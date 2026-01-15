@@ -116,6 +116,10 @@
 					</a>
 				{/each}
 			</nav>
+
+			<div class="sidebar-footer">
+				<span class="version">v1.0.0</span>
+			</div>
 		</aside>
 
 		<!-- Main content -->
@@ -268,6 +272,17 @@
 
 	.nav-icon {
 		font-size: 1rem;
+	}
+
+	.sidebar-footer {
+		padding: var(--space-4);
+		border-top: 1px solid var(--color-border-muted);
+	}
+
+	.version {
+		font-size: 0.6875rem;
+		color: var(--color-text-muted);
+		font-family: var(--font-mono);
 	}
 
 	/* Main content */
