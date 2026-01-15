@@ -1,6 +1,6 @@
 /**
  * Eero Dashboard API Client
- * 
+ *
  * HTTP client with error handling, request interceptors, and retry logic.
  */
 
@@ -46,7 +46,7 @@ interface RequestConfig {
  */
 function buildUrl(path: string, params?: Record<string, string | number | boolean>): string {
 	const url = new URL(path, window.location.origin);
-	
+
 	if (params) {
 		Object.entries(params).forEach(([key, value]) => {
 			if (value !== undefined && value !== null) {
@@ -54,7 +54,7 @@ function buildUrl(path: string, params?: Record<string, string | number | boolea
 			}
 		});
 	}
-	
+
 	return url.toString();
 }
 
@@ -70,7 +70,7 @@ async function parseError(response: Response): Promise<ApiError> {
 		};
 	} catch {
 		return {
-			detail: `HTTP ${response.status}: ${response.statusText}`,
+			detail: `HTTP ${response.status}: ${response.statusText}`
 		};
 	}
 }
@@ -78,10 +78,7 @@ async function parseError(response: Response): Promise<ApiError> {
 /**
  * Core fetch wrapper with error handling
  */
-async function fetchWithHandling<T>(
-	path: string,
-	config: RequestConfig = {}
-): Promise<T> {
+async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): Promise<T> {
 	const {
 		method = 'GET',
 		body,
@@ -92,7 +89,7 @@ async function fetchWithHandling<T>(
 	} = config;
 
 	const url = buildUrl(`${API_BASE}${path}`, params);
-	
+
 	const controller = new AbortController();
 	const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -111,7 +108,7 @@ async function fetchWithHandling<T>(
 	}
 
 	let lastError: Error | null = null;
-	
+
 	for (let attempt = 0; attempt <= retries; attempt++) {
 		try {
 			const response = await fetch(url, requestInit);
@@ -134,10 +131,9 @@ async function fetchWithHandling<T>(
 			// Parse response
 			const data = await response.json();
 			return data as T;
-			
 		} catch (error) {
 			lastError = error as Error;
-			
+
 			// Don't retry auth errors or client errors
 			if (error instanceof ApiClientError) {
 				if (error.status >= 400 && error.status < 500) {
@@ -152,7 +148,7 @@ async function fetchWithHandling<T>(
 
 			// Wait before retry (exponential backoff)
 			if (attempt < retries) {
-				await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+				await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
 			}
 		}
 	}
@@ -169,19 +165,19 @@ export const api = {
 	// Auth
 	auth: {
 		status: () => fetchWithHandling<import('./types').AuthStatus>('/auth/status'),
-		
-		login: (identifier: string) => 
+
+		login: (identifier: string) =>
 			fetchWithHandling<import('./types').LoginResponse>('/auth/login', {
 				method: 'POST',
 				body: { identifier }
 			}),
-		
+
 		verify: (code: string) =>
 			fetchWithHandling<import('./types').VerifyResponse>('/auth/verify', {
 				method: 'POST',
 				body: { code }
 			}),
-		
+
 		logout: () =>
 			fetchWithHandling<{ success: boolean }>('/auth/logout', {
 				method: 'POST'
@@ -194,23 +190,23 @@ export const api = {
 			fetchWithHandling<import('./types').NetworkSummary[]>('/networks', {
 				params: { refresh }
 			}),
-		
+
 		get: (networkId: string, refresh = false) =>
 			fetchWithHandling<import('./types').NetworkDetail>(`/networks/${networkId}`, {
 				params: { refresh }
 			}),
-		
+
 		setPreferred: (networkId: string) =>
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/set-preferred`, {
 				method: 'POST'
 			}),
-		
+
 		speedTest: (networkId: string) =>
 			fetchWithHandling<import('./types').SpeedTestResult>(`/networks/${networkId}/speedtest`, {
 				method: 'POST',
 				timeout: 90000 // Speed tests take longer
 			}),
-		
+
 		toggleGuestNetwork: (networkId: string, enabled: boolean, name?: string) =>
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/guest-network`, {
 				method: 'PUT',
@@ -220,43 +216,50 @@ export const api = {
 
 	// Devices
 	devices: {
-		list: (options: { refresh?: boolean; connectedOnly?: boolean; profileId?: string; deviceIds?: string[] } = {}) =>
+		list: (
+			options: {
+				refresh?: boolean;
+				connectedOnly?: boolean;
+				profileId?: string;
+				deviceIds?: string[];
+			} = {}
+		) =>
 			fetchWithHandling<import('./types').DeviceSummary[]>('/devices', {
-				params: { 
-					refresh: options.refresh ?? false, 
+				params: {
+					refresh: options.refresh ?? false,
 					connected_only: options.connectedOnly ?? false,
-					profile_id: options.profileId,
-					device_ids: options.deviceIds?.join(',')
+					...(options.profileId && { profile_id: options.profileId }),
+					...(options.deviceIds && { device_ids: options.deviceIds.join(',') })
 				}
 			}),
-		
+
 		get: (deviceId: string, refresh = false) =>
 			fetchWithHandling<import('./types').DeviceDetail>(`/devices/${deviceId}`, {
 				params: { refresh }
 			}),
-		
+
 		block: (deviceId: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/block`, {
 				method: 'POST'
 			}),
-		
+
 		unblock: (deviceId: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/unblock`, {
 				method: 'POST'
 			}),
-		
+
 		setNickname: (deviceId: string, nickname: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/nickname`, {
 				method: 'PUT',
 				body: { nickname }
 			}),
-		
+
 		prioritize: (deviceId: string, durationMinutes = 0) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/prioritize`, {
 				method: 'POST',
 				params: { duration_minutes: durationMinutes }
 			}),
-		
+
 		deprioritize: (deviceId: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/deprioritize`, {
 				method: 'POST'
@@ -269,23 +272,23 @@ export const api = {
 			fetchWithHandling<import('./types').EeroSummary[]>('/eeros', {
 				params: { refresh }
 			}),
-		
+
 		get: (eeroId: string, refresh = false) =>
 			fetchWithHandling<import('./types').EeroDetail>(`/eeros/${eeroId}`, {
 				params: { refresh }
 			}),
-		
+
 		reboot: (eeroId: string) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/reboot`, {
 				method: 'POST'
 			}),
-		
+
 		setLed: (eeroId: string, enabled: boolean) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/led`, {
 				method: 'POST',
 				params: { enabled }
 			}),
-		
+
 		setLedBrightness: (eeroId: string, brightness: number) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/led/brightness`, {
 				method: 'PUT',
@@ -299,17 +302,17 @@ export const api = {
 			fetchWithHandling<import('./types').ProfileSummary[]>('/profiles', {
 				params: { refresh }
 			}),
-		
+
 		get: (profileId: string, refresh = false) =>
 			fetchWithHandling<import('./types').ProfileSummary>(`/profiles/${profileId}`, {
 				params: { refresh }
 			}),
-		
+
 		pause: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}/pause`, {
 				method: 'POST'
 			}),
-		
+
 		unpause: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}/unpause`, {
 				method: 'POST'

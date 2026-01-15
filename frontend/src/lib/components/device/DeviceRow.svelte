@@ -5,7 +5,14 @@
 -->
 <script lang="ts">
 	import type { DeviceSummary } from '$api/types';
-	import { devicesStore, uiStore, columnVisibility, selectionMode, selectedDevices, toggleDeviceSelection } from '$stores';
+	import {
+		devicesStore,
+		uiStore,
+		columnVisibility,
+		selectionMode,
+		selectedDevices,
+		toggleDeviceSelection
+	} from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 
 	export let device: DeviceSummary;
@@ -27,8 +34,9 @@
 	let actionMenuOpen = false;
 	let loading = false;
 
-	$: displayName = device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device';
-	$: statusLabel = device.blocked ? 'blocked' : (device.connected ? 'connected' : 'disconnected');
+	$: displayName =
+		device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device';
+	$: statusLabel = device.blocked ? 'blocked' : device.connected ? 'connected' : 'disconnected';
 
 	function toggleActionMenu() {
 		actionMenuOpen = !actionMenuOpen;
@@ -41,7 +49,7 @@
 	async function handleBlock() {
 		if (!device.id) return;
 		closeActionMenu();
-		
+
 		uiStore.confirm({
 			title: 'Block Device',
 			message: `Are you sure you want to block "${displayName}"? This device will be disconnected from the network.`,
@@ -61,7 +69,7 @@
 	async function handleUnblock() {
 		if (!device.id) return;
 		closeActionMenu();
-		
+
 		try {
 			loading = true;
 			await devicesStore.unblockDevice(device.id);
@@ -77,7 +85,8 @@
 		closeActionMenu();
 		const newName = prompt('Enter new name:', device.nickname || device.hostname || '');
 		if (newName && device.id) {
-			devicesStore.setNickname(device.id, newName)
+			devicesStore
+				.setNickname(device.id, newName)
 				.then(() => uiStore.success('Device renamed successfully.'))
 				.catch((error) => uiStore.error(error.message));
 		}
@@ -92,15 +101,16 @@
 	}
 </script>
 
-<tr class="device-row" class:blocked={device.blocked} class:disconnected={!device.connected} class:selected={isSelected}>
+<tr
+	class="device-row"
+	class:blocked={device.blocked}
+	class:disconnected={!device.connected}
+	class:selected={isSelected}
+>
 	<!-- Selection checkbox (only in selection mode) -->
 	{#if $selectionMode}
 		<td class="select-cell">
-			<input 
-				type="checkbox" 
-				checked={isSelected}
-				on:change={handleSelect}
-			/>
+			<input type="checkbox" checked={isSelected} on:change={handleSelect} />
 		</td>
 	{/if}
 
@@ -108,7 +118,12 @@
 	{#if isVisible('name')}
 		<td class="device-name">
 			<div class="device-name-wrapper">
-				<span class="status-dot" class:online={device.connected && !device.blocked} class:offline={!device.connected} class:danger={device.blocked}></span>
+				<span
+					class="status-dot"
+					class:online={device.connected && !device.blocked}
+					class:offline={!device.connected}
+					class:danger={device.blocked}
+				></span>
 				<div class="name-info">
 					{#if device.id}
 						<a href="/devices/{device.id}" class="name device-link">{displayName}</a>
@@ -167,7 +182,8 @@
 		<td>
 			{#if device.connected && device.wireless && device.signal_strength}
 				<span class="signal mono" title="{device.signal_strength} dBm">
-					{getSignalIcon(device.signal_strength)} {device.signal_strength} dBm
+					{getSignalIcon(device.signal_strength)}
+					{device.signal_strength} dBm
 				</span>
 			{:else}
 				<span class="text-muted">—</span>
@@ -211,7 +227,6 @@
 		</td>
 	{/if}
 
-
 	<!-- Status -->
 	{#if isVisible('status')}
 		<td>
@@ -222,7 +237,7 @@
 	<!-- Actions - Always visible -->
 	<td class="actions-cell">
 		<div class="action-menu-wrapper">
-			<button 
+			<button
 				class="btn btn-ghost btn-sm action-btn"
 				on:click={toggleActionMenu}
 				disabled={loading}
@@ -234,12 +249,10 @@
 					⋮
 				{/if}
 			</button>
-			
+
 			{#if actionMenuOpen}
 				<div class="action-menu" on:mouseleave={closeActionMenu} role="menu" tabindex="-1">
-					<button class="action-item" on:click={handleRename} role="menuitem">
-						✏️ Rename
-					</button>
+					<button class="action-item" on:click={handleRename} role="menuitem"> ✏️ Rename </button>
 					{#if device.blocked}
 						<button class="action-item" on:click={handleUnblock} role="menuitem">
 							✓ Unblock
@@ -285,7 +298,7 @@
 		text-align: center;
 	}
 
-	.select-cell input[type="checkbox"] {
+	.select-cell input[type='checkbox'] {
 		width: 18px;
 		height: 18px;
 		cursor: pointer;

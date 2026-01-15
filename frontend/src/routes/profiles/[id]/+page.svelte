@@ -50,6 +50,7 @@
 	async function handleTogglePause() {
 		if (!profile?.id) return;
 
+		const profileId = profile.id;
 		const action = profile.paused ? 'unpause' : 'pause';
 		actionLoading = true;
 
@@ -57,10 +58,10 @@
 			// Optimistic update
 			profile = { ...profile, paused: !profile.paused };
 
-			const result = profile.paused 
-				? await api.profiles.unpause(profile.id)
-				: await api.profiles.pause(profile.id);
-			
+			const result = profile.paused
+				? await api.profiles.unpause(profileId)
+				: await api.profiles.pause(profileId);
+
 			if (result.success) {
 				uiStore.success(result.message || `Profile ${action}d successfully`);
 			}
@@ -77,6 +78,7 @@
 	async function handlePauseDevice(device: ProfileDevice) {
 		if (!device.id) return;
 
+		const deviceId = device.id;
 		const action = device.paused ? 'unpause' : 'pause';
 		const deviceName = device.display_name || device.nickname || device.hostname || 'Device';
 
@@ -90,17 +92,17 @@
 				if (profile) {
 					profile = {
 						...profile,
-						devices: profile.devices.map(d => 
-							d.id === device.id ? { ...d, paused: !d.paused } : d
+						devices: profile.devices.map((d) =>
+							d.id === deviceId ? { ...d, paused: !d.paused } : d
 						)
 					};
 				}
 
 				try {
-					const result = device.paused 
-						? await api.devices.unblock(device.id)
-						: await api.devices.block(device.id);
-					
+					const result = device.paused
+						? await api.devices.unblock(deviceId)
+						: await api.devices.block(deviceId);
+
 					if (result.success) {
 						uiStore.success(`${deviceName} ${action === 'pause' ? 'paused' : 'resumed'}`);
 					}
@@ -110,7 +112,7 @@
 					if (profile) {
 						profile = {
 							...profile,
-							devices: profile.devices.map(d => 
+							devices: profile.devices.map((d) =>
 								d.id === device.id ? { ...d, paused: device.paused } : d
 							)
 						};
@@ -145,12 +147,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchProfile(true)}>
-					Try Again
-				</button>
-				<button class="btn btn-ghost" on:click={() => goto('/profiles')}>
-					Back to Profiles
-				</button>
+				<button class="btn btn-secondary" on:click={() => fetchProfile(true)}> Try Again </button>
+				<button class="btn btn-ghost" on:click={() => goto('/profiles')}> Back to Profiles </button>
 			</div>
 		</div>
 	{:else if profile}
@@ -168,14 +166,14 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button 
+				<button
 					class="btn btn-secondary"
 					on:click={() => fetchProfile(true)}
 					disabled={actionLoading}
 				>
 					↻ Refresh
 				</button>
-				<button 
+				<button
 					class="btn {profile.paused ? 'btn-primary' : 'btn-warning'}"
 					on:click={handleTogglePause}
 					disabled={actionLoading}
@@ -198,7 +196,9 @@
 					<span class="status-icon">⏸</span>
 					<div>
 						<strong>Internet Access Paused</strong>
-						<p class="text-sm text-muted">All devices in this profile are currently blocked from accessing the internet.</p>
+						<p class="text-sm text-muted">
+							All devices in this profile are currently blocked from accessing the internet.
+						</p>
 					</div>
 				</div>
 			{:else}
@@ -215,20 +215,24 @@
 		<!-- Devices Section -->
 		<section class="devices-section">
 			<div class="section-header">
-				<h2>Devices ({devices.length}{profile.device_count !== devices.length ? ` of ${profile.device_count}` : ''})</h2>
+				<h2>
+					Devices ({devices.length}{profile.device_count !== devices.length
+						? ` of ${profile.device_count}`
+						: ''})
+				</h2>
 				<div class="view-toggle">
-					<button 
-						class="toggle-btn" 
+					<button
+						class="toggle-btn"
 						class:active={viewMode === 'blocks'}
-						on:click={() => viewMode = 'blocks'}
+						on:click={() => (viewMode = 'blocks')}
 						title="Block view"
 					>
 						▦
 					</button>
-					<button 
-						class="toggle-btn" 
+					<button
+						class="toggle-btn"
 						class:active={viewMode === 'list'}
-						on:click={() => viewMode = 'list'}
+						on:click={() => (viewMode = 'list')}
 						title="List view"
 					>
 						☰
@@ -246,8 +250,13 @@
 					<p>No devices found for this profile.</p>
 					<p class="text-sm text-muted">
 						{#if profile.device_count > 0}
-							This profile has {profile.device_count} assigned devices, but they may not be in the current device cache.
-							<button class="btn btn-secondary btn-sm" on:click={() => fetchProfile(true)} style="margin-top: var(--space-2);">
+							This profile has {profile.device_count} assigned devices, but they may not be in the current
+							device cache.
+							<button
+								class="btn btn-secondary btn-sm"
+								on:click={() => fetchProfile(true)}
+								style="margin-top: var(--space-2);"
+							>
 								Refresh
 							</button>
 						{:else}
@@ -259,10 +268,10 @@
 				<!-- Block/Card View -->
 				<div class="devices-grid">
 					{#each devices as device, index (getDeviceKey(device, index))}
-						<a 
+						<a
 							href={device.id ? `/devices/${device.id}` : undefined}
-							class="card device-card" 
-							class:paused={device.paused} 
+							class="card device-card"
+							class:paused={device.paused}
 							class:offline={!device.connected}
 							class:clickable={!!device.id}
 						>
@@ -270,7 +279,12 @@
 								<div class="device-info">
 									<span class="device-icon">{device.wireless ? '📱' : '🖥️'}</span>
 									<div>
-										<h3>{device.display_name || device.nickname || device.hostname || 'Unknown Device'}</h3>
+										<h3>
+											{device.display_name ||
+												device.nickname ||
+												device.hostname ||
+												'Unknown Device'}
+										</h3>
 										<span class="text-sm text-muted mono">{device.ip || device.mac || '—'}</span>
 									</div>
 								</div>
@@ -304,7 +318,7 @@
 
 							<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 							<div class="device-actions" on:click|stopPropagation>
-								<button 
+								<button
 									class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
 									on:click|preventDefault={() => handlePauseDevice(device)}
 								>
@@ -329,8 +343,8 @@
 						</thead>
 						<tbody>
 							{#each devices as device, index (getDeviceKey(device, index))}
-								<tr 
-									class:paused={device.paused} 
+								<tr
+									class:paused={device.paused}
 									class:offline={!device.connected}
 									class:clickable={!!device.id}
 									on:click={() => device.id && goto(`/devices/${device.id}`)}
@@ -338,7 +352,12 @@
 									<td class="device-name-cell">
 										<span class="device-icon-sm">{device.wireless ? '📱' : '🖥️'}</span>
 										<div>
-											<span class="device-name">{device.display_name || device.nickname || device.hostname || 'Unknown'}</span>
+											<span class="device-name"
+												>{device.display_name ||
+													device.nickname ||
+													device.hostname ||
+													'Unknown'}</span
+											>
 											{#if device.manufacturer}
 												<span class="text-xs text-muted">{device.manufacturer}</span>
 											{/if}
@@ -356,7 +375,7 @@
 									</td>
 									<td class="text-sm">{device.wireless ? '📶 Wireless' : '🔌 Wired'}</td>
 									<td on:click|stopPropagation>
-										<button 
+										<button
 											class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
 											on:click={() => handlePauseDevice(device)}
 										>
@@ -539,7 +558,10 @@
 		gap: var(--space-3);
 		text-decoration: none;
 		color: inherit;
-		transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			border-color 0.15s ease;
 	}
 
 	.device-card.clickable {

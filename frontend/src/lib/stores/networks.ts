@@ -1,6 +1,6 @@
 /**
  * Networks Store
- * 
+ *
  * Manages available networks and the currently selected network.
  */
 
@@ -50,29 +50,29 @@ function createNetworksStore() {
 		 * Fetch all available networks
 		 */
 		async fetch(refresh = false): Promise<void> {
-			update(s => ({ ...s, loading: true, error: null }));
-			
+			update((s) => ({ ...s, loading: true, error: null }));
+
 			try {
 				const networks = await api.networks.list(refresh);
-				
-				update(s => {
+
+				update((s) => {
 					// If no network is selected, or selected network doesn't exist, select the first one
 					let selectedNetworkId = s.selectedNetworkId;
-					
-					if (!selectedNetworkId || !networks.find(n => n.id === selectedNetworkId)) {
+
+					if (!selectedNetworkId || !networks.find((n) => n.id === selectedNetworkId)) {
 						selectedNetworkId = networks.length > 0 ? networks[0].id : null;
-						
+
 						// Persist to localStorage
 						if (selectedNetworkId && typeof window !== 'undefined') {
 							localStorage.setItem(STORAGE_KEY, selectedNetworkId);
 						}
-						
+
 						// Set as preferred on backend
 						if (selectedNetworkId) {
 							api.networks.setPreferred(selectedNetworkId).catch(console.error);
 						}
 					}
-					
+
 					return {
 						...s,
 						networks,
@@ -81,7 +81,7 @@ function createNetworksStore() {
 					};
 				});
 			} catch (error) {
-				update(s => ({
+				update((s) => ({
 					...s,
 					loading: false,
 					error: error instanceof Error ? error.message : 'Failed to fetch networks'
@@ -94,20 +94,20 @@ function createNetworksStore() {
 		 */
 		async selectNetwork(networkId: string): Promise<void> {
 			const state = get({ subscribe });
-			
+
 			// Verify network exists
-			if (!state.networks.find(n => n.id === networkId)) {
+			if (!state.networks.find((n) => n.id === networkId)) {
 				console.error(`Network ${networkId} not found`);
 				return;
 			}
-			
-			update(s => ({ ...s, selectedNetworkId: networkId }));
-			
+
+			update((s) => ({ ...s, selectedNetworkId: networkId }));
+
 			// Persist to localStorage
 			if (typeof window !== 'undefined') {
 				localStorage.setItem(STORAGE_KEY, networkId);
 			}
-			
+
 			// Set as preferred on backend
 			try {
 				await api.networks.setPreferred(networkId);
@@ -133,23 +133,14 @@ export const networksStore = createNetworksStore();
 // Derived: currently selected network
 export const selectedNetwork = derived(
 	networksStore,
-	$store => $store.networks.find(n => n.id === $store.selectedNetworkId) || null
+	($store) => $store.networks.find((n) => n.id === $store.selectedNetworkId) || null
 );
 
 // Derived: selected network ID
-export const selectedNetworkId = derived(
-	networksStore,
-	$store => $store.selectedNetworkId
-);
+export const selectedNetworkId = derived(networksStore, ($store) => $store.selectedNetworkId);
 
 // Derived: has multiple networks
-export const hasMultipleNetworks = derived(
-	networksStore,
-	$store => $store.networks.length > 1
-);
+export const hasMultipleNetworks = derived(networksStore, ($store) => $store.networks.length > 1);
 
 // Derived: loading state
-export const isNetworksLoading = derived(
-	networksStore,
-	$store => $store.loading
-);
+export const isNetworksLoading = derived(networksStore, ($store) => $store.loading);

@@ -71,7 +71,7 @@
 					<span class="step-number">2</span>
 					<span>Enter verification code</span>
 				</div>
-				
+
 				<p class="text-sm text-muted">
 					We sent a verification code to your email or phone. Enter it below to continue.
 				</p>
@@ -88,7 +88,7 @@
 					maxlength="6"
 				/>
 
-				<button 
+				<button
 					class="btn btn-primary btn-full"
 					on:click={handleVerify}
 					disabled={$isAuthLoading || !code.trim()}
@@ -99,11 +99,7 @@
 					Verify
 				</button>
 
-				<button 
-					class="btn btn-ghost btn-full"
-					on:click={handleBack}
-					disabled={$isAuthLoading}
-				>
+				<button class="btn btn-ghost btn-full" on:click={handleBack} disabled={$isAuthLoading}>
 					← Back
 				</button>
 			</div>
@@ -125,7 +121,7 @@
 					autocomplete="email"
 				/>
 
-				<button 
+				<button
 					class="btn btn-primary btn-full"
 					on:click={handleLogin}
 					disabled={$isAuthLoading || !identifier.trim()}

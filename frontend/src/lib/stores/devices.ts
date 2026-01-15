@@ -1,11 +1,11 @@
 /**
  * Devices Store
- * 
+ *
  * Manages device list, filtering, and device actions.
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { api, ApiClientError } from '$api/client';
+import { api } from '$api/client';
 import type { DeviceSummary } from '$api/types';
 
 // ============================================
@@ -24,7 +24,17 @@ interface DeviceFilters {
 	status: 'all' | 'connected' | 'disconnected' | 'blocked';
 	connectionType: 'all' | 'wireless' | 'wired';
 	frequency: 'all' | '2.4GHz' | '5GHz';
-	sortBy: 'name' | 'ip' | 'mac' | 'hostname' | 'manufacturer' | 'connection' | 'signal' | 'connectedTo' | 'profile' | 'last_active';
+	sortBy:
+		| 'name'
+		| 'ip'
+		| 'mac'
+		| 'hostname'
+		| 'manufacturer'
+		| 'connection'
+		| 'signal'
+		| 'connectedTo'
+		| 'profile'
+		| 'last_active';
 	sortOrder: 'asc' | 'desc';
 }
 
@@ -64,38 +74,38 @@ interface ParsedQuery {
  */
 function parseSearchQuery(search: string): ParsedQuery {
 	const fieldFilters = new Map<string, string>();
-	
+
 	// Regex to match field=value or field="quoted value"
 	const fieldPattern = /(\w+)=(?:"([^"]+)"|(\S+))/g;
-	
+
 	let freeText = search;
 	let match;
-	
+
 	while ((match = fieldPattern.exec(search)) !== null) {
 		const field = match[1].toLowerCase();
 		const value = (match[2] || match[3]).toLowerCase();
-		
+
 		// Map common field aliases
 		const fieldAliases: Record<string, string> = {
-			'device': 'device',
-			'name': 'device',
-			'ip': 'ip',
-			'ipaddress': 'ip',
-			'address': 'ip',
-			'mac': 'mac',
-			'manufacturer': 'manufacturer',
-			'vendor': 'manufacturer',
-			'profile': 'profile',
-			'connection': 'connection',
-			'type': 'connection',
-			'connected_to': 'connected_to',
-			'connectedto': 'connected_to',
-			'eero': 'connected_to',
-			'hostname': 'hostname',
-			'host': 'hostname',
-			'model': 'model'
+			device: 'device',
+			name: 'device',
+			ip: 'ip',
+			ipaddress: 'ip',
+			address: 'ip',
+			mac: 'mac',
+			manufacturer: 'manufacturer',
+			vendor: 'manufacturer',
+			profile: 'profile',
+			connection: 'connection',
+			type: 'connection',
+			connected_to: 'connected_to',
+			connectedto: 'connected_to',
+			eero: 'connected_to',
+			hostname: 'hostname',
+			host: 'hostname',
+			model: 'model'
 		};
-		
+
 		const normalizedField = fieldAliases[field];
 		if (normalizedField) {
 			fieldFilters.set(normalizedField, value);
@@ -103,12 +113,15 @@ function parseSearchQuery(search: string): ParsedQuery {
 			freeText = freeText.replace(match[0], '').trim();
 		}
 	}
-	
+
 	// Debug: Log parsed query
 	if (fieldFilters.size > 0) {
-		console.log('[DeviceFilter] Parsed query:', { freeText, fieldFilters: Object.fromEntries(fieldFilters) });
+		console.log('[DeviceFilter] Parsed query:', {
+			freeText,
+			fieldFilters: Object.fromEntries(fieldFilters)
+		});
 	}
-	
+
 	return { freeText, fieldFilters };
 }
 
@@ -118,7 +131,7 @@ function parseSearchQuery(search: string): ParsedQuery {
 function matchesFieldFilters(device: DeviceSummary, filters: Map<string, string>): boolean {
 	for (const [field, value] of filters) {
 		let fieldValue: string | null | undefined;
-		
+
 		switch (field) {
 			case 'device':
 				// Match against display_name, nickname, hostname, model
@@ -128,7 +141,9 @@ function matchesFieldFilters(device: DeviceSummary, filters: Map<string, string>
 					device.hostname,
 					device.model_name,
 					device.device_type
-				].filter(Boolean).join(' ');
+				]
+					.filter(Boolean)
+					.join(' ');
 				break;
 			case 'ip':
 				fieldValue = device.ip;
@@ -157,7 +172,7 @@ function matchesFieldFilters(device: DeviceSummary, filters: Map<string, string>
 			default:
 				continue;
 		}
-		
+
 		const matches = fieldValue && fieldValue.toLowerCase().includes(value);
 		if (!matches) {
 			return false;
@@ -176,18 +191,18 @@ function createDevicesStore() {
 		 * Fetch all devices
 		 */
 		async fetch(refresh = false): Promise<void> {
-			update(s => ({ ...s, loading: true, error: null }));
-			
+			update((s) => ({ ...s, loading: true, error: null }));
+
 			try {
 				const devices = await api.devices.list({ refresh });
-				update(s => ({
+				update((s) => ({
 					...s,
 					devices,
 					loading: false,
 					lastUpdated: new Date()
 				}));
 			} catch (error) {
-				update(s => ({
+				update((s) => ({
 					...s,
 					loading: false,
 					error: error instanceof Error ? error.message : 'Failed to fetch devices'
@@ -200,11 +215,9 @@ function createDevicesStore() {
 		 */
 		async blockDevice(deviceId: string): Promise<boolean> {
 			// Optimistic update
-			update(s => ({
+			update((s) => ({
 				...s,
-				devices: s.devices.map(d => 
-					d.id === deviceId ? { ...d, blocked: true } : d
-				)
+				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
 			}));
 
 			try {
@@ -215,11 +228,9 @@ function createDevicesStore() {
 				return true;
 			} catch (error) {
 				// Rollback
-				update(s => ({
+				update((s) => ({
 					...s,
-					devices: s.devices.map(d => 
-						d.id === deviceId ? { ...d, blocked: false } : d
-					)
+					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: false } : d))
 				}));
 				throw error;
 			}
@@ -230,11 +241,9 @@ function createDevicesStore() {
 		 */
 		async unblockDevice(deviceId: string): Promise<boolean> {
 			// Optimistic update
-			update(s => ({
+			update((s) => ({
 				...s,
-				devices: s.devices.map(d => 
-					d.id === deviceId ? { ...d, blocked: false } : d
-				)
+				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: false } : d))
 			}));
 
 			try {
@@ -245,11 +254,9 @@ function createDevicesStore() {
 				return true;
 			} catch (error) {
 				// Rollback
-				update(s => ({
+				update((s) => ({
 					...s,
-					devices: s.devices.map(d => 
-						d.id === deviceId ? { ...d, blocked: true } : d
-					)
+					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
 				}));
 				throw error;
 			}
@@ -260,13 +267,13 @@ function createDevicesStore() {
 		 */
 		async setNickname(deviceId: string, nickname: string): Promise<boolean> {
 			const currentState = get({ subscribe });
-			const device = currentState.devices.find(d => d.id === deviceId);
-			const previousNickname = device?.nickname;
+			const device = currentState.devices.find((d) => d.id === deviceId);
+			const previousNickname = device?.nickname ?? null;
 
 			// Optimistic update
-			update(s => ({
+			update((s) => ({
 				...s,
-				devices: s.devices.map(d => 
+				devices: s.devices.map((d) =>
 					d.id === deviceId ? { ...d, nickname, display_name: nickname } : d
 				)
 			}));
@@ -279,11 +286,11 @@ function createDevicesStore() {
 				return true;
 			} catch (error) {
 				// Rollback
-				update(s => ({
+				update((s) => ({
 					...s,
-					devices: s.devices.map(d => 
-						d.id === deviceId 
-							? { ...d, nickname: previousNickname, display_name: previousNickname || d.hostname } 
+					devices: s.devices.map((d) =>
+						d.id === deviceId
+							? { ...d, nickname: previousNickname, display_name: previousNickname || d.hostname }
 							: d
 					)
 				}));
@@ -304,26 +311,25 @@ export const devicesStore = createDevicesStore();
 export const deviceFilters = writable<DeviceFilters>(initialFilters);
 
 // Derived: filtered and sorted devices
-export const filteredDevices = derived(
-	[devicesStore, deviceFilters],
-	([$devices, $filters]) => {
-		let result = [...$devices.devices];
+export const filteredDevices = derived([devicesStore, deviceFilters], ([$devices, $filters]) => {
+	let result = [...$devices.devices];
 
-		// Parse the search query for field-specific filters
-		if ($filters.search) {
-			const { freeText, fieldFilters } = parseSearchQuery($filters.search);
-			
-			// Apply field-specific filters
-			if (fieldFilters.size > 0) {
-				const beforeCount = result.length;
-				result = result.filter(d => matchesFieldFilters(d, fieldFilters));
-				console.log(`[DeviceFilter] Field filter: ${beforeCount} → ${result.length} devices`);
-			}
-			
-			// Apply free text search (case-insensitive across all text fields)
-			if (freeText) {
-				const search = freeText.toLowerCase();
-				result = result.filter(d => 
+	// Parse the search query for field-specific filters
+	if ($filters.search) {
+		const { freeText, fieldFilters } = parseSearchQuery($filters.search);
+
+		// Apply field-specific filters
+		if (fieldFilters.size > 0) {
+			const beforeCount = result.length;
+			result = result.filter((d) => matchesFieldFilters(d, fieldFilters));
+			console.log(`[DeviceFilter] Field filter: ${beforeCount} → ${result.length} devices`);
+		}
+
+		// Apply free text search (case-insensitive across all text fields)
+		if (freeText) {
+			const search = freeText.toLowerCase();
+			result = result.filter(
+				(d) =>
 					d.display_name?.toLowerCase().includes(search) ||
 					d.nickname?.toLowerCase().includes(search) ||
 					d.hostname?.toLowerCase().includes(search) ||
@@ -334,96 +340,107 @@ export const filteredDevices = derived(
 					d.device_type?.toLowerCase().includes(search) ||
 					d.profile_name?.toLowerCase().includes(search) ||
 					d.connected_to_eero?.toLowerCase().includes(search)
-				);
-			}
+			);
 		}
-
-		// Filter by status
-		if ($filters.status !== 'all') {
-			result = result.filter(d => {
-				switch ($filters.status) {
-					case 'connected': return d.connected && !d.blocked;
-					case 'disconnected': return !d.connected && !d.blocked;
-					case 'blocked': return d.blocked;
-					default: return true;
-				}
-			});
-		}
-
-		// Filter by connection type
-		if ($filters.connectionType !== 'all') {
-			result = result.filter(d => d.connection_type === $filters.connectionType);
-		}
-
-		// Filter by frequency
-		if ($filters.frequency !== 'all') {
-			result = result.filter(d => d.frequency === $filters.frequency);
-		}
-
-		// Sort
-		result.sort((a, b) => {
-			let comparison = 0;
-			
-			switch ($filters.sortBy) {
-				case 'name':
-					comparison = (a.display_name || '').localeCompare(b.display_name || '');
-					break;
-				case 'ip':
-					// Sort IP addresses numerically
-					const ipA = a.ip?.split('.').map(n => parseInt(n, 10).toString().padStart(3, '0')).join('.') || '';
-					const ipB = b.ip?.split('.').map(n => parseInt(n, 10).toString().padStart(3, '0')).join('.') || '';
-					comparison = ipA.localeCompare(ipB);
-					break;
-				case 'mac':
-					comparison = (a.mac || '').localeCompare(b.mac || '');
-					break;
-				case 'hostname':
-					comparison = (a.hostname || '').localeCompare(b.hostname || '');
-					break;
-				case 'manufacturer':
-					comparison = (a.manufacturer || '').localeCompare(b.manufacturer || '');
-					break;
-				case 'connection':
-					comparison = (a.connection_type || '').localeCompare(b.connection_type || '');
-					break;
-				case 'signal':
-					comparison = (b.signal_strength || -100) - (a.signal_strength || -100);
-					break;
-				case 'connectedTo':
-					comparison = (a.connected_to_eero || '').localeCompare(b.connected_to_eero || '');
-					break;
-				case 'profile':
-					comparison = (a.profile_name || '').localeCompare(b.profile_name || '');
-					break;
-				case 'last_active':
-					comparison = (a.last_active || '').localeCompare(b.last_active || '');
-					break;
-			}
-			
-			return $filters.sortOrder === 'desc' ? -comparison : comparison;
-		});
-
-		return result;
 	}
-);
+
+	// Filter by status
+	if ($filters.status !== 'all') {
+		result = result.filter((d) => {
+			switch ($filters.status) {
+				case 'connected':
+					return d.connected && !d.blocked;
+				case 'disconnected':
+					return !d.connected && !d.blocked;
+				case 'blocked':
+					return d.blocked;
+				default:
+					return true;
+			}
+		});
+	}
+
+	// Filter by connection type
+	if ($filters.connectionType !== 'all') {
+		result = result.filter((d) => d.connection_type === $filters.connectionType);
+	}
+
+	// Filter by frequency
+	if ($filters.frequency !== 'all') {
+		result = result.filter((d) => d.frequency === $filters.frequency);
+	}
+
+	// Sort
+	result.sort((a, b) => {
+		let comparison = 0;
+
+		switch ($filters.sortBy) {
+			case 'name':
+				comparison = (a.display_name || '').localeCompare(b.display_name || '');
+				break;
+			case 'ip':
+				// Sort IP addresses numerically
+				const ipA =
+					a.ip
+						?.split('.')
+						.map((n) => parseInt(n, 10).toString().padStart(3, '0'))
+						.join('.') || '';
+				const ipB =
+					b.ip
+						?.split('.')
+						.map((n) => parseInt(n, 10).toString().padStart(3, '0'))
+						.join('.') || '';
+				comparison = ipA.localeCompare(ipB);
+				break;
+			case 'mac':
+				comparison = (a.mac || '').localeCompare(b.mac || '');
+				break;
+			case 'hostname':
+				comparison = (a.hostname || '').localeCompare(b.hostname || '');
+				break;
+			case 'manufacturer':
+				comparison = (a.manufacturer || '').localeCompare(b.manufacturer || '');
+				break;
+			case 'connection':
+				comparison = (a.connection_type || '').localeCompare(b.connection_type || '');
+				break;
+			case 'signal':
+				comparison = (b.signal_strength || -100) - (a.signal_strength || -100);
+				break;
+			case 'connectedTo':
+				comparison = (a.connected_to_eero || '').localeCompare(b.connected_to_eero || '');
+				break;
+			case 'profile':
+				comparison = (a.profile_name || '').localeCompare(b.profile_name || '');
+				break;
+			case 'last_active':
+				comparison = (a.last_active || '').localeCompare(b.last_active || '');
+				break;
+		}
+
+		return $filters.sortOrder === 'desc' ? -comparison : comparison;
+	});
+
+	return result;
+});
 
 // Derived: device counts
-export const deviceCounts = derived(devicesStore, $devices => {
+export const deviceCounts = derived(devicesStore, ($devices) => {
 	const devices = $devices.devices;
 	return {
 		total: devices.length,
-		connected: devices.filter(d => d.connected && !d.blocked).length,
-		disconnected: devices.filter(d => !d.connected && !d.blocked).length,
-		blocked: devices.filter(d => d.blocked).length,
-		wireless: devices.filter(d => d.wireless && d.connected).length,
-		wired: devices.filter(d => !d.wireless && d.connected).length,
-		freq24: devices.filter(d => d.frequency === '2.4GHz' && d.connected).length,
-		freq5: devices.filter(d => d.frequency === '5GHz' && d.connected).length
+		connected: devices.filter((d) => d.connected && !d.blocked).length,
+		disconnected: devices.filter((d) => !d.connected && !d.blocked).length,
+		blocked: devices.filter((d) => d.blocked).length,
+		wireless: devices.filter((d) => d.wireless && d.connected).length,
+		wired: devices.filter((d) => !d.wireless && d.connected).length,
+		freq24: devices.filter((d) => d.frequency === '2.4GHz' && d.connected).length,
+		freq5: devices.filter((d) => d.frequency === '5GHz' && d.connected).length
 	};
 });
 
 // Derived: loading state
-export const isDevicesLoading = derived(devicesStore, $devices => $devices.loading);
+export const isDevicesLoading = derived(devicesStore, ($devices) => $devices.loading);
 
 // ============================================
 // Column Visibility Store
@@ -456,7 +473,7 @@ const defaultColumnVisibility: ColumnVisibility = {
 	connectedTo: true,
 	profile: false,
 	lastActive: false,
-	status: true,
+	status: true
 };
 
 // ============================================
@@ -467,7 +484,7 @@ export const selectionMode = writable<boolean>(false);
 export const selectedDevices = writable<Set<string>>(new Set());
 
 export function toggleSelectionMode(): void {
-	selectionMode.update(mode => {
+	selectionMode.update((mode) => {
 		if (mode) {
 			// Exiting selection mode - clear selections
 			selectedDevices.set(new Set());
@@ -477,7 +494,7 @@ export function toggleSelectionMode(): void {
 }
 
 export function toggleDeviceSelection(deviceId: string): void {
-	selectedDevices.update(selected => {
+	selectedDevices.update((selected) => {
 		const newSelected = new Set(selected);
 		if (newSelected.has(deviceId)) {
 			newSelected.delete(deviceId);
@@ -499,7 +516,7 @@ export function clearSelection(): void {
 export const columnVisibility = writable<ColumnVisibility>(defaultColumnVisibility);
 
 export function toggleColumn(columnId: keyof ColumnVisibility): void {
-	columnVisibility.update(cv => ({
+	columnVisibility.update((cv) => ({
 		...cv,
 		[columnId]: !cv[columnId]
 	}));

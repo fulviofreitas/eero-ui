@@ -1,0 +1,11 @@
+# Ignore generated files
+.svelte-kit/
+build/
+node_modules/
+coverage/
+
+# Ignore lock files
+package-lock.json
+
+# Ignore dist and output directories
+dist/

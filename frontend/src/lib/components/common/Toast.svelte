@@ -10,11 +10,7 @@
 
 <div class="toast-container" aria-live="polite">
 	{#each $toasts as toast (toast.id)}
-		<div 
-			class="toast {toast.type}"
-			role="alert"
-			transition:fly={{ x: 100, duration: 200 }}
-		>
+		<div class="toast {toast.type}" role="alert" transition:fly={{ x: 100, duration: 200 }}>
 			<span class="toast-icon">
 				{#if toast.type === 'success'}
 					✓
@@ -27,7 +23,7 @@
 				{/if}
 			</span>
 			<span class="toast-message">{toast.message}</span>
-			<button 
+			<button
 				class="toast-close"
 				on:click={() => uiStore.removeToast(toast.id)}
 				aria-label="Dismiss"
@@ -82,10 +78,18 @@
 		flex-shrink: 0;
 	}
 
-	.toast.success .toast-icon { color: var(--color-success); }
-	.toast.error .toast-icon { color: var(--color-danger); }
-	.toast.warning .toast-icon { color: var(--color-warning); }
-	.toast.info .toast-icon { color: var(--color-info); }
+	.toast.success .toast-icon {
+		color: var(--color-success);
+	}
+	.toast.error .toast-icon {
+		color: var(--color-danger);
+	}
+	.toast.warning .toast-icon {
+		color: var(--color-warning);
+	}
+	.toast.info .toast-icon {
+		color: var(--color-info);
+	}
 
 	.toast-message {
 		flex: 1;

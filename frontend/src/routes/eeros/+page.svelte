@@ -34,14 +34,14 @@
 			const result = await api.eeros.list(refresh);
 			console.log('Eeros API response:', result);
 			// Ensure we have an array, filter out invalid entries, and sort alphabetically by location
-			eeros = Array.isArray(result) 
+			eeros = Array.isArray(result)
 				? result
-					.filter(e => e && e.id)
-					.sort((a, b) => {
-						const nameA = (a.location || a.model || '').toLowerCase();
-						const nameB = (b.location || b.model || '').toLowerCase();
-						return nameA.localeCompare(nameB);
-					})
+						.filter((e) => e && e.id)
+						.sort((a, b) => {
+							const nameA = (a.location || a.model || '').toLowerCase();
+							const nameB = (b.location || b.model || '').toLowerCase();
+							return nameA.localeCompare(nameB);
+						})
 				: [];
 			console.log('Eeros after filter and sort:', eeros);
 		} catch (err) {
@@ -77,28 +77,24 @@
 		</div>
 		<div class="header-right">
 			<div class="view-toggle">
-				<button 
-					class="toggle-btn" 
+				<button
+					class="toggle-btn"
 					class:active={viewMode === 'blocks'}
-					on:click={() => viewMode = 'blocks'}
+					on:click={() => (viewMode = 'blocks')}
 					title="Block view"
 				>
 					▦
 				</button>
-				<button 
-					class="toggle-btn" 
+				<button
+					class="toggle-btn"
 					class:active={viewMode === 'list'}
-					on:click={() => viewMode = 'list'}
+					on:click={() => (viewMode = 'list')}
 					title="List view"
 				>
 					☰
 				</button>
 			</div>
-			<button 
-				class="btn btn-secondary"
-				on:click={() => fetchEeros(true)}
-				disabled={loading}
-			>
+			<button class="btn btn-secondary" on:click={() => fetchEeros(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
@@ -117,9 +113,7 @@
 	{:else if error}
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
-			<button class="btn btn-secondary" on:click={() => fetchEeros(true)}>
-				Try Again
-			</button>
+			<button class="btn btn-secondary" on:click={() => fetchEeros(true)}> Try Again </button>
 		</div>
 	{:else if eeros.length === 0}
 		<div class="empty-state">
@@ -195,7 +189,7 @@
 				</thead>
 				<tbody>
 					{#each eeros as eero, index (getEeroKey(eero, index))}
-						<tr 
+						<tr
 							class="clickable"
 							class:gateway={eero.is_gateway}
 							on:click={() => eero.id && window.location.assign(`/eeros/${eero.id}`)}
@@ -277,7 +271,10 @@
 		gap: var(--space-4);
 		text-decoration: none;
 		color: inherit;
-		transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			border-color 0.15s ease;
 		cursor: pointer;
 	}
 
@@ -438,5 +435,4 @@
 		font-size: 0.625rem;
 		padding: 1px 4px;
 	}
-
 </style>

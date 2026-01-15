@@ -5,7 +5,20 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { devicesStore, deviceFilters, filteredDevices, deviceCounts, isDevicesLoading, columnVisibility, toggleColumn as toggleColumnStore, selectionMode, selectedDevices, toggleSelectionMode, toggleDeviceSelection, selectAllDevices, clearSelection } from '$stores';
+	import {
+		devicesStore,
+		deviceFilters,
+		filteredDevices,
+		deviceCounts,
+		isDevicesLoading,
+		columnVisibility,
+		toggleColumn as toggleColumnStore,
+		selectionMode,
+		selectedDevices,
+		toggleSelectionMode,
+		selectAllDevices,
+		clearSelection
+	} from '$stores';
 	import type { ColumnVisibility } from '$stores/devices';
 	import { api } from '$api/client';
 	import { uiStore } from '$stores';
@@ -19,36 +32,68 @@
 	let assigningProfile = false;
 
 	// Column definitions - all available columns (Actions is always shown, not in selector)
-	const allColumns: { id: keyof ColumnVisibility; label: string; required: boolean; sortable: boolean; sortKey?: string }[] = [
+	const allColumns: {
+		id: keyof ColumnVisibility;
+		label: string;
+		required: boolean;
+		sortable: boolean;
+		sortKey?: string;
+	}[] = [
 		{ id: 'name', label: 'Device', required: true, sortable: true, sortKey: 'name' },
 		{ id: 'ip', label: 'IP Address', required: false, sortable: true, sortKey: 'ip' },
 		{ id: 'mac', label: 'MAC Address', required: false, sortable: true, sortKey: 'mac' },
 		{ id: 'hostname', label: 'Hostname', required: false, sortable: true, sortKey: 'hostname' },
-		{ id: 'manufacturer', label: 'Manufacturer', required: false, sortable: true, sortKey: 'manufacturer' },
-		{ id: 'connection', label: 'Connection Type', required: false, sortable: true, sortKey: 'connection' },
+		{
+			id: 'manufacturer',
+			label: 'Manufacturer',
+			required: false,
+			sortable: true,
+			sortKey: 'manufacturer'
+		},
+		{
+			id: 'connection',
+			label: 'Connection Type',
+			required: false,
+			sortable: true,
+			sortKey: 'connection'
+		},
 		{ id: 'signal', label: 'Signal Strength', required: false, sortable: true, sortKey: 'signal' },
 		{ id: 'frequency', label: 'Frequency', required: false, sortable: false },
-		{ id: 'connectedTo', label: 'Connected To', required: false, sortable: true, sortKey: 'connectedTo' },
+		{
+			id: 'connectedTo',
+			label: 'Connected To',
+			required: false,
+			sortable: true,
+			sortKey: 'connectedTo'
+		},
 		{ id: 'profile', label: 'Profile', required: false, sortable: true, sortKey: 'profile' },
-		{ id: 'lastActive', label: 'Last Active', required: false, sortable: true, sortKey: 'last_active' },
-		{ id: 'status', label: 'Status', required: false, sortable: false },
+		{
+			id: 'lastActive',
+			label: 'Last Active',
+			required: false,
+			sortable: true,
+			sortKey: 'last_active'
+		},
+		{ id: 'status', label: 'Status', required: false, sortable: false }
 	];
 
 	function handleToggleColumn(columnId: keyof ColumnVisibility) {
-		const column = allColumns.find(c => c.id === columnId);
+		const column = allColumns.find((c) => c.id === columnId);
 		if (column?.required) return; // Can't toggle required columns
 		toggleColumnStore(columnId);
 	}
 
 	// Selection mode helpers
 	$: selectedCount = $selectedDevices.size;
-	$: allSelected = $filteredDevices.length > 0 && $filteredDevices.every(d => d.id && $selectedDevices.has(d.id));
+	$: allSelected =
+		$filteredDevices.length > 0 &&
+		$filteredDevices.every((d) => d.id && $selectedDevices.has(d.id));
 
 	function handleSelectAll() {
 		if (allSelected) {
 			clearSelection();
 		} else {
-			const ids = $filteredDevices.map(d => d.id).filter((id): id is string => !!id);
+			const ids = $filteredDevices.map((d) => d.id).filter((id): id is string => !!id);
 			selectAllDevices(ids);
 		}
 	}
@@ -58,8 +103,8 @@
 		loadingProfiles = true;
 		try {
 			const result = await api.profiles.list();
-			profiles = result.map(p => ({ id: p.id || '', name: p.name })).filter(p => p.id);
-		} catch (error) {
+			profiles = result.map((p) => ({ id: p.id || '', name: p.name })).filter((p) => p.id);
+		} catch (_error) {
 			uiStore.error('Failed to load profiles');
 		} finally {
 			loadingProfiles = false;
@@ -68,17 +113,18 @@
 
 	async function assignToProfile(profileId: string, profileName: string) {
 		if (selectedCount === 0) return;
-		
+
 		assigningProfile = true;
-		const deviceIds = Array.from($selectedDevices);
-		
+
 		try {
 			// Note: This would require a backend endpoint to assign devices to profiles
 			// For now, show a message about the feature
-			uiStore.success(`Would assign ${selectedCount} device(s) to "${profileName}". (API endpoint needed)`);
+			uiStore.success(
+				`Would assign ${selectedCount} device(s) to "${profileName}". (API endpoint needed)`
+			);
 			profileSelectorOpen = false;
 			toggleSelectionMode();
-		} catch (error) {
+		} catch (_error) {
 			uiStore.error('Failed to assign devices to profile');
 		} finally {
 			assigningProfile = false;
@@ -108,27 +154,27 @@
 
 	function handleSearch(event: Event) {
 		const input = event.target as HTMLInputElement;
-		deviceFilters.update(f => ({ ...f, search: input.value }));
+		deviceFilters.update((f) => ({ ...f, search: input.value }));
 	}
 
 	function handleClearSearch() {
-		deviceFilters.update(f => ({ ...f, search: '' }));
+		deviceFilters.update((f) => ({ ...f, search: '' }));
 	}
 
 	function handleStatusFilter(status: typeof $deviceFilters.status) {
-		deviceFilters.update(f => ({ ...f, status }));
+		deviceFilters.update((f) => ({ ...f, status }));
 	}
 
 	function handleConnectionFilter(connectionType: typeof $deviceFilters.connectionType) {
-		deviceFilters.update(f => ({ ...f, connectionType }));
+		deviceFilters.update((f) => ({ ...f, connectionType }));
 	}
 
 	function handleFrequencyFilter(frequency: typeof $deviceFilters.frequency) {
-		deviceFilters.update(f => ({ ...f, frequency }));
+		deviceFilters.update((f) => ({ ...f, frequency }));
 	}
 
 	function handleSort(sortBy: typeof $deviceFilters.sortBy) {
-		deviceFilters.update(f => ({
+		deviceFilters.update((f) => ({
 			...f,
 			sortBy,
 			sortOrder: f.sortBy === sortBy && f.sortOrder === 'asc' ? 'desc' : 'asc'
@@ -147,13 +193,15 @@
 				<span>{$deviceCounts.total} total</span>
 				{#if $devicesStore.lastUpdated}
 					<span>•</span>
-					<span title="Click Refresh to update">Updated {new Date($devicesStore.lastUpdated).toLocaleTimeString()}</span>
+					<span title="Click Refresh to update"
+						>Updated {new Date($devicesStore.lastUpdated).toLocaleTimeString()}</span
+					>
 				{/if}
 			</div>
 		</div>
 		<div class="header-right">
 			<!-- Selection Mode Toggle -->
-			<button 
+			<button
 				class="btn btn-sm"
 				class:btn-primary={$selectionMode}
 				class:btn-secondary={!$selectionMode}
@@ -169,9 +217,12 @@
 			<!-- Profile Assignment (only in selection mode) -->
 			{#if $selectionMode && selectedCount > 0}
 				<div class="profile-selector">
-					<button 
+					<button
 						class="btn btn-primary btn-sm"
-						on:click={() => { profileSelectorOpen = !profileSelectorOpen; loadProfiles(); }}
+						on:click={() => {
+							profileSelectorOpen = !profileSelectorOpen;
+							loadProfiles();
+						}}
 						disabled={assigningProfile}
 					>
 						📁 Assign to Profile ({selectedCount})
@@ -191,7 +242,7 @@
 								<div class="profile-empty">No profiles available</div>
 							{:else}
 								{#each profiles as profile}
-									<button 
+									<button
 										class="profile-option"
 										on:click={() => assignToProfile(profile.id, profile.name)}
 									>
@@ -206,9 +257,9 @@
 
 			<!-- Column Selector -->
 			<div class="column-selector">
-				<button 
+				<button
 					class="btn btn-secondary btn-sm"
-					on:click={() => columnSelectorOpen = !columnSelectorOpen}
+					on:click={() => (columnSelectorOpen = !columnSelectorOpen)}
 				>
 					⚙ Columns
 				</button>
@@ -220,8 +271,8 @@
 						</div>
 						{#each allColumns as column}
 							<label class="column-option" class:disabled={column.required}>
-								<input 
-									type="checkbox" 
+								<input
+									type="checkbox"
 									checked={$columnVisibility[column.id]}
 									disabled={column.required}
 									on:change={() => handleToggleColumn(column.id)}
@@ -236,7 +287,7 @@
 				{/if}
 			</div>
 
-			<button 
+			<button
 				class="btn btn-secondary btn-sm"
 				on:click={handleRefresh}
 				disabled={refreshing || $isDevicesLoading}
@@ -256,7 +307,7 @@
 		<!-- Search Row -->
 		<div class="search-row">
 			<div class="search-wrapper">
-				<input 
+				<input
 					type="text"
 					class="input search-input"
 					placeholder="Search devices... (try: ip=10.0.5, device=phone, mac=AA:BB)"
@@ -264,11 +315,7 @@
 					on:input={handleSearch}
 				/>
 				{#if $deviceFilters.search}
-					<button 
-						class="search-clear-btn"
-						on:click={handleClearSearch}
-						title="Clear search"
-					>
+					<button class="search-clear-btn" on:click={handleClearSearch} title="Clear search">
 						×
 					</button>
 				{/if}
@@ -279,14 +326,14 @@
 		<div class="filter-row">
 			<!-- Status Filter -->
 			<div class="filter-group">
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'all'}
 					on:click={() => handleStatusFilter('all')}
 				>
 					All
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'connected'}
 					on:click={() => handleStatusFilter('connected')}
@@ -294,14 +341,14 @@
 					<span class="status-dot online"></span>
 					Connected ({$deviceCounts.connected})
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'disconnected'}
 					on:click={() => handleStatusFilter('disconnected')}
 				>
 					Offline ({$deviceCounts.disconnected})
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'blocked'}
 					on:click={() => handleStatusFilter('blocked')}
@@ -313,21 +360,21 @@
 
 			<!-- Connection Type Filter -->
 			<div class="filter-group">
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'all'}
 					on:click={() => handleConnectionFilter('all')}
 				>
 					All Types
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'wireless'}
 					on:click={() => handleConnectionFilter('wireless')}
 				>
 					📶 Wireless ({$deviceCounts.wireless})
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'wired'}
 					on:click={() => handleConnectionFilter('wired')}
@@ -338,21 +385,21 @@
 
 			<!-- Frequency Filter -->
 			<div class="filter-group">
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === 'all'}
 					on:click={() => handleFrequencyFilter('all')}
 				>
 					All Bands
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === '2.4GHz'}
 					on:click={() => handleFrequencyFilter('2.4GHz')}
 				>
 					2.4 GHz ({$deviceCounts.freq24})
 				</button>
-				<button 
+				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === '5GHz'}
 					on:click={() => handleFrequencyFilter('5GHz')}
@@ -376,14 +423,18 @@
 			<div class="empty-state">
 				{#if $deviceFilters.search || $deviceFilters.status !== 'all' || $deviceFilters.connectionType !== 'all' || $deviceFilters.frequency !== 'all'}
 					<p>No devices match your filters.</p>
-					<button class="btn btn-secondary btn-sm" on:click={() => deviceFilters.set({
-						search: '',
-						status: 'all',
-						connectionType: 'all',
-						frequency: 'all',
-						sortBy: 'name',
-						sortOrder: 'asc'
-					})}>
+					<button
+						class="btn btn-secondary btn-sm"
+						on:click={() =>
+							deviceFilters.set({
+								search: '',
+								status: 'all',
+								connectionType: 'all',
+								frequency: 'all',
+								sortBy: 'name',
+								sortOrder: 'asc'
+							})}
+					>
 						Clear filters
 					</button>
 				{:else}
@@ -397,8 +448,8 @@
 						<!-- Selection checkbox (only in selection mode) -->
 						{#if $selectionMode}
 							<th class="select-header">
-								<input 
-									type="checkbox" 
+								<input
+									type="checkbox"
 									checked={allSelected}
 									on:change={handleSelectAll}
 									title="Select all"
@@ -409,7 +460,9 @@
 							<th class="sortable" on:click={() => handleSort('name')}>
 								Device
 								{#if $deviceFilters.sortBy === 'name'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -417,7 +470,9 @@
 							<th class="sortable" on:click={() => handleSort('ip')}>
 								IP Address
 								{#if $deviceFilters.sortBy === 'ip'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -425,7 +480,9 @@
 							<th class="sortable" on:click={() => handleSort('mac')}>
 								MAC Address
 								{#if $deviceFilters.sortBy === 'mac'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -433,7 +490,9 @@
 							<th class="sortable" on:click={() => handleSort('hostname')}>
 								Hostname
 								{#if $deviceFilters.sortBy === 'hostname'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -441,7 +500,9 @@
 							<th class="sortable" on:click={() => handleSort('manufacturer')}>
 								Manufacturer
 								{#if $deviceFilters.sortBy === 'manufacturer'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -449,7 +510,9 @@
 							<th class="sortable" on:click={() => handleSort('connection')}>
 								Connection
 								{#if $deviceFilters.sortBy === 'connection'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -457,7 +520,9 @@
 							<th class="sortable" on:click={() => handleSort('signal')}>
 								Signal
 								{#if $deviceFilters.sortBy === 'signal'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -468,7 +533,9 @@
 							<th class="sortable" on:click={() => handleSort('connectedTo')}>
 								Connected To
 								{#if $deviceFilters.sortBy === 'connectedTo'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -476,7 +543,9 @@
 							<th class="sortable" on:click={() => handleSort('profile')}>
 								Profile
 								{#if $deviceFilters.sortBy === 'profile'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -484,7 +553,9 @@
 							<th class="sortable" on:click={() => handleSort('last_active')}>
 								Last Active
 								{#if $deviceFilters.sortBy === 'last_active'}
-									<span class="sort-indicator">{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span>
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
 								{/if}
 							</th>
 						{/if}
@@ -595,7 +666,7 @@
 		text-align: center;
 	}
 
-	.select-header input[type="checkbox"] {
+	.select-header input[type='checkbox'] {
 		width: 18px;
 		height: 18px;
 		cursor: pointer;
@@ -638,7 +709,7 @@
 		cursor: not-allowed;
 	}
 
-	.column-option input[type="checkbox"] {
+	.column-option input[type='checkbox'] {
 		accent-color: var(--color-accent);
 	}
 

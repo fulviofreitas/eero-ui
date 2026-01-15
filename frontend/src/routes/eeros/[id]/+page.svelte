@@ -114,7 +114,7 @@
 		const days = Math.floor(seconds / 86400);
 		const hours = Math.floor((seconds % 86400) / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
-		
+
 		if (days > 0) return `${days}d ${hours}h`;
 		if (hours > 0) return `${hours}h ${minutes}m`;
 		return `${minutes}m`;
@@ -136,19 +136,19 @@
 
 	function formatTemperature(celsius: number | null | undefined): string {
 		if (celsius === null || celsius === undefined) return '—';
-		const fahrenheit = (celsius * 9/5) + 32;
+		const fahrenheit = (celsius * 9) / 5 + 32;
 		return `${celsius.toFixed(1)}°C / ${fahrenheit.toFixed(1)}°F`;
 	}
 
 	function formatBand(band: string): string {
 		// Convert API band names to readable format
 		const bandMap: Record<string, string> = {
-			'band_2_4GHz': '2.4 GHz',
-			'band_5GHz': '5 GHz',
-			'band_5GHz_full': '5 GHz',
-			'band_5GHz_low': '5 GHz Low',
-			'band_5GHz_high': '5 GHz High',
-			'band_6GHz': '6 GHz',
+			band_2_4GHz: '2.4 GHz',
+			band_5GHz: '5 GHz',
+			band_5GHz_full: '5 GHz',
+			band_5GHz_low: '5 GHz Low',
+			band_5GHz_high: '5 GHz High',
+			band_6GHz: '6 GHz'
 		};
 		return bandMap[band] || band.replace('band_', '').replace('_', ' ').replace('GHz', ' GHz');
 	}
@@ -199,12 +199,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchEero(true)}>
-					Try Again
-				</button>
-				<button class="btn btn-ghost" on:click={() => goto('/eeros')}>
-					Back to Eeros
-				</button>
+				<button class="btn btn-secondary" on:click={() => fetchEero(true)}> Try Again </button>
+				<button class="btn btn-ghost" on:click={() => goto('/eeros')}> Back to Eeros </button>
 			</div>
 		</div>
 	{:else if eero}
@@ -225,11 +221,7 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button 
-					class="btn btn-secondary"
-					on:click={() => fetchEero(true)}
-					disabled={actionLoading}
-				>
+				<button class="btn btn-secondary" on:click={() => fetchEero(true)} disabled={actionLoading}>
 					↻ Refresh
 				</button>
 			</div>
@@ -249,7 +241,11 @@
 					</div>
 					<div class="info-item">
 						<span class="info-label">Connection</span>
-						<span class="info-value">{eero.wired ? '🔌 Wired' : '📶 Wireless'}{eero.connection_type ? ` (${eero.connection_type})` : ''}</span>
+						<span class="info-value"
+							>{eero.wired ? '🔌 Wired' : '📶 Wireless'}{eero.connection_type
+								? ` (${eero.connection_type})`
+								: ''}</span
+						>
 					</div>
 					{#if !eero.is_gateway && eero.mesh_quality_bars != null}
 						<div class="info-item">
@@ -425,13 +421,17 @@
 					{#if eero.last_heartbeat}
 						<div class="info-item">
 							<span class="info-label">Last Heartbeat</span>
-							<span class="info-value"><span class="chip">{formatDate(eero.last_heartbeat)}</span></span>
+							<span class="info-value"
+								><span class="chip">{formatDate(eero.last_heartbeat)}</span></span
+							>
 						</div>
 					{/if}
 					{#if eero.last_reboot}
 						<div class="info-item">
 							<span class="info-label">Last Reboot</span>
-							<span class="info-value"><span class="chip">{formatDate(eero.last_reboot)}</span></span>
+							<span class="info-value"
+								><span class="chip">{formatDate(eero.last_reboot)}</span></span
+							>
 						</div>
 					{/if}
 					{#if eero.joined}
@@ -549,7 +549,9 @@
 								</div>
 								<span class="port-status">
 									{#if port.has_carrier}
-										<span class="text-success">●</span> Connected {#if port.speed}<span class="port-speed-badge">{formatPortSpeed(port.speed)}</span>{/if}
+										<span class="text-success">●</span> Connected {#if port.speed}<span
+												class="port-speed-badge">{formatPortSpeed(port.speed)}</span
+											>{/if}
 									{:else}
 										<span class="text-muted">○ No link</span>
 									{/if}
@@ -569,21 +571,13 @@
 			<section class="card detail-card actions-card">
 				<h2>Actions</h2>
 				<div class="action-buttons">
-					<button 
-						class="btn btn-secondary"
-						on:click={handleToggleLed}
-						disabled={actionLoading}
-					>
+					<button class="btn btn-secondary" on:click={handleToggleLed} disabled={actionLoading}>
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}
 						{eero.led_on ? '🌑 Turn LED Off' : '💡 Turn LED On'}
 					</button>
-					<button 
-						class="btn btn-danger"
-						on:click={handleReboot}
-						disabled={actionLoading}
-					>
+					<button class="btn btn-danger" on:click={handleReboot} disabled={actionLoading}>
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}

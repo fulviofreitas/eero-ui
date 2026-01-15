@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
-	import type { NetworkDetail, SpeedTestResult } from '$api/types';
+	import type { NetworkDetail } from '$api/types';
 	import { uiStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 
@@ -22,7 +22,7 @@
 
 	async function fetchNetwork(refresh = false) {
 		console.log('Fetching network with ID:', networkId);
-		
+
 		if (!networkId) {
 			console.error('Network ID is missing');
 			error = 'Invalid network ID';
@@ -46,12 +46,12 @@
 
 	async function handleSpeedTest() {
 		if (!networkId) return;
-		
+
 		speedTestLoading = true;
 		uiStore.info('Running speed test... This may take up to 60 seconds.');
-		
+
 		try {
-			const result = await api.networks.speedTest(networkId);
+			await api.networks.speedTest(networkId);
 			uiStore.success('Speed test completed!');
 			// Refresh network to get updated speed test data
 			await fetchNetwork(true);
@@ -64,10 +64,10 @@
 
 	async function handleToggleGuestNetwork() {
 		if (!network || !networkId) return;
-		
+
 		const enabling = !network.guest_network_enabled;
 		guestToggleLoading = true;
-		
+
 		try {
 			await api.networks.toggleGuestNetwork(networkId, enabling);
 			uiStore.success(`Guest network ${enabling ? 'enabled' : 'disabled'}.`);
@@ -89,7 +89,7 @@
 		return new Date(dateStr).toLocaleString();
 	}
 
-	function getSettingValue(settings: Record<string, unknown> | null, key: string): string {
+	function _getSettingValue(settings: Record<string, unknown> | null, key: string): string {
 		if (!settings || settings[key] === undefined) return '—';
 		const value = settings[key];
 		if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled';
@@ -99,55 +99,58 @@
 
 	// Acronym mappings with correct capitalization
 	const ACRONYM_MAP: Record<string, string> = {
-		'dns': 'DNS',
-		'upnp': 'UPnP',
-		'ipv6': 'IPv6',
-		'ipv4': 'IPv4',
-		'wpa3': 'WPA3',
-		'wpa2': 'WPA2',
-		'wpa': 'WPA',
-		'wan': 'WAN',
-		'lan': 'LAN',
-		'nat': 'NAT',
-		'dhcp': 'DHCP',
-		'ssid': 'SSID',
-		'ip': 'IP',
-		'isp': 'ISP',
-		'sqm': 'SQM',
-		'vpn': 'VPN',
-		'ddns': 'DDNS',
-		'https': 'HTTPS',
-		'http': 'HTTP',
-		'udp': 'UDP',
-		'tcp': 'TCP',
-		'iot': 'IoT',
-		'qos': 'QoS',
-		'pppoe': 'PPPoE',
-		'vlan': 'VLAN',
-		'mac': 'MAC',
-		'id': 'ID'
+		dns: 'DNS',
+		upnp: 'UPnP',
+		ipv6: 'IPv6',
+		ipv4: 'IPv4',
+		wpa3: 'WPA3',
+		wpa2: 'WPA2',
+		wpa: 'WPA',
+		wan: 'WAN',
+		lan: 'LAN',
+		nat: 'NAT',
+		dhcp: 'DHCP',
+		ssid: 'SSID',
+		ip: 'IP',
+		isp: 'ISP',
+		sqm: 'SQM',
+		vpn: 'VPN',
+		ddns: 'DDNS',
+		https: 'HTTPS',
+		http: 'HTTP',
+		udp: 'UDP',
+		tcp: 'TCP',
+		iot: 'IoT',
+		qos: 'QoS',
+		pppoe: 'PPPoE',
+		vlan: 'VLAN',
+		mac: 'MAC',
+		id: 'ID'
 	};
 
 	function formatLabel(key: string): string {
 		// Replace underscores with spaces
 		let label = key.replace(/_/g, ' ');
-		
+
 		// Capitalize each word, using acronym map for known acronyms
-		label = label.split(' ').map(word => {
-			const lower = word.toLowerCase();
-			if (ACRONYM_MAP[lower]) {
-				return ACRONYM_MAP[lower];
-			}
-			return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-		}).join(' ');
-		
+		label = label
+			.split(' ')
+			.map((word) => {
+				const lower = word.toLowerCase();
+				if (ACRONYM_MAP[lower]) {
+					return ACRONYM_MAP[lower];
+				}
+				return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+			})
+			.join(' ');
+
 		return label;
 	}
 
-	function formatHealthObject(obj: unknown): { entries: [string, unknown][], isSimple: boolean } {
+	function formatHealthObject(obj: unknown): { entries: [string, unknown][]; isSimple: boolean } {
 		if (obj === null || obj === undefined) return { entries: [], isSimple: true };
 		if (typeof obj !== 'object') return { entries: [['value', obj]], isSimple: true };
-		
+
 		const entries = Object.entries(obj as Record<string, unknown>);
 		return { entries, isSimple: entries.length <= 2 };
 	}
@@ -163,19 +166,34 @@
 		if (typeof value === 'boolean') return value ? 'good' : 'bad';
 		if (typeof value === 'string') {
 			const lower = value.toLowerCase();
-			if (['connected', 'online', 'up', 'ok', 'good', 'active', 'enabled', 'true'].some(s => lower.includes(s))) return 'good';
-			if (['disconnected', 'offline', 'down', 'error', 'failed', 'disabled', 'false'].some(s => lower.includes(s))) return 'bad';
-			if (['warning', 'degraded', 'slow', 'limited'].some(s => lower.includes(s))) return 'warning';
+			if (
+				['connected', 'online', 'up', 'ok', 'good', 'active', 'enabled', 'true'].some((s) =>
+					lower.includes(s)
+				)
+			)
+				return 'good';
+			if (
+				['disconnected', 'offline', 'down', 'error', 'failed', 'disabled', 'false'].some((s) =>
+					lower.includes(s)
+				)
+			)
+				return 'bad';
+			if (['warning', 'degraded', 'slow', 'limited'].some((s) => lower.includes(s)))
+				return 'warning';
 		}
 		return 'neutral';
 	}
 
 	function getStatusIcon(status: 'good' | 'warning' | 'bad' | 'neutral'): string {
 		switch (status) {
-			case 'good': return '●';
-			case 'warning': return '◐';
-			case 'bad': return '○';
-			default: return '◌';
+			case 'good':
+				return '●';
+			case 'warning':
+				return '◐';
+			case 'bad':
+				return '○';
+			default:
+				return '◌';
 		}
 	}
 
@@ -187,15 +205,15 @@
 		if (ACRONYM_MAP[lower]) return ACRONYM_MAP[lower];
 		// Known compound names
 		const knownValues: Record<string, string> = {
-			'dnsfilter': 'DNSFilter',
-			'cloudflare': 'Cloudflare',
-			'opendns': 'OpenDNS',
-			'nextdns': 'NextDNS',
-			'automatic': 'Automatic',
-			'manual': 'Manual',
-			'custom': 'Custom',
-			'disabled': 'Disabled',
-			'enabled': 'Enabled'
+			dnsfilter: 'DNSFilter',
+			cloudflare: 'Cloudflare',
+			opendns: 'OpenDNS',
+			nextdns: 'NextDNS',
+			automatic: 'Automatic',
+			manual: 'Manual',
+			custom: 'Custom',
+			disabled: 'Disabled',
+			enabled: 'Enabled'
 		};
 		if (knownValues[lower]) return knownValues[lower];
 		// Default: capitalize first letter
@@ -239,24 +257,16 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}>
-					Try Again
-				</button>
-				<button class="btn btn-ghost" on:click={() => goto('/')}>
-					Back to Dashboard
-				</button>
+				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}> Try Again </button>
+				<button class="btn btn-ghost" on:click={() => goto('/')}> Back to Dashboard </button>
 			</div>
 		</div>
 	{:else if !network}
 		<div class="empty-state">
 			<p>No network data available.</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}>
-					Try Again
-				</button>
-				<button class="btn btn-ghost" on:click={() => goto('/')}>
-					Back to Dashboard
-				</button>
+				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}> Try Again </button>
+				<button class="btn btn-ghost" on:click={() => goto('/')}> Back to Dashboard </button>
 			</div>
 		</div>
 	{:else}
@@ -273,7 +283,11 @@
 					</div>
 				</div>
 				<div class="header-meta">
-					<StatusBadge status={network.status === 'green' || network.status === 'online' ? 'connected' : 'disconnected'} />
+					<StatusBadge
+						status={network.status === 'green' || network.status === 'online'
+							? 'connected'
+							: 'disconnected'}
+					/>
 					{#if network.public_ip}
 						<span class="text-muted">•</span>
 						<span class="mono text-muted">{network.public_ip}</span>
@@ -281,11 +295,7 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button 
-					class="btn btn-secondary"
-					on:click={() => fetchNetwork(true)}
-					disabled={loading}
-				>
+				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)} disabled={loading}>
 					↻ Refresh
 				</button>
 			</div>
@@ -304,7 +314,11 @@
 					<div class="info-row">
 						<dt>Status</dt>
 						<dd>
-							<StatusBadge status={network.status === 'green' || network.status === 'online' ? 'connected' : 'disconnected'} />
+							<StatusBadge
+								status={network.status === 'green' || network.status === 'online'
+									? 'connected'
+									: 'disconnected'}
+							/>
 						</dd>
 					</div>
 					<div class="info-row">
@@ -356,7 +370,9 @@
 						<div class="info-row">
 							<dt>Double NAT</dt>
 							<dd>
-								<span class="badge {network.ip_settings.double_nat ? 'badge-warning' : 'badge-success'}">
+								<span
+									class="badge {network.ip_settings.double_nat ? 'badge-warning' : 'badge-success'}"
+								>
 									{network.ip_settings.double_nat ? 'Detected' : 'No'}
 								</span>
 							</dd>
@@ -396,7 +412,7 @@
 							{network.guest_network_enabled ? 'Enabled' : 'Disabled'}
 						</span>
 					</div>
-					<button 
+					<button
 						class="btn {network.guest_network_enabled ? 'btn-secondary' : 'btn-primary'}"
 						on:click={handleToggleGuestNetwork}
 						disabled={guestToggleLoading}
@@ -413,7 +429,7 @@
 			<section class="card info-card speed-test-card">
 				<div class="card-header-flex">
 					<h2>Speed Test</h2>
-					<button 
+					<button
 						class="btn btn-primary btn-sm"
 						on:click={handleSpeedTest}
 						disabled={speedTestLoading}
@@ -426,14 +442,16 @@
 						{/if}
 					</button>
 				</div>
-				
+
 				{#if network.speed_test && (network.speed_test.download_mbps || network.speed_test.upload_mbps || network.speed_test.down?.value || network.speed_test.up?.value)}
 					<div class="speed-results">
 						<div class="speed-item download">
 							<div class="speed-icon">↓</div>
 							<div class="speed-data">
 								<span class="speed-value">
-									{formatSpeed(network.speed_test.down?.value ?? network.speed_test.download_mbps ?? null)}
+									{formatSpeed(
+										network.speed_test.down?.value ?? network.speed_test.download_mbps ?? null
+									)}
 								</span>
 								<span class="speed-label">Download</span>
 							</div>
@@ -442,7 +460,9 @@
 							<div class="speed-icon">↑</div>
 							<div class="speed-data">
 								<span class="speed-value">
-									{formatSpeed(network.speed_test.up?.value ?? network.speed_test.upload_mbps ?? null)}
+									{formatSpeed(
+										network.speed_test.up?.value ?? network.speed_test.upload_mbps ?? null
+									)}
 								</span>
 								<span class="speed-label">Upload</span>
 							</div>
@@ -450,11 +470,15 @@
 					</div>
 					{#if network.speed_test.date || network.speed_test.timestamp}
 						<p class="text-muted text-sm speed-timestamp">
-							Last tested: {formatDate(network.speed_test.date || network.speed_test.timestamp)}
+							Last tested: {formatDate(
+								network.speed_test.date ?? network.speed_test.timestamp ?? null
+							)}
 						</p>
 					{/if}
 				{:else}
-					<p class="text-muted text-sm">No speed test data available. Run a test to measure your network speed.</p>
+					<p class="text-muted text-sm">
+						No speed test data available. Run a test to measure your network speed.
+					</p>
 				{/if}
 			</section>
 
@@ -560,7 +584,9 @@
 					<div class="location-display">
 						<div class="location-main">
 							<span class="location-city">{network.geo_ip.city}</span>
-							<span class="location-region">{network.geo_ip.region}, {network.geo_ip.countryCode}</span>
+							<span class="location-region"
+								>{network.geo_ip.region}, {network.geo_ip.countryCode}</span
+							>
 						</div>
 						<div class="location-time">
 							<span class="time-icon">🕐</span>
@@ -620,7 +646,11 @@
 						<div class="info-row">
 							<dt>Policies</dt>
 							<dd>
-								<span class="badge {network.premium_dns.dns_policies_enabled ? 'badge-success' : 'badge-neutral'}">
+								<span
+									class="badge {network.premium_dns.dns_policies_enabled
+										? 'badge-success'
+										: 'badge-neutral'}"
+								>
 									{network.premium_dns.dns_policies_enabled ? 'Enabled' : 'Disabled'}
 								</span>
 							</dd>
@@ -629,7 +659,11 @@
 							<div class="info-row">
 								<dt>Block Malware</dt>
 								<dd>
-									<span class="badge {network.premium_dns.dns_policies.block_malware ? 'badge-success' : 'badge-neutral'}">
+									<span
+										class="badge {network.premium_dns.dns_policies.block_malware
+											? 'badge-success'
+											: 'badge-neutral'}"
+									>
 										{network.premium_dns.dns_policies.block_malware ? 'Enabled' : 'Disabled'}
 									</span>
 								</dd>
@@ -637,7 +671,11 @@
 							<div class="info-row">
 								<dt>Ad Blocking</dt>
 								<dd>
-									<span class="badge {network.premium_dns.dns_policies.ad_block ? 'badge-success' : 'badge-neutral'}">
+									<span
+										class="badge {network.premium_dns.dns_policies.ad_block
+											? 'badge-success'
+											: 'badge-neutral'}"
+									>
 										{network.premium_dns.dns_policies.ad_block ? 'Enabled' : 'Disabled'}
 									</span>
 								</dd>
@@ -699,7 +737,9 @@
 						<div class="info-row">
 							<dt>Update Available</dt>
 							<dd>
-								<span class="badge {network.updates.has_update ? 'badge-warning' : 'badge-success'}">
+								<span
+									class="badge {network.updates.has_update ? 'badge-warning' : 'badge-success'}"
+								>
 									{network.updates.has_update ? 'Yes' : 'Up to date'}
 								</span>
 							</dd>
@@ -1034,7 +1074,6 @@
 		color: var(--color-accent);
 	}
 
-
 	.speed-timestamp {
 		margin-top: var(--space-4);
 		text-align: center;
@@ -1356,7 +1395,11 @@
 	}
 
 	.premium-card {
-		background: linear-gradient(135deg, var(--color-bg-secondary) 0%, rgba(251, 191, 36, 0.02) 100%);
+		background: linear-gradient(
+			135deg,
+			var(--color-bg-secondary) 0%,
+			rgba(251, 191, 36, 0.02) 100%
+		);
 	}
 
 	/* Badge info variant */

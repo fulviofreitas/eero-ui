@@ -1,12 +1,11 @@
 /**
  * Authentication Store
- * 
+ *
  * Manages authentication state and login flow.
  */
 
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import { api, ApiClientError } from '$api/client';
-import type { AuthStatus } from '$api/types';
 
 // ============================================
 // Types
@@ -23,7 +22,7 @@ interface AuthState {
 	premiumStatus: string | null;
 	loading: boolean;
 	error: string | null;
-	loginPending: boolean;  // Waiting for verification code
+	loginPending: boolean; // Waiting for verification code
 }
 
 // ============================================
@@ -54,12 +53,12 @@ function createAuthStore() {
 		 * Check current authentication status
 		 */
 		async checkStatus(): Promise<boolean> {
-			update(s => ({ ...s, loading: true, error: null }));
-			
+			update((s) => ({ ...s, loading: true, error: null }));
+
 			try {
 				const status = await api.auth.status();
 				console.log('[Auth] Status response:', status);
-				update(s => ({
+				update((s) => ({
 					...s,
 					authenticated: status.authenticated,
 					preferredNetworkId: status.preferred_network_id,
@@ -74,7 +73,7 @@ function createAuthStore() {
 				}));
 				return status.authenticated;
 			} catch (error) {
-				update(s => ({
+				update((s) => ({
 					...s,
 					authenticated: false,
 					loading: false,
@@ -88,19 +87,19 @@ function createAuthStore() {
 		 * Start login flow - sends verification code
 		 */
 		async login(identifier: string): Promise<boolean> {
-			update(s => ({ ...s, loading: true, error: null }));
-			
+			update((s) => ({ ...s, loading: true, error: null }));
+
 			try {
 				const response = await api.auth.login(identifier);
 				if (response.success) {
-					update(s => ({
+					update((s) => ({
 						...s,
 						loading: false,
 						loginPending: true
 					}));
 					return true;
 				} else {
-					update(s => ({
+					update((s) => ({
 						...s,
 						loading: false,
 						error: response.message
@@ -108,10 +107,9 @@ function createAuthStore() {
 					return false;
 				}
 			} catch (error) {
-				const message = error instanceof ApiClientError 
-					? error.detail 
-					: 'Login failed. Please try again.';
-				update(s => ({
+				const message =
+					error instanceof ApiClientError ? error.detail : 'Login failed. Please try again.';
+				update((s) => ({
 					...s,
 					loading: false,
 					error: message
@@ -124,12 +122,12 @@ function createAuthStore() {
 		 * Verify login with OTP code
 		 */
 		async verify(code: string): Promise<boolean> {
-			update(s => ({ ...s, loading: true, error: null }));
-			
+			update((s) => ({ ...s, loading: true, error: null }));
+
 			try {
 				const response = await api.auth.verify(code);
 				if (response.success) {
-					update(s => ({
+					update((s) => ({
 						...s,
 						authenticated: true,
 						preferredNetworkId: response.preferred_network_id,
@@ -140,7 +138,7 @@ function createAuthStore() {
 					await this.checkStatus();
 					return true;
 				} else {
-					update(s => ({
+					update((s) => ({
 						...s,
 						loading: false,
 						error: response.message
@@ -148,10 +146,9 @@ function createAuthStore() {
 					return false;
 				}
 			} catch (error) {
-				const message = error instanceof ApiClientError 
-					? error.detail 
-					: 'Verification failed. Please try again.';
-				update(s => ({
+				const message =
+					error instanceof ApiClientError ? error.detail : 'Verification failed. Please try again.';
+				update((s) => ({
 					...s,
 					loading: false,
 					error: message
@@ -164,14 +161,14 @@ function createAuthStore() {
 		 * Log out
 		 */
 		async logout(): Promise<void> {
-			update(s => ({ ...s, loading: true }));
-			
+			update((s) => ({ ...s, loading: true }));
+
 			try {
 				await api.auth.logout();
 			} catch {
 				// Continue with local logout even if API fails
 			}
-			
+
 			set({
 				...initialState,
 				loading: false
@@ -182,14 +179,14 @@ function createAuthStore() {
 		 * Clear error
 		 */
 		clearError(): void {
-			update(s => ({ ...s, error: null }));
+			update((s) => ({ ...s, error: null }));
 		},
 
 		/**
 		 * Cancel login (go back from verification)
 		 */
 		cancelLogin(): void {
-			update(s => ({ ...s, loginPending: false, error: null }));
+			update((s) => ({ ...s, loginPending: false, error: null }));
 		}
 	};
 }
@@ -197,16 +194,16 @@ function createAuthStore() {
 export const authStore = createAuthStore();
 
 // Derived stores
-export const isAuthenticated = derived(authStore, $auth => $auth.authenticated);
-export const isAuthLoading = derived(authStore, $auth => $auth.loading);
-export const authError = derived(authStore, $auth => $auth.error);
-export const isLoginPending = derived(authStore, $auth => $auth.loginPending);
-export const userEmail = derived(authStore, $auth => $auth.userEmail);
-export const userName = derived(authStore, $auth => $auth.userName);
-export const userPhone = derived(authStore, $auth => $auth.userPhone);
-export const userRole = derived(authStore, $auth => $auth.userRole);
-export const accountId = derived(authStore, $auth => $auth.accountId);
-export const premiumStatus = derived(authStore, $auth => $auth.premiumStatus);
+export const isAuthenticated = derived(authStore, ($auth) => $auth.authenticated);
+export const isAuthLoading = derived(authStore, ($auth) => $auth.loading);
+export const authError = derived(authStore, ($auth) => $auth.error);
+export const isLoginPending = derived(authStore, ($auth) => $auth.loginPending);
+export const userEmail = derived(authStore, ($auth) => $auth.userEmail);
+export const userName = derived(authStore, ($auth) => $auth.userName);
+export const userPhone = derived(authStore, ($auth) => $auth.userPhone);
+export const userRole = derived(authStore, ($auth) => $auth.userRole);
+export const accountId = derived(authStore, ($auth) => $auth.accountId);
+export const premiumStatus = derived(authStore, ($auth) => $auth.premiumStatus);
 
 // Listen for 401 events from API client
 if (typeof window !== 'undefined') {

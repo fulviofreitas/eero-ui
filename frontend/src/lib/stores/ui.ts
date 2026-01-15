@@ -1,6 +1,6 @@
 /**
  * UI Store
- * 
+ *
  * Manages UI state: toasts, modals, loading states.
  */
 
@@ -57,8 +57,8 @@ function createUIStore() {
 		 */
 		toast(type: Toast['type'], message: string, duration = 5000): string {
 			const id = `toast-${++toastIdCounter}`;
-			
-			update(s => ({
+
+			update((s) => ({
 				...s,
 				toasts: [...s.toasts, { id, type, message, duration }]
 			}));
@@ -105,9 +105,9 @@ function createUIStore() {
 		 * Remove a toast
 		 */
 		removeToast(id: string): void {
-			update(s => ({
+			update((s) => ({
 				...s,
-				toasts: s.toasts.filter(t => t.id !== id)
+				toasts: s.toasts.filter((t) => t.id !== id)
 			}));
 		},
 
@@ -115,7 +115,7 @@ function createUIStore() {
 		 * Show confirmation dialog
 		 */
 		confirm(options: ConfirmDialog): void {
-			update(s => ({
+			update((s) => ({
 				...s,
 				confirmDialog: options
 			}));
@@ -125,7 +125,7 @@ function createUIStore() {
 		 * Close confirmation dialog
 		 */
 		closeConfirm(): void {
-			update(s => ({
+			update((s) => ({
 				...s,
 				confirmDialog: null
 			}));
@@ -135,7 +135,7 @@ function createUIStore() {
 		 * Toggle sidebar
 		 */
 		toggleSidebar(): void {
-			update(s => ({
+			update((s) => ({
 				...s,
 				sidebarOpen: !s.sidebarOpen
 			}));
@@ -145,7 +145,7 @@ function createUIStore() {
 		 * Set global loading state
 		 */
 		setGlobalLoading(loading: boolean): void {
-			update(s => ({
+			update((s) => ({
 				...s,
 				globalLoading: loading
 			}));
@@ -156,7 +156,7 @@ function createUIStore() {
 export const uiStore = createUIStore();
 
 // Derived stores
-export const toasts = derived(uiStore, $ui => $ui.toasts);
-export const confirmDialog = derived(uiStore, $ui => $ui.confirmDialog);
-export const sidebarOpen = derived(uiStore, $ui => $ui.sidebarOpen);
-export const globalLoading = derived(uiStore, $ui => $ui.globalLoading);
+export const toasts = derived(uiStore, ($ui) => $ui.toasts);
+export const confirmDialog = derived(uiStore, ($ui) => $ui.confirmDialog);
+export const sidebarOpen = derived(uiStore, ($ui) => $ui.sidebarOpen);
+export const globalLoading = derived(uiStore, ($ui) => $ui.globalLoading);

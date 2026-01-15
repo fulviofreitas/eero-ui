@@ -16,7 +16,7 @@
 	let loading = true;
 	let error: string | null = null;
 	let actionLoading = false;
-	
+
 	// Profile management
 	let profiles: ProfileSummary[] = [];
 	let loadingProfiles = false;
@@ -24,8 +24,9 @@
 	let changingProfile = false;
 
 	$: deviceId = $page.params.id;
-	$: displayName = device?.display_name || device?.nickname || device?.hostname || device?.mac || 'Unknown Device';
-	$: statusLabel = device?.blocked ? 'blocked' : (device?.connected ? 'connected' : 'disconnected');
+	$: displayName =
+		device?.display_name || device?.nickname || device?.hostname || device?.mac || 'Unknown Device';
+	$: statusLabel = device?.blocked ? 'blocked' : device?.connected ? 'connected' : 'disconnected';
 
 	onMount(async () => {
 		await fetchDevice();
@@ -66,13 +67,15 @@
 
 	async function handleProfileChange(profileId: string | null, profileName: string) {
 		if (!device?.id) return;
-		
+
 		changingProfile = true;
 		profileDropdownOpen = false;
-		
+
 		try {
 			// Note: This would require a backend endpoint to assign device to profile
-			uiStore.success(`Would assign device to "${profileName}". (API endpoint needed for profile assignment)`);
+			uiStore.success(
+				`Would assign device to "${profileName}". (API endpoint needed for profile assignment)`
+			);
 			// await fetchDevice(true);
 		} catch (err) {
 			uiStore.error(err instanceof Error ? err.message : 'Failed to change profile');
@@ -106,7 +109,7 @@
 
 	async function handleUnblock() {
 		if (!device?.id) return;
-		
+
 		actionLoading = true;
 		try {
 			await devicesStore.unblockDevice(device.id);
@@ -123,7 +126,8 @@
 		if (!device?.id) return;
 		const newName = prompt('Enter new name:', device.nickname || device.hostname || '');
 		if (newName) {
-			devicesStore.setNickname(device.id, newName)
+			devicesStore
+				.setNickname(device.id, newName)
 				.then(() => {
 					uiStore.success('Device renamed successfully.');
 					fetchDevice(true);
@@ -170,12 +174,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchDevice(true)}>
-					Try Again
-				</button>
-				<button class="btn btn-ghost" on:click={() => goto('/devices')}>
-					Back to Devices
-				</button>
+				<button class="btn btn-secondary" on:click={() => fetchDevice(true)}> Try Again </button>
+				<button class="btn btn-ghost" on:click={() => goto('/devices')}> Back to Devices </button>
 			</div>
 		</div>
 	{:else if device}
@@ -198,35 +198,23 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button 
+				<button
 					class="btn btn-secondary"
 					on:click={() => fetchDevice(true)}
 					disabled={actionLoading}
 				>
 					↻ Refresh
 				</button>
-				<button 
-					class="btn btn-secondary"
-					on:click={handleRename}
-					disabled={actionLoading}
-				>
+				<button class="btn btn-secondary" on:click={handleRename} disabled={actionLoading}>
 					✏️ Rename
 				</button>
 				{#if device.blocked}
-					<button 
-						class="btn btn-primary"
-						on:click={handleUnblock}
-						disabled={actionLoading}
-					>
+					<button class="btn btn-primary" on:click={handleUnblock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						✓ Unblock
 					</button>
 				{:else}
-					<button 
-						class="btn btn-danger"
-						on:click={handleBlock}
-						disabled={actionLoading}
-					>
+					<button class="btn btn-danger" on:click={handleBlock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						🚫 Block
 					</button>
@@ -239,9 +227,9 @@
 			<div class="profile-header">
 				<h2>📁 Profile</h2>
 				<div class="profile-selector" on:click|stopPropagation>
-					<button 
+					<button
 						class="btn btn-secondary"
-						on:click={() => profileDropdownOpen = !profileDropdownOpen}
+						on:click={() => (profileDropdownOpen = !profileDropdownOpen)}
 						disabled={changingProfile || loadingProfiles}
 					>
 						{#if changingProfile}
@@ -261,7 +249,7 @@
 									Loading...
 								</div>
 							{:else}
-								<button 
+								<button
 									class="profile-option"
 									class:active={!device.profile_id}
 									on:click={() => handleProfileChange(null, 'No Profile')}
@@ -269,7 +257,7 @@
 									<span>No Profile</span>
 								</button>
 								{#each profiles as profile}
-									<button 
+									<button
 										class="profile-option"
 										class:active={device.profile_id === profile.id}
 										on:click={() => handleProfileChange(profile.id, profile.name)}
@@ -373,7 +361,9 @@
 						<dd>
 							{#if device.connected_to_eero}
 								{#if device.connected_to_eero_id}
-									<a href="/eeros/{device.connected_to_eero_id}" class="eero-link">{device.connected_to_eero}</a>
+									<a href="/eeros/{device.connected_to_eero_id}" class="eero-link"
+										>{device.connected_to_eero}</a
+									>
 								{:else}
 									{device.connected_to_eero}
 								{/if}
@@ -454,7 +444,11 @@
 					<div class="info-row">
 						<dt>Connected</dt>
 						<dd>
-							<span class="status-indicator" class:status-success={device.connected} class:status-muted={!device.connected}>
+							<span
+								class="status-indicator"
+								class:status-success={device.connected}
+								class:status-muted={!device.connected}
+							>
 								{device.connected ? '● Connected' : '○ Disconnected'}
 							</span>
 						</dd>
@@ -462,7 +456,11 @@
 					<div class="info-row">
 						<dt>Blocked</dt>
 						<dd>
-							<span class="status-indicator" class:status-danger={device.blocked} class:status-success={!device.blocked}>
+							<span
+								class="status-indicator"
+								class:status-danger={device.blocked}
+								class:status-success={!device.blocked}
+							>
 								{device.blocked ? '🚫 Blocked' : '✓ Allowed'}
 							</span>
 						</dd>
@@ -470,7 +468,11 @@
 					<div class="info-row">
 						<dt>Paused</dt>
 						<dd>
-							<span class="status-indicator" class:status-warning={device.paused} class:status-success={!device.paused}>
+							<span
+								class="status-indicator"
+								class:status-warning={device.paused}
+								class:status-success={!device.paused}
+							>
 								{device.paused ? '⏸ Paused' : '▶ Active'}
 							</span>
 						</dd>

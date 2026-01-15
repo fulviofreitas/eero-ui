@@ -1,6 +1,6 @@
 /**
  * Eero Dashboard API Types
- * 
+ *
  * TypeScript interfaces matching the FastAPI backend models.
  */
 
@@ -45,7 +45,7 @@ export interface VerifyResponse {
 export interface NetworkSummary {
 	id: string;
 	name: string;
-	status: 'online' | 'offline' | 'updating' | 'unknown';
+	status: 'online' | 'offline' | 'updating' | 'unknown' | 'green' | 'yellow' | 'red';
 	guest_network_enabled: boolean;
 	public_ip: string | null;
 	isp_name: string | null;
@@ -54,23 +54,23 @@ export interface NetworkSummary {
 export interface NetworkDetail extends NetworkSummary {
 	device_count: number;
 	eero_count: number;
-	speed_test: SpeedTestResult | Record<string, unknown> | null;
+	speed_test: SpeedTestResult | null;
 	health: Record<string, unknown> | null;
 	settings: Record<string, unknown> | null;
-	
+
 	// Additional info
 	owner: string | null;
 	display_name: string | null;
 	network_customer_type: string | null;
 	premium_status: string | null;
 	created_at: string | null;
-	
+
 	// Connection
 	gateway: string | null;
 	wan_type: string | null;
 	gateway_ip: string | null;
 	connection_mode: string | null;
-	
+
 	// Features
 	backup_internet_enabled: boolean;
 	power_saving: boolean;
@@ -80,7 +80,7 @@ export interface NetworkDetail extends NetworkSummary {
 	band_steering: boolean;
 	wpa3: boolean;
 	ipv6_upstream: boolean;
-	
+
 	// DNS
 	dns: {
 		mode: string;
@@ -93,7 +93,7 @@ export interface NetworkDetail extends NetworkSummary {
 		dns_provider: string;
 		dns_policies?: Record<string, boolean>;
 	} | null;
-	
+
 	// Geo IP
 	geo_ip: {
 		countryCode: string;
@@ -103,7 +103,7 @@ export interface NetworkDetail extends NetworkSummary {
 		timezone: string;
 		isp: string;
 	} | null;
-	
+
 	// Updates
 	updates: {
 		target_firmware: string;
@@ -112,7 +112,7 @@ export interface NetworkDetail extends NetworkSummary {
 		can_update_now: boolean;
 		last_update_started: string | null;
 	} | null;
-	
+
 	// DHCP
 	dhcp: {
 		lease_time_seconds: number;
@@ -120,36 +120,36 @@ export interface NetworkDetail extends NetworkSummary {
 		starting_address: string;
 		ending_address: string;
 	} | null;
-	
+
 	// DDNS
 	ddns: {
 		enabled: boolean;
 		subdomain: string;
 	} | null;
-	
+
 	// HomeKit
 	homekit: {
 		enabled: boolean;
 		managedNetworkEnabled: boolean;
 	} | null;
-	
+
 	// IP Settings
 	ip_settings: {
 		double_nat: boolean;
 		public_ip: string;
 	} | null;
-	
+
 	// Premium
 	premium_details: {
 		tier: string;
 		payment_method: string;
 		next_billing_event_date: string | null;
 	} | null;
-	
+
 	// Integrations
 	amazon_account_linked: boolean;
 	alexa_skill: boolean;
-	
+
 	// Timestamps
 	last_reboot: string | null;
 }
@@ -165,6 +165,9 @@ export interface SpeedTestResult {
 	upload?: { value: number; units?: string } | null;
 	latency?: number | null;
 	date?: string | null;
+	// Alternative raw format
+	down?: { value?: number; units?: string } | null;
+	up?: { value?: number; units?: string } | null;
 }
 
 // ============================================
@@ -204,7 +207,7 @@ export interface DeviceDetail {
 	ip: string | null;
 	ips: string[];
 	ipv4: string | null;
-	
+
 	// Identification
 	nickname: string | null;
 	hostname: string | null;
@@ -212,18 +215,18 @@ export interface DeviceDetail {
 	manufacturer: string | null;
 	model_name: string | null;
 	device_type: string | null;
-	
+
 	// Connection status
 	connected: boolean;
 	wireless: boolean;
 	connection_type: string | null;
-	
+
 	// Status flags
 	blocked: boolean;
 	paused: boolean;
 	is_guest: boolean;
 	is_private: boolean;
-	
+
 	// Connectivity details
 	signal_strength: number | null;
 	signal_bars: number | null;
@@ -233,20 +236,20 @@ export interface DeviceDetail {
 	ssid: string | null;
 	rx_bitrate: string | null;
 	tx_bitrate: string | null;
-	
+
 	// Connected to
 	connected_to_eero: string | null;
 	connected_to_eero_id: string | null;
 	connected_to_eero_model: string | null;
-	
+
 	// Profile
 	profile_id: string | null;
 	profile_name: string | null;
-	
+
 	// Timestamps
 	last_active: string | null;
 	first_active: string | null;
-	
+
 	// Network
 	network_id: string | null;
 	subnet_kind: string | null;
@@ -302,7 +305,7 @@ export interface EeroDetail {
 	model: string;
 	model_number: string | null;
 	status: 'green' | 'yellow' | 'red' | string;
-	state: string | null;  // ONLINE, OFFLINE, etc.
+	state: string | null; // ONLINE, OFFLINE, etc.
 	location: string | null;
 
 	// Role
@@ -385,6 +388,7 @@ export interface ProfileDevice {
 	id: string | null;
 	url: string | null;
 	mac: string | null;
+	ip: string | null;
 	nickname: string | null;
 	hostname: string | null;
 	display_name: string | null;

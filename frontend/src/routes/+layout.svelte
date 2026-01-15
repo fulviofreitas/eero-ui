@@ -6,14 +6,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { authStore, isAuthenticated, isAuthLoading, networksStore, selectedNetwork, hasMultipleNetworks, devicesStore, userEmail, userName, userRole, premiumStatus } from '$stores';
+	import { goto } from '$app/navigation';
+	import {
+		authStore,
+		isAuthenticated,
+		isAuthLoading,
+		networksStore,
+		selectedNetwork,
+		devicesStore,
+		userEmail,
+		userName,
+		userRole
+	} from '$stores';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
 	import '../app.css';
 
 	let initialized = false;
-	let networkSelectorOpen = false;
 
 	onMount(async () => {
 		await authStore.checkStatus();
@@ -26,7 +35,12 @@
 	}
 
 	// Reactive navigation guard
-	$: if (initialized && !$isAuthLoading && !$isAuthenticated && !$page.url.pathname.startsWith('/login')) {
+	$: if (
+		initialized &&
+		!$isAuthLoading &&
+		!$isAuthenticated &&
+		!$page.url.pathname.startsWith('/login')
+	) {
 		goto('/login');
 	}
 
@@ -41,7 +55,9 @@
 	// Dynamic nav items including network link
 	$: navItems = [
 		...baseNavItems.slice(0, 1), // Dashboard
-		$selectedNetwork ? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: '🌐' } : null,
+		$selectedNetwork
+			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: '🌐' }
+			: null,
 		...baseNavItems.slice(1)
 	].filter(Boolean) as { path: string; label: string; icon: string }[];
 
@@ -52,26 +68,20 @@
 	}
 
 	async function handleNetworkChange(networkId: string) {
-		networkSelectorOpen = false;
 		await networksStore.selectNetwork(networkId);
 		// Refresh device data for the new network
 		devicesStore.clear();
 		devicesStore.fetch(true);
 	}
-
-	function toggleNetworkSelector() {
-		networkSelectorOpen = !networkSelectorOpen;
-	}
-
-	function closeNetworkSelector() {
-		networkSelectorOpen = false;
-	}
 </script>
 
 <svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+		rel="stylesheet"
+	/>
 </svelte:head>
 
 {#if !initialized || $isAuthLoading}
@@ -106,10 +116,11 @@
 
 			<nav class="sidebar-nav">
 				{#each navItems as item}
-					<a 
+					<a
 						href={item.path}
 						class="nav-item"
-						class:active={$page.url.pathname === item.path || (item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
+						class:active={$page.url.pathname === item.path ||
+							(item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
 					>
 						<span class="nav-icon">{item.icon}</span>
 						<span class="nav-label">{item.label}</span>
@@ -117,9 +128,9 @@
 				{/each}
 			</nav>
 
-		<div class="sidebar-footer">
-			<span class="version">v{__APP_VERSION__}</span>
-		</div>
+			<div class="sidebar-footer">
+				<span class="version">v{__APP_VERSION__}</span>
+			</div>
 		</aside>
 
 		<!-- Main content -->
@@ -131,23 +142,22 @@
 					{#if $userName || $userEmail}
 						<span class="account-name">{$userName || $userEmail}</span>
 					{/if}
-				{#if $userRole}
-					<span class="account-role">{$userRole}</span>
-				{/if}
+					{#if $userRole}
+						<span class="account-role">{$userRole}</span>
+					{/if}
 				</div>
 
 				<!-- Network + Sign out (right, stacked) -->
 				<div class="top-bar-right">
 					<div class="signout-row">
 						<span class="status-dot online"></span>
-						<button class="signout-btn" on:click={handleLogout} title="Sign out">
-							Sign out
-						</button>
+						<button class="signout-btn" on:click={handleLogout} title="Sign out"> Sign out </button>
 					</div>
 					{#if $networksStore.networks.length > 0}
 						<div class="network-bar-inner">
-							<span class="status-indicator" class:online={$selectedNetwork?.status === 'online'}></span>
-							<select 
+							<span class="status-indicator" class:online={$selectedNetwork?.status === 'online'}
+							></span>
+							<select
 								class="network-select"
 								on:change={(e) => handleNetworkChange(e.currentTarget.value)}
 							>
@@ -161,7 +171,7 @@
 					{/if}
 				</div>
 			</div>
-			
+
 			<div class="page-content">
 				<slot />
 			</div>

@@ -34,12 +34,12 @@
 			const result = await api.profiles.list(refresh);
 			console.log('Profiles API response:', result);
 			// Ensure we have an array and sort alphabetically by name
-			profiles = Array.isArray(result) 
+			profiles = Array.isArray(result)
 				? result.sort((a, b) => {
-					const nameA = (a.name || '').toLowerCase();
-					const nameB = (b.name || '').toLowerCase();
-					return nameA.localeCompare(nameB);
-				})
+						const nameA = (a.name || '').toLowerCase();
+						const nameB = (b.name || '').toLowerCase();
+						return nameA.localeCompare(nameB);
+					})
 				: [];
 		} catch (err) {
 			console.error('Failed to load profiles:', err);
@@ -68,28 +68,24 @@
 		</div>
 		<div class="header-right">
 			<div class="view-toggle">
-				<button 
-					class="toggle-btn" 
+				<button
+					class="toggle-btn"
 					class:active={viewMode === 'blocks'}
-					on:click={() => viewMode = 'blocks'}
+					on:click={() => (viewMode = 'blocks')}
 					title="Block view"
 				>
 					▦
 				</button>
-				<button 
-					class="toggle-btn" 
+				<button
+					class="toggle-btn"
 					class:active={viewMode === 'list'}
-					on:click={() => viewMode = 'list'}
+					on:click={() => (viewMode = 'list')}
 					title="List view"
 				>
 					☰
 				</button>
 			</div>
-			<button 
-				class="btn btn-secondary"
-				on:click={() => fetchProfiles(true)}
-				disabled={loading}
-			>
+			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
@@ -108,14 +104,14 @@
 	{:else if error}
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
-			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)}>
-				Try Again
-			</button>
+			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)}> Try Again </button>
 		</div>
 	{:else if profiles.length === 0}
 		<div class="empty-state card">
 			<p>No profiles found.</p>
-			<p class="text-sm text-muted">Profiles are created in the Eero app and can be used to group devices for parental controls.</p>
+			<p class="text-sm text-muted">
+				Profiles are created in the Eero app and can be used to group devices for parental controls.
+			</p>
 		</div>
 	{:else if viewMode === 'blocks'}
 		<!-- Block/Card View -->
@@ -128,10 +124,7 @@
 							<h3>{profile.name || 'Unknown Profile'}</h3>
 							<span class="text-sm text-muted">{profile.device_count ?? 0} devices</span>
 						</div>
-						<StatusBadge 
-							status={profile.paused ? 'paused' : 'online'} 
-							showDot={false}
-						/>
+						<StatusBadge status={profile.paused ? 'paused' : 'online'} showDot={false} />
 					</div>
 
 					{#if profile.paused}
@@ -158,7 +151,7 @@
 				</thead>
 				<tbody>
 					{#each profiles as profile, index (getProfileKey(profile, index))}
-						<tr 
+						<tr
 							class:paused={profile.paused}
 							class="clickable"
 							on:click={() => profile.id && window.location.assign(`/profiles/${profile.id}`)}
@@ -228,7 +221,10 @@
 		gap: var(--space-4);
 		text-decoration: none;
 		color: inherit;
-		transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease,
+			border-color 0.15s ease;
 		cursor: pointer;
 	}
 

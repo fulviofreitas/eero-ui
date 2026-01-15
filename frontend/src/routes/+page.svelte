@@ -8,7 +8,6 @@
 	import { api } from '$api/client';
 	import type { NetworkDetail, EeroSummary, ProfileSummary } from '$api/types';
 	import { devicesStore, deviceCounts, uiStore, selectedNetworkId } from '$stores';
-	import StatusBadge from '$components/common/StatusBadge.svelte';
 
 	let network: NetworkDetail | null = null;
 	let eeros: EeroSummary[] = [];
@@ -19,10 +18,7 @@
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
-		await Promise.all([
-			loadNetworkData(),
-			devicesStore.fetch()
-		]);
+		await Promise.all([loadNetworkData(), devicesStore.fetch()]);
 	});
 
 	// React to network changes
@@ -49,8 +45,8 @@
 					profiles = await api.profiles.list();
 				}
 			}
-		} catch (error) {
-			console.error('Failed to load network data:', error);
+		} catch (_error) {
+			console.error('Failed to load network data:', _error);
 		} finally {
 			loading = false;
 		}
@@ -58,21 +54,21 @@
 
 	// Computed values for profiles
 	$: totalProfileDevices = profiles.reduce((sum, p) => sum + p.device_count, 0);
-	$: pausedProfiles = profiles.filter(p => p.paused).length;
+	$: pausedProfiles = profiles.filter((p) => p.paused).length;
 
 	async function runSpeedTest() {
 		if (!network) return;
-		
+
 		speedTestLoading = true;
 		uiStore.info('Starting speed test... This may take a minute.');
-		
+
 		try {
 			const result = await api.networks.speedTest(network.id);
 			if (result) {
 				network = await api.networks.get(network.id, true);
 				uiStore.success('Speed test completed!');
 			}
-		} catch (error) {
+		} catch (_error) {
 			uiStore.error('Speed test failed. Please try again.');
 		} finally {
 			speedTestLoading = false;
@@ -80,25 +76,23 @@
 	}
 
 	// Speed test helper functions
-	function getDownloadSpeed(speedTest: Record<string, unknown> | null): string {
+	function getDownloadSpeed(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '—';
 		// Try raw format first (down.value), then normalized (download_mbps)
-		const down = speedTest.down as { value?: number } | undefined;
-		const value = down?.value ?? (speedTest.download_mbps as number | undefined);
+		const value = speedTest.down?.value ?? speedTest.download_mbps;
 		return value ? value.toFixed(1) : '—';
 	}
 
-	function getUploadSpeed(speedTest: Record<string, unknown> | null): string {
+	function getUploadSpeed(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '—';
 		// Try raw format first (up.value), then normalized (upload_mbps)
-		const up = speedTest.up as { value?: number } | undefined;
-		const value = up?.value ?? (speedTest.upload_mbps as number | undefined);
+		const value = speedTest.up?.value ?? speedTest.upload_mbps;
 		return value ? value.toFixed(1) : '—';
 	}
 
-	function getSpeedTestDate(speedTest: Record<string, unknown> | null): string {
+	function getSpeedTestDate(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '';
-		const dateStr = (speedTest.date as string | undefined) ?? (speedTest.timestamp as string | undefined);
+		const dateStr = speedTest.date ?? speedTest.timestamp;
 		if (!dateStr) return '';
 		return new Date(dateStr).toLocaleString();
 	}
@@ -134,10 +128,12 @@
 					</div>
 					<div class="network-status-title">
 						<span class="network-name">{network.name}</span>
-						<span class="network-status-label">{network.status === 'online' ? 'Connected' : network.status}</span>
+						<span class="network-status-label"
+							>{network.status === 'online' ? 'Connected' : network.status}</span
+						>
 					</div>
 				</div>
-				
+
 				<div class="network-info-grid">
 					{#if network.isp_name}
 						<div class="network-info-item">
@@ -158,7 +154,7 @@
 						</div>
 					{/if}
 				</div>
-				
+
 				<div class="network-features">
 					{#if network.wpa3}
 						<span class="feature-badge">WPA3</span>
@@ -173,7 +169,7 @@
 						<span class="feature-badge">SQM</span>
 					{/if}
 				</div>
-				
+
 				<span class="card-hint">View network details →</span>
 			</a>
 
@@ -207,7 +203,8 @@
 				</div>
 				<div class="stat-value">{eeros.length}</div>
 				<div class="stat-meta">
-					<span class="text-success">{eeros.filter(e => e.status === 'green').length} online</span>
+					<span class="text-success">{eeros.filter((e) => e.status === 'green').length} online</span
+					>
 				</div>
 				<div class="stat-breakdown">
 					{#each eeros.slice(0, 4) as eero}
@@ -244,10 +241,16 @@
 					{/if}
 				</div>
 				<div class="stat-breakdown">
-					{#each [...profiles].sort((a, b) => b.device_count - a.device_count).slice(0, 4) as profile}
+					{#each [...profiles]
+						.sort((a, b) => b.device_count - a.device_count)
+						.slice(0, 4) as profile}
 						<div class="breakdown-item">
 							<span class="breakdown-name">
-								<span class="status-dot small" class:online={!profile.paused} class:warning={profile.paused}></span>
+								<span
+									class="status-dot small"
+									class:online={!profile.paused}
+									class:warning={profile.paused}
+								></span>
 								{profile.name}
 							</span>
 							<span class="mono text-sm">{profile.device_count}</span>
@@ -271,7 +274,7 @@
 			<div class="card stat-card speed-card">
 				<div class="stat-header">
 					<span class="stat-label">Speed Test</span>
-					<button 
+					<button
 						class="btn btn-secondary btn-sm"
 						on:click={runSpeedTest}
 						disabled={speedTestLoading}
@@ -312,7 +315,9 @@
 						</p>
 					{/if}
 				{:else}
-					<p class="text-muted text-sm">No speed test data available. Run a test to see your network speed.</p>
+					<p class="text-muted text-sm">
+						No speed test data available. Run a test to see your network speed.
+					</p>
 				{/if}
 			</div>
 		</div>
@@ -663,7 +668,6 @@
 	.speed-item.upload .speed-value {
 		color: var(--color-accent);
 	}
-
 
 	.speed-timestamp {
 		margin-top: var(--space-3);

@@ -8,7 +8,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, beforeAll, afterEach, afterAll } from 'vitest';
 import { server } from './mocks/server';
 
 // Start MSW server before all tests

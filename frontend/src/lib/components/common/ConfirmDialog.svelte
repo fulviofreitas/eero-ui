@@ -11,7 +11,7 @@
 
 	async function handleConfirm() {
 		if (!$confirmDialog) return;
-		
+
 		loading = true;
 		try {
 			await $confirmDialog.onConfirm();
@@ -36,13 +36,9 @@
 
 {#if $confirmDialog}
 	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-	<div 
-		class="modal-backdrop"
-		transition:fade={{ duration: 150 }}
-		on:click={handleCancel}
-	>
+	<div class="modal-backdrop" transition:fade={{ duration: 150 }} on:click={handleCancel}>
 		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-		<div 
+		<div
 			class="modal"
 			transition:scale={{ duration: 150, start: 0.95 }}
 			on:click|stopPropagation
@@ -53,20 +49,16 @@
 			<h2 id="confirm-title" class="modal-title">
 				{$confirmDialog.title}
 			</h2>
-			
+
 			<p class="modal-message">
 				{$confirmDialog.message}
 			</p>
-			
+
 			<div class="modal-actions">
-				<button 
-					class="btn btn-secondary"
-					on:click={handleCancel}
-					disabled={loading}
-				>
+				<button class="btn btn-secondary" on:click={handleCancel} disabled={loading}>
 					{$confirmDialog.cancelText || 'Cancel'}
 				</button>
-				<button 
+				<button
 					class="btn {$confirmDialog.danger ? 'btn-danger' : 'btn-primary'}"
 					on:click={handleConfirm}
 					disabled={loading}
