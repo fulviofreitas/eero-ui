@@ -65,17 +65,24 @@ This dashboard depends on [eero-client](https://github.com/fulviofreitas/eero-cl
 The easiest way to run eero-ui is with Docker:
 
 ```bash
+# Generate a secure session secret (REQUIRED)
+export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+
 # Pull and run the pre-built image
 docker run -d \
   --name eero-ui \
   -p 8000:8000 \
   -v eero-data:/data \
+  -e EERO_DASHBOARD_SESSION_SECRET \
   ghcr.io/fulviofreitas/eero-ui:latest
 ```
 
 Or clone and build locally:
 
 ```bash
+# Generate a secure session secret (REQUIRED)
+export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+
 git clone https://github.com/fulviofreitas/eero-ui.git
 cd eero-ui
 ./start.sh
@@ -89,15 +96,7 @@ To rebuild with the latest dependencies (e.g., after eero-client updates):
 ./start.sh --rebuild
 ```
 
-To set a secure session secret:
-
-```bash
-# Generate a secret
-export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
-
-# Start with the secret
-docker compose up -d
-```
+> **⚠️ Security Note:** The `EERO_DASHBOARD_SESSION_SECRET` environment variable is required. The application will not start without it. Generate a secure secret with: `openssl rand -hex 32`
 
 To view logs:
 

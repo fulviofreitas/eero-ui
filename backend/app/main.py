@@ -87,12 +87,26 @@ if frontend_dist.exists():
         "/_app", StaticFiles(directory=str(frontend_dist / "_app")), name="static_app"
     )
 
+    # Resolve frontend_dist once for security checks
+    frontend_dist_resolved = frontend_dist.resolve()
+
     # SPA fallback: serve index.html for all non-API routes
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve the SPA for all non-API routes."""
+        # Resolve the requested file path
+        file_path = (frontend_dist / full_path).resolve()
+
+        # Security: Prevent path traversal attacks
+        # Ensure the resolved path is within the frontend_dist directory
+        try:
+            file_path.relative_to(frontend_dist_resolved)
+        except ValueError:
+            # Path traversal attempt detected - serve index.html instead
+            _LOGGER.warning(f"Path traversal attempt blocked: {full_path}")
+            return FileResponse(frontend_dist / "index.html")
+
         # Check if it's a static file that exists
-        file_path = frontend_dist / full_path
         if file_path.is_file():
             return FileResponse(file_path)
         # Otherwise serve index.html for client-side routing

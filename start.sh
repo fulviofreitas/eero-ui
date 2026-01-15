@@ -19,9 +19,18 @@ for arg in "$@"; do
 done
 
 # Generate session secret if not set
+# Persist it in .env so it survives restarts
 if [ -z "$EERO_DASHBOARD_SESSION_SECRET" ]; then
-    echo "🔐 Generating session secret..."
-    export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+    if [ -f .env ] && grep -q "EERO_DASHBOARD_SESSION_SECRET" .env 2>/dev/null; then
+        echo "🔐 Loading session secret from .env..."
+        export $(grep "EERO_DASHBOARD_SESSION_SECRET" .env | xargs)
+    else
+        echo "🔐 Generating new session secret..."
+        export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+        # Save to .env for persistence
+        echo "EERO_DASHBOARD_SESSION_SECRET=$EERO_DASHBOARD_SESSION_SECRET" >> .env
+        echo "   Saved to .env for future restarts"
+    fi
 fi
 
 # Rebuild if requested (fetches latest eero-client from GitHub)
