@@ -87,19 +87,39 @@ jobs:
 
       # ----------------------------------------------------------------------
       # 🛠️ Install Opengrep
-      # Using the official quick install method
+      # Download binary directly from GitHub releases for reliability
       # ----------------------------------------------------------------------
       - name: 🛠️ Install Opengrep
         run: |
           echo "📦 Installing Opengrep..."
-          curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
           
-          # Add to PATH for subsequent steps
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          # Get the latest release version
+          OPENGREP_VERSION=$(curl --silent "https://api.github.com/repos/opengrep/opengrep/releases/latest" | \
+            grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          
+          if [ -z "$OPENGREP_VERSION" ]; then
+            echo "::warning::Could not fetch latest version, using fallback v1.0.0"
+            OPENGREP_VERSION="v1.0.0"
+          fi
+          
+          echo "📌 Using Opengrep version: $OPENGREP_VERSION"
+          
+          # Download the Linux x86_64 binary
+          DOWNLOAD_URL="https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep-core_linux_x86.tar.gz"
+          echo "⬇️ Downloading from: $DOWNLOAD_URL"
+          
+          curl -fsSL "$DOWNLOAD_URL" -o opengrep.tar.gz || {
+            echo "::error::Failed to download Opengrep binary"
+            exit 1
+          }
+          
+          # Extract and install
+          tar -xzf opengrep.tar.gz
+          chmod +x opengrep-core
+          sudo mv opengrep-core /usr/local/bin/opengrep
           
           # Verify installation
-          export PATH="$HOME/.local/bin:$PATH"
-          opengrep --version || echo "⚠️ Version check failed, continuing..."
+          opengrep --version || opengrep --help || echo "📋 Opengrep installed"
           echo "✅ Opengrep installation complete"
 
       # ----------------------------------------------------------------------
@@ -132,8 +152,6 @@ jobs:
       - name: 🔍 Run Opengrep security scan
         id: scan
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          
           echo "🔍 Starting security scan..."
           echo "   Rules: ${{ env.OPENGREP_RULES_PATH }}"
           echo "   Target: ${{ env.OPENGREP_SCAN_PATH }}"
