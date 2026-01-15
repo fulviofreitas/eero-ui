@@ -80,7 +80,23 @@ async def health_check():
 # Serve static frontend (production)
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "build"
 if frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
+    from fastapi.responses import FileResponse
+
+    # Serve static assets (JS, CSS, etc.) - must come before SPA fallback
+    app.mount(
+        "/_app", StaticFiles(directory=str(frontend_dist / "_app")), name="static_app"
+    )
+
+    # SPA fallback: serve index.html for all non-API routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the SPA for all non-API routes."""
+        # Check if it's a static file that exists
+        file_path = frontend_dist / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        # Otherwise serve index.html for client-side routing
+        return FileResponse(frontend_dist / "index.html")
 
 
 if __name__ == "__main__":
