@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+LICENSE
+
+# IDE
+.cursor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache
+.coverage
+htmlcov
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+.venv
+venv
+env
+
+# Node
+node_modules
+frontend/node_modules
+.npm
+
+# Build artifacts (we rebuild in Docker)
+frontend/build
+
+# Test files
+tests
+**/tests
+**/*.test.ts
+**/*.spec.ts
+
+# Local config
+.env
+.env.*
+*.local
+
+# OS
+.DS_Store
+Thumbs.db

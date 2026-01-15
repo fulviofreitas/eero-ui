@@ -60,13 +60,62 @@ This dashboard depends on [eero-client](https://github.com/fulviofreitas/eero-cl
 
 ## Quick Start
 
-### Prerequisites
+### Option A: Docker (Recommended)
 
-- Python 3.8+
+The easiest way to run eero-ui is with Docker:
+
+```bash
+# Pull and run the pre-built image
+docker run -d \
+  --name eero-ui \
+  -p 8000:8000 \
+  -v eero-data:/data \
+  ghcr.io/fulviofreitas/eero-ui:latest
+```
+
+Or clone and build locally:
+
+```bash
+git clone https://github.com/fulviofreitas/eero-ui.git
+cd eero-ui
+docker compose up -d
+```
+
+Open http://localhost:8000 in your browser.
+
+To set a secure session secret:
+
+```bash
+# Generate a secret
+export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+
+# Start with the secret
+docker compose up -d
+```
+
+To view logs:
+
+```bash
+docker compose logs -f
+```
+
+To stop:
+
+```bash
+docker compose down
+```
+
+---
+
+### Option B: Manual Setup
+
+#### Prerequisites
+
+- Python 3.10+
 - Node.js 18+
-- npm or pnpm
+- npm
 
-### 1. Install Backend
+#### 1. Install Backend
 
 ```bash
 cd backend
@@ -131,31 +180,25 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 The built frontend is automatically served from `/`.
 
-### Option 2: Docker
+### Option 2: Docker (Recommended)
 
-```dockerfile
-# Dockerfile
-FROM python:3.11-slim as backend
-WORKDIR /app
-COPY backend/pyproject.toml .
-RUN pip install --no-cache-dir .
+Use the included `Dockerfile` and `docker-compose.yml`:
 
-FROM node:18-alpine as frontend
-WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ .
-RUN npm run build
+```bash
+# Build and run
+docker compose up -d
 
-FROM python:3.11-slim
-WORKDIR /app
-COPY --from=backend /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY backend/app /app/app
-COPY --from=frontend /app/build /app/frontend/build
+# With custom session secret
+EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
 ```
+
+Session data is persisted in a Docker volume (`eero-data`).
 
 ---
 

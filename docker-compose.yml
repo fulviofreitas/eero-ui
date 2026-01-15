@@ -1,0 +1,25 @@
+services:
+  eero-ui:
+    build: .
+    container_name: eero-ui
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist session data across container restarts
+      - eero-data:/data
+    environment:
+      - EERO_DASHBOARD_HOST=0.0.0.0
+      - EERO_DASHBOARD_PORT=8000
+      - EERO_DASHBOARD_DEBUG=false
+      # Generate a secure secret: openssl rand -hex 32
+      - EERO_DASHBOARD_SESSION_SECRET=${EERO_DASHBOARD_SESSION_SECRET:-change-me-in-production}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  eero-data:
