@@ -125,7 +125,7 @@ To update dependencies (fetches latest eero-client):
 
 - Python 3.10+
 - Node.js 18+
-- npm
+- npm or pnpm
 
 #### 1. Install Backend
 
@@ -295,18 +295,23 @@ Full API docs available at `/api/docs` when running in debug mode.
 ### Frontend Scripts
 
 ```bash
-npm run dev       # Start dev server
-npm run build     # Production build
-npm run check     # TypeScript check
-npm run lint      # Lint code
-npm run format    # Format code
+npm run dev           # Start dev server
+npm run build         # Production build
+npm run check         # TypeScript check
+npm run lint          # Lint code
+npm run format        # Format code
+npm run test          # Run tests
+npm run test:watch    # Run tests in watch mode
+npm run test:coverage # Run tests with coverage
 ```
 
 ### Backend Scripts
 
 ```bash
-uvicorn app.main:app --reload  # Dev server with hot reload
-pytest                          # Run tests
+uvicorn app.main:app --reload     # Dev server with hot reload
+pytest                             # Run tests
+pytest --cov=app --cov-report=html # Run tests with coverage
+pytest -k "login"                  # Run tests matching pattern
 ```
 
 ### Code Structure
@@ -331,6 +336,17 @@ eero-ui/
     └── package.json
 ```
 
+### Testing
+
+**Backend Testing** uses pytest with pytest-asyncio for async test support:
+- Tests located in `backend/tests/`
+- Fixtures in `conftest.py` mock the EeroClient
+- Install dev dependencies: `pip install -e ".[dev]"`
+
+**Frontend Testing** uses Vitest with Testing Library and MSW for API mocking:
+- Store and component tests in `src/lib/**/*.test.ts`
+- MSW handlers in `tests/mocks/handlers.ts`
+
 ---
 
 ## Related Projects
@@ -341,11 +357,18 @@ eero-ui/
 
 ## Future Roadmap
 
+- [ ] Svelte 5 migration (resolves npm vulnerabilities)
 - [ ] WebSocket support for real-time updates
 - [ ] Multi-account support
 - [ ] Advanced charts and analytics
 - [ ] Export device list to CSV
 - [ ] Custom themes
+
+---
+
+## Known Issues
+
+- **npm vulnerabilities**: There are currently 12 npm audit vulnerabilities (3 low, 9 moderate) in the frontend dependencies. These are inherited from Svelte 4 and will be resolved with the Svelte 5 migration.
 
 ---
 
