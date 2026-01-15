@@ -127,12 +127,9 @@
 					{#if $userName || $userEmail}
 						<span class="account-name">{$userName || $userEmail}</span>
 					{/if}
-					{#if $userRole}
-						<span class="account-role">{$userRole}</span>
-					{/if}
-					{#if $premiumStatus}
-						<span class="premium-badge">{$premiumStatus}</span>
-					{/if}
+				{#if $userRole}
+					<span class="account-role">{$userRole}</span>
+				{/if}
 				</div>
 
 				<!-- Network + Sign out (right, stacked) -->

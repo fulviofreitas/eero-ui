@@ -225,6 +225,11 @@
 </svelte:head>
 
 <div class="network-detail-page">
+	<header class="page-header">
+		<h1>Network</h1>
+		<p class="text-muted">View and manage your network settings</p>
+	</header>
+
 	<!-- Back navigation -->
 	<nav class="breadcrumb">
 		<a href="/" class="back-link">← Back to Dashboard</a>
@@ -780,6 +785,14 @@
 <style>
 	.network-detail-page {
 		max-width: 1200px;
+	}
+
+	.page-header {
+		margin-bottom: var(--space-4);
+	}
+
+	.page-header h1 {
+		margin-bottom: var(--space-1);
 	}
 
 	.breadcrumb {

@@ -33,11 +33,17 @@
 		try {
 			const result = await api.eeros.list(refresh);
 			console.log('Eeros API response:', result);
-			// Ensure we have an array and filter out invalid entries
+			// Ensure we have an array, filter out invalid entries, and sort alphabetically by location
 			eeros = Array.isArray(result) 
-				? result.filter(e => e && e.id) 
+				? result
+					.filter(e => e && e.id)
+					.sort((a, b) => {
+						const nameA = (a.location || a.model || '').toLowerCase();
+						const nameB = (b.location || b.model || '').toLowerCase();
+						return nameA.localeCompare(nameB);
+					})
 				: [];
-			console.log('Eeros after filter:', eeros);
+			console.log('Eeros after filter and sort:', eeros);
 		} catch (err) {
 			console.error('Failed to load eeros:', err);
 			error = err instanceof Error ? err.message : 'Failed to load eero nodes';

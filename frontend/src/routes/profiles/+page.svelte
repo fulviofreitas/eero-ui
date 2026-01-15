@@ -33,8 +33,14 @@
 		try {
 			const result = await api.profiles.list(refresh);
 			console.log('Profiles API response:', result);
-			// Ensure we have an array
-			profiles = Array.isArray(result) ? result : [];
+			// Ensure we have an array and sort alphabetically by name
+			profiles = Array.isArray(result) 
+				? result.sort((a, b) => {
+					const nameA = (a.name || '').toLowerCase();
+					const nameB = (b.name || '').toLowerCase();
+					return nameA.localeCompare(nameB);
+				})
+				: [];
 		} catch (err) {
 			console.error('Failed to load profiles:', err);
 			error = err instanceof Error ? err.message : 'Failed to load profiles';
