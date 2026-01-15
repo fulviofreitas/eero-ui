@@ -372,7 +372,11 @@
 						<dt>Connected To</dt>
 						<dd>
 							{#if device.connected_to_eero}
-								{device.connected_to_eero}
+								{#if device.connected_to_eero_id}
+									<a href="/eeros/{device.connected_to_eero_id}" class="eero-link">{device.connected_to_eero}</a>
+								{:else}
+									{device.connected_to_eero}
+								{/if}
 								{#if device.connected_to_eero_model}
 									<span class="text-muted">({device.connected_to_eero_model})</span>
 								{/if}
@@ -656,6 +660,16 @@
 		color: var(--color-success);
 		letter-spacing: 0.1em;
 		margin-right: var(--space-2);
+	}
+
+	.eero-link {
+		color: var(--color-accent);
+		text-decoration: none;
+		font-weight: 500;
+	}
+
+	.eero-link:hover {
+		text-decoration: underline;
 	}
 
 	.text-warning {
