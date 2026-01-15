@@ -134,19 +134,14 @@
 						/>
 					</div>
 
-					<div class="profile-status">
-						{#if profile.paused}
+					{#if profile.paused}
+						<div class="profile-status">
 							<div class="pause-indicator">
 								<span class="pause-icon">⏸</span>
 								<span>Internet access is paused</span>
 							</div>
-						{:else}
-							<div class="active-indicator">
-								<span class="active-icon">✓</span>
-								<span>Internet access is active</span>
-							</div>
-						{/if}
-					</div>
+						</div>
+					{/if}
 				</a>
 			{/each}
 		</div>
@@ -284,24 +279,15 @@
 		border-radius: var(--radius-md);
 	}
 
-	.pause-indicator,
-	.active-indicator {
+	.pause-indicator {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 		font-size: 0.875rem;
-	}
-
-	.pause-indicator {
 		color: var(--color-warning);
 	}
 
-	.active-indicator {
-		color: var(--color-success);
-	}
-
-	.pause-icon,
-	.active-icon {
+	.pause-icon {
 		font-size: 1rem;
 	}
 
