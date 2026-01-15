@@ -128,7 +128,7 @@ async def list_networks(
         _LOGGER.error(f"Failed to get networks: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to retrieve networks. Please try again.",
         )
 
 
@@ -273,5 +273,5 @@ async def toggle_guest_network(
         _LOGGER.error(f"Failed to toggle guest network: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to update guest network settings. Please try again.",
         )

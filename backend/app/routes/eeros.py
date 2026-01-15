@@ -180,7 +180,7 @@ async def list_eeros(
         _LOGGER.error(f"Failed to get eeros: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to retrieve eero nodes. Please try again.",
         )
 
 
@@ -360,7 +360,7 @@ async def reboot_eero(
         _LOGGER.error(f"Failed to reboot eero {eero_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to reboot eero. Please try again.",
         )
 
 
@@ -387,7 +387,7 @@ async def set_eero_led(
         _LOGGER.error(f"Failed to set LED for eero {eero_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to update LED state. Please try again.",
         )
 
 
@@ -415,5 +415,5 @@ async def set_eero_led_brightness(
         _LOGGER.error(f"Failed to set LED brightness for eero {eero_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to update LED brightness. Please try again.",
         )

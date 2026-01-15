@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     "pydantic>=2.10.0",
     "python-multipart>=0.0.18",
+    "slowapi>=0.1.9",
     "eero-client @ git+https://github.com/fulviofreitas/eero-client.git",
 ]
 

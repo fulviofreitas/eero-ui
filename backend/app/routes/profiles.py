@@ -151,7 +151,7 @@ async def list_profiles(
         _LOGGER.error(f"Failed to get profiles: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to retrieve profiles. Please try again.",
         )
 
 
@@ -264,7 +264,7 @@ async def pause_profile(
         _LOGGER.error(f"Failed to pause profile {profile_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to pause profile. Please try again.",
         )
 
 
@@ -289,5 +289,5 @@ async def unpause_profile(
         _LOGGER.error(f"Failed to unpause profile {profile_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to resume profile. Please try again.",
         )

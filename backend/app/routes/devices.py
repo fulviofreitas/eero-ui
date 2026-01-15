@@ -246,7 +246,7 @@ async def list_devices(
         _LOGGER.error(f"Failed to get devices: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to retrieve devices. Please try again.",
         )
 
 
@@ -388,7 +388,7 @@ async def block_device(
         _LOGGER.error(f"Failed to block device {device_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to block device. Please try again.",
         )
 
 
@@ -411,7 +411,7 @@ async def unblock_device(
         _LOGGER.error(f"Failed to unblock device {device_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to unblock device. Please try again.",
         )
 
 
@@ -437,7 +437,7 @@ async def set_device_nickname(
         _LOGGER.error(f"Failed to set nickname for device {device_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to set device nickname. Please try again.",
         )
 
 
@@ -463,7 +463,7 @@ async def prioritize_device(
         _LOGGER.error(f"Failed to prioritize device {device_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to prioritize device. Please try again.",
         )
 
 
@@ -486,5 +486,5 @@ async def deprioritize_device(
         _LOGGER.error(f"Failed to deprioritize device {device_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail="Failed to remove device priority. Please try again.",
         )

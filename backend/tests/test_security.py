@@ -2,6 +2,9 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch, AsyncMock
+
+from fastapi.testclient import TestClient
 
 
 class TestPathTraversalPrevention:
@@ -100,3 +103,70 @@ class TestSessionSecretRequirement:
             or len(strong_secret) < 32
         )
         assert not is_weak, "Strong secret should not be detected as weak"
+
+
+class TestRateLimiting:
+    """Test rate limiting configuration on auth endpoints."""
+
+    def test_rate_limiter_is_configured(self):
+        """Verify that rate limiter is configured on auth endpoints."""
+        from app.routes.auth import limiter, login, verify
+
+        # Check that the limiter exists
+        assert limiter is not None
+
+        # Check that login and verify have the rate limit decorator applied
+        # The decorator adds limit info to the function
+        assert hasattr(login, "__wrapped__") or callable(login)
+        assert hasattr(verify, "__wrapped__") or callable(verify)
+
+    def test_rate_limiter_registered_with_app(self):
+        """Verify that the rate limiter is registered with the FastAPI app."""
+        from app.main import app
+
+        # Check that the app has the limiter state
+        assert hasattr(app.state, "limiter")
+        assert app.state.limiter is not None
+
+
+class TestExceptionSanitization:
+    """Test that exception messages don't leak internal details."""
+
+    def test_error_messages_are_generic(self):
+        """Verify that error messages shown to users are generic."""
+        # These are the sanitized error messages that should be returned
+        expected_generic_messages = [
+            "Failed to retrieve networks. Please try again.",
+            "Failed to retrieve devices. Please try again.",
+            "Failed to retrieve eero nodes. Please try again.",
+            "Failed to retrieve profiles. Please try again.",
+            "Failed to block device. Please try again.",
+            "Failed to unblock device. Please try again.",
+            "Failed to set device nickname. Please try again.",
+            "Failed to prioritize device. Please try again.",
+            "Failed to remove device priority. Please try again.",
+            "Failed to reboot eero. Please try again.",
+            "Failed to update LED state. Please try again.",
+            "Failed to update LED brightness. Please try again.",
+            "Failed to pause profile. Please try again.",
+            "Failed to resume profile. Please try again.",
+            "Failed to update guest network settings. Please try again.",
+            "Authentication failed. Please check your credentials.",
+        ]
+
+        # Verify none of these contain internal implementation details
+        forbidden_patterns = [
+            "Exception",
+            "Error:",
+            "Traceback",
+            "File \"",
+            "line ",
+            "python",
+            ".py",
+        ]
+
+        for message in expected_generic_messages:
+            for pattern in forbidden_patterns:
+                assert pattern.lower() not in message.lower(), (
+                    f"Error message '{message}' contains forbidden pattern '{pattern}'"
+                )

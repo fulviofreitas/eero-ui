@@ -2,8 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from eero import EeroClient
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
@@ -12,6 +14,9 @@ from ..deps import get_eero_client
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
+
+# Rate limiter for auth endpoints (prevents brute force attacks)
+limiter = Limiter(key_func=get_remote_address)
 
 
 class LoginRequest(BaseModel):
@@ -97,16 +102,19 @@ async def get_auth_status(
 
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("5/minute")
 async def login(
-    request: LoginRequest,
+    request: Request,
+    login_request: LoginRequest,
     client: EeroClient = Depends(get_eero_client),
 ) -> LoginResponse:
     """Start the login process.
 
     Sends a verification code to the provided email or phone number.
+    Rate limited to 5 attempts per minute per IP address.
     """
     try:
-        success = await client.login(request.identifier)
+        success = await client.login(login_request.identifier)
         if success:
             return LoginResponse(
                 success=True,
@@ -120,7 +128,7 @@ async def login(
         _LOGGER.warning(f"Login failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail="Authentication failed. Please check your credentials.",
         )
     except EeroNetworkException as e:
         _LOGGER.error(f"Network error during login: {e}")
@@ -131,13 +139,18 @@ async def login(
 
 
 @router.post("/verify", response_model=VerifyResponse)
+@limiter.limit("5/minute")
 async def verify(
-    request: VerifyRequest,
+    request: Request,
+    verify_request: VerifyRequest,
     client: EeroClient = Depends(get_eero_client),
 ) -> VerifyResponse:
-    """Verify the login with the code sent to the user."""
+    """Verify the login with the code sent to the user.
+
+    Rate limited to 5 attempts per minute per IP address.
+    """
     try:
-        success = await client.verify(request.code)
+        success = await client.verify(verify_request.code)
         if success:
             return VerifyResponse(
                 success=True,
