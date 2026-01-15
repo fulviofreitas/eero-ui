@@ -1,0 +1,72 @@
+name: Commit Lint
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commitlint:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install commitlint
+        run: |
+          npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: Validate PR commits
+        run: |
+          npx commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }} \
+            --verbose
+
+      - name: Generate validation summary
+        if: always()
+        run: |
+          echo "## Commit Message Validation 📝" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Conventional Commits Format" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "<type>(<scope>): <subject>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[optional body]" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[optional footer(s)]" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Allowed Types" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Type | Description | Version Bump |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------------|--------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`feat\` | New feature | Minor |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`fix\` | Bug fix | Patch |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`perf\` | Performance improvement | Patch |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`refactor\` | Code refactoring | Patch |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`docs\` | Documentation | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`style\` | Code style (formatting) | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`test\` | Tests | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`chore\` | Maintenance | None |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`ci\` | CI/CD changes | None |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Breaking changes:** Add \`BREAKING CHANGE:\` in footer or \`!\` after type for major version bump." >> $GITHUB_STEP_SUMMARY

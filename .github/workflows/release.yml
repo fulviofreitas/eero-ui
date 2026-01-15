@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  # Trigger after CI workflow completes successfully
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main, master]
+
+# Prevent concurrent releases
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Only run if CI passed and not a release commit
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      !contains(github.event.workflow_run.head_commit.message, '[skip ci]') &&
+      !contains(github.event.workflow_run.head_commit.message, 'chore(release)')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install semantic-release and plugins
+        run: |
+          npm install -g \
+            semantic-release@24 \
+            @semantic-release/changelog@6 \
+            @semantic-release/git@10 \
+            @semantic-release/exec@6 \
+            conventional-changelog-conventionalcommits@8
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: semantic-release
+
+      - name: Generate release summary
+        if: always()
+        run: |
+          echo "## Release Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f VERSION ]; then
+            VERSION=$(cat VERSION)
+            echo "✅ **New version released:** v$VERSION" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ No new version released (no relevant changes)" >> $GITHUB_STEP_SUMMARY
+          fi
