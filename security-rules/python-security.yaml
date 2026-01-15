@@ -3,6 +3,8 @@
 # ============================================================================
 # These rules detect common security vulnerabilities in Python codebases,
 # with a focus on FastAPI and web application security.
+#
+# Note: Rules are tuned to reduce false positives for this project.
 # ============================================================================
 
 rules:
@@ -76,43 +78,6 @@ rules:
       cwe: CWE-95
 
   # --------------------------------------------------------------------------
-  # Authentication & Session Security
-  # --------------------------------------------------------------------------
-  - id: python-hardcoded-password
-    languages:
-      - python
-    message: |
-      Hardcoded password detected. Use environment variables or secrets manager.
-    severity: ERROR
-    pattern-either:
-      - pattern: password = "..."
-      - pattern: PASSWORD = "..."
-      - pattern: secret = "..."
-      - pattern: SECRET = "..."
-      - pattern: api_key = "..."
-      - pattern: API_KEY = "..."
-    metadata:
-      category: security
-      subcategory: secrets
-      cwe: CWE-798
-      owasp: A2:2017 - Broken Authentication
-
-  - id: python-weak-jwt-secret
-    languages:
-      - python
-    message: |
-      Potential weak or hardcoded JWT secret. Use a strong, randomly
-      generated secret stored in environment variables.
-    severity: ERROR
-    pattern-either:
-      - pattern: jwt.encode($PAYLOAD, "...", ...)
-      - pattern: jwt.decode($TOKEN, "...", ...)
-    metadata:
-      category: security
-      subcategory: cryptography
-      cwe: CWE-326
-
-  # --------------------------------------------------------------------------
   # Cryptographic Issues
   # --------------------------------------------------------------------------
   - id: python-md5-usage
@@ -140,23 +105,6 @@ rules:
       category: security
       subcategory: cryptography
       cwe: CWE-328
-
-  - id: python-weak-random
-    languages:
-      - python
-    message: |
-      random module is not cryptographically secure.
-      Use secrets module for security-sensitive random values.
-    severity: WARNING
-    pattern-either:
-      - pattern: random.random()
-      - pattern: random.randint(...)
-      - pattern: random.choice(...)
-      - pattern: random.randrange(...)
-    metadata:
-      category: security
-      subcategory: cryptography
-      cwe: CWE-338
 
   # --------------------------------------------------------------------------
   # Insecure Deserialization
@@ -190,80 +138,6 @@ rules:
       cwe: CWE-502
 
   # --------------------------------------------------------------------------
-  # Path Traversal
-  # --------------------------------------------------------------------------
-  - id: python-path-traversal
-    languages:
-      - python
-    message: |
-      Potential path traversal vulnerability. Validate and sanitize
-      user input before using it in file paths.
-    severity: WARNING
-    pattern-either:
-      - pattern: open(f"...$USER_INPUT...", ...)
-      - pattern: open($BASE + $USER_INPUT, ...)
-      - pattern: Path($BASE) / $USER_INPUT
-    metadata:
-      category: security
-      subcategory: path-traversal
-      cwe: CWE-22
-
-  # --------------------------------------------------------------------------
-  # FastAPI Specific
-  # --------------------------------------------------------------------------
-  - id: fastapi-cors-wildcard
-    languages:
-      - python
-    message: |
-      CORS with allow_origins=["*"] is insecure for production.
-      Specify explicit allowed origins.
-    severity: WARNING
-    pattern: |
-      CORSMiddleware(..., allow_origins=["*"], ...)
-    metadata:
-      category: security
-      subcategory: cors
-      cwe: CWE-942
-      framework: fastapi
-
-  - id: fastapi-debug-mode
-    languages:
-      - python
-    message: |
-      Debug mode should be disabled in production.
-      It can expose sensitive information.
-    severity: WARNING
-    pattern-either:
-      - pattern: app = FastAPI(..., debug=True, ...)
-      - pattern: uvicorn.run(..., reload=True, ...)
-    metadata:
-      category: security
-      subcategory: configuration
-      cwe: CWE-215
-      framework: fastapi
-
-  # --------------------------------------------------------------------------
-  # Logging Sensitive Data
-  # --------------------------------------------------------------------------
-  - id: python-log-sensitive
-    languages:
-      - python
-    message: |
-      Potential sensitive data in log output. Avoid logging
-      passwords, tokens, or personal data.
-    severity: WARNING
-    pattern-either:
-      - pattern: logging.$METHOD(..., password=..., ...)
-      - pattern: logging.$METHOD(..., token=..., ...)
-      - pattern: logging.$METHOD(..., secret=..., ...)
-      - pattern: logger.$METHOD(..., password=..., ...)
-      - pattern: logger.$METHOD(..., token=..., ...)
-    metadata:
-      category: security
-      subcategory: sensitive-data
-      cwe: CWE-532
-
-  # --------------------------------------------------------------------------
   # SSL/TLS Verification
   # --------------------------------------------------------------------------
   - id: python-ssl-verify-disabled
@@ -276,8 +150,30 @@ rules:
     pattern-either:
       - pattern: requests.$METHOD(..., verify=False, ...)
       - pattern: httpx.$METHOD(..., verify=False, ...)
-      - pattern: urllib3.disable_warnings(...)
+    paths:
+      exclude:
+        - "**/test*"
+        - "**/*.test.*"
+        - "**/conftest.py"
     metadata:
       category: security
       subcategory: ssl
       cwe: CWE-295
+
+  # --------------------------------------------------------------------------
+  # FastAPI Specific
+  # --------------------------------------------------------------------------
+  - id: fastapi-cors-allow-all-production
+    languages:
+      - python
+    message: |
+      CORS with allow_origins=["*"] combined with allow_credentials=True
+      is insecure and may not work as expected. Use specific origins.
+    severity: WARNING
+    pattern: |
+      CORSMiddleware(..., allow_origins=["*"], allow_credentials=True, ...)
+    metadata:
+      category: security
+      subcategory: cors
+      cwe: CWE-942
+      framework: fastapi

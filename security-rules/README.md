@@ -1,165 +1,97 @@
-# 🔐 Security Rules for Opengrep
+# 🔐 Security Rules
 
-This directory contains custom security rules for the Opengrep static analysis scanner.
+Custom Opengrep security rules for the Eero UI project.
 
-## 📁 Rule Files
+## Rules Overview
 
-| File | Description | Languages |
-|------|-------------|-----------|
-| `javascript-security.yaml` | XSS, injection, secrets, Svelte-specific | JS/TS |
-| `python-security.yaml` | Injection, crypto, FastAPI-specific | Python |
-| `general-security.yaml` | Secrets, credentials, Docker | All |
+| File | Language | Rules | Focus |
+|------|----------|-------|-------|
+| `javascript-security.yaml` | JS/TS | 8 | XSS, eval, localStorage, hardcoded keys |
+| `python-security.yaml` | Python | 10 | Injection, crypto, deserialization, SSL |
+| `general-security.yaml` | All | 6 | Secrets, tokens, keys, Docker |
 
-## 🚀 Quick Start
+## Rule Categories
 
-### Local Scanning
+### JavaScript/TypeScript
+- **XSS Prevention**: `innerHTML`, `document.write`, Svelte `{@html}`
+- **Code Injection**: `eval()`, `new Function()`
+- **Sensitive Data**: localStorage with tokens/passwords
+- **Hardcoded Secrets**: API keys in source code
+
+### Python
+- **Injection**: SQL injection, command injection, `eval()`, `exec()`
+- **Cryptography**: MD5, SHA-1 (deprecated)
+- **Deserialization**: `pickle`, unsafe `yaml.load()`
+- **SSL/TLS**: Disabled certificate verification
+- **FastAPI**: Insecure CORS configurations
+
+### General
+- **Secrets**: Private keys, AWS keys, GitHub tokens, Stripe keys
+- **Webhooks**: Slack webhook URLs
+- **Docker**: `:latest` tag usage
+
+## Running Locally
 
 ```bash
 # Install Opengrep
-curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
+curl -fsSL https://github.com/opengrep/opengrep/releases/latest/download/opengrep_osx_arm64 -o opengrep
+chmod +x opengrep
 
-# Scan the codebase
-opengrep scan -f security-rules . --sarif-output=results.sarif
+# Run scan
+./opengrep scan --config security-rules .
 
-# View human-readable output
-opengrep scan -f security-rules .
+# Generate SARIF report
+./opengrep scan --config security-rules . --sarif --output results.sarif
 ```
 
-### GitHub Actions
+## Customizing Rules
 
-The `security.yml` workflow automatically runs on:
-- Pull requests to `main`/`master`/`develop`
-- Pushes to `main`/`master`
-
-Results are uploaded to the GitHub Security tab.
-
-## 📝 Rule Format
-
-Rules use the Opengrep (Semgrep-compatible) YAML format:
+Rules use Opengrep/Semgrep syntax. Key elements:
 
 ```yaml
 rules:
   - id: unique-rule-id
     languages:
-      - javascript
-      - typescript
+      - python
     message: |
       Description of the issue and how to fix it.
     severity: ERROR  # ERROR, WARNING, INFO
-    pattern: dangerous_function($ARG)
+    pattern: dangerous_function($X)
+    paths:
+      exclude:
+        - "**/test*"
     metadata:
       category: security
-      subcategory: injection
       cwe: CWE-XXX
 ```
 
-## 🎯 Rule Categories
+## Excluding False Positives
 
-### By Severity
-
-| Severity | When to Use |
-|----------|-------------|
-| `ERROR` | Critical vulnerabilities that must be fixed |
-| `WARNING` | Security issues that should be addressed |
-| `INFO` | Best practice recommendations |
-
-### By Category
-
-- **secrets** - Hardcoded credentials, API keys, tokens
-- **injection** - SQL, command, code injection
-- **xss** - Cross-site scripting vulnerabilities
-- **cryptography** - Weak algorithms, insecure random
-- **deserialization** - Unsafe deserialization
-- **configuration** - Insecure settings
-- **sensitive-data** - Logging/exposing secrets
-
-## ➕ Adding New Rules
-
-1. Create a new YAML file or add to existing:
+Add patterns to exclude specific paths:
 
 ```yaml
-- id: my-custom-rule
-  languages:
-    - python
-  message: |
-    Clear description of the issue.
-    Include how to fix it.
-  severity: WARNING
-  pattern: $FUNC.unsafe_method($ARG)
-  metadata:
-    category: security
-    subcategory: custom
-    cwe: CWE-XXX
+paths:
+  exclude:
+    - "**/test*"           # Test files
+    - "**/*.test.*"        # Test files
+    - "**/mock*"           # Mock files
+    - "**/conftest.py"     # Pytest configuration
 ```
 
-2. Test locally:
+## GitHub Actions Integration
 
-```bash
-opengrep scan -f security-rules/my-rules.yaml .
-```
+The security scan runs automatically on:
+- Pull requests to `main`, `master`, `develop`
+- Pushes to `main`, `master`
 
-3. Commit and push - the CI will pick up new rules automatically.
+Results appear in:
+1. **Workflow Summary** - Human-readable report
+2. **Security Tab** - Code scanning alerts
+3. **PR Comments** - Summary of findings
 
-## 🔧 Pattern Types
+## Adding New Rules
 
-### Basic Pattern
-```yaml
-pattern: eval($CODE)
-```
-
-### Multiple Patterns (OR)
-```yaml
-pattern-either:
-  - pattern: eval($CODE)
-  - pattern: exec($CODE)
-```
-
-### Pattern with Context
-```yaml
-pattern: $CURSOR.execute($QUERY)
-pattern-inside: |
-  def $FUNC(...):
-    ...
-```
-
-### Regex Pattern
-```yaml
-pattern-regex: 'password\s*=\s*["\x27][^"\x27]+["\x27]'
-```
-
-## 📚 Resources
-
-- [Opengrep Documentation](https://opengrep.dev/docs)
-- [Semgrep Rule Syntax](https://semgrep.dev/docs/writing-rules/rule-syntax)
-- [CWE Database](https://cwe.mitre.org/)
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-
-## 🤝 Contributing
-
-When adding new rules:
-
-1. Use descriptive `id` names following the pattern: `{language}-{category}-{issue}`
-2. Include clear `message` with fix recommendations
-3. Add `metadata` with CWE references where applicable
-4. Test rules locally before committing
-5. Consider false positive rates
-
-## ⚠️ Suppressing Findings
-
-To suppress a finding in code:
-
-```javascript
-// opengrep-ignore
-const result = eval(safeCode);  // This is intentionally safe
-```
-
-```python
-# opengrep-ignore
-result = eval(validated_expression)  # Validated input
-```
-
-Or use rule-specific suppression:
-
-```javascript
-// opengrep-ignore: js-insecure-eval
-```
+1. Choose the appropriate YAML file based on language
+2. Add your rule following the template above
+3. Test locally with `opengrep scan --config security-rules .`
+4. Push and verify in CI

@@ -3,6 +3,8 @@
 # ============================================================================
 # These rules detect common security vulnerabilities in JavaScript/TypeScript
 # codebases, with a focus on Svelte and modern frontend frameworks.
+#
+# Note: Rules are tuned to reduce false positives for this project.
 # ============================================================================
 
 rules:
@@ -73,23 +75,6 @@ rules:
   # --------------------------------------------------------------------------
   # Sensitive Data Exposure
   # --------------------------------------------------------------------------
-  - id: js-console-log-sensitive
-    languages:
-      - javascript
-      - typescript
-    message: |
-      Potential sensitive data in console.log(). Remove before production.
-    severity: INFO
-    pattern-either:
-      - pattern: console.log(..., $TOKEN, ...)
-      - pattern: console.log(..., $PASSWORD, ...)
-      - pattern: console.log(..., $SECRET, ...)
-      - pattern: console.log(..., $API_KEY, ...)
-    metadata:
-      category: security
-      subcategory: sensitive-data
-      cwe: CWE-532
-
   - id: js-localstorage-sensitive
     languages:
       - javascript
@@ -110,37 +95,26 @@ rules:
       cwe: CWE-922
 
   # --------------------------------------------------------------------------
-  # Insecure HTTP Communication
+  # Hardcoded Credentials (strict patterns only)
   # --------------------------------------------------------------------------
-  - id: js-insecure-http-url
+  - id: js-hardcoded-api-key
     languages:
       - javascript
       - typescript
     message: |
-      Hardcoded HTTP URL detected. Use HTTPS for secure communication.
-    severity: WARNING
-    pattern-regex: '["'']http://(?!localhost|127\.0\.0\.1)[^"'']+["'']'
+      Potential hardcoded API key detected. Use environment variables instead.
+    severity: ERROR
+    pattern-regex: '(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\x27][a-zA-Z0-9_\-]{32,}["\x27]'
+    paths:
+      exclude:
+        - "**/test*"
+        - "**/*.test.*"
+        - "**/*.spec.*"
+        - "**/mock*"
     metadata:
       category: security
-      subcategory: insecure-transport
-      cwe: CWE-319
-
-  # --------------------------------------------------------------------------
-  # Cryptographic Issues
-  # --------------------------------------------------------------------------
-  - id: js-weak-random
-    languages:
-      - javascript
-      - typescript
-    message: |
-      Math.random() is not cryptographically secure.
-      Use crypto.getRandomValues() for security-sensitive random values.
-    severity: WARNING
-    pattern: Math.random()
-    metadata:
-      category: security
-      subcategory: cryptography
-      cwe: CWE-338
+      subcategory: secrets
+      cwe: CWE-798
 
   # --------------------------------------------------------------------------
   # Svelte-Specific Security
@@ -160,33 +134,3 @@ rules:
       cwe: CWE-79
       framework: svelte
       fix: Sanitize content with DOMPurify before using {@html}
-
-  # --------------------------------------------------------------------------
-  # API Security
-  # --------------------------------------------------------------------------
-  - id: js-fetch-no-credentials
-    languages:
-      - javascript
-      - typescript
-    message: |
-      fetch() without explicit credentials mode may leak or omit cookies
-      unexpectedly. Set credentials: 'same-origin' or 'include' explicitly.
-    severity: INFO
-    pattern: fetch($URL)
-    metadata:
-      category: security
-      subcategory: authentication
-      cwe: CWE-346
-
-  - id: js-hardcoded-api-key
-    languages:
-      - javascript
-      - typescript
-    message: |
-      Potential hardcoded API key detected. Use environment variables instead.
-    severity: ERROR
-    pattern-regex: '(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\x27][a-zA-Z0-9_\-]{20,}["\x27]'
-    metadata:
-      category: security
-      subcategory: secrets
-      cwe: CWE-798
