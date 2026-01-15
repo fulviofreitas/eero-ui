@@ -80,13 +80,12 @@ docker run -d \
 Or clone and build locally:
 
 ```bash
-# Generate a secure session secret (REQUIRED)
-export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
-
 git clone https://github.com/fulviofreitas/eero-ui.git
 cd eero-ui
 ./start.sh
 ```
+
+The script auto-generates a secure session secret and saves it to `.env` for persistence.
 
 Open http://localhost:8000 in your browser.
 
@@ -96,7 +95,7 @@ To rebuild with the latest dependencies (e.g., after eero-client updates):
 ./start.sh --rebuild
 ```
 
-> **⚠️ Security Note:** The `EERO_DASHBOARD_SESSION_SECRET` environment variable is required. The application will not start without it. Generate a secure secret with: `openssl rand -hex 32`
+> **💡 Note:** The session secret is auto-generated on first run. For production, you can set your own: `export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)`
 
 To view logs:
 
