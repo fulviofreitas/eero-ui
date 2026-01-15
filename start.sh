@@ -3,6 +3,12 @@
 
 set -e
 
+# Generate session secret if not set
+if [ -z "$EERO_DASHBOARD_SESSION_SECRET" ]; then
+    echo "🔐 Generating session secret..."
+    export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+fi
+
 echo "🚀 Starting eero-ui..."
 docker compose up -d
 
