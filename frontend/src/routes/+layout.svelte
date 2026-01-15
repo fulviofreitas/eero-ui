@@ -117,9 +117,9 @@
 				{/each}
 			</nav>
 
-			<div class="sidebar-footer">
-				<span class="version">v1.0.0</span>
-			</div>
+		<div class="sidebar-footer">
+			<span class="version">v{__APP_VERSION__}</span>
+		</div>
 		</aside>
 
 		<!-- Main content -->
