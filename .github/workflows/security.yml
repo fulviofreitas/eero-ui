@@ -59,7 +59,7 @@ permissions:
   contents: read
   security-events: write    # Required for uploading SARIF to GitHub Security
   pull-requests: write      # Required for commenting on PRs
-  actions: read             # Required for workflow status
+  actions: read             # Required for workflow status and SARIF upload
 
 env:
   # Opengrep configuration
@@ -87,7 +87,8 @@ jobs:
 
       # ----------------------------------------------------------------------
       # 🛠️ Install Opengrep
-      # Download binary directly from GitHub releases for reliability
+      # Download the full Python CLI binary (not just core) from GitHub releases
+      # This provides proper SARIF output support
       # ----------------------------------------------------------------------
       - name: 🛠️ Install Opengrep
         id: install
@@ -106,22 +107,23 @@ jobs:
           echo "opengrep_version=${OPENGREP_VERSION}" >> $GITHUB_OUTPUT
           echo "📌 Using Opengrep version: $OPENGREP_VERSION"
           
-          # Download the Linux x86_64 binary
-          DOWNLOAD_URL="https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep-core_linux_x86.tar.gz"
+          # Download the full Python CLI binary (opengrep_manylinux_x86)
+          # This is the complete CLI with proper SARIF support, not just the core
+          DOWNLOAD_URL="https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86"
           echo "⬇️ Downloading from: $DOWNLOAD_URL"
           
-          curl -fsSL "$DOWNLOAD_URL" -o opengrep.tar.gz || {
+          curl -fsSL "$DOWNLOAD_URL" -o opengrep || {
             echo "::error::Failed to download Opengrep binary"
             exit 1
           }
           
-          # Extract and install
-          tar -xzf opengrep.tar.gz
-          chmod +x opengrep-core
-          sudo mv opengrep-core /usr/local/bin/opengrep
+          # Install binary
+          chmod +x opengrep
+          sudo mv opengrep /usr/local/bin/opengrep
           
           # Verify installation
-          opengrep --version || opengrep --help || echo "📋 Opengrep installed"
+          echo "📋 Verifying installation..."
+          opengrep --version
           echo "✅ Opengrep installation complete"
 
       # ----------------------------------------------------------------------
@@ -152,6 +154,7 @@ jobs:
       # ----------------------------------------------------------------------
       # 🔍 Run Opengrep Security Scan
       # Scans the entire codebase with custom rules and outputs SARIF
+      # Note: --output can only be specified once, so we run scan twice
       # ----------------------------------------------------------------------
       - name: 🔍 Run Opengrep security scan
         id: scan
@@ -161,42 +164,74 @@ jobs:
           echo "   Target: ${{ env.OPENGREP_SCAN_PATH }}"
           echo ""
           
-          # Run the scan with SARIF output
-          # Use --sarif and --output flags (correct Opengrep syntax)
+          # First, run the scan with text output to console for parsing
+          # Use --text (default) output and capture to file
+          echo "Running initial scan for text output..."
+          opengrep scan \
+            --config ${{ env.OPENGREP_RULES_PATH }} \
+            ${{ env.OPENGREP_SCAN_PATH }} \
+            2>&1 | tee scan-output.txt || true
+          
+          # Now run with SARIF output for GitHub Security tab
+          echo ""
+          echo "Generating SARIF output..."
           opengrep scan \
             --config ${{ env.OPENGREP_RULES_PATH }} \
             ${{ env.OPENGREP_SCAN_PATH }} \
             --sarif \
-            --output=${{ env.SARIF_OUTPUT }} \
-            --json \
-            --output=results.json \
-            2>&1 | tee scan-output.txt
-          
-          SCAN_EXIT_CODE=${PIPESTATUS[0]}
-          echo "scan_exit_code=${SCAN_EXIT_CODE}" >> $GITHUB_OUTPUT
+            --output ${{ env.SARIF_OUTPUT }} || true
           
           # Parse findings from the console output
-          # Look for the "X Code Findings" line in the output
-          FINDING_COUNT=$(grep -oP '\d+(?= Code Findings)' scan-output.txt 2>/dev/null || echo "0")
+          # Look for patterns like "22 Code Findings" or "Findings:" in the output
+          FINDING_COUNT=$(grep -oP '\d+(?= Code Findings)' scan-output.txt 2>/dev/null | head -1 || echo "")
+          if [ -z "$FINDING_COUNT" ]; then
+            # Try alternative pattern
+            FINDING_COUNT=$(grep -oP 'Findings:\s*\K\d+' scan-output.txt 2>/dev/null | head -1 || echo "0")
+          fi
           if [ -z "$FINDING_COUNT" ]; then
             FINDING_COUNT="0"
           fi
           echo "finding_count=${FINDING_COUNT}" >> $GITHUB_OUTPUT
           
           # Parse files scanned
-          FILES_SCANNED=$(grep -oP 'Scanning \K\d+(?= files)' scan-output.txt 2>/dev/null || echo "0")
+          FILES_SCANNED=$(grep -oP 'Scanning \K\d+(?= files)' scan-output.txt 2>/dev/null | head -1 || echo "")
+          if [ -z "$FILES_SCANNED" ]; then
+            FILES_SCANNED=$(grep -oP '\d+(?= files scanned)' scan-output.txt 2>/dev/null | head -1 || echo "0")
+          fi
           echo "files_scanned=${FILES_SCANNED}" >> $GITHUB_OUTPUT
           
           # Parse rules count
-          RULES_USED=$(grep -oP 'with \K\d+(?= Code rules)' scan-output.txt 2>/dev/null || echo "0")
+          RULES_USED=$(grep -oP 'with \K\d+(?= Code rules)' scan-output.txt 2>/dev/null | head -1 || echo "")
+          if [ -z "$RULES_USED" ]; then
+            RULES_USED=$(grep -oP '\d+(?= rules)' scan-output.txt 2>/dev/null | head -1 || echo "0")
+          fi
           echo "rules_used=${RULES_USED}" >> $GITHUB_OUTPUT
           
-          echo "📊 Scan complete: ${FINDING_COUNT} findings in ${FILES_SCANNED} files using ${RULES_USED} rules"
+          echo ""
+          echo "╔════════════════════════════════════════════════════════════╗"
+          echo "║  📊 SCAN RESULTS                                           ║"
+          echo "╠════════════════════════════════════════════════════════════╣"
+          echo "║  Findings:    ${FINDING_COUNT}"
+          echo "║  Files:       ${FILES_SCANNED}"
+          echo "║  Rules:       ${RULES_USED}"
+          echo "╚════════════════════════════════════════════════════════════╝"
           
-          # Check if SARIF was generated, if not create minimal valid SARIF
-          if [ ! -f "${{ env.SARIF_OUTPUT }}" ]; then
-            echo "⚠️ SARIF file not generated, creating minimal SARIF from scan results"
-            cat > ${{ env.SARIF_OUTPUT }} << 'EOF'
+          # Verify SARIF was generated
+          if [ -f "${{ env.SARIF_OUTPUT }}" ]; then
+            echo "✅ SARIF output generated: ${{ env.SARIF_OUTPUT }}"
+            echo "   File size: $(wc -c < ${{ env.SARIF_OUTPUT }}) bytes"
+            
+            # Quick validation of SARIF structure
+            if grep -q '"version": "2.1.0"' ${{ env.SARIF_OUTPUT }}; then
+              echo "   SARIF version: 2.1.0 ✓"
+            fi
+            
+            # Count results in SARIF
+            SARIF_RESULTS=$(grep -o '"ruleId"' ${{ env.SARIF_OUTPUT }} | wc -l || echo "0")
+            echo "   Results in SARIF: ${SARIF_RESULTS}"
+          else
+            echo "⚠️ SARIF file not generated, creating minimal valid SARIF"
+            cat > ${{ env.SARIF_OUTPUT }} << 'EOFMARKER'
           {
             "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
             "version": "2.1.0",
@@ -211,7 +246,7 @@ jobs:
               "results": []
             }]
           }
-          EOF
+          EOFMARKER
           fi
           
           echo "✅ Scan completed"
@@ -238,7 +273,6 @@ jobs:
           name: security-scan-results
           path: |
             ${{ env.SARIF_OUTPUT }}
-            results.json
             scan-output.txt
           retention-days: 30
 
@@ -299,15 +333,15 @@ jobs:
           # Show findings details if any exist
           if [ "$FINDING_COUNT" != "0" ] && [ -f "scan-output.txt" ]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## 🚨 Findings by File
+          ## 🚨 Findings Details
           
           <details>
-          <summary>Click to expand findings details</summary>
+          <summary>Click to expand scan output</summary>
           
           ```
           EOF
-            # Extract the findings section from scan output
-            sed -n '/Code Findings/,/Scan Summary/p' scan-output.txt | head -100 >> $GITHUB_STEP_SUMMARY
+            # Show relevant portion of scan output (findings section)
+            head -200 scan-output.txt >> $GITHUB_STEP_SUMMARY
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ```
           
