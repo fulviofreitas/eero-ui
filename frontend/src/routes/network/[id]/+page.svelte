@@ -230,11 +230,6 @@
 		<p class="text-muted">View and manage your network settings</p>
 	</header>
 
-	<!-- Back navigation -->
-	<nav class="breadcrumb">
-		<a href="/" class="back-link">← Back to Dashboard</a>
-	</nav>
-
 	{#if loading}
 		<div class="loading-state">
 			<span class="loading-spinner"></span>
@@ -793,20 +788,6 @@
 
 	.page-header h1 {
 		margin-bottom: var(--space-1);
-	}
-
-	.breadcrumb {
-		margin-bottom: var(--space-4);
-	}
-
-	.back-link {
-		color: var(--color-accent);
-		text-decoration: none;
-		font-size: 0.875rem;
-	}
-
-	.back-link:hover {
-		text-decoration: underline;
 	}
 
 	.loading-state,
