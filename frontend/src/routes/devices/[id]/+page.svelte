@@ -423,7 +423,7 @@
 			</section>
 
 			<!-- Transfer Rates -->
-			{#if device.wireless && (device.rx_bitrate || device.tx_bitrate)}
+			{#if device.rx_bitrate || device.tx_bitrate}
 				<section class="card info-card">
 					<h2>Transfer Rates</h2>
 					<dl class="info-list">
