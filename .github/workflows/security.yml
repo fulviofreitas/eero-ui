@@ -90,6 +90,7 @@ jobs:
       # Download binary directly from GitHub releases for reliability
       # ----------------------------------------------------------------------
       - name: 🛠️ Install Opengrep
+        id: install
         run: |
           echo "📦 Installing Opengrep..."
           
@@ -98,10 +99,11 @@ jobs:
             grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           
           if [ -z "$OPENGREP_VERSION" ]; then
-            echo "::warning::Could not fetch latest version, using fallback v1.0.0"
-            OPENGREP_VERSION="v1.0.0"
+            echo "::warning::Could not fetch latest version, using fallback v1.15.0"
+            OPENGREP_VERSION="v1.15.0"
           fi
           
+          echo "opengrep_version=${OPENGREP_VERSION}" >> $GITHUB_OUTPUT
           echo "📌 Using Opengrep version: $OPENGREP_VERSION"
           
           # Download the Linux x86_64 binary
@@ -127,6 +129,7 @@ jobs:
       # Ensure the rules directory exists and has valid rules
       # ----------------------------------------------------------------------
       - name: 📋 Validate security rules
+        id: rules
         run: |
           if [ ! -d "${{ env.OPENGREP_RULES_PATH }}" ]; then
             echo "::error::Security rules directory '${{ env.OPENGREP_RULES_PATH }}' not found"
@@ -135,6 +138,7 @@ jobs:
           fi
           
           RULE_COUNT=$(find ${{ env.OPENGREP_RULES_PATH }} -name "*.yaml" -o -name "*.yml" | wc -l)
+          echo "rule_count=${RULE_COUNT}" >> $GITHUB_OUTPUT
           echo "📊 Found ${RULE_COUNT} rule file(s)"
           
           if [ "$RULE_COUNT" -eq 0 ]; then
@@ -158,28 +162,59 @@ jobs:
           echo ""
           
           # Run the scan with SARIF output
-          # --sarif-output generates GitHub-compatible SARIF format
-          # Continue even if findings exist (we handle failures later)
+          # Use --sarif and --output flags (correct Opengrep syntax)
           opengrep scan \
-            -f ${{ env.OPENGREP_RULES_PATH }} \
+            --config ${{ env.OPENGREP_RULES_PATH }} \
             ${{ env.OPENGREP_SCAN_PATH }} \
-            --sarif-output=${{ env.SARIF_OUTPUT }} \
-            2>&1 | tee scan-output.txt || true
+            --sarif \
+            --output=${{ env.SARIF_OUTPUT }} \
+            --json \
+            --output=results.json \
+            2>&1 | tee scan-output.txt
           
-          # Check if SARIF was generated
-          if [ -f "${{ env.SARIF_OUTPUT }}" ]; then
-            echo "✅ SARIF output generated successfully"
-            
-            # Count findings (basic JSON parsing)
-            FINDING_COUNT=$(cat ${{ env.SARIF_OUTPUT }} | grep -o '"ruleId"' | wc -l || echo "0")
-            echo "finding_count=${FINDING_COUNT}" >> $GITHUB_OUTPUT
-            echo "📊 Found ${FINDING_COUNT} potential issue(s)"
-          else
-            echo "⚠️ No SARIF output generated"
-            echo "finding_count=0" >> $GITHUB_OUTPUT
-            # Create empty SARIF for upload
-            echo '{"$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","version":"2.1.0","runs":[{"tool":{"driver":{"name":"Opengrep","version":"1.0.0"}},"results":[]}]}' > ${{ env.SARIF_OUTPUT }}
+          SCAN_EXIT_CODE=${PIPESTATUS[0]}
+          echo "scan_exit_code=${SCAN_EXIT_CODE}" >> $GITHUB_OUTPUT
+          
+          # Parse findings from the console output
+          # Look for the "X Code Findings" line in the output
+          FINDING_COUNT=$(grep -oP '\d+(?= Code Findings)' scan-output.txt 2>/dev/null || echo "0")
+          if [ -z "$FINDING_COUNT" ]; then
+            FINDING_COUNT="0"
           fi
+          echo "finding_count=${FINDING_COUNT}" >> $GITHUB_OUTPUT
+          
+          # Parse files scanned
+          FILES_SCANNED=$(grep -oP 'Scanning \K\d+(?= files)' scan-output.txt 2>/dev/null || echo "0")
+          echo "files_scanned=${FILES_SCANNED}" >> $GITHUB_OUTPUT
+          
+          # Parse rules count
+          RULES_USED=$(grep -oP 'with \K\d+(?= Code rules)' scan-output.txt 2>/dev/null || echo "0")
+          echo "rules_used=${RULES_USED}" >> $GITHUB_OUTPUT
+          
+          echo "📊 Scan complete: ${FINDING_COUNT} findings in ${FILES_SCANNED} files using ${RULES_USED} rules"
+          
+          # Check if SARIF was generated, if not create minimal valid SARIF
+          if [ ! -f "${{ env.SARIF_OUTPUT }}" ]; then
+            echo "⚠️ SARIF file not generated, creating minimal SARIF from scan results"
+            cat > ${{ env.SARIF_OUTPUT }} << 'EOF'
+          {
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [{
+              "tool": {
+                "driver": {
+                  "name": "Opengrep",
+                  "version": "${{ steps.install.outputs.opengrep_version }}",
+                  "informationUri": "https://opengrep.dev"
+                }
+              },
+              "results": []
+            }]
+          }
+          EOF
+          fi
+          
+          echo "✅ Scan completed"
 
       # ----------------------------------------------------------------------
       # 📤 Upload SARIF to GitHub Security Tab
@@ -203,8 +238,129 @@ jobs:
           name: security-scan-results
           path: |
             ${{ env.SARIF_OUTPUT }}
+            results.json
             scan-output.txt
           retention-days: 30
+
+      # ----------------------------------------------------------------------
+      # 📝 Generate Beautiful Workflow Summary
+      # Modern, human-readable summary in the Actions tab
+      # ----------------------------------------------------------------------
+      - name: 📝 Generate workflow summary
+        if: always()
+        run: |
+          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
+          FILES_SCANNED="${{ steps.scan.outputs.files_scanned }}"
+          RULES_USED="${{ steps.scan.outputs.rules_used }}"
+          RULE_FILES="${{ steps.rules.outputs.rule_count }}"
+          OPENGREP_VERSION="${{ steps.install.outputs.opengrep_version }}"
+          
+          # Default values if empty
+          FINDING_COUNT=${FINDING_COUNT:-0}
+          FILES_SCANNED=${FILES_SCANNED:-0}
+          RULES_USED=${RULES_USED:-0}
+          
+          # Header with banner
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🔐 Opengrep Security Scan Report
+          
+          EOF
+          
+          # Status banner based on findings
+          if [ "$FINDING_COUNT" = "0" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          > [!NOTE]
+          > ### ✅ All Clear — No Security Issues Detected
+          > Your code passed all security checks. Great job maintaining secure code!
+          
+          EOF
+          else
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          > [!WARNING]
+          > ### ⚠️ Security Findings Detected: ${FINDING_COUNT} issue(s)
+          > Review the findings below and address them before merging.
+          
+          EOF
+          fi
+          
+          # Metrics dashboard
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 📊 Scan Metrics
+          
+          | Metric | Value |
+          |:-------|------:|
+          | 🔍 **Findings** | **${FINDING_COUNT}** |
+          | 📁 Files Scanned | ${FILES_SCANNED} |
+          | 📋 Rules Applied | ${RULES_USED} |
+          | 📦 Rule Files | ${RULE_FILES} |
+          
+          EOF
+          
+          # Show findings details if any exist
+          if [ "$FINDING_COUNT" != "0" ] && [ -f "scan-output.txt" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 🚨 Findings by File
+          
+          <details>
+          <summary>Click to expand findings details</summary>
+          
+          ```
+          EOF
+            # Extract the findings section from scan output
+            sed -n '/Code Findings/,/Scan Summary/p' scan-output.txt | head -100 >> $GITHUB_STEP_SUMMARY
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ```
+          
+          </details>
+          
+          EOF
+          fi
+          
+          # Configuration section
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ⚙️ Configuration
+          
+          | Setting | Value |
+          |:--------|:------|
+          | Scanner | Opengrep ${OPENGREP_VERSION} |
+          | Rules Directory | \`${{ env.OPENGREP_RULES_PATH }}/\` |
+          | Scan Target | \`${{ env.OPENGREP_SCAN_PATH }}\` |
+          | Output Format | SARIF 2.1.0 |
+          | Trigger | \`${{ github.event_name }}\` |
+          | Commit | \`${{ github.sha }}\` |
+          
+          EOF
+          
+          # Next steps section
+          if [ "$FINDING_COUNT" != "0" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 📋 Next Steps
+          
+          1. **Review Findings** — Check the [Security tab](../../security/code-scanning) for detailed alerts
+          2. **Fix Issues** — Address high-severity findings first
+          3. **Re-run Scan** — Push fixes and verify the scan passes
+          
+          > 💡 **Tip:** Click on individual alerts in the Security tab to see affected code and remediation guidance.
+          
+          EOF
+          else
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 🎉 Keep It Up!
+          
+          Your codebase is following security best practices. Continue to:
+          - Add new security rules as threats evolve
+          - Review the [Security tab](../../security/code-scanning) periodically
+          - Keep dependencies updated
+          
+          EOF
+          fi
+          
+          # Footer
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ---
+          
+          <sub>🤖 Generated by the Opengrep Security Scan workflow</sub>
+          EOF
 
       # ----------------------------------------------------------------------
       # 💬 Comment on PR with Findings Summary
@@ -216,25 +372,27 @@ jobs:
         with:
           script: |
             const findingCount = '${{ steps.scan.outputs.finding_count }}';
+            const filesScanned = '${{ steps.scan.outputs.files_scanned }}';
+            const rulesUsed = '${{ steps.scan.outputs.rules_used }}';
             
             const body = `## 🔐 Security Scan Results
-
+            
             | Metric | Value |
-            |--------|-------|
-            | 🔍 Scanner | Opengrep |
-            | ⚠️ Findings | ${findingCount} |
-            | 📁 Rules | \`security-rules/\` |
-
+            |:-------|------:|
+            | ⚠️ **Findings** | **${findingCount}** |
+            | 📁 Files Scanned | ${filesScanned} |
+            | 📋 Rules Applied | ${rulesUsed} |
+            
             ### 📋 Next Steps
-
-            1. Review the findings in the **Security** tab
-            2. Check the "Code scanning alerts" section
-            3. Address any high/critical severity issues before merging
-
-            > 💡 **Tip:** Click on individual alerts to see the affected code and remediation guidance.
-
+            
+            1. Check the **[Security tab](../../security/code-scanning)** for detailed findings
+            2. Review the workflow summary for finding details
+            3. Address high-severity issues before merging
+            
+            > 💡 Click on alerts in the Security tab to see affected code and remediation guidance.
+            
             ---
-            *This comment was automatically generated by the security scan workflow.*`;
+            <sub>🤖 Generated by Opengrep Security Scan</sub>`;
 
             // Check if we already commented to avoid duplicates
             const { data: comments } = await github.rest.issues.listComments({
@@ -249,7 +407,6 @@ jobs:
             );
             
             if (existingComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -257,7 +414,6 @@ jobs:
                 body: body
               });
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -265,46 +421,6 @@ jobs:
                 body: body
               });
             }
-
-      # ----------------------------------------------------------------------
-      # 📝 Generate Workflow Summary
-      # Provides a clear overview in the Actions tab
-      # ----------------------------------------------------------------------
-      - name: 📝 Generate workflow summary
-        if: always()
-        run: |
-          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
-          
-          echo "## 🔐 Opengrep Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "$FINDING_COUNT" = "0" ] || [ -z "$FINDING_COUNT" ]; then
-            echo "### ✅ No Security Issues Found" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The security scan completed successfully with no findings." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ⚠️ Security Findings Detected" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Total Findings | ${FINDING_COUNT} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Rules Path | \`${{ env.OPENGREP_RULES_PATH }}/\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| Scan Target | \`${{ env.OPENGREP_SCAN_PATH }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "📌 **Review the [Security tab](../../security/code-scanning) for detailed findings.**" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Scan Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Scanner | Opengrep |" >> $GITHUB_STEP_SUMMARY
-          echo "| Output Format | SARIF 2.1.0 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Rules Directory | \`${{ env.OPENGREP_RULES_PATH }}/\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
 
       # ----------------------------------------------------------------------
       # 🚨 Fail Workflow on Findings (Configurable)
@@ -317,15 +433,33 @@ jobs:
           FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
           FAIL_ON_FINDINGS="${{ github.event.inputs.fail_on_findings || 'true' }}"
           
-          if [ "$FINDING_COUNT" != "0" ] && [ -n "$FINDING_COUNT" ]; then
+          # Default to 0 if empty
+          FINDING_COUNT=${FINDING_COUNT:-0}
+          
+          if [ "$FINDING_COUNT" != "0" ]; then
             echo "::warning::Found ${FINDING_COUNT} security finding(s)"
             
             if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-              echo "::error::Security scan failed due to findings. Review the Security tab for details."
+              echo ""
+              echo "╔════════════════════════════════════════════════════════════╗"
+              echo "║  🚨 SECURITY SCAN FAILED                                   ║"
+              echo "║                                                            ║"
+              echo "║  Found ${FINDING_COUNT} security finding(s) that need attention.     ║"
+              echo "║                                                            ║"
+              echo "║  Review the workflow summary and Security tab for details. ║"
+              echo "╚════════════════════════════════════════════════════════════╝"
+              echo ""
+              echo "::error::Security scan failed: ${FINDING_COUNT} finding(s) detected"
               exit 1
             else
-              echo "::notice::Workflow configured to continue despite findings (fail_on_findings=false)"
+              echo "::notice::Continuing despite ${FINDING_COUNT} finding(s) (fail_on_findings=false)"
             fi
+          else
+            echo ""
+            echo "╔════════════════════════════════════════════════════════════╗"
+            echo "║  ✅ SECURITY SCAN PASSED                                   ║"
+            echo "║                                                            ║"
+            echo "║  No security issues detected in your code.                 ║"
+            echo "╚════════════════════════════════════════════════════════════╝"
+            echo ""
           fi
-          
-          echo "✅ Security check passed"
