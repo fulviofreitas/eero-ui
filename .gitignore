@@ -62,6 +62,7 @@ session.json
 
 # Coverage
 htmlcov/
+coverage/
 .tox/
 .coverage
 .coverage.*
