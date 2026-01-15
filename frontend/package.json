@@ -16,7 +16,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "overrides": {
-    "cookie": "^0.7.0"
+    "cookie": "^0.7.0",
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",
