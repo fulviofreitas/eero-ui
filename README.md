@@ -78,7 +78,7 @@ Or clone and build locally:
 ```bash
 git clone https://github.com/fulviofreitas/eero-ui.git
 cd eero-ui
-docker compose up -d
+./start.sh
 ```
 
 Open http://localhost:8000 in your browser.
