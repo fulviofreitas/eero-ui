@@ -1,0 +1,192 @@
+# ============================================================================
+# 🔐 JavaScript/TypeScript Security Rules for Opengrep
+# ============================================================================
+# These rules detect common security vulnerabilities in JavaScript/TypeScript
+# codebases, with a focus on Svelte and modern frontend frameworks.
+# ============================================================================
+
+rules:
+  # --------------------------------------------------------------------------
+  # XSS (Cross-Site Scripting) Prevention
+  # --------------------------------------------------------------------------
+  - id: js-xss-innerhtml-usage
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Potential XSS vulnerability: Using innerHTML with dynamic content.
+      Use textContent for text or sanitize HTML with DOMPurify.
+    severity: WARNING
+    pattern: $EL.innerHTML = $EXPR
+    metadata:
+      category: security
+      subcategory: xss
+      cwe: CWE-79
+      owasp: A7:2017 - Cross-Site Scripting (XSS)
+      fix: Use textContent instead, or sanitize with DOMPurify.sanitize()
+
+  - id: js-xss-document-write
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Avoid document.write() - it can introduce XSS vulnerabilities
+      and causes performance issues by blocking HTML parsing.
+    severity: WARNING
+    pattern: document.write($CONTENT)
+    metadata:
+      category: security
+      subcategory: xss
+      cwe: CWE-79
+
+  # --------------------------------------------------------------------------
+  # Insecure Data Handling
+  # --------------------------------------------------------------------------
+  - id: js-insecure-eval
+    languages:
+      - javascript
+      - typescript
+    message: |
+      eval() is dangerous and can execute arbitrary code.
+      Use safer alternatives like JSON.parse() for data or Function constructor.
+    severity: ERROR
+    pattern: eval($CODE)
+    metadata:
+      category: security
+      subcategory: code-injection
+      cwe: CWE-95
+      owasp: A1:2017 - Injection
+
+  - id: js-insecure-function-constructor
+    languages:
+      - javascript
+      - typescript
+    message: |
+      new Function() with dynamic input is similar to eval() and dangerous.
+    severity: WARNING
+    pattern: new Function($ARGS)
+    metadata:
+      category: security
+      subcategory: code-injection
+      cwe: CWE-95
+
+  # --------------------------------------------------------------------------
+  # Sensitive Data Exposure
+  # --------------------------------------------------------------------------
+  - id: js-console-log-sensitive
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Potential sensitive data in console.log(). Remove before production.
+    severity: INFO
+    pattern-either:
+      - pattern: console.log(..., $TOKEN, ...)
+      - pattern: console.log(..., $PASSWORD, ...)
+      - pattern: console.log(..., $SECRET, ...)
+      - pattern: console.log(..., $API_KEY, ...)
+    metadata:
+      category: security
+      subcategory: sensitive-data
+      cwe: CWE-532
+
+  - id: js-localstorage-sensitive
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Storing sensitive data in localStorage is insecure - it's accessible
+      via JavaScript and persists across sessions. Use httpOnly cookies instead.
+    severity: WARNING
+    pattern-either:
+      - pattern: localStorage.setItem("token", $VAL)
+      - pattern: localStorage.setItem("password", $VAL)
+      - pattern: localStorage.setItem("secret", $VAL)
+      - pattern: localStorage.setItem("api_key", $VAL)
+      - pattern: localStorage.setItem("apiKey", $VAL)
+    metadata:
+      category: security
+      subcategory: sensitive-data
+      cwe: CWE-922
+
+  # --------------------------------------------------------------------------
+  # Insecure HTTP Communication
+  # --------------------------------------------------------------------------
+  - id: js-insecure-http-url
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Hardcoded HTTP URL detected. Use HTTPS for secure communication.
+    severity: WARNING
+    pattern-regex: '["'']http://(?!localhost|127\.0\.0\.1)[^"'']+["'']'
+    metadata:
+      category: security
+      subcategory: insecure-transport
+      cwe: CWE-319
+
+  # --------------------------------------------------------------------------
+  # Cryptographic Issues
+  # --------------------------------------------------------------------------
+  - id: js-weak-random
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Math.random() is not cryptographically secure.
+      Use crypto.getRandomValues() for security-sensitive random values.
+    severity: WARNING
+    pattern: Math.random()
+    metadata:
+      category: security
+      subcategory: cryptography
+      cwe: CWE-338
+
+  # --------------------------------------------------------------------------
+  # Svelte-Specific Security
+  # --------------------------------------------------------------------------
+  - id: svelte-html-directive-xss
+    languages:
+      - javascript
+      - typescript
+    message: |
+      The {@html} directive in Svelte bypasses HTML escaping.
+      Ensure content is sanitized to prevent XSS attacks.
+    severity: WARNING
+    pattern-regex: '\{@html\s+\$?[a-zA-Z_][a-zA-Z0-9_]*\s*\}'
+    metadata:
+      category: security
+      subcategory: xss
+      cwe: CWE-79
+      framework: svelte
+      fix: Sanitize content with DOMPurify before using {@html}
+
+  # --------------------------------------------------------------------------
+  # API Security
+  # --------------------------------------------------------------------------
+  - id: js-fetch-no-credentials
+    languages:
+      - javascript
+      - typescript
+    message: |
+      fetch() without explicit credentials mode may leak or omit cookies
+      unexpectedly. Set credentials: 'same-origin' or 'include' explicitly.
+    severity: INFO
+    pattern: fetch($URL)
+    metadata:
+      category: security
+      subcategory: authentication
+      cwe: CWE-346
+
+  - id: js-hardcoded-api-key
+    languages:
+      - javascript
+      - typescript
+    message: |
+      Potential hardcoded API key detected. Use environment variables instead.
+    severity: ERROR
+    pattern-regex: '(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\x27][a-zA-Z0-9_\-]{20,}["\x27]'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798

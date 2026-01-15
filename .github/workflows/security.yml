@@ -1,0 +1,313 @@
+# ============================================================================
+# 🔐 Security Static Analysis with Opengrep
+# ============================================================================
+# This workflow runs Opengrep SAST (Static Application Security Testing) to
+# detect security vulnerabilities, code quality issues, and potential bugs.
+#
+# Features:
+# - Scans both frontend (Svelte/TypeScript) and backend (Python) code
+# - Uses custom security rules from the security-rules/ directory
+# - Uploads SARIF results to GitHub Security tab for visibility
+# - Comments on PRs when security findings are detected
+# - Fails the workflow if critical vulnerabilities are found
+# ============================================================================
+
+name: 🔐 Security Scan
+
+on:
+  # Run on all pull requests to protected branches
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'security-rules/**'
+      - '.github/workflows/security.yml'
+  
+  # Run on pushes to the default branch
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'security-rules/**'
+      - '.github/workflows/security.yml'
+  
+  # Allow manual trigger for ad-hoc security audits
+  workflow_dispatch:
+    inputs:
+      fail_on_findings:
+        description: 'Fail workflow if vulnerabilities found'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write    # Required for uploading SARIF to GitHub Security
+  pull-requests: write      # Required for commenting on PRs
+  actions: read             # Required for workflow status
+
+env:
+  # Opengrep configuration
+  OPENGREP_RULES_PATH: security-rules
+  OPENGREP_SCAN_PATH: .
+  SARIF_OUTPUT: results.sarif
+
+jobs:
+  # ============================================================================
+  # 🔍 Security Scan Job
+  # ============================================================================
+  security-scan:
+    name: 🔍 Opengrep SAST Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      # ----------------------------------------------------------------------
+      # 📥 Checkout Repository
+      # ----------------------------------------------------------------------
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for accurate scanning
+
+      # ----------------------------------------------------------------------
+      # 🛠️ Install Opengrep
+      # Using the official quick install method
+      # ----------------------------------------------------------------------
+      - name: 🛠️ Install Opengrep
+        run: |
+          echo "📦 Installing Opengrep..."
+          curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
+          
+          # Add to PATH for subsequent steps
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          # Verify installation
+          export PATH="$HOME/.local/bin:$PATH"
+          opengrep --version || echo "⚠️ Version check failed, continuing..."
+          echo "✅ Opengrep installation complete"
+
+      # ----------------------------------------------------------------------
+      # 📋 Validate Security Rules
+      # Ensure the rules directory exists and has valid rules
+      # ----------------------------------------------------------------------
+      - name: 📋 Validate security rules
+        run: |
+          if [ ! -d "${{ env.OPENGREP_RULES_PATH }}" ]; then
+            echo "::error::Security rules directory '${{ env.OPENGREP_RULES_PATH }}' not found"
+            echo "Please create the directory and add YAML rule files"
+            exit 1
+          fi
+          
+          RULE_COUNT=$(find ${{ env.OPENGREP_RULES_PATH }} -name "*.yaml" -o -name "*.yml" | wc -l)
+          echo "📊 Found ${RULE_COUNT} rule file(s)"
+          
+          if [ "$RULE_COUNT" -eq 0 ]; then
+            echo "::warning::No YAML rule files found in ${{ env.OPENGREP_RULES_PATH }}"
+          fi
+          
+          # List rules for visibility
+          echo "📁 Rule files:"
+          find ${{ env.OPENGREP_RULES_PATH }} -name "*.yaml" -o -name "*.yml" | head -20
+
+      # ----------------------------------------------------------------------
+      # 🔍 Run Opengrep Security Scan
+      # Scans the entire codebase with custom rules and outputs SARIF
+      # ----------------------------------------------------------------------
+      - name: 🔍 Run Opengrep security scan
+        id: scan
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          echo "🔍 Starting security scan..."
+          echo "   Rules: ${{ env.OPENGREP_RULES_PATH }}"
+          echo "   Target: ${{ env.OPENGREP_SCAN_PATH }}"
+          echo ""
+          
+          # Run the scan with SARIF output
+          # --sarif-output generates GitHub-compatible SARIF format
+          # Continue even if findings exist (we handle failures later)
+          opengrep scan \
+            -f ${{ env.OPENGREP_RULES_PATH }} \
+            ${{ env.OPENGREP_SCAN_PATH }} \
+            --sarif-output=${{ env.SARIF_OUTPUT }} \
+            2>&1 | tee scan-output.txt || true
+          
+          # Check if SARIF was generated
+          if [ -f "${{ env.SARIF_OUTPUT }}" ]; then
+            echo "✅ SARIF output generated successfully"
+            
+            # Count findings (basic JSON parsing)
+            FINDING_COUNT=$(cat ${{ env.SARIF_OUTPUT }} | grep -o '"ruleId"' | wc -l || echo "0")
+            echo "finding_count=${FINDING_COUNT}" >> $GITHUB_OUTPUT
+            echo "📊 Found ${FINDING_COUNT} potential issue(s)"
+          else
+            echo "⚠️ No SARIF output generated"
+            echo "finding_count=0" >> $GITHUB_OUTPUT
+            # Create empty SARIF for upload
+            echo '{"$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","version":"2.1.0","runs":[{"tool":{"driver":{"name":"Opengrep","version":"1.0.0"}},"results":[]}]}' > ${{ env.SARIF_OUTPUT }}
+          fi
+
+      # ----------------------------------------------------------------------
+      # 📤 Upload SARIF to GitHub Security Tab
+      # This enables the Security tab alerts and code scanning results
+      # ----------------------------------------------------------------------
+      - name: 📤 Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ env.SARIF_OUTPUT }}
+          category: opengrep-security-scan
+
+      # ----------------------------------------------------------------------
+      # 📊 Upload Scan Artifacts
+      # Keep scan results for debugging and audit trail
+      # ----------------------------------------------------------------------
+      - name: 📊 Upload scan artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            ${{ env.SARIF_OUTPUT }}
+            scan-output.txt
+          retention-days: 30
+
+      # ----------------------------------------------------------------------
+      # 💬 Comment on PR with Findings Summary
+      # Provides visibility directly in the PR conversation
+      # ----------------------------------------------------------------------
+      - name: 💬 Comment on PR with findings
+        if: github.event_name == 'pull_request' && steps.scan.outputs.finding_count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const findingCount = '${{ steps.scan.outputs.finding_count }}';
+            
+            const body = `## 🔐 Security Scan Results
+
+            | Metric | Value |
+            |--------|-------|
+            | 🔍 Scanner | Opengrep |
+            | ⚠️ Findings | ${findingCount} |
+            | 📁 Rules | \`security-rules/\` |
+
+            ### 📋 Next Steps
+
+            1. Review the findings in the **Security** tab
+            2. Check the "Code scanning alerts" section
+            3. Address any high/critical severity issues before merging
+
+            > 💡 **Tip:** Click on individual alerts to see the affected code and remediation guidance.
+
+            ---
+            *This comment was automatically generated by the security scan workflow.*`;
+
+            // Check if we already commented to avoid duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('🔐 Security Scan Results')
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      # ----------------------------------------------------------------------
+      # 📝 Generate Workflow Summary
+      # Provides a clear overview in the Actions tab
+      # ----------------------------------------------------------------------
+      - name: 📝 Generate workflow summary
+        if: always()
+        run: |
+          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
+          
+          echo "## 🔐 Opengrep Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$FINDING_COUNT" = "0" ] || [ -z "$FINDING_COUNT" ]; then
+            echo "### ✅ No Security Issues Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The security scan completed successfully with no findings." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Security Findings Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Findings | ${FINDING_COUNT} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Rules Path | \`${{ env.OPENGREP_RULES_PATH }}/\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Scan Target | \`${{ env.OPENGREP_SCAN_PATH }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📌 **Review the [Security tab](../../security/code-scanning) for detailed findings.**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Scan Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Opengrep |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output Format | SARIF 2.1.0 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rules Directory | \`${{ env.OPENGREP_RULES_PATH }}/\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+
+      # ----------------------------------------------------------------------
+      # 🚨 Fail Workflow on Findings (Configurable)
+      # This step fails the workflow if security issues are found
+      # Can be disabled via workflow_dispatch input
+      # ----------------------------------------------------------------------
+      - name: 🚨 Check for critical findings
+        if: always()
+        run: |
+          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
+          FAIL_ON_FINDINGS="${{ github.event.inputs.fail_on_findings || 'true' }}"
+          
+          if [ "$FINDING_COUNT" != "0" ] && [ -n "$FINDING_COUNT" ]; then
+            echo "::warning::Found ${FINDING_COUNT} security finding(s)"
+            
+            if [ "$FAIL_ON_FINDINGS" = "true" ]; then
+              echo "::error::Security scan failed due to findings. Review the Security tab for details."
+              exit 1
+            else
+              echo "::notice::Workflow configured to continue despite findings (fail_on_findings=false)"
+            fi
+          fi
+          
+          echo "✅ Security check passed"

@@ -1,0 +1,219 @@
+# ============================================================================
+# 🔐 General Security Rules for Opengrep
+# ============================================================================
+# These rules detect common security issues that apply across multiple
+# languages and file types in the codebase.
+# ============================================================================
+
+rules:
+  # --------------------------------------------------------------------------
+  # Secrets & Credentials Detection
+  # --------------------------------------------------------------------------
+  - id: generic-private-key
+    languages:
+      - generic
+    message: |
+      Private key detected in source code. Never commit private keys.
+      Use a secrets manager or environment variables.
+    severity: ERROR
+    pattern-regex: '-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  - id: generic-aws-access-key
+    languages:
+      - generic
+    message: |
+      Potential AWS Access Key detected. Remove and rotate immediately.
+    severity: ERROR
+    pattern-regex: '(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+      cloud: aws
+
+  - id: generic-aws-secret-key
+    languages:
+      - generic
+    message: |
+      Potential AWS Secret Key detected. Remove and rotate immediately.
+    severity: ERROR
+    pattern-regex: '(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+      cloud: aws
+
+  - id: generic-github-token
+    languages:
+      - generic
+    message: |
+      GitHub token detected. Remove and rotate immediately.
+    severity: ERROR
+    pattern-regex: 'gh[pousr]_[A-Za-z0-9_]{36,}'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  - id: generic-jwt-token
+    languages:
+      - generic
+    message: |
+      Potential hardcoded JWT detected. Never commit tokens to source control.
+    severity: WARNING
+    pattern-regex: 'eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  - id: generic-slack-webhook
+    languages:
+      - generic
+    message: |
+      Slack webhook URL detected. Use environment variables instead.
+    severity: ERROR
+    pattern-regex: 'https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[a-zA-Z0-9]+'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  - id: generic-stripe-key
+    languages:
+      - generic
+    message: |
+      Stripe API key detected. Use environment variables instead.
+    severity: ERROR
+    pattern-regex: '(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  # --------------------------------------------------------------------------
+  # Environment Files
+  # --------------------------------------------------------------------------
+  - id: env-file-with-secrets
+    languages:
+      - generic
+    message: |
+      Potential secrets in environment configuration. Ensure .env files
+      are in .gitignore and not committed to version control.
+    severity: INFO
+    pattern-regex: '(?:PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY)\s*=\s*[^\s]+'
+    paths:
+      include:
+        - "*.env*"
+        - ".env*"
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+
+  # --------------------------------------------------------------------------
+  # Debug & Development Code
+  # --------------------------------------------------------------------------
+  - id: generic-todo-security
+    languages:
+      - generic
+    message: |
+      Security-related TODO found. Address before deployment.
+    severity: INFO
+    pattern-regex: '(?i)(?:TODO|FIXME|XXX|HACK).*(?:security|vulnerable|insecure|auth|password|secret)'
+    metadata:
+      category: security
+      subcategory: code-review
+
+  - id: generic-disabled-security
+    languages:
+      - generic
+    message: |
+      Security feature appears to be disabled. Review before deployment.
+    severity: WARNING
+    pattern-regex: '(?i)(?:disable|skip|bypass|ignore).*(?:security|auth|ssl|tls|csrf|xss|validation)'
+    metadata:
+      category: security
+      subcategory: configuration
+      cwe: CWE-1188
+
+  # --------------------------------------------------------------------------
+  # URL & Network Security
+  # --------------------------------------------------------------------------
+  - id: generic-localhost-url
+    languages:
+      - generic
+    message: |
+      Hardcoded localhost URL may cause issues in production.
+      Use environment variables for configurable URLs.
+    severity: INFO
+    pattern-regex: '(?:http|https)://(?:localhost|127\.0\.0\.1)(?::\d+)?'
+    metadata:
+      category: security
+      subcategory: configuration
+
+  - id: generic-insecure-protocol
+    languages:
+      - generic
+    message: |
+      Insecure protocol (HTTP, FTP, TELNET) detected. Use secure alternatives.
+    severity: WARNING
+    pattern-regex: '(?:http|ftp|telnet)://(?!localhost|127\.0\.0\.1)[a-zA-Z0-9.-]+[^"\x27\s]*'
+    metadata:
+      category: security
+      subcategory: insecure-transport
+      cwe: CWE-319
+
+  # --------------------------------------------------------------------------
+  # Docker Security
+  # --------------------------------------------------------------------------
+  - id: dockerfile-run-as-root
+    languages:
+      - dockerfile
+    message: |
+      Container runs as root by default. Add USER directive for security.
+    severity: WARNING
+    pattern: |
+      FROM $IMAGE
+      ...
+      CMD $CMD
+    metadata:
+      category: security
+      subcategory: container
+      cwe: CWE-250
+
+  - id: dockerfile-latest-tag
+    languages:
+      - dockerfile
+    message: |
+      Using :latest tag is not recommended. Pin to a specific version.
+    severity: INFO
+    pattern-regex: 'FROM\s+[a-zA-Z0-9._/-]+:latest'
+    metadata:
+      category: security
+      subcategory: container
+      cwe: CWE-1104
+
+  # --------------------------------------------------------------------------
+  # Git Security
+  # --------------------------------------------------------------------------
+  - id: git-credentials-file
+    languages:
+      - generic
+    message: |
+      Git credentials file detected. Never commit credentials.
+    severity: ERROR
+    paths:
+      include:
+        - ".git-credentials"
+        - ".gitconfig"
+    pattern-regex: '(?:https?://)?[^:]+:[^@]+@'
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798

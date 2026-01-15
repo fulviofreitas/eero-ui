@@ -1,0 +1,283 @@
+# ============================================================================
+# 🔐 Python Security Rules for Opengrep
+# ============================================================================
+# These rules detect common security vulnerabilities in Python codebases,
+# with a focus on FastAPI and web application security.
+# ============================================================================
+
+rules:
+  # --------------------------------------------------------------------------
+  # Injection Vulnerabilities
+  # --------------------------------------------------------------------------
+  - id: python-sql-injection
+    languages:
+      - python
+    message: |
+      Potential SQL injection vulnerability. Use parameterized queries
+      or ORM methods instead of string formatting.
+    severity: ERROR
+    pattern-either:
+      - pattern: |
+          $CURSOR.execute(f"...$VAR...")
+      - pattern: |
+          $CURSOR.execute("..." % $VAR)
+      - pattern: |
+          $CURSOR.execute("..." + $VAR)
+      - pattern: |
+          $CURSOR.execute("...".format($VAR))
+    metadata:
+      category: security
+      subcategory: injection
+      cwe: CWE-89
+      owasp: A1:2017 - Injection
+
+  - id: python-command-injection
+    languages:
+      - python
+    message: |
+      Potential command injection. Use subprocess with shell=False
+      and pass arguments as a list.
+    severity: ERROR
+    pattern-either:
+      - pattern: os.system($CMD)
+      - pattern: subprocess.call($CMD, shell=True, ...)
+      - pattern: subprocess.run($CMD, shell=True, ...)
+      - pattern: subprocess.Popen($CMD, shell=True, ...)
+    metadata:
+      category: security
+      subcategory: injection
+      cwe: CWE-78
+      owasp: A1:2017 - Injection
+
+  - id: python-eval-danger
+    languages:
+      - python
+    message: |
+      eval() is dangerous and can execute arbitrary code.
+      Use ast.literal_eval() for safe evaluation of literals.
+    severity: ERROR
+    pattern: eval($EXPR)
+    metadata:
+      category: security
+      subcategory: code-injection
+      cwe: CWE-95
+
+  - id: python-exec-danger
+    languages:
+      - python
+    message: |
+      exec() is dangerous and can execute arbitrary code.
+      Avoid using exec with user-controlled input.
+    severity: ERROR
+    pattern: exec($EXPR)
+    metadata:
+      category: security
+      subcategory: code-injection
+      cwe: CWE-95
+
+  # --------------------------------------------------------------------------
+  # Authentication & Session Security
+  # --------------------------------------------------------------------------
+  - id: python-hardcoded-password
+    languages:
+      - python
+    message: |
+      Hardcoded password detected. Use environment variables or secrets manager.
+    severity: ERROR
+    pattern-either:
+      - pattern: password = "..."
+      - pattern: PASSWORD = "..."
+      - pattern: secret = "..."
+      - pattern: SECRET = "..."
+      - pattern: api_key = "..."
+      - pattern: API_KEY = "..."
+    metadata:
+      category: security
+      subcategory: secrets
+      cwe: CWE-798
+      owasp: A2:2017 - Broken Authentication
+
+  - id: python-weak-jwt-secret
+    languages:
+      - python
+    message: |
+      Potential weak or hardcoded JWT secret. Use a strong, randomly
+      generated secret stored in environment variables.
+    severity: ERROR
+    pattern-either:
+      - pattern: jwt.encode($PAYLOAD, "...", ...)
+      - pattern: jwt.decode($TOKEN, "...", ...)
+    metadata:
+      category: security
+      subcategory: cryptography
+      cwe: CWE-326
+
+  # --------------------------------------------------------------------------
+  # Cryptographic Issues
+  # --------------------------------------------------------------------------
+  - id: python-md5-usage
+    languages:
+      - python
+    message: |
+      MD5 is cryptographically broken. Use SHA-256 or SHA-3 for hashing.
+    severity: ERROR
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: md5($DATA)
+    metadata:
+      category: security
+      subcategory: cryptography
+      cwe: CWE-328
+
+  - id: python-sha1-usage
+    languages:
+      - python
+    message: |
+      SHA-1 is deprecated for security purposes. Use SHA-256 or SHA-3.
+    severity: WARNING
+    pattern: hashlib.sha1(...)
+    metadata:
+      category: security
+      subcategory: cryptography
+      cwe: CWE-328
+
+  - id: python-weak-random
+    languages:
+      - python
+    message: |
+      random module is not cryptographically secure.
+      Use secrets module for security-sensitive random values.
+    severity: WARNING
+    pattern-either:
+      - pattern: random.random()
+      - pattern: random.randint(...)
+      - pattern: random.choice(...)
+      - pattern: random.randrange(...)
+    metadata:
+      category: security
+      subcategory: cryptography
+      cwe: CWE-338
+
+  # --------------------------------------------------------------------------
+  # Insecure Deserialization
+  # --------------------------------------------------------------------------
+  - id: python-pickle-insecure
+    languages:
+      - python
+    message: |
+      pickle.loads() is insecure - it can execute arbitrary code.
+      Use JSON or a safer serialization format.
+    severity: ERROR
+    pattern-either:
+      - pattern: pickle.loads($DATA)
+      - pattern: pickle.load($FILE)
+    metadata:
+      category: security
+      subcategory: deserialization
+      cwe: CWE-502
+      owasp: A8:2017 - Insecure Deserialization
+
+  - id: python-yaml-unsafe
+    languages:
+      - python
+    message: |
+      yaml.load() without Loader is insecure. Use yaml.safe_load() instead.
+    severity: ERROR
+    pattern: yaml.load($DATA)
+    metadata:
+      category: security
+      subcategory: deserialization
+      cwe: CWE-502
+
+  # --------------------------------------------------------------------------
+  # Path Traversal
+  # --------------------------------------------------------------------------
+  - id: python-path-traversal
+    languages:
+      - python
+    message: |
+      Potential path traversal vulnerability. Validate and sanitize
+      user input before using it in file paths.
+    severity: WARNING
+    pattern-either:
+      - pattern: open(f"...$USER_INPUT...", ...)
+      - pattern: open($BASE + $USER_INPUT, ...)
+      - pattern: Path($BASE) / $USER_INPUT
+    metadata:
+      category: security
+      subcategory: path-traversal
+      cwe: CWE-22
+
+  # --------------------------------------------------------------------------
+  # FastAPI Specific
+  # --------------------------------------------------------------------------
+  - id: fastapi-cors-wildcard
+    languages:
+      - python
+    message: |
+      CORS with allow_origins=["*"] is insecure for production.
+      Specify explicit allowed origins.
+    severity: WARNING
+    pattern: |
+      CORSMiddleware(..., allow_origins=["*"], ...)
+    metadata:
+      category: security
+      subcategory: cors
+      cwe: CWE-942
+      framework: fastapi
+
+  - id: fastapi-debug-mode
+    languages:
+      - python
+    message: |
+      Debug mode should be disabled in production.
+      It can expose sensitive information.
+    severity: WARNING
+    pattern-either:
+      - pattern: app = FastAPI(..., debug=True, ...)
+      - pattern: uvicorn.run(..., reload=True, ...)
+    metadata:
+      category: security
+      subcategory: configuration
+      cwe: CWE-215
+      framework: fastapi
+
+  # --------------------------------------------------------------------------
+  # Logging Sensitive Data
+  # --------------------------------------------------------------------------
+  - id: python-log-sensitive
+    languages:
+      - python
+    message: |
+      Potential sensitive data in log output. Avoid logging
+      passwords, tokens, or personal data.
+    severity: WARNING
+    pattern-either:
+      - pattern: logging.$METHOD(..., password=..., ...)
+      - pattern: logging.$METHOD(..., token=..., ...)
+      - pattern: logging.$METHOD(..., secret=..., ...)
+      - pattern: logger.$METHOD(..., password=..., ...)
+      - pattern: logger.$METHOD(..., token=..., ...)
+    metadata:
+      category: security
+      subcategory: sensitive-data
+      cwe: CWE-532
+
+  # --------------------------------------------------------------------------
+  # SSL/TLS Verification
+  # --------------------------------------------------------------------------
+  - id: python-ssl-verify-disabled
+    languages:
+      - python
+    message: |
+      SSL verification is disabled. This is vulnerable to MITM attacks.
+      Only disable for testing in isolated environments.
+    severity: ERROR
+    pattern-either:
+      - pattern: requests.$METHOD(..., verify=False, ...)
+      - pattern: httpx.$METHOD(..., verify=False, ...)
+      - pattern: urllib3.disable_warnings(...)
+    metadata:
+      category: security
+      subcategory: ssl
+      cwe: CWE-295
