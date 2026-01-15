@@ -83,6 +83,12 @@ cd eero-ui
 
 Open http://localhost:8000 in your browser.
 
+To rebuild with the latest dependencies (e.g., after eero-client updates):
+
+```bash
+./start.sh --rebuild
+```
+
 To set a secure session secret:
 
 ```bash
@@ -103,6 +109,12 @@ To stop:
 
 ```bash
 docker compose down
+```
+
+To update dependencies (fetches latest eero-client):
+
+```bash
+./start.sh --rebuild
 ```
 
 ---
