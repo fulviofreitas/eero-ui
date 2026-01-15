@@ -8,12 +8,12 @@ services:
       # Persist session data across container restarts
       - eero-data:/data
     environment:
-      - EERO_DASHBOARD_HOST=0.0.0.0
-      - EERO_DASHBOARD_PORT=8000
-      - EERO_DASHBOARD_DEBUG=false
+      EERO_DASHBOARD_HOST: "0.0.0.0"
+      EERO_DASHBOARD_PORT: "8000"
+      EERO_DASHBOARD_DEBUG: "false"
       # REQUIRED: Generate a secure secret with: openssl rand -hex 32
       # Set in .env file or export before running docker-compose
-      - EERO_DASHBOARD_SESSION_SECRET=${EERO_DASHBOARD_SESSION_SECRET:?Session secret is required. Generate with: openssl rand -hex 32}
+      EERO_DASHBOARD_SESSION_SECRET: "${EERO_DASHBOARD_SESSION_SECRET:?Session secret required - run openssl rand -hex 32}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
