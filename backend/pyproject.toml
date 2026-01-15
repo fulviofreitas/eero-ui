@@ -2,23 +2,23 @@
 name = "eero-ui-backend"
 version = "1.0.0"
 description = "FastAPI backend for the Eero UI Dashboard"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 
 dependencies = [
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "pydantic>=2.0.0",
-    "python-multipart>=0.0.6",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "python-multipart>=0.0.18",
     "eero-client @ git+https://github.com/fulviofreitas/eero-client.git",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "httpx>=0.26.0",
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
+    "httpx>=0.28.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
 ]
 
 [tool.pytest.ini_options]
