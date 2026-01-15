@@ -61,10 +61,11 @@ if settings.debug:
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Handle uncaught exceptions."""
-    _LOGGER.exception(f"Unhandled exception: {exc}")
+    # Log full details server-side, return generic message to client
+    _LOGGER.exception("Unhandled exception occurred")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": type(exc).__name__},
+        content={"detail": "Internal server error"},
     )
 
 

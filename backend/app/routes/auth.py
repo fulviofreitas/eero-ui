@@ -84,8 +84,9 @@ async def get_auth_status(
                 user_name = user.name
                 user_phone = user.phone
                 user_role = user.role
-                
-            _LOGGER.info(f"Auth status: account_id={account_id}, user_email={user_email}, user_name={user_name}, premium={premium_status}")
+
+            # Log minimal info - avoid PII in logs
+            _LOGGER.debug(f"Auth status check: authenticated, account_id={account_id}")
         except Exception as e:
             _LOGGER.warning(f"Failed to get account info: {e}")
 

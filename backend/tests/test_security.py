@@ -129,6 +129,38 @@ class TestRateLimiting:
         assert app.state.limiter is not None
 
 
+class TestGlobalExceptionHandler:
+    """Test that global exception handler doesn't leak details."""
+
+    def test_global_handler_returns_generic_response(self):
+        """Verify global exception handler returns generic error without type info."""
+        from app.main import global_exception_handler
+        from fastapi.responses import JSONResponse
+        import asyncio
+
+        # Simulate an unhandled exception
+        mock_request = None
+        test_exception = ValueError("sensitive internal message")
+
+        # Call the handler
+        response = asyncio.get_event_loop().run_until_complete(
+            global_exception_handler(mock_request, test_exception)
+        )
+
+        # Verify it returns a JSONResponse
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 500
+
+        # Verify the response body doesn't contain exception type or details
+        import json
+
+        body = json.loads(response.body.decode())
+        assert body == {"detail": "Internal server error"}
+        assert "type" not in body
+        assert "ValueError" not in str(body)
+        assert "sensitive" not in str(body)
+
+
 class TestExceptionSanitization:
     """Test that exception messages don't leak internal details."""
 
