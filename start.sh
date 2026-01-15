@@ -1,12 +1,34 @@
 #!/bin/bash
 # Start eero-ui dashboard
+#
+# Usage:
+#   ./start.sh              # Start normally (use cached build)
+#   ./start.sh --rebuild    # Force rebuild with latest dependencies
 
 set -e
+
+# Parse arguments
+REBUILD=false
+for arg in "$@"; do
+    case $arg in
+        --rebuild|-r)
+            REBUILD=true
+            shift
+            ;;
+    esac
+done
 
 # Generate session secret if not set
 if [ -z "$EERO_DASHBOARD_SESSION_SECRET" ]; then
     echo "🔐 Generating session secret..."
     export EERO_DASHBOARD_SESSION_SECRET=$(openssl rand -hex 32)
+fi
+
+# Rebuild if requested (fetches latest eero-client from GitHub)
+if [ "$REBUILD" = true ]; then
+    echo "🔄 Rebuilding container (fetching latest dependencies)..."
+    docker compose down 2>/dev/null || true
+    docker compose build --no-cache
 fi
 
 echo "🚀 Starting eero-ui..."
@@ -24,8 +46,9 @@ while [ $elapsed -lt $timeout ]; do
         echo "   🌐 Open in browser: http://localhost:8000"
         echo ""
         echo "   📋 Useful commands:"
-        echo "      docker compose logs -f   # View logs"
-        echo "      docker compose down      # Stop"
+        echo "      docker compose logs -f      # View logs"
+        echo "      docker compose down         # Stop"
+        echo "      ./start.sh --rebuild        # Update dependencies"
         echo ""
         exit 0
     fi

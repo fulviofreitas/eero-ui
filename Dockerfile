@@ -25,7 +25,8 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-# Install git (for pip to clone eero-client) and curl (for healthcheck)
+# Install uv (fast Python package installer), git (for cloning eero-client), and curl (for healthcheck)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -34,9 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy backend dependencies
 COPY backend/pyproject.toml ./backend/
 
-# Install Python dependencies
+# Install Python dependencies with uv (10-100x faster than pip)
 WORKDIR /app/backend
-RUN pip install --no-cache-dir .
+RUN uv pip install --system --no-cache .
 
 # Copy backend source
 COPY backend/app ./app
