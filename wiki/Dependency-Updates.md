@@ -6,24 +6,25 @@ This project uses **Renovate** with a **GitHub App** for automated dependency ma
 
 The dependency update system automatically:
 - Tracks new releases of `eero-client` (the core API client)
-- Creates PRs when dependencies have updates available
+- Creates PRs **immediately** when dependencies have updates available
 - Auto-merges minor/patch updates for non-critical dependencies
 - Requires manual review for `eero-client` and major updates
+- Triggers instantly when `eero-client` releases a new version
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     DEPENDENCY UPDATE FLOW                                   │
+│                     IMMEDIATE DEPENDENCY UPDATE FLOW                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌────────────────────────────┐                                             │
 │  │  fulviofreitas/eero-client │                                             │
 │  │  ──────────────────────    │                                             │
-│  │  🚀 Release v1.0.2         │                                             │
+│  │  🚀 Release v1.2.0         │                                             │
 │  └────────────┬───────────────┘                                             │
 │               │                                                              │
-│               │ repository_dispatch                                          │
+│               │ repository_dispatch (automatic)                              │
 │               │ event: "eero-client-release"                                │
 │               ▼                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
@@ -37,20 +38,22 @@ The dependency update system automatically:
 │  │  │  (eero-renovate-bot)│     │  • workflow_dispatch (manual)      │  │  │
 │  │  └──────────┬──────────┘     └─────────────────────────────────────┘  │  │
 │  │             │                                                          │  │
-│  │             │ Detects new tag v1.0.2                                   │  │
+│  │             │ Creates PR immediately (no schedule wait)                │  │
 │  │             ▼                                                          │  │
-│  │  ┌─────────────────────┐                                               │  │
-│  │  │ 📝 Creates PR:      │                                               │  │
-│  │  │ "Update eero-client │                                               │  │
-│  │  │  to v1.0.2"         │                                               │  │
-│  │  └──────────┬──────────┘                                               │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  PR: deps(critical): update eero-client v1.2.0                  │  │  │
+│  │  │  ──────────────────────────────────────────                     │  │  │
+│  │  │  Labels: [critical] [needs-review] [eero-client]                │  │  │
+│  │  │  Reviewers: @fulviofreitas                                      │  │  │
+│  │  │  Assignees: @fulviofreitas                                      │  │  │
+│  │  └──────────┬──────────────────────────────────────────────────────┘  │  │
 │  │             │                                                          │  │
-│  │             │ PR triggers CI                                           │  │
+│  │             │ PR triggers CI automatically                             │  │
 │  │             ▼                                                          │  │
 │  │  ┌─────────────────────┐                                               │  │
 │  │  │ 🧪 CI Pipeline      │  Tests with new eero-client version          │  │
-│  │  │  ✅ Pass → Merge    │                                               │  │
-│  │  │  ❌ Fail → Review   │                                               │  │
+│  │  │  ✅ Pass → Review   │                                               │  │
+│  │  │  ❌ Fail → Fix      │                                               │  │
 │  │  └─────────────────────┘                                               │  │
 │  │                                                                        │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
@@ -58,11 +61,35 @@ The dependency update system automatically:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Key Features
+
+### Immediate PR Creation
+
+PRs are created **immediately** when Renovate detects updates - there's no schedule restriction. This means:
+
+- When `eero-client` releases, a PR is created within minutes
+- The workflow itself runs weekly (backup) or on-demand
+- Cross-repo dispatch from `eero-client` triggers instant updates
+
+### Cross-Repository Notification
+
+The `eero-client` repository is configured to notify `eero-ui` when a new release is published. This happens automatically via GitHub's `repository_dispatch` event.
+
+**Flow:**
+1. `eero-client` releases v1.2.0
+2. Release workflow sends `repository_dispatch` to `eero-ui`
+3. `eero-ui`'s Renovate workflow triggers immediately
+4. Renovate creates a PR to update the dependency
+5. CI runs tests against the new version
+
+---
+
 ## Configuration
 
 ### Renovate Config (`.github/renovate.json5`)
 
 Key features:
+- **No schedule restriction**: PRs created immediately when updates detected
 - **Custom regex manager**: Tracks git URL dependencies with version tags
 - **Semantic commits**: All PRs use conventional commit format
 - **Auto-merge rules**: Minor/patch updates auto-merge after CI passes
@@ -71,7 +98,7 @@ Key features:
 ### GitHub App
 
 The `eero-renovate-bot` GitHub App provides:
-- Higher rate limits than PATs
+- Higher rate limits than PATs (15,000 req/hour)
 - Scoped permissions (only what's needed)
 - No expiration issues
 - Clear audit trail
@@ -80,74 +107,44 @@ The `eero-renovate-bot` GitHub App provides:
 - `RENOVATE_APP_ID`: The GitHub App's numeric ID
 - `RENOVATE_APP_PRIVATE_KEY`: The App's private key (PEM format)
 
+---
+
+## Workflow Triggers
+
+The Renovate workflow (`.github/workflows/renovate.yml`) can be triggered by:
+
+| Trigger | When | Result |
+|---------|------|--------|
+| `repository_dispatch` | eero-client releases | Immediate PR creation |
+| `schedule` | Weekly (Mondays 3 AM UTC) | Checks all dependencies |
+| `workflow_dispatch` | Manual run | On-demand check |
+
+---
+
 ## Manual Trigger
 
 To run Renovate manually:
 
 1. Go to **Actions** → **🔄 Renovate**
 2. Click **Run workflow**
-3. Optionally enable dry-run mode to preview changes
-
-## eero-client Release Notification
-
-For immediate updates when eero-client releases, configure the eero-client repository to send a `repository_dispatch` event. See the section below.
+3. Options:
+   - **Dry-run mode**: Preview changes without creating PRs
+   - **Log level**: Set to `debug` for troubleshooting
+   - **Reset cache**: Clear cached data for fresh run
 
 ---
 
-## Setting Up eero-client Notifications
+## Dependency Dashboard
 
-To enable immediate CI triggers when eero-client releases a new version, add this step to the eero-client release workflow:
+Renovate creates a **Dependency Dashboard** issue that shows:
+- All detected dependencies
+- Pending updates
+- Config warnings
+- Manual override checkboxes
 
-### Option A: Using a Personal Access Token
+**Location:** [Issue #5 - 📦 Dependency Dashboard](https://github.com/fulviofreitas/eero-ui/issues/5)
 
-Add to `eero-client/.github/workflows/release.yml`:
-
-```yaml
-- name: 🔔 Notify eero-ui of new release
-  if: steps.release.outputs.new_release_published == 'true'
-  uses: peter-evans/repository-dispatch@v3
-  with:
-    token: ${{ secrets.EERO_UI_DISPATCH_TOKEN }}
-    repository: fulviofreitas/eero-ui
-    event-type: eero-client-release
-    client-payload: |
-      {
-        "version": "${{ steps.release.outputs.new_release_version }}",
-        "tag": "v${{ steps.release.outputs.new_release_version }}"
-      }
-```
-
-**Required secret in eero-client:**
-- `EERO_UI_DISPATCH_TOKEN`: A PAT with `repo` scope for the eero-ui repository
-
-### Option B: Using the GitHub App (Recommended)
-
-If you install the same `eero-renovate-bot` GitHub App on the eero-client repository:
-
-```yaml
-- name: 🔑 Generate GitHub App token
-  id: app-token
-  uses: actions/create-github-app-token@v1
-  with:
-    app-id: ${{ secrets.RENOVATE_APP_ID }}
-    private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
-    repositories: eero-ui
-
-- name: 🔔 Notify eero-ui of new release
-  if: steps.release.outputs.new_release_published == 'true'
-  uses: peter-evans/repository-dispatch@v3
-  with:
-    token: ${{ steps.app-token.outputs.token }}
-    repository: fulviofreitas/eero-ui
-    event-type: eero-client-release
-    client-payload: |
-      {
-        "version": "${{ steps.release.outputs.new_release_version }}",
-        "tag": "v${{ steps.release.outputs.new_release_version }}"
-      }
-```
-
-This approach uses the same GitHub App, avoiding the need for additional PATs.
+You can force-create any PR by checking its checkbox in the dashboard.
 
 ---
 
@@ -175,11 +172,29 @@ The Renovate workflow includes repository caching for faster subsequent runs.
 
 When Renovate detects a new eero-client version:
 
-1. **PR Title**: Prefixed with `🔴 deps(critical):` for visibility
-2. **Labels**: `critical`, `needs-review`, `eero-client`
+1. **Commit Message**: `deps(critical): update eero-client v1.2.0`
+2. **Labels**: `critical`, `needs-review`, `eero-client`, `dependencies`
 3. **Reviewers**: Automatically assigned to maintainers
 4. **Assignees**: Automatically assigned for accountability
 5. **PR Body**: Includes review checklist and relevant links
+
+### PR Body Content
+
+```markdown
+## ⚠️ Critical Dependency Update
+
+This PR updates `eero-client`, the core API client for eero network communication.
+
+### Review Checklist
+- [ ] Review the changelog for breaking changes
+- [ ] Verify API compatibility
+- [ ] Run full test suite locally if needed
+- [ ] Check for any deprecated methods
+
+### Links
+- [eero-client Repository](https://github.com/fulviofreitas/eero-client)
+- [eero-client Releases](https://github.com/fulviofreitas/eero-client/releases)
+```
 
 ### Major Updates
 
@@ -187,6 +202,41 @@ All major version updates (any dependency):
 - Labeled with `major-update`, `needs-review`
 - Automatically request review from maintainers
 - Never auto-merged
+
+---
+
+## eero-client Configuration
+
+The `eero-client` repository has been configured to notify `eero-ui` on releases.
+
+### How It Works
+
+In `eero-client/.github/workflows/release.yml`, a `notify-downstream` job:
+
+```yaml
+notify-downstream:
+  name: 🔔 Notify eero-ui
+  needs: release
+  if: needs.release.outputs.released == 'true'
+
+  steps:
+    - uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.EERO_UI_DISPATCH_TOKEN }}
+        repository: fulviofreitas/eero-ui
+        event-type: eero-client-release
+        client-payload: |
+          {
+            "version": "${{ needs.release.outputs.version }}",
+            "tag": "v${{ needs.release.outputs.version }}"
+          }
+```
+
+### Required Secret
+
+`eero-client` needs the `EERO_UI_DISPATCH_TOKEN` secret:
+- A PAT with `repo` scope for `fulviofreitas/eero-ui`
+- Or use the same GitHub App installed on both repos
 
 ---
 
@@ -202,20 +252,36 @@ All major version updates (any dependency):
 2. Verify the regex pattern matches by running Renovate in debug mode
 3. Check the Dependency Dashboard issue for any errors
 
+### PRs not being created
+
+1. Check the Dependency Dashboard for "Awaiting Schedule" - this shouldn't happen now
+2. Verify the GitHub App has proper permissions
+3. Run Renovate manually with debug logging
+
 ### GitHub App token errors
 
 1. Ensure secrets `RENOVATE_APP_ID` and `RENOVATE_APP_PRIVATE_KEY` are set
 2. Verify the App is installed on the repository
-3. Check that the App has the required permissions
+3. Check that the App has the required permissions:
+   - Contents: Read and write
+   - Issues: Read and write
+   - Pull requests: Read and write
+   - Workflows: Read and write
 
 ### Rate limiting
 
 The GitHub App should have 15,000 requests/hour. If you hit limits:
 - Reduce `prHourlyLimit` in renovate.json5
-- Increase the schedule interval
+- The current limit is 2 PRs/hour
 
 ### Cache issues
 
 If Renovate behaves unexpectedly:
 1. Run workflow with "Reset repository cache" enabled
 2. Or manually delete the `renovate-cache-v1` artifact from Actions
+
+### Cross-repo dispatch not working
+
+1. Verify `EERO_UI_DISPATCH_TOKEN` is set in eero-client
+2. Check the token has `repo` scope
+3. Verify the `repository_dispatch` trigger is in eero-ui's workflow
