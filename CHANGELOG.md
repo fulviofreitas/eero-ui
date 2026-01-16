@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.4](https://github.com/fulviofreitas/eero-ui/compare/v2.3.3...v2.3.4) (2026-01-16)
+
+### 🐛 Bug Fixes
+
+* **ci:** disable registry cache for PR builds ([92a74ab](https://github.com/fulviofreitas/eero-ui/commit/92a74ab834f9225efb3cbb5ce7d6a3e07929bf92))
+
 ## [2.3.3](https://github.com/fulviofreitas/eero-ui/compare/v2.3.2...v2.3.3) (2026-01-16)
 
 ### 🐛 Bug Fixes
