@@ -38,8 +38,9 @@ export default {
     // Subject cannot be empty
     'subject-empty': [2, 'never'],
     
-    // Subject must start with lowercase
-    'subject-case': [2, 'always', 'lower-case'],
+    // Subject case: disabled to allow acronyms (CI/CD, API, HTTP, etc.)
+    // Conventional commits don't strictly require lowercase subjects
+    'subject-case': [0],
     
     // Subject must not end with period
     'subject-full-stop': [2, 'never', '.'],
