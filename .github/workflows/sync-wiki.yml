@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 🔄 Sync wiki
         uses: Andrew-Chen-Wang/github-wiki-action@v4
