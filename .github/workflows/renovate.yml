@@ -104,7 +104,7 @@ jobs:
       # ========================================================================
       - name: 📥 Download cache artifact
         if: github.event.inputs.reset_cache != 'true'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v12
         continue-on-error: true
         with:
           name: ${{ env.cache_key }}
