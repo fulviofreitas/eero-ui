@@ -6,22 +6,25 @@
 #
 # Chain: CI → Release → Docker
 # Triggers:
-#   - On version tags (v*) created by Release workflow → Build & Push
+#   - After Release workflow completes (creates versioned images)
 #   - On PRs → Build only (validation)
 # ============================================================================
 
 name: 🐳 Docker Build & Publish
 
 on:
-  # Trigger on version tags created by semantic-release
-  push:
-    tags:
-      - 'v*'
+  # Trigger after Release workflow completes
+  workflow_run:
+    workflows: ["🚀 Release"]
+    types: [completed]
+    branches: [main, master]
   # Build validation on PRs (no push)
   pull_request:
     branches:
       - master
       - main
+  # Manual trigger for debugging
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,6 +41,11 @@ jobs:
   build-and-push:
     name: 🏗️ Build & Push
     runs-on: ubuntu-latest
+    # Only run if Release succeeded (or PR/manual trigger)
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
       packages: write
@@ -47,6 +55,17 @@ jobs:
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🏷️ Get latest tag
+        id: get_tag
+        run: |
+          # For workflow_run, we need to fetch the latest tag
+          git fetch --tags
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "📌 Latest tag: ${LATEST_TAG}"
 
       - name: 🛠️ Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -68,10 +87,11 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=${{ steps.get_tag.outputs.tag }},enable=${{ steps.get_tag.outputs.tag != '' && github.event_name != 'pull_request' }}
+            type=semver,pattern={{version}},value=${{ steps.get_tag.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.get_tag.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ steps.get_tag.outputs.tag }},enable=${{ !startsWith(steps.get_tag.outputs.tag, 'v0.') }}
             type=sha,prefix=
             type=ref,event=pr
 
@@ -100,7 +120,7 @@ jobs:
       - name: 📊 Generate build summary
         run: |
           IS_PR="${{ github.event_name == 'pull_request' }}"
-          IS_TAG="${{ github.ref_type == 'tag' }}"
+          LATEST_TAG="${{ steps.get_tag.outputs.tag }}"
 
           cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## 🐳 Docker Image Build
@@ -114,11 +134,11 @@ jobs:
           > Image built successfully but not pushed to registry.
 
           EOF
-          elif [ "$IS_TAG" = "true" ]; then
+          elif [ -n "$LATEST_TAG" ]; then
             cat >> $GITHUB_STEP_SUMMARY << EOF
           > [!TIP]
           > ### ✅ Release Image Published
-          > Version \`${{ github.ref_name }}\` has been pushed to GitHub Container Registry!
+          > Version \`${LATEST_TAG}\` has been pushed to GitHub Container Registry!
 
           EOF
           fi
@@ -147,14 +167,14 @@ jobs:
           ### 🚀 Quick Start
 
           \`\`\`bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           \`\`\`
 
           ### ⚙️ Workflow Chain
 
           \`\`\`
           🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
-               ✅               ✅ v${{ github.ref_name }}      ✅
+               ✅                  ✅              ✅
           \`\`\`
 
           EOF
