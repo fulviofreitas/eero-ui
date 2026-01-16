@@ -164,9 +164,7 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 export const api = {
 	// Health
 	health: () =>
-		fetchWithHandling<{ status: string; version: string; eero_client_version: string }>(
-			'/health'
-		),
+		fetchWithHandling<{ status: string; version: string; eero_client_version: string }>('/health'),
 
 	// Auth
 	auth: {
