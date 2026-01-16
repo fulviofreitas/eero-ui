@@ -1,16 +1,23 @@
-name: Release
+# ============================================================================
+# 🚀 Automated Semantic Release
+# ============================================================================
+# Automatically creates releases based on conventional commit messages.
+# Generates changelogs, bumps versions, and creates GitHub releases.
+# ============================================================================
+
+name: 🚀 Release
 
 on:
   # Trigger after CI workflow completes successfully
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["🧪 CI Pipeline"]
     types: [completed]
     branches: [main, master]
   # Allow manual trigger for debugging or catching up on releases
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run in dry-run mode (no actual release)"
+        description: "🧪 Dry-run mode (no actual release)"
         required: false
         default: "false"
         type: choice
@@ -29,8 +36,11 @@ permissions:
   pull-requests: write
 
 jobs:
+  # ============================================================================
+  # 🚀 Semantic Release
+  # ============================================================================
   release:
-    name: Semantic Release
+    name: 🚀 Semantic Release
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -42,18 +52,18 @@ jobs:
       !contains(github.event.workflow_run.head_commit.message, 'chore(release)'))
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
+      - name: 📦 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install semantic-release and plugins
+      - name: 🔧 Install semantic-release
         run: |
           npm install -g \
             semantic-release@24 \
@@ -62,44 +72,91 @@ jobs:
             @semantic-release/exec@6 \
             conventional-changelog-conventionalcommits@8
 
-      - name: Run semantic-release
+      - name: 🚀 Run semantic-release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
           if [ "$DRY_RUN" = "true" ]; then
-            echo "Running in dry-run mode..."
+            echo "🧪 Running in dry-run mode..."
             semantic-release --dry-run
           else
             semantic-release
           fi
 
-      - name: Generate release summary
+      - name: 📝 Generate release summary
         if: always()
         run: |
           DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
 
-          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 🚀 Release Summary
+
+          EOF
 
           if [ "$DRY_RUN" = "true" ]; then
-            echo "Dry-run mode - no actual release was created" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          > [!NOTE]
+          > ### 🧪 Dry-Run Mode
+          > No actual release was created. This was a simulation run.
+
+          EOF
           fi
 
           if [ -f VERSION ]; then
             VERSION=$(cat VERSION)
             if [ "$DRY_RUN" = "true" ]; then
-              echo "Would release: v$VERSION" >> $GITHUB_STEP_SUMMARY
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 📋 Would Release
+
+          | Property | Value |
+          |:---------|:------|
+          | 🏷️ Version | \`v${VERSION}\` |
+          | 📝 Changelog | Would be updated |
+          | 🏗️ Artifacts | Would be created |
+
+          EOF
             else
-              echo "New version released: v$VERSION" >> $GITHUB_STEP_SUMMARY
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          > [!TIP]
+          > ### ✅ Release Created Successfully
+          > Version \`v${VERSION}\` has been published!
+
+          ### 📋 Release Details
+
+          | Property | Value |
+          |:---------|:------|
+          | 🏷️ Version | \`v${VERSION}\` |
+          | 📝 Changelog | Updated |
+          | 🔗 Release | [View Release](../../releases/tag/v${VERSION}) |
+
+          EOF
             fi
           else
-            echo "No new version released (no relevant changes)" >> $GITHUB_STEP_SUMMARY
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          > [!NOTE]
+          > ### 📭 No Release Created
+          > No releasable changes detected since the last release.
+          >
+          > Commits must follow [Conventional Commits](https://conventionalcommits.org) to trigger releases:
+          > - `feat:` → Minor release
+          > - `fix:` → Patch release
+          > - `feat!:` or `BREAKING CHANGE:` → Major release
+
+          EOF
           fi
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Trigger Info" >> $GITHUB_STEP_SUMMARY
-          echo "- Event: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Ref: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "- SHA: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### ⚙️ Trigger Information
+
+          | Property | Value |
+          |:---------|:------|
+          | 📌 Event | \`${{ github.event_name }}\` |
+          | 🌿 Branch | \`${{ github.ref_name }}\` |
+          | 🔗 Commit | \`${{ github.sha }}\` |
+
+          ---
+
+          <sub>🤖 Powered by semantic-release</sub>
+          EOF

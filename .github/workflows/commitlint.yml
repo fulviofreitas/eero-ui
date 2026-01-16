@@ -1,4 +1,11 @@
-name: Commit Lint
+# ============================================================================
+# 📝 Commit Message Linting
+# ============================================================================
+# Validates commit messages follow Conventional Commits specification.
+# This enables automatic changelog generation and semantic versioning.
+# ============================================================================
+
+name: 📝 Commit Lint
 
 on:
   pull_request:
@@ -15,27 +22,30 @@ permissions:
   pull-requests: read
 
 jobs:
+  # ============================================================================
+  # 📝 Validate Commit Messages
+  # ============================================================================
   commitlint:
-    name: Validate Commit Messages
+    name: 📝 Validate Commits
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
+      - name: 📦 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install commitlint
+      - name: 🔧 Install commitlint
         run: |
           npm install -g @commitlint/cli @commitlint/config-conventional
 
-      - name: Validate PR commits
+      - name: 🔍 Validate PR commits
         if: github.event_name == 'pull_request'
         run: |
           npx commitlint \
@@ -43,39 +53,51 @@ jobs:
             --to ${{ github.event.pull_request.head.sha }} \
             --verbose
 
-      - name: Validate push commits
+      - name: 🔍 Validate push commits
         if: github.event_name == 'push'
         run: |
           # Validate the last commit on push (for direct pushes to main branches)
           npx commitlint --last --verbose
 
-      - name: Generate validation summary
+      - name: 📝 Generate validation summary
         if: always()
         run: |
-          echo "## Commit Message Validation 📝" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Conventional Commits Format" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "<type>(<scope>): <subject>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[optional body]" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[optional footer(s)]" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Allowed Types" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Type | Description | Version Bump |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------------|--------------|" >> $GITHUB_STEP_SUMMARY
-          echo "| \`feat\` | New feature | Minor |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`fix\` | Bug fix | Patch |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`perf\` | Performance improvement | Patch |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`refactor\` | Code refactoring | Patch |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`docs\` | Documentation | None |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`style\` | Code style (formatting) | None |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`test\` | Tests | None |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`chore\` | Maintenance | None |" >> $GITHUB_STEP_SUMMARY
-          echo "| \`ci\` | CI/CD changes | None |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Breaking changes:** Add \`BREAKING CHANGE:\` in footer or \`!\` after type for major version bump." >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## 📝 Commit Message Validation
+
+          > [!TIP]
+          > Use [Conventional Commits](https://conventionalcommits.org) for automatic versioning!
+
+          ### 📋 Expected Format
+
+          ```
+          <type>(<scope>): <subject>
+
+          [optional body]
+
+          [optional footer(s)]
+          ```
+
+          ### 🏷️ Commit Types
+
+          | Type | Description | Version Bump |
+          |:-----|:------------|:-------------|
+          | ✨ `feat` | New feature | **Minor** |
+          | 🐛 `fix` | Bug fix | **Patch** |
+          | ⚡ `perf` | Performance improvement | Patch |
+          | ♻️ `refactor` | Code refactoring | Patch |
+          | 📚 `docs` | Documentation | None |
+          | 💄 `style` | Code style (formatting) | None |
+          | 🧪 `test` | Tests | None |
+          | 🔧 `chore` | Maintenance | None |
+          | 👷 `ci` | CI/CD changes | None |
+
+          ### 💥 Breaking Changes
+
+          Add `BREAKING CHANGE:` in the footer or `!` after type for a **major** version bump.
+
+          ```
+          feat!: remove deprecated API endpoint
+          ```
+
+          EOF

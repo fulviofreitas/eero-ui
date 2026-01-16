@@ -1,4 +1,11 @@
-name: 🐳 Build and Push Docker Image
+# ============================================================================
+# 🐳 Docker Image Build & Publish
+# ============================================================================
+# Builds multi-platform Docker images and publishes to GitHub Container Registry.
+# Generates attestations for supply chain security.
+# ============================================================================
+
+name: 🐳 Docker Build & Publish
 
 on:
   push:
@@ -21,6 +28,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ============================================================================
+  # 🏗️ Build & Push Docker Image
+  # ============================================================================
   build-and-push:
     name: 🏗️ Build & Push
     runs-on: ubuntu-latest
@@ -75,7 +85,7 @@ jobs:
           provenance: mode=min
           sbom: true
 
-      - name: 📝 Generate artifact attestation
+      - name: 🔏 Generate artifact attestation
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v2
         with:
@@ -83,23 +93,63 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
-      - name: 📊 Output image details
+      - name: 📊 Generate build summary
         run: |
-          echo "## 🐳 Docker Image Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏷️ Tags" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🖥️ Platforms" >> $GITHUB_STEP_SUMMARY
-          echo "- \`linux/amd64\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`linux/arm64\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 Pull Command" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          IS_PR="${{ github.event_name == 'pull_request' }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🐳 Docker Image Build
+
+          EOF
+
+          if [ "$IS_PR" = "true" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          > [!NOTE]
+          > ### 🔍 PR Build — Image Not Published
+          > This is a pull request build. The image was built successfully but not pushed to the registry.
+
+          EOF
+          else
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          > [!NOTE]
+          > ### ✅ Image Published Successfully
+          > The image has been pushed to GitHub Container Registry.
+
+          EOF
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 📋 Image Details
+
+          | Property | Value |
+          |:---------|:------|
+          | 📦 Registry | \`${{ env.REGISTRY }}\` |
+          | 🏷️ Image | \`${{ env.IMAGE_NAME }}\` |
+          | 🏗️ Platforms | \`linux/amd64\`, \`linux/arm64\` |
+          | 🔏 SBOM | Generated |
+          | 📝 Provenance | Attached |
+
+          ### 🏷️ Tags
+
+          \`\`\`
+          ${{ steps.meta.outputs.tags }}
+          \`\`\`
+
+          EOF
+
+          if [ "$IS_PR" != "true" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          ### 🚀 Quick Start
+
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          \`\`\`
+
+          EOF
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ---
+
+          <sub>🤖 Built with Docker Buildx and GitHub Actions</sub>
+          EOF
