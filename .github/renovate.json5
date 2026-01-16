@@ -7,8 +7,7 @@
     ":semanticCommits"
   ],
   
-  // Repository to manage
-  "repositories": ["fulviofreitas/eero-ui"],
+  // Note: "repositories" is a global-only option, not needed in repo config
   
   // Timezone for scheduling
   "timezone": "America/New_York",
@@ -24,6 +23,7 @@
   "branchPrefix": "deps/",
   
   // Commit message format (semantic commits)
+  // prTitle inherits from commitMessage, so we customize commitMessage instead
   "commitMessagePrefix": "deps:",
   "commitMessageAction": "update",
   
@@ -41,7 +41,7 @@
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
   
   // Include release notes in PRs
-  "fetchReleaseNotes": true,
+  "fetchChangeLogs": "pr",
   
   // Custom manager for git URL dependencies in pyproject.toml
   "customManagers": [
@@ -82,9 +82,9 @@
       "reviewers": ["fulviofreitas"],
       "assignees": ["fulviofreitas"],
       
-      // Custom PR title for visibility
+      // Custom commit message (prTitle inherits from this)
+      "commitMessagePrefix": "deps(critical):",
       "commitMessageExtra": "{{newVersion}}",
-      "prTitle": "🔴 deps(critical): update eero-client to {{newVersion}}",
       
       // Add detailed PR body note
       "prBodyNotes": [
@@ -115,7 +115,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "prTitle": "deps(python): update {{groupName}}"
+      "commitMessagePrefix": "deps(python):"
     },
     
     // ==========================================================================
@@ -129,7 +129,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "prTitle": "deps(npm): update {{groupName}}"
+      "commitMessagePrefix": "deps(npm):"
     },
     
     // ==========================================================================
@@ -143,7 +143,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "prTitle": "deps(actions): update {{groupName}}"
+      "commitMessagePrefix": "deps(actions):"
     },
     
     // ==========================================================================
@@ -155,7 +155,7 @@
       "automerge": false,
       "labels": ["dependencies", "major-update", "needs-review"],
       "reviewers": ["fulviofreitas"],
-      "prTitle": "deps(major): update {{depName}} to {{newVersion}}"
+      "commitMessagePrefix": "deps(major):"
     },
     
     // ==========================================================================
@@ -164,13 +164,16 @@
     {
       "matchDepTypes": ["devDependencies", "dependencies"],
       "matchUpdateTypes": ["patch"],
-      "matchPackagePatterns": ["*"],
-      "vulnerabilityAlerts": {
-        "enabled": true,
-        "labels": ["security", "critical"],
-        "prPriority": 20,
-        "automerge": true
-      }
+      "matchPackageNames": ["*"],
+      "prPriority": 20,
+      "description": "Security patches get high priority"
     }
-  ]
+  ],
+  
+  // Vulnerability alerts configuration (top-level, not inside packageRules)
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "critical"],
+    "automerge": true
+  }
 }
