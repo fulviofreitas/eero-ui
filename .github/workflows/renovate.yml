@@ -150,6 +150,8 @@ jobs:
         env:
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
           RENOVATE_DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'full' || 'null' }}
+          # Tell Renovate which repository to process
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
           # Enable repository cache
           RENOVATE_REPOSITORY_CACHE: enabled
 
