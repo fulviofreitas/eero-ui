@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.1](https://github.com/fulviofreitas/eero-ui/compare/v2.3.0...v2.3.1) (2026-01-16)
+
+### 🐛 Bug Fixes
+
+* **ci:** remove repository_dispatch trigger from CI workflow ([0734fa8](https://github.com/fulviofreitas/eero-ui/commit/0734fa80d0d9d555c77ffaecda3c55e79b0cabc2))
+* **renovate:** add explicit 'at any time' schedule for immediate PR creation ([05ced12](https://github.com/fulviofreitas/eero-ui/commit/05ced126e6df145abb5e0e77d612a67591951aca))
+
+### 📚 Documentation
+
+* update dependency docs with schedule fix explanation ([dc8e5bf](https://github.com/fulviofreitas/eero-ui/commit/dc8e5bfd79d9bdf8ed4fb8e8aa78703042a81022))
+
 ## [2.3.0](https://github.com/fulviofreitas/eero-ui/compare/v2.2.2...v2.3.0) (2026-01-16)
 
 ### ✨ Features
