@@ -18,13 +18,23 @@
 		userName,
 		userRole
 	} from '$stores';
+	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
 	import '../app.css';
 
 	let initialized = false;
+	let eeroClientVersion: string | null = null;
 
 	onMount(async () => {
+		// Fetch API version info
+		try {
+			const health = await api.health();
+			eeroClientVersion = health.eero_client_version;
+		} catch {
+			// Silently ignore - version display is non-critical
+		}
+
 		await authStore.checkStatus();
 		initialized = true;
 	});
@@ -129,7 +139,16 @@
 			</nav>
 
 			<div class="sidebar-footer">
-				<span class="version">v{__APP_VERSION__}</span>
+				{#if eeroClientVersion}
+					<div class="version-row">
+						<span class="version-label">eero-client</span>
+						<span class="version-chip">v{eeroClientVersion}</span>
+					</div>
+				{/if}
+				<div class="version-row">
+					<span class="version-label">eero-ui</span>
+					<span class="version-chip">v{__APP_VERSION__}</span>
+				</div>
 			</div>
 		</aside>
 
@@ -287,12 +306,31 @@
 	.sidebar-footer {
 		padding: var(--space-4);
 		border-top: 1px solid var(--color-border-muted);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
-	.version {
+	.version-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.version-label {
 		font-size: 0.6875rem;
 		color: var(--color-text-muted);
+	}
+
+	.version-chip {
+		font-size: 0.625rem;
 		font-family: var(--font-mono);
+		color: var(--color-text-secondary);
+		background: var(--color-bg-tertiary);
+		padding: 2px 8px;
+		border-radius: 10px;
+		border: 1px solid var(--color-border-muted);
 	}
 
 	/* Main content */

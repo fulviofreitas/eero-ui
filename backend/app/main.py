@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -14,6 +15,14 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .deps import shutdown_client
 from .routes import auth, devices, eeros, networks, profiles
+
+
+def get_eero_client_version() -> str:
+    """Get the installed eero-client version."""
+    try:
+        return pkg_version("eero-client")
+    except Exception:
+        return "unknown"
 
 # Configure logging
 logging.basicConfig(
@@ -81,7 +90,11 @@ app.include_router(profiles.router, prefix="/api/profiles", tags=["Profiles"])
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "eero_client_version": get_eero_client_version(),
+    }
 
 
 # Serve static frontend (production)
