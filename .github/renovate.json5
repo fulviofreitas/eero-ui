@@ -7,13 +7,12 @@
     ":semanticCommits"
   ],
   
-  // Note: "repositories" is a global-only option, not needed in repo config
-  
   // Timezone for scheduling (used for prCreation hours if needed)
   "timezone": "America/New_York",
   
-  // No schedule restriction - PRs are created immediately when updates are detected
-  // The workflow itself runs on schedule (weekly) or on-demand via repository_dispatch
+  // IMPORTANT: Explicitly set empty schedule to create PRs immediately
+  // Without this, config:recommended applies a default schedule
+  "schedule": ["at any time"],
   
   // PR limits to avoid noise
   "prHourlyLimit": 2,
