@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.2.0](https://github.com/fulviofreitas/eero-ui/compare/v2.1.0...v2.2.0) (2026-01-16)
+
+### ✨ Features
+
+* **docker:** add OCI image labels and annotations ([01123bc](https://github.com/fulviofreitas/eero-ui/commit/01123bcbfbf5e990cc2b73c3328a9f247ab397e9))
+
+### ⚡ Performance
+
+* **docker:** add multi-layer caching strategy for faster builds ([e0d9b1b](https://github.com/fulviofreitas/eero-ui/commit/e0d9b1bc0f31924566c7cfc72fd53eea0b8dc380))
+
 ## [2.1.0](https://github.com/fulviofreitas/eero-ui/compare/v2.0.1...v2.1.0) (2026-01-16)
 
 ### ✨ Features
