@@ -22,8 +22,8 @@
   "branchPrefix": "deps/",
   
   // Commit message format (semantic commits)
-  // prTitle inherits from commitMessage, so we customize commitMessage instead
-  "commitMessagePrefix": "deps:",
+  // Using "chore" as it's a valid commitlint type for dependency updates
+  "commitMessagePrefix": "chore(deps):",
   "commitMessageAction": "update",
   
   // Labels for all PRs
@@ -82,7 +82,7 @@
       "assignees": ["fulviofreitas"],
       
       // Custom commit message (prTitle inherits from this)
-      "commitMessagePrefix": "deps(critical):",
+      "commitMessagePrefix": "chore(deps-critical):",
       "commitMessageExtra": "{{newVersion}}",
       
       // Add detailed PR body note
@@ -114,7 +114,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "commitMessagePrefix": "deps(python):"
+      "commitMessagePrefix": "chore(deps-python):"
     },
     
     // ==========================================================================
@@ -128,7 +128,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "commitMessagePrefix": "deps(npm):"
+      "commitMessagePrefix": "chore(deps-npm):"
     },
     
     // ==========================================================================
@@ -142,7 +142,7 @@
       "automerge": true,
       "automergeType": "pr",
       "automergeStrategy": "squash",
-      "commitMessagePrefix": "deps(actions):"
+      "commitMessagePrefix": "chore(deps-actions):"
     },
     
     // ==========================================================================
@@ -154,7 +154,7 @@
       "automerge": false,
       "labels": ["dependencies", "major-update", "needs-review"],
       "reviewers": ["fulviofreitas"],
-      "commitMessagePrefix": "deps(major):"
+      "commitMessagePrefix": "chore(deps-major):"
     },
     
     // ==========================================================================
