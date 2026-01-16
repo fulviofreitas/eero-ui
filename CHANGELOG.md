@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.0](https://github.com/fulviofreitas/eero-ui/compare/v2.2.2...v2.3.0) (2026-01-16)
+
+### ✨ Features
+
+* **ui:** display eero-client API version in sidebar footer ([4ce5897](https://github.com/fulviofreitas/eero-ui/commit/4ce58978479755a7cd82e8fb3ef462a8771c3ac3))
+
+### 📚 Documentation
+
+* update Dependency-Updates wiki with immediate PR creation ([f128702](https://github.com/fulviofreitas/eero-ui/commit/f128702fc321159aba20dbd59912d46a6b44a4ac))
+
 ## [2.2.2](https://github.com/fulviofreitas/eero-ui/compare/v2.2.1...v2.2.2) (2026-01-16)
 
 ### 🐛 Bug Fixes
