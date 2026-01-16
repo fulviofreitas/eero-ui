@@ -36,6 +36,10 @@
   // Dependency dashboard approval for certain updates
   "dependencyDashboardApproval": false,
   
+  // Allow recreating PRs that were closed without merging
+  // This ensures PRs can be recreated after branch deletion or config changes
+  "recreateClosed": true,
+  
   // PR body template with useful information
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
   
