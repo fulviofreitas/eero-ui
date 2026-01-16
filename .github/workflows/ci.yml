@@ -15,9 +15,6 @@ on:
   pull_request:
     branches: [main, master, develop]
   workflow_dispatch:
-  # Triggered when eero-client releases a new version
-  repository_dispatch:
-    types: [eero-client-release]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
