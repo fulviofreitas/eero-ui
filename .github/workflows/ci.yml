@@ -98,7 +98,7 @@ jobs:
         run: pytest --cov=app --cov-report=xml --cov-report=term-missing
 
       - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: backend-coverage
@@ -141,7 +141,7 @@ jobs:
         run: npm run test:coverage
 
       - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: frontend-coverage
@@ -192,7 +192,7 @@ jobs:
         continue-on-error: true
 
       - name: 📊 Upload scan artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: security-scan-results
