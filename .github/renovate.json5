@@ -1,0 +1,176 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  
+  // Base configuration
+  "extends": [
+    "config:recommended",
+    ":semanticCommits"
+  ],
+  
+  // Repository to manage
+  "repositories": ["fulviofreitas/eero-ui"],
+  
+  // Timezone for scheduling
+  "timezone": "America/New_York",
+  
+  // Schedule: Run weekly on Mondays at 3 AM
+  "schedule": ["before 6am on monday"],
+  
+  // PR limits to avoid noise
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+  
+  // Branch naming
+  "branchPrefix": "deps/",
+  
+  // Commit message format (semantic commits)
+  "commitMessagePrefix": "deps:",
+  "commitMessageAction": "update",
+  
+  // Labels for all PRs
+  "labels": ["dependencies", "renovate"],
+  
+  // Create a dependency dashboard issue
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📦 Dependency Dashboard",
+  
+  // Dependency dashboard approval for certain updates
+  "dependencyDashboardApproval": false,
+  
+  // PR body template with useful information
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
+  
+  // Include release notes in PRs
+  "fetchReleaseNotes": true,
+  
+  // Custom manager for git URL dependencies in pyproject.toml
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track eero-client git dependency version tags",
+      "fileMatch": ["^backend/pyproject\\.toml$"],
+      "matchStrings": [
+        "eero-client\\s*@\\s*git\\+https://github\\.com/(?<depName>fulviofreitas/eero-client)\\.git@(?<currentValue>v[\\d.]+)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
+    }
+  ],
+  
+  // Package-specific rules
+  "packageRules": [
+    // ==========================================================================
+    // 🔴 CRITICAL: eero-client - Core API dependency
+    // ==========================================================================
+    // This is the most important dependency. Updates require:
+    // - Manual review by maintainer
+    // - Full CI test suite pass
+    // - Changelog review for breaking changes
+    {
+      "matchPackageNames": ["fulviofreitas/eero-client"],
+      "groupName": "eero-client",
+      "description": "🔴 Core eero API client - requires careful review",
+      "automerge": false,
+      
+      // High visibility labels
+      "labels": ["dependencies", "eero-client", "critical", "needs-review"],
+      
+      // Prioritize this PR above others
+      "prPriority": 10,
+      
+      // Request review from maintainers
+      "reviewers": ["fulviofreitas"],
+      "assignees": ["fulviofreitas"],
+      
+      // Custom PR title for visibility
+      "commitMessageExtra": "{{newVersion}}",
+      "prTitle": "🔴 deps(critical): update eero-client to {{newVersion}}",
+      
+      // Add detailed PR body note
+      "prBodyNotes": [
+        "## ⚠️ Critical Dependency Update",
+        "",
+        "This PR updates `eero-client`, the core API client for eero network communication.",
+        "",
+        "### Review Checklist",
+        "- [ ] Review the changelog for breaking changes",
+        "- [ ] Verify API compatibility",
+        "- [ ] Run full test suite locally if needed",
+        "- [ ] Check for any deprecated methods",
+        "",
+        "### Links",
+        "- [eero-client Repository](https://github.com/fulviofreitas/eero-client)",
+        "- [eero-client Releases](https://github.com/fulviofreitas/eero-client/releases)"
+      ]
+    },
+    
+    // ==========================================================================
+    // 🟡 Python dependencies: Group minor/patch updates
+    // ==========================================================================
+    {
+      "matchManagers": ["pip_requirements", "pip-compile", "pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python-minor-patch",
+      "description": "Python minor/patch updates (auto-merge)",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "prTitle": "deps(python): update {{groupName}}"
+    },
+    
+    // ==========================================================================
+    // 🟡 Node.js dependencies: Group minor/patch updates
+    // ==========================================================================
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm-minor-patch",
+      "description": "npm minor/patch updates (auto-merge)",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "prTitle": "deps(npm): update {{groupName}}"
+    },
+    
+    // ==========================================================================
+    // 🟢 GitHub Actions: Auto-merge minor/patch updates
+    // ==========================================================================
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github-actions",
+      "description": "GitHub Actions minor/patch updates (auto-merge)",
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash",
+      "prTitle": "deps(actions): update {{groupName}}"
+    },
+    
+    // ==========================================================================
+    // 🔵 Major updates: Never auto-merge, require review
+    // ==========================================================================
+    {
+      "matchUpdateTypes": ["major"],
+      "description": "Major updates require manual review",
+      "automerge": false,
+      "labels": ["dependencies", "major-update", "needs-review"],
+      "reviewers": ["fulviofreitas"],
+      "prTitle": "deps(major): update {{depName}} to {{newVersion}}"
+    },
+    
+    // ==========================================================================
+    // 🟣 Security updates: High priority, fast-track
+    // ==========================================================================
+    {
+      "matchDepTypes": ["devDependencies", "dependencies"],
+      "matchUpdateTypes": ["patch"],
+      "matchPackagePatterns": ["*"],
+      "vulnerabilityAlerts": {
+        "enabled": true,
+        "labels": ["security", "critical"],
+        "prPriority": 20,
+        "automerge": true
+      }
+    }
+  ]
+}

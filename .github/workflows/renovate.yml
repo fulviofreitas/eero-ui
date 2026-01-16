@@ -1,0 +1,231 @@
+# ============================================================================
+# 🔄 Renovate - Automated Dependency Updates
+# ============================================================================
+# Runs Renovate to check for dependency updates and create PRs.
+# Uses a GitHub App for authentication (better rate limits & security).
+#
+# Key features:
+# - Tracks eero-client git dependency via custom regex manager
+# - Auto-merges minor/patch updates for most dependencies
+# - Requires manual review for eero-client and major updates
+# - Repository caching for faster subsequent runs
+#
+# Triggers:
+# - Scheduled: Weekly on Mondays at 3 AM UTC
+# - Manual: workflow_dispatch
+# - On eero-client release: repository_dispatch
+# ============================================================================
+
+name: 🔄 Renovate
+
+on:
+  schedule:
+    # Weekly on Mondays at 3 AM UTC
+    - cron: "0 3 * * 1"
+  
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "🧪 Dry-run mode (no PRs created)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      log_level:
+        description: "📝 Log level"
+        required: false
+        default: "info"
+        type: choice
+        options:
+          - "debug"
+          - "info"
+          - "warn"
+      reset_cache:
+        description: "🗑️ Reset repository cache"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  
+  # Triggered by eero-client releases
+  repository_dispatch:
+    types: [eero-client-release]
+
+# Prevent concurrent runs
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Environment variables for caching
+env:
+  # Cache archive name
+  cache_archive: renovate_cache.tar.gz
+  # Renovate's default cache directory
+  cache_dir: /tmp/renovate/cache/renovate/repository
+  # Cache key - bump version to bust cache if needed
+  cache_key: renovate-cache-v1
+
+jobs:
+  # ============================================================================
+  # 🔄 Run Renovate
+  # ============================================================================
+  renovate:
+    name: 🔄 Renovate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔑 Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+
+      - name: 📋 Log trigger info
+        run: |
+          echo "🎯 Trigger: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "📦 eero-client version: ${{ github.event.client_payload.version }}"
+          fi
+
+      # ========================================================================
+      # 📦 Cache Restoration
+      # ========================================================================
+      - name: 📥 Download cache artifact
+        if: github.event.inputs.reset_cache != 'true'
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          name: ${{ env.cache_key }}
+          path: cache-download
+          workflow_conclusion: success
+          search_artifacts: true
+
+      - name: 📂 Extract renovate cache
+        if: github.event.inputs.reset_cache != 'true'
+        run: |
+          set -x
+          
+          # Skip if no cache found
+          if [ ! -d cache-download ]; then
+            echo "📭 No cache found - first run or cache expired"
+            exit 0
+          fi
+          
+          # Check if archive exists
+          if [ ! -f cache-download/${{ env.cache_archive }} ]; then
+            echo "📭 Cache archive not found"
+            exit 0
+          fi
+          
+          # Create cache directory and extract
+          mkdir -p ${{ env.cache_dir }}
+          tar -xzf cache-download/${{ env.cache_archive }} -C ${{ env.cache_dir }}
+          
+          # Fix permissions for Renovate's Docker container (runs as uid 12021)
+          sudo chown -R 12021:0 /tmp/renovate/
+          
+          echo "✅ Cache restored successfully"
+          ls -la ${{ env.cache_dir }} || true
+
+      # ========================================================================
+      # 🔄 Run Renovate
+      # ========================================================================
+      - name: 🔄 Run Renovate
+        uses: renovatebot/github-action@v44.2.3
+        with:
+          configurationFile: .github/renovate.json5
+          token: ${{ steps.app-token.outputs.token }}
+        env:
+          LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
+          RENOVATE_DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && 'full' || 'null' }}
+          # Enable repository cache
+          RENOVATE_REPOSITORY_CACHE: enabled
+
+      # ========================================================================
+      # 📦 Cache Persistence
+      # ========================================================================
+      - name: 📦 Compress renovate cache
+        if: always() && github.event.inputs.reset_cache != 'true'
+        run: |
+          if [ -d "${{ env.cache_dir }}" ]; then
+            echo "📦 Compressing cache..."
+            tar -czvf ${{ env.cache_archive }} -C ${{ env.cache_dir }} . || true
+            echo "✅ Cache compressed: $(du -h ${{ env.cache_archive }} | cut -f1)"
+          else
+            echo "📭 No cache directory to compress"
+          fi
+
+      - name: 📤 Upload cache artifact
+        if: always() && github.event.inputs.reset_cache != 'true'
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ env.cache_key }}
+          path: ${{ env.cache_archive }}
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # ========================================================================
+      # 📝 Summary
+      # ========================================================================
+      - name: 📝 Generate summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🔄 Renovate Summary
+
+          | Property | Value |
+          |:---------|:------|
+          | 🎯 Trigger | \`${{ github.event_name }}\` |
+          | 🧪 Dry Run | \`${{ github.event.inputs.dry_run || 'false' }}\` |
+          | 📝 Log Level | \`${{ github.event.inputs.log_level || 'info' }}\` |
+          | 🗑️ Cache Reset | \`${{ github.event.inputs.reset_cache || 'false' }}\` |
+          | 📦 Cache | \`enabled\` |
+
+          EOF
+
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          ### 📦 Triggered by eero-client Release
+
+          | Property | Value |
+          |:---------|:------|
+          | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
+          | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
+
+          EOF
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+
+          ### 📚 Configuration
+
+          - **Config file**: `.github/renovate.json5`
+          - **Schedule**: Weekly on Mondays at 3 AM UTC
+          - **Key dependency**: `eero-client` (git-tags tracking)
+          - **Caching**: Enabled (7-day retention)
+
+          ### ⚡ Performance
+
+          Repository caching speeds up subsequent runs by preserving:
+          - Changelogs and release notes
+          - Dependency metadata
+          - Previous scan results
+
+          ---
+
+          <sub>🤖 Powered by Renovate with GitHub App authentication</sub>
+          EOF
