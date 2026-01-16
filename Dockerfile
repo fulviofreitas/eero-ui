@@ -22,7 +22,7 @@ RUN npm run build
 # ============================================
 # Stage 2: Production Runtime
 # ============================================
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # OCI Image Labels (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
 LABEL org.opencontainers.image.title="eero-ui" \
