@@ -24,6 +24,15 @@ RUN npm run build
 # ============================================
 FROM python:3.12-slim AS runtime
 
+# OCI Image Labels (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
+LABEL org.opencontainers.image.title="eero-ui" \
+      org.opencontainers.image.description="A modern web dashboard for managing eero mesh WiFi networks" \
+      org.opencontainers.image.url="https://github.com/fulviofreitas/eero-ui" \
+      org.opencontainers.image.source="https://github.com/fulviofreitas/eero-ui" \
+      org.opencontainers.image.documentation="https://github.com/fulviofreitas/eero-ui/wiki" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="fulviofreitas"
+
 WORKDIR /app
 
 # Install uv (fast Python package installer), git (for cloning eero-client), and curl (for healthcheck)

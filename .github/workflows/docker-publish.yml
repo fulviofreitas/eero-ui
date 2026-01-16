@@ -86,6 +86,15 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # OCI annotations for multi-arch manifest
+          annotations: |
+            org.opencontainers.image.title=eero-ui
+            org.opencontainers.image.description=A modern web dashboard for managing eero mesh WiFi networks
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/wiki
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
           tags: |
             type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
             type=raw,value=${{ steps.get_tag.outputs.tag }},enable=${{ steps.get_tag.outputs.tag != '' && github.event_name != 'pull_request' }}
@@ -104,6 +113,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           # Multi-layer caching strategy for faster builds
           cache-from: |
             type=gha,scope=${{ github.ref_name }}-${{ runner.arch }}
