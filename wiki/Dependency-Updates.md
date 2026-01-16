@@ -65,11 +65,13 @@ The dependency update system automatically:
 
 ### Immediate PR Creation
 
-PRs are created **immediately** when Renovate detects updates - there's no schedule restriction. This means:
+PRs are created **immediately** when Renovate detects updates. This is achieved by setting `"schedule": ["at any time"]` in the config, which overrides any default schedule from presets.
 
 - When `eero-client` releases, a PR is created within minutes
 - The workflow itself runs weekly (backup) or on-demand
 - Cross-repo dispatch from `eero-client` triggers instant updates
+
+> **Note:** Without the explicit `"schedule": ["at any time"]`, the `config:recommended` preset applies a default schedule that would cause updates to show "Awaiting Schedule" in the Dependency Dashboard.
 
 ### Cross-Repository Notification
 
@@ -89,7 +91,7 @@ The `eero-client` repository is configured to notify `eero-ui` when a new releas
 ### Renovate Config (`.github/renovate.json5`)
 
 Key features:
-- **No schedule restriction**: PRs created immediately when updates detected
+- **Immediate PR creation**: `"schedule": ["at any time"]` bypasses default preset schedules
 - **Custom regex manager**: Tracks git URL dependencies with version tags
 - **Semantic commits**: All PRs use conventional commit format
 - **Auto-merge rules**: Minor/patch updates auto-merge after CI passes
