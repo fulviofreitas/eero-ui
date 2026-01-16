@@ -143,7 +143,7 @@ jobs:
       # 🔄 Run Renovate
       # ========================================================================
       - name: 🔄 Run Renovate
-        uses: renovatebot/github-action@v44.2.3
+        uses: renovatebot/github-action@v44.2.4
         with:
           configurationFile: .github/renovate.json5
           token: ${{ steps.app-token.outputs.token }}
