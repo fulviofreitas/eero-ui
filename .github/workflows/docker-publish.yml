@@ -3,17 +3,21 @@
 # ============================================================================
 # Builds multi-platform Docker images and publishes to GitHub Container Registry.
 # Generates attestations for supply chain security.
+#
+# Chain: CI → Release → Docker
+# Triggers:
+#   - On version tags (v*) created by Release workflow → Build & Push
+#   - On PRs → Build only (validation)
 # ============================================================================
 
 name: 🐳 Docker Build & Publish
 
 on:
+  # Trigger on version tags created by semantic-release
   push:
-    branches:
-      - master
-      - main
     tags:
       - 'v*'
+  # Build validation on PRs (no push)
   pull_request:
     branches:
       - master
@@ -64,7 +68,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
@@ -96,8 +100,9 @@ jobs:
       - name: 📊 Generate build summary
         run: |
           IS_PR="${{ github.event_name == 'pull_request' }}"
+          IS_TAG="${{ github.ref_type == 'tag' }}"
 
-          cat >> $GITHUB_STEP_SUMMARY << EOF
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           ## 🐳 Docker Image Build
 
           EOF
@@ -105,15 +110,15 @@ jobs:
           if [ "$IS_PR" = "true" ]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
           > [!NOTE]
-          > ### 🔍 PR Build — Image Not Published
-          > This is a pull request build. The image was built successfully but not pushed to the registry.
+          > ### 🔍 PR Build — Validation Only
+          > Image built successfully but not pushed to registry.
 
           EOF
-          else
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### ✅ Image Published Successfully
-          > The image has been pushed to GitHub Container Registry.
+          elif [ "$IS_TAG" = "true" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          > [!TIP]
+          > ### ✅ Release Image Published
+          > Version \`${{ github.ref_name }}\` has been pushed to GitHub Container Registry!
 
           EOF
           fi
@@ -142,7 +147,14 @@ jobs:
           ### 🚀 Quick Start
 
           \`\`\`bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          \`\`\`
+
+          ### ⚙️ Workflow Chain
+
+          \`\`\`
+          🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
+               ✅               ✅ v${{ github.ref_name }}      ✅
           \`\`\`
 
           EOF

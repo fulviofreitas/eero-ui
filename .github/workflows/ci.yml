@@ -1,8 +1,10 @@
 # ============================================================================
 # 🧪 Continuous Integration Pipeline
 # ============================================================================
-# Runs tests and checks for both frontend and backend code.
-# Triggered on pushes and PRs to main branches.
+# Comprehensive CI that runs all checks: linting, tests, and security scans.
+# This is the single source of truth for code quality before release.
+#
+# Chain: CI → Release → Docker
 # ============================================================================
 
 name: 🧪 CI Pipeline
@@ -10,22 +12,58 @@ name: 🧪 CI Pipeline
 on:
   push:
     branches: [main, master, develop]
-    # Run on all pushes to main branches for reliable releases
-    # Path filters disabled to ensure CI always runs for semantic-release
   pull_request:
     branches: [main, master, develop]
-  # Allow manual trigger for debugging
   workflow_dispatch:
 
-# Cancel in-progress runs for same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+  security-events: write
+  pull-requests: write
+  actions: read
+
+env:
+  OPENGREP_RULES_PATH: security-rules
+  SARIF_OUTPUT: results.sarif
 
 jobs:
+  # ============================================================================
+  # 📝 Commit Lint
+  # ============================================================================
+  commitlint:
+    name: 📝 Commit Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🔧 Install commitlint
+        run: npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: 🔍 Validate commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx commitlint \
+              --from ${{ github.event.pull_request.base.sha }} \
+              --to ${{ github.event.pull_request.head.sha }} \
+              --verbose
+          else
+            npx commitlint --last --verbose
+          fi
+
   # ============================================================================
   # 🐍 Backend Tests
   # ============================================================================
@@ -56,7 +94,6 @@ jobs:
 
       - name: 🧪 Run tests with coverage
         env:
-          # Test-only secret - not used in production
           EERO_DASHBOARD_SESSION_SECRET: ci-test-secret-not-for-production-use-only
         run: pytest --cov=app --cov-report=xml --cov-report=term-missing
 
@@ -67,20 +104,6 @@ jobs:
           name: backend-coverage
           path: backend/coverage.xml
           retention-days: 30
-
-      - name: 📝 Generate test summary
-        if: always()
-        run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## 🐍 Backend Test Results
-
-          | Metric | Value |
-          |:-------|:------|
-          | 🔧 Python Version | `3.12` |
-          | 🧪 Test Framework | pytest |
-          | 📊 Coverage | XML report generated |
-
-          EOF
 
   # ============================================================================
   # ⚛️ Frontend Tests
@@ -125,20 +148,65 @@ jobs:
           path: frontend/coverage/
           retention-days: 30
 
-      - name: 📝 Generate test summary
-        if: always()
+  # ============================================================================
+  # 🔐 Security Scan
+  # ============================================================================
+  security-scan:
+    name: 🔐 Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🛠️ Install Opengrep
+        id: install
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## ⚛️ Frontend Test Results
+          OPENGREP_VERSION=$(curl --silent "https://api.github.com/repos/opengrep/opengrep/releases/latest" | \
+            grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          OPENGREP_VERSION=${OPENGREP_VERSION:-"v1.15.0"}
+          echo "opengrep_version=${OPENGREP_VERSION}" >> $GITHUB_OUTPUT
+          
+          curl -fsSL "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" -o opengrep
+          chmod +x opengrep
+          sudo mv opengrep /usr/local/bin/opengrep
 
-          | Metric | Value |
-          |:-------|:------|
-          | 📦 Node Version | `20` |
-          | 🧪 Test Framework | Vitest |
-          | 🎨 Framework | SvelteKit |
-          | 📊 Coverage | HTML report generated |
+      - name: 🔍 Run security scan
+        id: scan
+        run: |
+          opengrep scan --config ${{ env.OPENGREP_RULES_PATH }} . 2>&1 | tee scan-output.txt || true
+          opengrep scan --config ${{ env.OPENGREP_RULES_PATH }} . --sarif --output ${{ env.SARIF_OUTPUT }} || true
+          
+          FINDING_COUNT=$(grep -oP '\d+(?= Code Findings)' scan-output.txt 2>/dev/null | head -1 || echo "0")
+          echo "finding_count=${FINDING_COUNT:-0}" >> $GITHUB_OUTPUT
 
-          EOF
+      - name: 📤 Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: ${{ env.SARIF_OUTPUT }}
+          category: opengrep-security-scan
+        continue-on-error: true
+
+      - name: 📊 Upload scan artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            ${{ env.SARIF_OUTPUT }}
+            scan-output.txt
+          retention-days: 30
+
+      - name: 🚨 Check for findings
+        run: |
+          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
+          if [ "${FINDING_COUNT:-0}" != "0" ]; then
+            echo "::warning::Found ${FINDING_COUNT} security finding(s)"
+          fi
 
   # ============================================================================
   # ✅ CI Success Gate
@@ -146,31 +214,45 @@ jobs:
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests]
+    needs: [commitlint, backend-tests, frontend-tests, security-scan]
     if: always()
 
     steps:
       - name: 🔍 Check all jobs passed
         run: |
+          COMMITLINT="${{ needs.commitlint.result }}"
           BACKEND="${{ needs.backend-tests.result }}"
           FRONTEND="${{ needs.frontend-tests.result }}"
+          SECURITY="${{ needs.security-scan.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🧪 CI Pipeline Summary
 
           | Job | Status |
           |:----|:-------|
+          | 📝 Commit Lint | ${COMMITLINT} |
           | 🐍 Backend Tests | ${BACKEND} |
           | ⚛️ Frontend Tests | ${FRONTEND} |
+          | 🔐 Security Scan | ${SECURITY} |
 
           EOF
 
-          if [[ "$BACKEND" == "success" && "$FRONTEND" == "success" ]]; then
+          # All must pass (security can warn but not fail)
+          if [[ "$COMMITLINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" && ("$SECURITY" == "success" || "$SECURITY" == "skipped") ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
           > ### ✅ All Checks Passed
-          > CI pipeline completed successfully. Ready for merge!
+          > CI pipeline completed successfully. Ready for release!
+
+          ---
+
+          ```
+          📝 Commit Lint  ──┐
+          🐍 Backend      ──┼──→  ✅ CI Success  ──→  🚀 Release  ──→  🐳 Docker
+          ⚛️ Frontend     ──┤
+          🔐 Security     ──┘
+          ```
 
           EOF
             exit 0

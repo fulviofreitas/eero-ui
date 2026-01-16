@@ -3,6 +3,9 @@
 # ============================================================================
 # Automatically creates releases based on conventional commit messages.
 # Generates changelogs, bumps versions, and creates GitHub releases.
+#
+# Chain: CI → Release → Docker
+# Triggers: After CI Pipeline succeeds on main/master
 # ============================================================================
 
 name: 🚀 Release
@@ -13,7 +16,7 @@ on:
     workflows: ["🧪 CI Pipeline"]
     types: [completed]
     branches: [main, master]
-  # Allow manual trigger for debugging or catching up on releases
+  # Allow manual trigger for debugging
   workflow_dispatch:
     inputs:
       dry_run:
@@ -114,7 +117,7 @@ jobs:
           |:---------|:------|
           | 🏷️ Version | \`v${VERSION}\` |
           | 📝 Changelog | Would be updated |
-          | 🏗️ Artifacts | Would be created |
+          | 🐳 Docker | Would trigger build |
 
           EOF
             else
@@ -130,6 +133,7 @@ jobs:
           | 🏷️ Version | \`v${VERSION}\` |
           | 📝 Changelog | Updated |
           | 🔗 Release | [View Release](../../releases/tag/v${VERSION}) |
+          | 🐳 Docker | Build triggered automatically |
 
           EOF
             fi
@@ -148,7 +152,14 @@ jobs:
           fi
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### ⚙️ Trigger Information
+          ### ⚙️ Workflow Chain
+
+          \`\`\`
+          🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
+               ✅                  ✅              (on tag)
+          \`\`\`
+
+          ### 📌 Trigger Information
 
           | Property | Value |
           |:---------|:------|
