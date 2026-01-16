@@ -119,9 +119,10 @@ jobs:
             type=gha,scope=${{ github.ref_name }}-${{ runner.arch }}
             type=gha,scope=main-${{ runner.arch }}
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          # Registry cache disabled for PRs (no auth available)
           cache-to: |
             type=gha,mode=max,scope=${{ github.ref_name }}-${{ runner.arch }}
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true
+            ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max,image-manifest=true', github.repository) || '' }}
           provenance: mode=min
           sbom: true
 
