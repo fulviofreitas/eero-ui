@@ -8,8 +8,9 @@ WORKDIR /app/frontend
 # Copy package files first for better caching
 COPY frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci
 
 # Copy frontend source
 COPY frontend/ ./
@@ -27,17 +28,19 @@ WORKDIR /app
 
 # Install uv (fast Python package installer), git (for cloning eero-client), and curl (for healthcheck)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 # Copy backend dependencies
 COPY backend/pyproject.toml ./backend/
 
-# Install Python dependencies with uv (10-100x faster than pip)
+# Install Python dependencies with uv and cache mount for faster rebuilds
 WORKDIR /app/backend
-RUN uv pip install --system --no-cache .
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv pip install --system .
 
 # Copy backend source
 COPY backend/app ./app

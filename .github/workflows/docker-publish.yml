@@ -104,8 +104,14 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Multi-layer caching strategy for faster builds
+          cache-from: |
+            type=gha,scope=${{ github.ref_name }}-${{ runner.arch }}
+            type=gha,scope=main-${{ runner.arch }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: |
+            type=gha,mode=max,scope=${{ github.ref_name }}-${{ runner.arch }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true
           provenance: mode=min
           sbom: true
 
@@ -151,6 +157,7 @@ jobs:
           | 📦 Registry | \`${{ env.REGISTRY }}\` |
           | 🏷️ Image | \`${{ env.IMAGE_NAME }}\` |
           | 🏗️ Platforms | \`linux/amd64\`, \`linux/arm64\` |
+          | ⚡ Cache | GHA + Registry (multi-layer) |
           | 🔏 SBOM | Generated |
           | 📝 Provenance | Attached |
 
