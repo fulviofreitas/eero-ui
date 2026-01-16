@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.1](https://github.com/fulviofreitas/eero-ui/compare/v2.0.0...v2.0.1) (2026-01-16)
+
+### 🐛 Bug Fixes
+
+* **ci:** use workflow_run to trigger Docker after Release ([d988d90](https://github.com/fulviofreitas/eero-ui/commit/d988d90391034b69eb0fe68450cd962578db71f7))
+
 ## [2.0.0](https://github.com/fulviofreitas/eero-ui/compare/v1.0.0...v2.0.0) (2026-01-16)
 
 ### ⚠ BREAKING CHANGES
