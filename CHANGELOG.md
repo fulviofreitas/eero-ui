@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.3.5](https://github.com/fulviofreitas/eero-ui/compare/v2.3.4...v2.3.5) (2026-01-16)
+
+### 🐛 Bug Fixes
+
+* **renovate:** add recreateClosed to allow PR recreation ([4694fd5](https://github.com/fulviofreitas/eero-ui/commit/4694fd572648df84a08cf38dfb06c966bca04182))
+
 ## [2.3.4](https://github.com/fulviofreitas/eero-ui/compare/v2.3.3...v2.3.4) (2026-01-16)
 
 ### 🐛 Bug Fixes
