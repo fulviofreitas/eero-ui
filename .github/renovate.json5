@@ -15,8 +15,9 @@
   "schedule": ["at any time"],
   
   // PR limits to avoid noise
-  "prHourlyLimit": 2,
-  "prConcurrentLimit": 5,
+  // Note: Set to 0 to disable rate limiting
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 10,
   
   // Branch naming
   "branchPrefix": "deps/",
