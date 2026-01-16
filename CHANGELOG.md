@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.0](https://github.com/fulviofreitas/eero-ui/compare/v1.0.0...v2.0.0) (2026-01-16)
+
+### ⚠ BREAKING CHANGES
+
+* **ci:** Consolidated workflows into a proper chain
+
+- Merge commitlint, tests, and security scan into single CI workflow
+- CI runs all checks in parallel for faster feedback
+- Release workflow triggers after CI succeeds (via workflow_run)
+- Docker workflow triggers only on version tags (created by Release)
+- Remove standalone commitlint.yml and security.yml (now in CI)
+- Remove duplicate docker builds on push to main
+- Add workflow chain visualization in step summaries
+
+Chain: CI → Release → Docker
+
+### 🐛 Bug Fixes
+
+* **ci:** disable subject-case rule to allow acronyms ([f9d1310](https://github.com/fulviofreitas/eero-ui/commit/f9d13101501f41121765c810fe7b9bbcc3a1e00f))
+
+### ♻️ Refactoring
+
+* **ci:** chain workflows for proper CI/CD pipeline ([10c9d14](https://github.com/fulviofreitas/eero-ui/commit/10c9d142e3e556c0543c8969a3965616c5ae4150))
+
+### 📚 Documentation
+
+* add CI/CD pipeline section to README ([944ee73](https://github.com/fulviofreitas/eero-ui/commit/944ee73f5d6d7ccbe41dc06d90eb11425e688849))
+
 ## 1.0.0 (2026-01-16)
 
 ### ✨ Features
