@@ -29,7 +29,10 @@
 
   // Create a dependency dashboard issue
   dependencyDashboard: true,
-  dependencyDashboardTitle: "📦 Dependency Dashboard",
+  dependencyDashboardTitle: "📦 Renovate Dependency Dashboard",
+
+  // Close the Dependency Dashboard issue if there are no more updates
+  dependencyDashboardAutoclose: true,
 
   // Dependency dashboard approval for certain updates
   dependencyDashboardApproval: false,
