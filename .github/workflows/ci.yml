@@ -3,16 +3,12 @@ name: CI
 on:
   push:
     branches: [main, master, develop]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/ci.yml'
+    # Run on all pushes to main branches for reliable releases
+    # Path filters disabled to ensure CI always runs for semantic-release
   pull_request:
     branches: [main, master, develop]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/ci.yml'
+  # Allow manual trigger for debugging
+  workflow_dispatch:
 
 # Cancel in-progress runs for same branch
 concurrency:

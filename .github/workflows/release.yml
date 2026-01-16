@@ -6,6 +6,17 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main, master]
+  # Allow manual trigger for debugging or catching up on releases
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode (no actual release)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 # Prevent concurrent releases
 concurrency:
@@ -23,11 +34,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Only run if CI passed and not a release commit
+    # Only run if CI passed (or manual trigger) and not a release commit
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' &&
       !contains(github.event.workflow_run.head_commit.message, '[skip ci]') &&
-      !contains(github.event.workflow_run.head_commit.message, 'chore(release)')
+      !contains(github.event.workflow_run.head_commit.message, 'chore(release)'))
 
     steps:
       - name: Checkout repository
@@ -39,7 +51,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install semantic-release and plugins
         run: |
@@ -53,16 +65,41 @@ jobs:
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Running in dry-run mode..."
+            semantic-release --dry-run
+          else
+            semantic-release
+          fi
 
       - name: Generate release summary
         if: always()
         run: |
-          echo "## Release Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry-run mode - no actual release was created" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
           if [ -f VERSION ]; then
             VERSION=$(cat VERSION)
-            echo "✅ **New version released:** v$VERSION" >> $GITHUB_STEP_SUMMARY
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Would release: v$VERSION" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "New version released: v$VERSION" >> $GITHUB_STEP_SUMMARY
+            fi
           else
-            echo "ℹ️ No new version released (no relevant changes)" >> $GITHUB_STEP_SUMMARY
+            echo "No new version released (no relevant changes)" >> $GITHUB_STEP_SUMMARY
           fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Trigger Info" >> $GITHUB_STEP_SUMMARY
+          echo "- Event: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Ref: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
