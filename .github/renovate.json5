@@ -9,11 +9,11 @@
   
   // Note: "repositories" is a global-only option, not needed in repo config
   
-  // Timezone for scheduling
+  // Timezone for scheduling (used for prCreation hours if needed)
   "timezone": "America/New_York",
   
-  // Schedule: Run weekly on Mondays at 3 AM
-  "schedule": ["before 6am on monday"],
+  // No schedule restriction - PRs are created immediately when updates are detected
+  // The workflow itself runs on schedule (weekly) or on-demand via repository_dispatch
   
   // PR limits to avoid noise
   "prHourlyLimit": 2,
