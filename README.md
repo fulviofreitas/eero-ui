@@ -347,6 +347,33 @@ eero-ui/
 
 ---
 
+## CI/CD Pipeline
+
+This project uses a chained GitHub Actions workflow:
+
+```
+🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
+    (tests)        (semantic)       (multi-platform)
+```
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **CI Pipeline** | Push/PR | Runs commit lint, backend tests, frontend tests, security scan |
+| **Release** | After CI passes | Creates GitHub releases using semantic-release |
+| **Docker Build** | On version tags | Builds and pushes images to `ghcr.io` |
+
+### Conventional Commits
+
+Use [Conventional Commits](https://conventionalcommits.org) to trigger automatic releases:
+
+| Commit Type | Example | Version Bump |
+|-------------|---------|--------------|
+| `feat:` | `feat: add device filtering` | Minor (1.x.0) |
+| `fix:` | `fix: handle empty device list` | Patch (1.0.x) |
+| `feat!:` | `feat!: redesign API` | Major (x.0.0) |
+
+---
+
 ## Related Projects
 
 - **[eero-client](https://github.com/fulviofreitas/eero-client)** - The async Python client for the Eero API that this dashboard uses
