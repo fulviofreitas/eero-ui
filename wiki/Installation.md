@@ -46,7 +46,7 @@ docker compose down
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.12+
 - Node.js 18+
 - npm or pnpm
 

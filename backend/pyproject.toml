@@ -2,7 +2,7 @@
 name = "eero-ui-backend"
 version = "2.4.0"
 description = "FastAPI backend for the Eero UI Dashboard"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 
 dependencies = [
