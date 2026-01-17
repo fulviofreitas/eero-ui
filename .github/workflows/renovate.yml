@@ -45,7 +45,7 @@ on:
           - "true"
 
   repository_dispatch:
-    types: [eero-client-release]
+    types: [eero-client-dependency-update-available]
 
 concurrency:
   group: renovate

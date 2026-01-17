@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph dispatch ["repository_dispatch"]
-        event["event: eero-client-release"]
+        event["event: eero-client-dependency-update-available"]
     end
 
     notify --> event
