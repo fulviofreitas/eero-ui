@@ -2,11 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
-
 from eero import EeroClient
 from eero.exceptions import EeroException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
 
@@ -207,7 +206,11 @@ async def get_eero(
 
         # Extract ethernet port info
         ethernet_ports = None
-        if eero.ethernet_status and hasattr(eero.ethernet_status, "statuses") and eero.ethernet_status.statuses:
+        if (
+            eero.ethernet_status
+            and hasattr(eero.ethernet_status, "statuses")
+            and eero.ethernet_status.statuses
+        ):
             ethernet_ports = []
             for port_status in eero.ethernet_status.statuses:
                 port_info = {
@@ -220,7 +223,9 @@ async def get_eero(
                 }
                 # Add neighbor info if available
                 if port_status.neighbor and port_status.neighbor.metadata:
-                    port_info["neighbor_location"] = port_status.neighbor.metadata.location
+                    port_info["neighbor_location"] = (
+                        port_status.neighbor.metadata.location
+                    )
                     port_info["neighbor_port"] = port_status.neighbor.metadata.port_name
                 ethernet_ports.append(port_info)
 
@@ -243,8 +248,11 @@ async def get_eero(
         bssids_with_bands = None
         if hasattr(eero, "bssids_with_bands") and eero.bssids_with_bands:
             bssids_with_bands = [
-                {"band": b.band, "ethernet_address": b.ethernet_address}
-                if hasattr(b, "band") else b
+                (
+                    {"band": b.band, "ethernet_address": b.ethernet_address}
+                    if hasattr(b, "band")
+                    else b
+                )
                 for b in eero.bssids_with_bands
             ]
 
@@ -276,7 +284,9 @@ async def get_eero(
         power_saving_active = None
         if hasattr(eero, "power_saving") and eero.power_saving:
             if hasattr(eero.power_saving, "schedule"):
-                power_saving_active = getattr(eero.power_saving.schedule, "active", None)
+                power_saving_active = getattr(
+                    eero.power_saving.schedule, "active", None
+                )
 
         return EeroDetail(
             id=eero_id_extracted,
@@ -352,9 +362,11 @@ async def reboot_eero(
             success=success,
             eero_id=eero_id,
             action="reboot",
-            message="Reboot initiated. The eero will be back online in a few minutes."
-            if success
-            else "Failed to initiate reboot.",
+            message=(
+                "Reboot initiated. The eero will be back online in a few minutes."
+                if success
+                else "Failed to initiate reboot."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to reboot eero {eero_id}: {e}")
@@ -379,9 +391,11 @@ async def set_eero_led(
             success=success,
             eero_id=eero_id,
             action=action,
-            message=f"LED {'turned on' if enabled else 'turned off'}."
-            if success
-            else "Failed to change LED state.",
+            message=(
+                f"LED {'turned on' if enabled else 'turned off'}."
+                if success
+                else "Failed to change LED state."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to set LED for eero {eero_id}: {e}")
@@ -407,9 +421,11 @@ async def set_eero_led_brightness(
             success=success,
             eero_id=eero_id,
             action="led_brightness",
-            message=f"LED brightness set to {brightness}%."
-            if success
-            else "Failed to set LED brightness.",
+            message=(
+                f"LED brightness set to {brightness}%."
+                if success
+                else "Failed to set LED brightness."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to set LED brightness for eero {eero_id}: {e}")

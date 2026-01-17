@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +23,7 @@ def get_eero_client_version() -> str:
         return pkg_version("eero-client")
     except Exception:
         return "unknown"
+
 
 # Configure logging
 logging.basicConfig(

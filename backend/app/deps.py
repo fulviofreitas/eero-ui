@@ -1,13 +1,13 @@
 """FastAPI dependencies for the Eero Dashboard."""
 
 import logging
+
+# Import eero client from parent package
+import sys
 from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import Depends, HTTPException, status
-
-# Import eero client from parent package
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 

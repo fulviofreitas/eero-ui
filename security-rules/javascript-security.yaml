@@ -1,5 +1,5 @@
 # ============================================================================
-# 🔐 JavaScript/TypeScript Security Rules for Opengrep
+# 🔐 JavaScript/TypeScript Security Rules for Semgrep
 # ============================================================================
 # These rules detect common security vulnerabilities in JavaScript/TypeScript
 # codebases, with a focus on Svelte and modern frontend frameworks.

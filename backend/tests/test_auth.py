@@ -8,7 +8,6 @@ Tests cover:
 - Error scenarios
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
@@ -124,9 +123,7 @@ class TestVerify:
         mock_eero_client.verify = AsyncMock(return_value=True)
         mock_eero_client.preferred_network_id = "network-123"
 
-        response = await async_client.post(
-            "/api/auth/verify", json={"code": "123456"}
-        )
+        response = await async_client.post("/api/auth/verify", json={"code": "123456"})
 
         assert response.status_code == 200
         data = response.json()
@@ -137,9 +134,7 @@ class TestVerify:
         """Failed verification returns success=false."""
         mock_eero_client.verify = AsyncMock(return_value=False)
 
-        response = await async_client.post(
-            "/api/auth/verify", json={"code": "wrong"}
-        )
+        response = await async_client.post("/api/auth/verify", json={"code": "wrong"})
 
         assert response.status_code == 200
         data = response.json()
@@ -151,9 +146,7 @@ class TestVerify:
             side_effect=EeroAuthenticationException("Invalid code")
         )
 
-        response = await async_client.post(
-            "/api/auth/verify", json={"code": "invalid"}
-        )
+        response = await async_client.post("/api/auth/verify", json={"code": "invalid"})
 
         assert response.status_code == 401
 

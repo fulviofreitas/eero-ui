@@ -1,5 +1,5 @@
 # ============================================================================
-# 🔐 General Security Rules for Opengrep
+# 🔐 General Security Rules for Semgrep
 # ============================================================================
 # These rules detect common security issues that apply across multiple
 # languages and file types in the codebase.

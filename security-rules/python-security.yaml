@@ -1,5 +1,5 @@
 # ============================================================================
-# 🔐 Python Security Rules for Opengrep
+# 🔐 Python Security Rules for Semgrep
 # ============================================================================
 # These rules detect common security vulnerabilities in Python codebases,
 # with a focus on FastAPI and web application security.

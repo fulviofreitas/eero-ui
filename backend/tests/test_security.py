@@ -1,10 +1,8 @@
 """Security tests for the Eero Dashboard backend."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
 
-from fastapi.testclient import TestClient
+import pytest
 
 
 class TestPathTraversalPrevention:
@@ -90,7 +88,9 @@ class TestSessionSecretRequirement:
 
     def test_strong_secret_passes(self):
         """Verify that strong secrets pass validation."""
-        strong_secret = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        strong_secret = (
+            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        )
 
         is_weak = (
             strong_secret.lower()
@@ -135,9 +135,11 @@ class TestGlobalExceptionHandler:
     @pytest.mark.asyncio
     async def test_global_handler_returns_generic_response(self):
         """Verify global exception handler returns generic error without type info."""
-        from app.main import global_exception_handler
-        from fastapi.responses import JSONResponse
         import json
+
+        from fastapi.responses import JSONResponse
+
+        from app.main import global_exception_handler
 
         # Simulate an unhandled exception
         mock_request = None
@@ -188,7 +190,7 @@ class TestExceptionSanitization:
             "Exception",
             "Error:",
             "Traceback",
-            "File \"",
+            'File "',
             "line ",
             "python",
             ".py",
@@ -196,6 +198,6 @@ class TestExceptionSanitization:
 
         for message in expected_generic_messages:
             for pattern in forbidden_patterns:
-                assert pattern.lower() not in message.lower(), (
-                    f"Error message '{message}' contains forbidden pattern '{pattern}'"
-                )
+                assert (
+                    pattern.lower() not in message.lower()
+                ), f"Error message '{message}' contains forbidden pattern '{pattern}'"
