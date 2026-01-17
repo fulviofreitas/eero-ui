@@ -25,7 +25,7 @@
   commitMessageAction: "update",
 
   // Labels for all PRs
-  labels: ["dependencies", "renovate"],
+  labels: ["dependencies", "renovate", "automerge"],
 
   // Create a dependency dashboard issue
   dependencyDashboard: true,
