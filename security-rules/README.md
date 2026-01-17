@@ -1,6 +1,6 @@
 # 🔐 Security Rules
 
-Custom Opengrep security rules for the Eero UI project.
+Custom Semgrep security rules for the Eero UI project.
 
 ## Rules Overview
 
@@ -33,20 +33,22 @@ Custom Opengrep security rules for the Eero UI project.
 ## Running Locally
 
 ```bash
-# Install Opengrep
-curl -fsSL https://github.com/opengrep/opengrep/releases/latest/download/opengrep_osx_arm64 -o opengrep
-chmod +x opengrep
+# Install Semgrep
+pip install semgrep
 
 # Run scan
-./opengrep scan --config security-rules .
+semgrep --config security-rules .
+
+# Run with community rulesets
+semgrep --config p/python --config p/javascript --config security-rules .
 
 # Generate SARIF report
-./opengrep scan --config security-rules . --sarif --output results.sarif
+semgrep --config security-rules --sarif --output semgrep.sarif .
 ```
 
 ## Customizing Rules
 
-Rules use Opengrep/Semgrep syntax. Key elements:
+Rules use Semgrep syntax. Key elements:
 
 ```yaml
 rules:
@@ -81,8 +83,8 @@ paths:
 ## GitHub Actions Integration
 
 The security scan runs automatically on:
-- Pull requests to `main`, `master`, `develop`
-- Pushes to `main`, `master`
+- Pull requests to `master`
+- Pushes to `master`
 
 Results appear in:
 1. **Workflow Summary** - Human-readable report
@@ -93,5 +95,15 @@ Results appear in:
 
 1. Choose the appropriate YAML file based on language
 2. Add your rule following the template above
-3. Test locally with `opengrep scan --config security-rules .`
+3. Test locally with `semgrep --config security-rules .`
 4. Push and verify in CI
+
+## Community Rulesets
+
+In addition to custom rules, the CI also uses Semgrep community rulesets:
+
+- `p/python` - Python security rules
+- `p/javascript` - JavaScript/TypeScript security rules
+- `p/security-audit` - General security audit rules
+
+Browse more at [semgrep.dev/r](https://semgrep.dev/r)

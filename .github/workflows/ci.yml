@@ -29,8 +29,8 @@ permissions:
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
-  OPENGREP_RULES_PATH: security-rules
-  SARIF_OUTPUT: results.sarif
+  SEMGREP_RULES_PATH: security-rules
+  SARIF_OUTPUT: semgrep.sarif
 
 jobs:
   # ============================================================================
@@ -172,10 +172,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 🔐 Run Opengrep scan
-        uses: fulviofreitas/eero-client/.github/actions/security-opengrep@master
+      - name: 🔐 Run Semgrep scan
+        uses: fulviofreitas/eero-client/.github/actions/security-semgrep@master
         with:
-          rules-path: ${{ env.OPENGREP_RULES_PATH }}
+          config: "p/python p/javascript ${{ env.SEMGREP_RULES_PATH }}"
           target-path: "."
           sarif-output: ${{ env.SARIF_OUTPUT }}
           fail-on-findings: "true"
