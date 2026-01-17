@@ -176,7 +176,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: commitlint
-    continue-on-error: true
 
     steps:
       - name: 📥 Checkout repository
@@ -209,7 +208,7 @@ jobs:
           FRONTEND_LINT="${{ needs.frontend-lint.result }}"
           BACKEND="${{ needs.backend-tests.result }}"
           FRONTEND="${{ needs.frontend-tests.result }}"
-          SECURITY="${{ needs.security-scan.outcome }}"
+          SECURITY="${{ needs.security-scan.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🧪 CI Pipeline Summary
@@ -225,9 +224,8 @@ jobs:
 
           EOF
 
-          # Required: commitlint, backend-lint, frontend-lint, backend-tests, frontend-tests
-          # Allowed to fail: security-scan (informational)
-          if [[ "$COMMITLINT" == "success" && "$BACKEND_LINT" == "success" && "$FRONTEND_LINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" ]]; then
+          # All jobs are required to pass
+          if [[ "$COMMITLINT" == "success" && "$BACKEND_LINT" == "success" && "$FRONTEND_LINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" && "$SECURITY" == "success" ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
