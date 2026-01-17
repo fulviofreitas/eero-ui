@@ -14,7 +14,7 @@
 		"pretest": "svelte-kit sync",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "svelte-kit sync && vitest run --coverage"
 	},
 	"overrides": {
 		"cookie": "^0.7.0",
