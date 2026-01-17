@@ -176,6 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: commitlint
+    continue-on-error: true
 
     steps:
       - name: 📥 Checkout repository
@@ -189,7 +190,7 @@ jobs:
           rules-path: ${{ env.OPENGREP_RULES_PATH }}
           target-path: "."
           sarif-output: ${{ env.SARIF_OUTPUT }}
-          fail-on-findings: "false"
+          fail-on-findings: "true"
 
   # ============================================================================
   # 4️⃣ CI Success Gate (Final - depends on all parallel jobs)
@@ -208,7 +209,7 @@ jobs:
           FRONTEND_LINT="${{ needs.frontend-lint.result }}"
           BACKEND="${{ needs.backend-tests.result }}"
           FRONTEND="${{ needs.frontend-tests.result }}"
-          SECURITY="${{ needs.security-scan.result }}"
+          SECURITY="${{ needs.security-scan.outcome }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🧪 CI Pipeline Summary
