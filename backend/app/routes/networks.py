@@ -1,15 +1,13 @@
 """Network routes for the Eero Dashboard."""
 
 import logging
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 
 from eero import EeroClient
 from eero.exceptions import EeroAPIException, EeroException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
-from ..deps import get_network_id, require_auth
+from ..deps import require_auth
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -39,20 +37,20 @@ class NetworkDetail(NetworkSummary):
     speed_test: dict | None = None
     health: dict | None = None
     settings: dict | None = None
-    
+
     # Additional info
     owner: str | None = None
     display_name: str | None = None
     network_customer_type: str | None = None
     premium_status: str | None = None
     created_at: str | None = None
-    
+
     # Connection
     gateway: str | None = None
     wan_type: str | None = None
     gateway_ip: str | None = None
     connection_mode: str | None = None
-    
+
     # Features
     backup_internet_enabled: bool = False
     power_saving: bool = False
@@ -62,36 +60,36 @@ class NetworkDetail(NetworkSummary):
     band_steering: bool = False
     wpa3: bool = False
     ipv6_upstream: bool = False
-    
+
     # DNS
     dns: dict | None = None
     premium_dns: dict | None = None
-    
+
     # Geo IP
     geo_ip: dict | None = None
-    
+
     # Updates
     updates: dict | None = None
-    
+
     # DHCP
     dhcp: dict | None = None
-    
+
     # DDNS
     ddns: dict | None = None
-    
+
     # HomeKit
     homekit: dict | None = None
-    
+
     # IP Settings
     ip_settings: dict | None = None
-    
+
     # Premium
     premium_details: dict | None = None
-    
+
     # Integrations
     amazon_account_linked: bool = False
     alexa_skill: bool = False
-    
+
     # Timestamps
     last_reboot: str | None = None
 
@@ -117,7 +115,11 @@ async def list_networks(
             NetworkSummary(
                 id=net.id,
                 name=net.name,
-                status=str(net.status.value) if hasattr(net.status, "value") else str(net.status),
+                status=(
+                    str(net.status.value)
+                    if hasattr(net.status, "value")
+                    else str(net.status)
+                ),
                 guest_network_enabled=net.guest_network_enabled,
                 public_ip=net.public_ip,
                 isp_name=net.isp_name,
@@ -146,12 +148,20 @@ async def get_network(
         devices = await client.get_devices(network_id)
         eeros = await client.get_eeros(network_id)
 
-        status_str = str(network.status.value) if hasattr(network.status, "value") else str(network.status)
+        status_str = (
+            str(network.status.value)
+            if hasattr(network.status, "value")
+            else str(network.status)
+        )
 
         # Format created_at if available
         created_at_str = None
         if network.created_at:
-            created_at_str = network.created_at.isoformat() if hasattr(network.created_at, 'isoformat') else str(network.created_at)
+            created_at_str = (
+                network.created_at.isoformat()
+                if hasattr(network.created_at, "isoformat")
+                else str(network.created_at)
+            )
 
         return NetworkDetail(
             id=network.id,
@@ -166,47 +176,47 @@ async def get_network(
             health=network.health,
             settings=network.settings.model_dump() if network.settings else None,
             # Additional info
-            owner=getattr(network, 'owner', None),
-            display_name=getattr(network, 'display_name', None),
-            network_customer_type=getattr(network, 'network_customer_type', None),
-            premium_status=getattr(network, 'premium_status', None),
+            owner=getattr(network, "owner", None),
+            display_name=getattr(network, "display_name", None),
+            network_customer_type=getattr(network, "network_customer_type", None),
+            premium_status=getattr(network, "premium_status", None),
             created_at=created_at_str,
             # Connection
-            gateway=getattr(network, 'gateway', None),
-            wan_type=getattr(network, 'wan_type', None),
-            gateway_ip=getattr(network, 'gateway_ip', None),
-            connection_mode=getattr(network, 'connection_mode', None),
+            gateway=getattr(network, "gateway", None),
+            wan_type=getattr(network, "wan_type", None),
+            gateway_ip=getattr(network, "gateway_ip", None),
+            connection_mode=getattr(network, "connection_mode", None),
             # Features
-            backup_internet_enabled=getattr(network, 'backup_internet_enabled', False),
-            power_saving=getattr(network, 'power_saving', False),
-            sqm=getattr(network, 'sqm', False),
-            upnp=getattr(network, 'upnp', False),
-            thread=getattr(network, 'thread', False),
-            band_steering=getattr(network, 'band_steering', False),
-            wpa3=getattr(network, 'wpa3', False),
-            ipv6_upstream=getattr(network, 'ipv6_upstream', False),
+            backup_internet_enabled=getattr(network, "backup_internet_enabled", False),
+            power_saving=getattr(network, "power_saving", False),
+            sqm=getattr(network, "sqm", False),
+            upnp=getattr(network, "upnp", False),
+            thread=getattr(network, "thread", False),
+            band_steering=getattr(network, "band_steering", False),
+            wpa3=getattr(network, "wpa3", False),
+            ipv6_upstream=getattr(network, "ipv6_upstream", False),
             # DNS
-            dns=getattr(network, 'dns', None),
-            premium_dns=getattr(network, 'premium_dns', None),
+            dns=getattr(network, "dns", None),
+            premium_dns=getattr(network, "premium_dns", None),
             # Geo IP
-            geo_ip=getattr(network, 'geo_ip', None),
+            geo_ip=getattr(network, "geo_ip", None),
             # Updates
-            updates=getattr(network, 'updates', None),
+            updates=getattr(network, "updates", None),
             # DHCP
             dhcp=network.dhcp.model_dump() if network.dhcp else None,
             # DDNS
-            ddns=getattr(network, 'ddns', None),
+            ddns=getattr(network, "ddns", None),
             # HomeKit
-            homekit=getattr(network, 'homekit', None),
+            homekit=getattr(network, "homekit", None),
             # IP Settings
-            ip_settings=getattr(network, 'ip_settings', None),
+            ip_settings=getattr(network, "ip_settings", None),
             # Premium
-            premium_details=getattr(network, 'premium_details', None),
+            premium_details=getattr(network, "premium_details", None),
             # Integrations
-            amazon_account_linked=getattr(network, 'amazon_account_linked', False),
-            alexa_skill=getattr(network, 'alexa_skill', False),
+            amazon_account_linked=getattr(network, "amazon_account_linked", False),
+            alexa_skill=getattr(network, "alexa_skill", False),
             # Timestamps
-            last_reboot=getattr(network, 'last_reboot', None),
+            last_reboot=getattr(network, "last_reboot", None),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to get network {network_id}: {e}")

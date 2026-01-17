@@ -4,12 +4,13 @@ This module provides reusable fixtures for testing FastAPI routes
 with a mocked EeroClient dependency.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from httpx import AsyncClient, ASGITransport
 
-from app.main import app
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from app.deps import get_eero_client
+from app.main import app
 
 
 @pytest.fixture

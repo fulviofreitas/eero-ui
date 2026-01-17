@@ -1,13 +1,11 @@
 """Device routes for the Eero Dashboard."""
 
 import logging
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 
 from eero import EeroClient
 from eero.exceptions import EeroException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
 
@@ -57,7 +55,7 @@ class DeviceDetail(BaseModel):
     ip: str | None = None
     ips: list[str] = []
     ipv4: str | None = None
-    
+
     # Identification
     nickname: str | None = None
     hostname: str | None = None
@@ -65,18 +63,18 @@ class DeviceDetail(BaseModel):
     manufacturer: str | None = None
     model_name: str | None = None
     device_type: str | None = None
-    
+
     # Connection status
     connected: bool = False
     wireless: bool = False
     connection_type: str | None = None
-    
+
     # Status flags
     blocked: bool = False
     paused: bool = False
     is_guest: bool = False
     is_private: bool = False
-    
+
     # Connectivity details
     signal_strength: int | None = None
     signal_bars: int | None = None
@@ -86,20 +84,20 @@ class DeviceDetail(BaseModel):
     ssid: str | None = None
     rx_bitrate: str | None = None
     tx_bitrate: str | None = None
-    
+
     # Connected to
     connected_to_eero: str | None = None
     connected_to_eero_id: str | None = None
     connected_to_eero_model: str | None = None
-    
+
     # Profile
     profile_id: str | None = None
     profile_name: str | None = None
-    
+
     # Timestamps
     last_active: str | None = None
     first_active: str | None = None
-    
+
     # Network
     network_id: str | None = None
     subnet_kind: str | None = None
@@ -133,7 +131,9 @@ async def list_devices(
     refresh: bool = Query(False, description="Force cache refresh"),
     connected_only: bool = Query(False, description="Only show connected devices"),
     profile_id: str | None = Query(None, description="Filter by profile ID"),
-    device_ids: str | None = Query(None, description="Filter by comma-separated device IDs"),
+    device_ids: str | None = Query(
+        None, description="Filter by comma-separated device IDs"
+    ),
 ) -> list[DeviceSummary]:
     """Get list of all devices on the network."""
     try:
@@ -148,7 +148,7 @@ async def list_devices(
         result = []
         matched_ids = set()
         skipped_devices = []
-        
+
         for device in devices:
             try:
                 # Filter by connected status if requested
@@ -163,8 +163,10 @@ async def list_devices(
                 if device_id_filter:
                     # Try matching by ID or MAC address
                     dev_id = device.id
-                    device_mac = device.mac.replace(":", "").lower() if device.mac else None
-                    
+                    device_mac = (
+                        device.mac.replace(":", "").lower() if device.mac else None
+                    )
+
                     if dev_id in device_id_filter:
                         matched_ids.add(dev_id)
                     elif device_mac and device_mac in device_id_filter:
@@ -178,7 +180,9 @@ async def list_devices(
                 if device.connectivity:
                     if device.connectivity.signal:
                         try:
-                            signal_strength = int(device.connectivity.signal.replace(" dBm", ""))
+                            signal_strength = int(
+                                device.connectivity.signal.replace(" dBm", "")
+                            )
                         except (ValueError, AttributeError):
                             pass
                     if device.connectivity.frequency:
@@ -204,7 +208,9 @@ async def list_devices(
                         ip=device.ip,
                         nickname=device.nickname,
                         hostname=device.hostname,
-                        display_name=device.display_name or device.nickname or device.hostname,
+                        display_name=device.display_name
+                        or device.nickname
+                        or device.hostname,
                         manufacturer=device.manufacturer,
                         model_name=device.model_name,
                         device_type=device.device_type,
@@ -217,30 +223,44 @@ async def list_devices(
                         signal_strength=signal_strength,
                         frequency=frequency,
                         connected_to_eero=connected_to,
-                        last_active=device.last_active.isoformat() if device.last_active else None,
+                        last_active=(
+                            device.last_active.isoformat()
+                            if device.last_active
+                            else None
+                        ),
                         profile_id=device_profile_id,
                         profile_name=device_profile_name,
                     )
                 )
             except Exception as e:
                 # Log any device that fails to process - this should NEVER happen
-                _LOGGER.error(f"CRITICAL: Failed to process device {getattr(device, 'id', 'unknown')}: {e}")
-                skipped_devices.append(getattr(device, 'id', 'unknown'))
-        
+                _LOGGER.error(
+                    f"CRITICAL: Failed to process device {getattr(device, 'id', 'unknown')}: {e}"
+                )
+                skipped_devices.append(getattr(device, "id", "unknown"))
+
         if skipped_devices:
-            _LOGGER.error(f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors: {skipped_devices}")
+            _LOGGER.error(
+                f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors: {skipped_devices}"
+            )
 
         if device_id_filter:
-            _LOGGER.debug(f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs")
-        
+            _LOGGER.debug(
+                f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs"
+            )
+
         # Log counts to identify any discrepancies
-        _LOGGER.info(f"Devices API: eero_api_count={len(devices)}, returned_count={len(result)}, filters_applied=(connected_only={connected_only}, profile_id={profile_id}, device_ids={device_ids is not None})")
-        
+        _LOGGER.info(
+            f"Devices API: eero_api_count={len(devices)}, returned_count={len(result)}, filters_applied=(connected_only={connected_only}, profile_id={profile_id}, device_ids={device_ids is not None})"
+        )
+
         # CRITICAL: Ensure we're returning exactly what the eero API gives us (when no filters)
         if not connected_only and not profile_id and not device_ids:
             if len(devices) != len(result):
-                _LOGGER.warning(f"DISCREPANCY: eero API returned {len(devices)} devices but we're returning {len(result)}")
-        
+                _LOGGER.warning(
+                    f"DISCREPANCY: eero API returned {len(devices)} devices but we're returning {len(result)}"
+                )
+
         return result
     except EeroException as e:
         _LOGGER.error(f"Failed to get devices: {e}")
@@ -268,11 +288,13 @@ async def get_device(
         frequency_mhz = None
         rx_bitrate = None
         tx_bitrate = None
-        
+
         if device.connectivity:
             if device.connectivity.signal:
                 try:
-                    signal_strength = int(device.connectivity.signal.replace(" dBm", ""))
+                    signal_strength = int(
+                        device.connectivity.signal.replace(" dBm", "")
+                    )
                 except (ValueError, AttributeError):
                     pass
             signal_bars = device.connectivity.score_bars
@@ -281,7 +303,7 @@ async def get_device(
                 frequency = "5GHz" if frequency_mhz > 4000 else "2.4GHz"
             rx_bitrate = device.connectivity.rx_bitrate
             tx_bitrate = device.connectivity.tx_bitrate
-            
+
             # Extract TX bitrate from tx_rate_info if not directly available
             if not tx_bitrate and device.connectivity.tx_rate_info:
                 tx_info = device.connectivity.tx_rate_info
@@ -292,7 +314,7 @@ async def get_device(
                         # Convert bps to Mbit/s
                         rate_mbps = rate_bps / 1_000_000
                         tx_bitrate = f"{rate_mbps:.1f} MBit/s"
-            
+
             # Extract RX bitrate from rx_rate_info as fallback
             if not rx_bitrate and device.connectivity.rx_rate_info:
                 rx_info = device.connectivity.rx_rate_info
@@ -312,6 +334,7 @@ async def get_device(
             if device.source.url:
                 # Extract eero ID from URL
                 import re
+
                 match = re.search(r"/eeros/([^/]+)", device.source.url)
                 if match:
                     connected_to_id = match.group(1)
@@ -356,7 +379,9 @@ async def get_device(
             profile_id=profile_id,
             profile_name=profile_name,
             last_active=device.last_active.isoformat() if device.last_active else None,
-            first_active=device.first_active.isoformat() if device.first_active else None,
+            first_active=(
+                device.first_active.isoformat() if device.first_active else None
+            ),
             network_id=device.network_id,
             subnet_kind=device.subnet_kind,
             auth=device.auth,
@@ -377,12 +402,16 @@ async def block_device(
 ) -> DeviceAction:
     """Block a device from the network."""
     try:
-        success = await client.block_device(device_id, blocked=True, network_id=network_id)
+        success = await client.block_device(
+            device_id, blocked=True, network_id=network_id
+        )
         return DeviceAction(
             success=success,
             device_id=device_id,
             action="block",
-            message="Device blocked successfully." if success else "Failed to block device.",
+            message=(
+                "Device blocked successfully." if success else "Failed to block device."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to block device {device_id}: {e}")
@@ -400,12 +429,18 @@ async def unblock_device(
 ) -> DeviceAction:
     """Unblock a device from the network."""
     try:
-        success = await client.block_device(device_id, blocked=False, network_id=network_id)
+        success = await client.block_device(
+            device_id, blocked=False, network_id=network_id
+        )
         return DeviceAction(
             success=success,
             device_id=device_id,
             action="unblock",
-            message="Device unblocked successfully." if success else "Failed to unblock device.",
+            message=(
+                "Device unblocked successfully."
+                if success
+                else "Failed to unblock device."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to unblock device {device_id}: {e}")
@@ -431,7 +466,11 @@ async def set_device_nickname(
             success=success,
             device_id=device_id,
             action="nickname",
-            message=f"Nickname set to '{request.nickname}'." if success else "Failed to set nickname.",
+            message=(
+                f"Nickname set to '{request.nickname}'."
+                if success
+                else "Failed to set nickname."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to set nickname for device {device_id}: {e}")
@@ -444,7 +483,9 @@ async def set_device_nickname(
 @router.post("/{device_id}/prioritize", response_model=DeviceAction)
 async def prioritize_device(
     device_id: str,
-    duration_minutes: int = Query(0, description="Duration in minutes (0 = indefinite)"),
+    duration_minutes: int = Query(
+        0, description="Duration in minutes (0 = indefinite)"
+    ),
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
@@ -457,7 +498,9 @@ async def prioritize_device(
             success=success,
             device_id=device_id,
             action="prioritize",
-            message="Device prioritized." if success else "Failed to prioritize device.",
+            message=(
+                "Device prioritized." if success else "Failed to prioritize device."
+            ),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to prioritize device {device_id}: {e}")

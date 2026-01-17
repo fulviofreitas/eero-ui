@@ -2,13 +2,12 @@
 
 import logging
 
+from eero import EeroClient
+from eero.exceptions import EeroAuthenticationException, EeroNetworkException
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-
-from eero import EeroClient
-from eero.exceptions import EeroAuthenticationException, EeroNetworkException
 
 from ..deps import get_eero_client
 
@@ -76,7 +75,7 @@ async def get_auth_status(
             account = await client.get_account()
             account_id = account.id
             premium_status = account.premium_status
-            
+
             if account.users:
                 # Get the first user (typically the owner)
                 user = account.users[0]
