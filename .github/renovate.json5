@@ -120,6 +120,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-python):",
+      labels: ["dependencies", "renovate", "automerge"],
     },
 
     // ==========================================================================
@@ -134,6 +135,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-npm):",
+      labels: ["dependencies", "renovate", "automerge"],
     },
 
     // ==========================================================================
@@ -148,6 +150,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-actions):",
+      labels: ["dependencies", "renovate", "automerge"],
     },
 
     // ==========================================================================
@@ -177,7 +180,7 @@
   // Vulnerability alerts configuration (top-level, not inside packageRules)
   vulnerabilityAlerts: {
     enabled: true,
-    labels: ["security", "critical"],
+    labels: ["security", "critical", "automerge"],
     automerge: true,
   },
 }
