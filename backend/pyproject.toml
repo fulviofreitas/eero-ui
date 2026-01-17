@@ -11,7 +11,7 @@ dependencies = [
     "pydantic>=2.10.0",
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
-    "eero-client @ git+https://github.com/fulviofreitas/eero-client.git@v1.2.1",
+    "eero-client @ git+https://github.com/fulviofreitas/eero-client.git@v3.0.0",
 ]
 
 [project.optional-dependencies]
