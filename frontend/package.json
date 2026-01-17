@@ -17,13 +17,13 @@
 		"test:coverage": "svelte-kit sync && vitest run --coverage"
 	},
 	"overrides": {
-		"cookie": "^0.7.0",
+		"cookie": "^1.0.0",
 		"esbuild": "^0.27.0"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "^3.0.0",
 		"@sveltejs/kit": "^2.49.5",
-		"@sveltejs/vite-plugin-svelte": "^6.0.0",
+		"@sveltejs/vite-plugin-svelte": "^3.0.0",
 		"@testing-library/jest-dom": "^6.4.0",
 		"@testing-library/svelte": "^5.0.0",
 		"@types/node": "^24.0.0",
