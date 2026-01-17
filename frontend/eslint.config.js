@@ -41,9 +41,26 @@ export default [
 			// Svelte-specific: downgrade to warnings for existing codebase
 			'svelte/valid-compile': ['warn', { ignoreWarnings: true }],
 			'svelte/no-unused-svelte-ignore': 'warn',
-			// Disable new Svelte 5 rules for gradual migration
+			// ============================================================
+			// Svelte 5 Migration: Disabled Rules
+			// ============================================================
+			// These rules were introduced in eslint-plugin-svelte v3 for Svelte 5.
+			// They are disabled to allow gradual migration from Svelte 4 patterns.
+			// TODO: Enable these rules and fix the codebase incrementally.
+			//
+			// svelte/require-each-key: Requires {#each} blocks to have a key
+			//   - Improves rendering performance and prevents bugs with keyed updates
+			//   - Fix: Add (item.id) or similar key to each block: {#each items as item (item.id)}
 			'svelte/require-each-key': 'off',
+			//
+			// svelte/no-navigation-without-resolve: Requires resolve() for goto/href
+			//   - Ensures proper URL resolution in SvelteKit applications
+			//   - Fix: Use resolve() from $app/paths or relative paths
 			'svelte/no-navigation-without-resolve': 'off',
+			//
+			// svelte/no-reactive-functions: Disallows function creation in reactive statements
+			//   - Prevents unnecessary function recreation on each reactive update
+			//   - Fix: Move function definitions outside of $: reactive blocks
 			'svelte/no-reactive-functions': 'off'
 		}
 	},
