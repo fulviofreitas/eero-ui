@@ -40,7 +40,11 @@ export default [
 			'no-case-declarations': 'off',
 			// Svelte-specific: downgrade to warnings for existing codebase
 			'svelte/valid-compile': ['warn', { ignoreWarnings: true }],
-			'svelte/no-unused-svelte-ignore': 'warn'
+			'svelte/no-unused-svelte-ignore': 'warn',
+			// Disable new Svelte 5 rules for gradual migration
+			'svelte/require-each-key': 'off',
+			'svelte/no-navigation-without-resolve': 'off',
+			'svelte/no-reactive-functions': 'off'
 		}
 	},
 	{
