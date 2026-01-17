@@ -29,7 +29,7 @@
 		"@types/node": "^24.0.0",
 		"@typescript-eslint/parser": "^8.53.0",
 		"@vitest/coverage-v8": "^4.0.0",
-		"eslint": "^8.56.0",
+		"eslint": "^9.0.0",
 		"eslint-plugin-svelte": "^2.35.0",
 		"globals": "^17.0.0",
 		"jsdom": "^24.0.0",
