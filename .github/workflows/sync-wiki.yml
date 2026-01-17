@@ -9,7 +9,7 @@ name: 📚 Sync Wiki
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
     paths:
       - "wiki/**"
   workflow_dispatch:
@@ -32,6 +32,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔄 Sync wiki
-        uses: fulviofreitas/eero-client/.github/actions/wiki-sync@main
+        uses: fulviofreitas/eero-client/.github/actions/wiki-sync@master
         with:
           wiki-path: wiki/

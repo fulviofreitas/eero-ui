@@ -13,9 +13,9 @@ on:
   workflow_run:
     workflows: ["🚀 Release"]
     types: [completed]
-    branches: [main, master]
+    branches: [master]
   pull_request:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
 
       - name: 🐳 Build and push Docker image
-        uses: fulviofreitas/eero-client/.github/actions/docker-build@main
+        uses: fulviofreitas/eero-client/.github/actions/docker-build@master
         with:
           image-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           context: "."

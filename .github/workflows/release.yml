@@ -14,7 +14,7 @@ on:
   workflow_run:
     workflows: ["🧪 CI Pipeline"]
     types: [completed]
-    branches: [main, master]
+    branches: [master]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
 
       - name: 🚀 Run semantic-release
-        uses: fulviofreitas/eero-client/.github/actions/semantic-release@main
+        uses: fulviofreitas/eero-client/.github/actions/semantic-release@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
