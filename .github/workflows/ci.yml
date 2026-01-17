@@ -1,8 +1,8 @@
 # ============================================================================
 # 🧪 Continuous Integration Pipeline
 # ============================================================================
-# Comprehensive CI that runs all checks: linting, tests, and security scans.
-# This is the single source of truth for code quality before release.
+# Comprehensive CI using reusable actions from eero-client.
+# Tests both frontend (Svelte) and backend (FastAPI) components.
 #
 # Chain: CI → Release → Docker
 # ============================================================================
@@ -41,28 +41,15 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v6
+      - name: 📝 Validate commits
+        uses: fulviofreitas/eero-client/.github/actions/commitlint@main
         with:
-          node-version: '20'
-
-      - name: 🔧 Install commitlint
-        run: npm install -g @commitlint/cli @commitlint/config-conventional
-
-      - name: 🔍 Validate commits
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            npx commitlint \
-              --from ${{ github.event.pull_request.base.sha }} \
-              --to ${{ github.event.pull_request.head.sha }} \
-              --verbose
-          else
-            npx commitlint --last --verbose
-          fi
+          from-sha: ${{ github.event.pull_request.base.sha }}
+          to-sha: ${{ github.event.pull_request.head.sha }}
 
   # ============================================================================
   # 🐍 Backend Tests
@@ -78,14 +65,14 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
-          cache: 'pip'
-          cache-dependency-path: 'backend/pyproject.toml'
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "backend/pyproject.toml"
 
       - name: 📦 Install dependencies
         run: |
@@ -98,7 +85,7 @@ jobs:
         run: pytest --cov=app --cov-report=xml --cov-report=term-missing
 
       - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: backend-coverage
@@ -113,40 +100,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v6
+      - name: 🔍 Run type check & lint
+        uses: fulviofreitas/eero-client/.github/actions/frontend-check@main
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
+          working-directory: frontend
+          node-version: "20"
 
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🔍 Run Svelte check
-        run: npm run check
-
-      - name: 🧹 Run linting
-        run: npm run lint
-
-      - name: 🧪 Run tests with coverage
-        run: npm run test:coverage
-
-      - name: 📊 Upload coverage report
-        uses: actions/upload-artifact@v6
-        if: always()
+      - name: 🧪 Run tests
+        uses: fulviofreitas/eero-client/.github/actions/frontend-test@main
         with:
-          name: frontend-coverage
-          path: frontend/coverage/
-          retention-days: 30
+          working-directory: frontend
+          node-version: "20"
 
   # ============================================================================
   # 🔐 Security Scan
@@ -158,55 +126,17 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🛠️ Install Opengrep
-        id: install
-        run: |
-          OPENGREP_VERSION=$(curl --silent "https://api.github.com/repos/opengrep/opengrep/releases/latest" | \
-            grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          OPENGREP_VERSION=${OPENGREP_VERSION:-"v1.15.0"}
-          echo "opengrep_version=${OPENGREP_VERSION}" >> $GITHUB_OUTPUT
-          
-          curl -fsSL "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" -o opengrep
-          chmod +x opengrep
-          sudo mv opengrep /usr/local/bin/opengrep
-
-      - name: 🔍 Run security scan
-        id: scan
-        run: |
-          opengrep scan --config ${{ env.OPENGREP_RULES_PATH }} . 2>&1 | tee scan-output.txt || true
-          opengrep scan --config ${{ env.OPENGREP_RULES_PATH }} . --sarif --output ${{ env.SARIF_OUTPUT }} || true
-          
-          FINDING_COUNT=$(grep -oP '\d+(?= Code Findings)' scan-output.txt 2>/dev/null | head -1 || echo "0")
-          echo "finding_count=${FINDING_COUNT:-0}" >> $GITHUB_OUTPUT
-
-      - name: 📤 Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: 🔐 Run Opengrep scan
+        uses: fulviofreitas/eero-client/.github/actions/security-opengrep@main
         with:
-          sarif_file: ${{ env.SARIF_OUTPUT }}
-          category: opengrep-security-scan
-        continue-on-error: true
-
-      - name: 📊 Upload scan artifacts
-        uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: security-scan-results
-          path: |
-            ${{ env.SARIF_OUTPUT }}
-            scan-output.txt
-          retention-days: 30
-
-      - name: 🚨 Check for findings
-        run: |
-          FINDING_COUNT="${{ steps.scan.outputs.finding_count }}"
-          if [ "${FINDING_COUNT:-0}" != "0" ]; then
-            echo "::warning::Found ${FINDING_COUNT} security finding(s)"
-          fi
+          rules-path: ${{ env.OPENGREP_RULES_PATH }}
+          target-path: "."
+          sarif-output: ${{ env.SARIF_OUTPUT }}
+          fail-on-findings: "false"
 
   # ============================================================================
   # ✅ CI Success Gate
@@ -237,7 +167,6 @@ jobs:
 
           EOF
 
-          # All must pass (security can warn but not fail)
           if [[ "$COMMITLINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" && ("$SECURITY" == "success" || "$SECURITY" == "skipped") ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 

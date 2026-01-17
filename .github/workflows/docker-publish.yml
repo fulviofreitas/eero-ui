@@ -2,28 +2,20 @@
 # 🐳 Docker Image Build & Publish
 # ============================================================================
 # Builds multi-platform Docker images and publishes to GitHub Container Registry.
-# Generates attestations for supply chain security.
+# Uses reusable actions from eero-client for maintainability.
 #
 # Chain: CI → Release → Docker
-# Triggers:
-#   - After Release workflow completes (creates versioned images)
-#   - On PRs → Build only (validation)
 # ============================================================================
 
 name: 🐳 Docker Build & Publish
 
 on:
-  # Trigger after Release workflow completes
   workflow_run:
     workflows: ["🚀 Release"]
     types: [completed]
     branches: [main, master]
-  # Build validation on PRs (no push)
   pull_request:
-    branches:
-      - master
-      - main
-  # Manual trigger for debugging
+    branches: [master, main]
   workflow_dispatch:
 
 concurrency:
@@ -35,13 +27,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ============================================================================
-  # 🏗️ Build & Push Docker Image
-  # ============================================================================
   build-and-push:
     name: 🏗️ Build & Push
     runs-on: ubuntu-latest
-    # Only run if Release succeeded (or PR/manual trigger)
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
@@ -54,39 +42,20 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🏷️ Get latest tag
-        id: get_tag
-        run: |
-          # For workflow_run, we need to fetch the latest tag
-          git fetch --tags
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
-          echo "📌 Latest tag: ${LATEST_TAG}"
-
-      - name: 🛠️ Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: 🛠️ Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 🔐 Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+      - name: 🐳 Build and push Docker image
+        uses: fulviofreitas/eero-client/.github/actions/docker-build@main
         with:
+          image-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          context: "."
+          platforms: "linux/amd64,linux/arm64"
+          push: ${{ github.event_name != 'pull_request' }}
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🏷️ Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # OCI annotations for multi-arch manifest
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
           annotations: |
             org.opencontainers.image.title=eero-ui
             org.opencontainers.image.description=A modern web dashboard for managing eero mesh WiFi networks
@@ -94,112 +63,3 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/wiki
             org.opencontainers.image.licenses=MIT
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=${{ steps.get_tag.outputs.tag }},enable=${{ steps.get_tag.outputs.tag != '' && github.event_name != 'pull_request' }}
-            type=semver,pattern={{version}},value=${{ steps.get_tag.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.get_tag.outputs.tag }}
-            type=semver,pattern={{major}},value=${{ steps.get_tag.outputs.tag }},enable=${{ !startsWith(steps.get_tag.outputs.tag, 'v0.') }}
-            type=sha,prefix=
-            type=ref,event=pr
-
-      - name: 📦 Build and push Docker image
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          # Multi-layer caching strategy for faster builds
-          cache-from: |
-            type=gha,scope=${{ github.ref_name }}-${{ runner.arch }}
-            type=gha,scope=main-${{ runner.arch }}
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          # Registry cache disabled for PRs (no auth available)
-          cache-to: |
-            type=gha,mode=max,scope=${{ github.ref_name }}-${{ runner.arch }}
-            ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}:buildcache,mode=max,image-manifest=true', github.repository) || '' }}
-          provenance: mode=min
-          sbom: true
-
-      - name: 🔏 Generate artifact attestation
-        if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-
-      - name: 📊 Generate build summary
-        run: |
-          IS_PR="${{ github.event_name == 'pull_request' }}"
-          LATEST_TAG="${{ steps.get_tag.outputs.tag }}"
-
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## 🐳 Docker Image Build
-
-          EOF
-
-          if [ "$IS_PR" = "true" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### 🔍 PR Build — Validation Only
-          > Image built successfully but not pushed to registry.
-
-          EOF
-          elif [ -n "$LATEST_TAG" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << EOF
-          > [!TIP]
-          > ### ✅ Release Image Published
-          > Version \`${LATEST_TAG}\` has been pushed to GitHub Container Registry!
-
-          EOF
-          fi
-
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### 📋 Image Details
-
-          | Property | Value |
-          |:---------|:------|
-          | 📦 Registry | \`${{ env.REGISTRY }}\` |
-          | 🏷️ Image | \`${{ env.IMAGE_NAME }}\` |
-          | 🏗️ Platforms | \`linux/amd64\`, \`linux/arm64\` |
-          | ⚡ Cache | GHA + Registry (multi-layer) |
-          | 🔏 SBOM | Generated |
-          | 📝 Provenance | Attached |
-
-          ### 🏷️ Tags
-
-          \`\`\`
-          ${{ steps.meta.outputs.tags }}
-          \`\`\`
-
-          EOF
-
-          if [ "$IS_PR" != "true" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### 🚀 Quick Start
-
-          \`\`\`bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          \`\`\`
-
-          ### ⚙️ Workflow Chain
-
-          \`\`\`
-          🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
-               ✅                  ✅              ✅
-          \`\`\`
-
-          EOF
-          fi
-
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ---
-
-          <sub>🤖 Built with Docker Buildx and GitHub Actions</sub>
-          EOF

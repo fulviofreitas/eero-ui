@@ -1,8 +1,15 @@
+# ============================================================================
+# 📚 Sync Wiki
+# ============================================================================
+# Syncs the wiki/ directory to the GitHub Wiki.
+# Uses the reusable wiki-sync action from eero-client.
+# ============================================================================
+
 name: 📚 Sync Wiki
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
     paths:
       - "wiki/**"
   workflow_dispatch:
@@ -19,12 +26,12 @@ jobs:
     name: 📖 Sync Wiki to GitHub Wiki
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🔄 Sync wiki
-        uses: Andrew-Chen-Wang/github-wiki-action@v5
+        uses: fulviofreitas/eero-client/.github/actions/wiki-sync@main
         with:
-          path: wiki/
-          ignore: .gitignore
+          wiki-path: wiki/

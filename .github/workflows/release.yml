@@ -2,7 +2,7 @@
 # 🚀 Automated Semantic Release
 # ============================================================================
 # Automatically creates releases based on conventional commit messages.
-# Generates changelogs, bumps versions, and creates GitHub releases.
+# Uses reusable actions from eero-client for maintainability.
 #
 # Chain: CI → Release → Docker
 # Triggers: After CI Pipeline succeeds on main/master
@@ -11,12 +11,10 @@
 name: 🚀 Release
 
 on:
-  # Trigger after CI workflow completes successfully
   workflow_run:
     workflows: ["🧪 CI Pipeline"]
     types: [completed]
     branches: [main, master]
-  # Allow manual trigger for debugging
   workflow_dispatch:
     inputs:
       dry_run:
@@ -28,7 +26,6 @@ on:
           - "false"
           - "true"
 
-# Prevent concurrent releases
 concurrency:
   group: release
   cancel-in-progress: false
@@ -39,15 +36,11 @@ permissions:
   pull-requests: write
 
 jobs:
-  # ============================================================================
-  # 🚀 Semantic Release
-  # ============================================================================
   release:
     name: 🚀 Semantic Release
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Only run if CI passed (or manual trigger) and not a release commit
     if: |
       (github.event_name == 'workflow_dispatch') ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -56,118 +49,13 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-
-      - name: 🔧 Install semantic-release
-        run: |
-          npm install -g \
-            semantic-release@24 \
-            @semantic-release/changelog@6 \
-            @semantic-release/git@10 \
-            @semantic-release/exec@6 \
-            conventional-changelog-conventionalcommits@8
-
       - name: 🚀 Run semantic-release
-        id: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "🧪 Running in dry-run mode..."
-            semantic-release --dry-run
-          else
-            semantic-release
-          fi
-
-      - name: 📝 Generate release summary
-        if: always()
-        run: |
-          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
-
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ## 🚀 Release Summary
-
-          EOF
-
-          if [ "$DRY_RUN" = "true" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### 🧪 Dry-Run Mode
-          > No actual release was created. This was a simulation run.
-
-          EOF
-          fi
-
-          if [ -f VERSION ]; then
-            VERSION=$(cat VERSION)
-            if [ "$DRY_RUN" = "true" ]; then
-              cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### 📋 Would Release
-
-          | Property | Value |
-          |:---------|:------|
-          | 🏷️ Version | \`v${VERSION}\` |
-          | 📝 Changelog | Would be updated |
-          | 🐳 Docker | Would trigger build |
-
-          EOF
-            else
-              cat >> $GITHUB_STEP_SUMMARY << EOF
-          > [!TIP]
-          > ### ✅ Release Created Successfully
-          > Version \`v${VERSION}\` has been published!
-
-          ### 📋 Release Details
-
-          | Property | Value |
-          |:---------|:------|
-          | 🏷️ Version | \`v${VERSION}\` |
-          | 📝 Changelog | Updated |
-          | 🔗 Release | [View Release](../../releases/tag/v${VERSION}) |
-          | 🐳 Docker | Build triggered automatically |
-
-          EOF
-            fi
-          else
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### 📭 No Release Created
-          > No releasable changes detected since the last release.
-          >
-          > Commits must follow [Conventional Commits](https://conventionalcommits.org) to trigger releases:
-          > - `feat:` → Minor release
-          > - `fix:` → Patch release
-          > - `feat!:` or `BREAKING CHANGE:` → Major release
-
-          EOF
-          fi
-
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ### ⚙️ Workflow Chain
-
-          \`\`\`
-          🧪 CI Pipeline  ──→  🚀 Release  ──→  🐳 Docker Build
-               ✅                  ✅              (on tag)
-          \`\`\`
-
-          ### 📌 Trigger Information
-
-          | Property | Value |
-          |:---------|:------|
-          | 📌 Event | \`${{ github.event_name }}\` |
-          | 🌿 Branch | \`${{ github.ref_name }}\` |
-          | 🔗 Commit | \`${{ github.sha }}\` |
-
-          ---
-
-          <sub>🤖 Powered by semantic-release</sub>
-          EOF
+        uses: fulviofreitas/eero-client/.github/actions/semantic-release@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: ${{ github.event.inputs.dry_run || 'false' }}

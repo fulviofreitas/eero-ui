@@ -2,14 +2,12 @@
 # 🤖 Auto-Merge Approved PRs
 # ============================================================================
 # Automatically merges pull requests that are approved and pass all checks.
-# Uses pascalgn/automerge-action for reliable auto-merge functionality.
+# Uses the reusable auto-merge action from eero-client.
 #
 # How it works:
 #   - PRs with the "automerge" label will be merged when ready
 #   - PRs are ready when: approved + all required checks pass + up to date
 #   - Uses squash merge strategy by default
-#
-# See: https://github.com/marketplace/actions/merge-pull-requests-automerge-action
 # ============================================================================
 
 name: 🤖 Auto-Merge
@@ -42,117 +40,20 @@ permissions:
   pull-requests: write
 
 jobs:
-  # ============================================================================
-  # 🤖 Auto-Merge
-  # ============================================================================
   automerge:
     name: 🤖 Auto-Merge
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
       - name: 🤖 Run automerge
-        id: automerge
-        uses: pascalgn/automerge-action@v0.16.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Merge configuration
-          MERGE_LABELS: "automerge,!wip,!do-not-merge"
-          MERGE_METHOD: "squash"
-          MERGE_COMMIT_MESSAGE: "pull-request-title-and-description"
-          MERGE_DELETE_BRANCH: "true"
-          MERGE_RETRIES: "6"
-          MERGE_RETRY_SLEEP: "10000"
-          MERGE_REQUIRED_APPROVALS: "1"
-          MERGE_ERROR_FAIL: "false"
-          # Update configuration (keep PR up to date with base)
-          UPDATE_LABELS: "automerge"
-          UPDATE_METHOD: "merge"
-
-      - name: 📝 Generate summary
-        if: always()
-        run: |
-          RESULT="${{ steps.automerge.outputs.mergeResult }}"
-          PR_NUMBER="${{ steps.automerge.outputs.pullRequestNumber }}"
-
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## 🤖 Auto-Merge Summary
-
-          | Property | Value |
-          |:---------|:------|
-          | 📌 Result | \`${RESULT:-N/A}\` |
-          | 🔢 PR Number | ${PR_NUMBER:-N/A} |
-
-          ---
-
-          EOF
-
-          case "$RESULT" in
-            "merged")
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!TIP]
-          > ### ✅ Pull Request Merged
-          > The pull request was successfully merged using squash strategy.
-
-          EOF
-              ;;
-            "not_ready")
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### ⏳ Not Ready Yet
-          > The pull request is not ready to merge. Waiting for:
-          > - Required approvals
-          > - Required status checks to pass
-          > - Branch to be up to date
-
-          EOF
-              ;;
-            "skipped")
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### ⏭️ Skipped
-          > The pull request was skipped. Ensure it has the `automerge` label.
-
-          EOF
-              ;;
-            "author_filtered")
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### 👤 Author Filtered
-          > The pull request author is not in the allowed list.
-
-          EOF
-              ;;
-            "merge_failed")
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!WARNING]
-          > ### ❌ Merge Failed
-          > The merge operation failed. Check the logs for details.
-
-          EOF
-              ;;
-            *)
-              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          > [!NOTE]
-          > ### ℹ️ No Action Taken
-          > No merge action was performed in this run.
-
-          EOF
-              ;;
-          esac
-
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
-          ### 📋 Configuration
-
-          | Setting | Value |
-          |:--------|:------|
-          | 🏷️ Required Labels | `automerge` |
-          | 🚫 Blocking Labels | `wip`, `do-not-merge` |
-          | 🔀 Merge Method | Squash |
-          | 🗑️ Delete Branch | Yes |
-          | ✅ Required Approvals | 1 |
-
-          ---
-
-          <sub>🤖 Powered by [automerge-action](https://github.com/pascalgn/automerge-action)</sub>
-          EOF
+        uses: fulviofreitas/eero-client/.github/actions/auto-merge@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          merge-labels: "automerge"
+          blocking-labels: "wip,do-not-merge"
+          merge-method: "squash"
+          required-approvals: "1"
