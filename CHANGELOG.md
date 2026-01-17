@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.0](https://github.com/fulviofreitas/eero-ui/compare/v2.4.0...v3.0.0) (2026-01-17)
+
+### ⚠ BREAKING CHANGES
+
+* Python 3.10 and 3.11 are no longer supported
+
+- Update backend requires-python to >=3.12
+- Update wiki installation docs
+
+### ✨ Features
+
+* **ci:** migrate workflows to use reusable actions from eero-client ([ddd13c1](https://github.com/fulviofreitas/eero-ui/commit/ddd13c1abfb143082a787f241cddac953f7e1c53))
+* require Python 3.12 minimum ([ff758c5](https://github.com/fulviofreitas/eero-ui/commit/ff758c545ecdc83720ef0cf106d45170c42ec723))
+* **security:** migrate from Opengrep to Semgrep ([b4b3ed3](https://github.com/fulviofreitas/eero-ui/commit/b4b3ed32f1123fceedacfd21fccd3a9759251ac9))
+
+### 🐛 Bug Fixes
+
+* add pretest script to run svelte-kit sync before tests ([240c2ed](https://github.com/fulviofreitas/eero-ui/commit/240c2eda06e284a2d40f8687cc93d71776b5de4b))
+* **ci:** properly report security scan job status ([c3c42fb](https://github.com/fulviofreitas/eero-ui/commit/c3c42fb05ecee421758bd1eb55909efeab083fdb))
+* **ci:** require ALL jobs to pass for CI Success ([1aaa250](https://github.com/fulviofreitas/eero-ui/commit/1aaa2503c2c04b450085b7400c212d107b2045cb))
+* **ci:** use master branch consistently in all workflows ([26e3c6e](https://github.com/fulviofreitas/eero-ui/commit/26e3c6e226dc798624847deeb5b3b342808966ed))
+* **ci:** use master branch only in triggers ([5c9bf00](https://github.com/fulviofreitas/eero-ui/commit/5c9bf00dacff288d27ab5f4dac8ffc0ed269e5fe))
+* resolve python lint errors and add isort config ([03192f6](https://github.com/fulviofreitas/eero-ui/commit/03192f64a75c57c1c7e028f20e5ff7544d23a4b4))
+* run svelte-kit sync before test:coverage ([572f5fc](https://github.com/fulviofreitas/eero-ui/commit/572f5fc6d27a304651b8f986a3110940dab6f29b))
+
+### ♻️ Refactoring
+
+* **ci:** standardize pipeline chain format ([1c2fb2e](https://github.com/fulviofreitas/eero-ui/commit/1c2fb2e9a643a5aa1792e0c919d3b58209abeb2e))
+* update repository_dispatch event type name ([41e991d](https://github.com/fulviofreitas/eero-ui/commit/41e991dc47151bb2892d46b5fc9d93747aefe7e3))
+
+### 📚 Documentation
+
+* simplify Dependency-Updates wiki with mermaid diagrams ([66c1fb6](https://github.com/fulviofreitas/eero-ui/commit/66c1fb60e340ec180549310683ee862fb1cef4c5))
+
 ## [2.4.0](https://github.com/fulviofreitas/eero-ui/compare/v2.3.7...v2.4.0) (2026-01-17)
 
 ### ✨ Features
