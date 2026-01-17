@@ -1,7 +1,7 @@
 # ============================================================================
 # 🧪 Continuous Integration Pipeline
 # ============================================================================
-# Chain: Commit Lint → Lint & Format → [Backend Tests ‖ Frontend Tests ‖ Security] → CI Success
+# Chain: Commit Lint → Lint & Format → [Backend Tests ‖ Frontend Tests ‖ Security ‖ Docker] → CI Success
 #
 # Tests both frontend (Svelte) and backend (FastAPI) components.
 # All reusable actions are sourced from fulviofreitas/eero-client/.github/actions/
@@ -181,12 +181,37 @@ jobs:
           fail-on-findings: "true"
 
   # ============================================================================
+  # 3️⃣ Docker Build Test (Parallel - depends on Lint)
+  # ============================================================================
+  docker-build:
+    name: 🐳 Docker Build Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend-lint, frontend-lint]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🐳 Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: eero-ui:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
   # 4️⃣ CI Success Gate (Final - depends on all parallel jobs)
   # ============================================================================
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [commitlint, backend-lint, frontend-lint, backend-tests, frontend-tests, security-scan]
+    needs: [commitlint, backend-lint, frontend-lint, backend-tests, frontend-tests, security-scan, docker-build]
     if: always()
 
     steps:
@@ -198,6 +223,7 @@ jobs:
           BACKEND="${{ needs.backend-tests.result }}"
           FRONTEND="${{ needs.frontend-tests.result }}"
           SECURITY="${{ needs.security-scan.result }}"
+          DOCKER="${{ needs.docker-build.result }}"
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🧪 CI Pipeline Summary
@@ -210,11 +236,12 @@ jobs:
           | 3️⃣ | 🐍 Backend Tests | ${BACKEND} |
           | 3️⃣ | ⚛️ Frontend Tests | ${FRONTEND} |
           | 3️⃣ | 🔐 Security Scan | ${SECURITY} |
+          | 3️⃣ | 🐳 Docker Build | ${DOCKER} |
 
           EOF
 
           # All jobs are required to pass
-          if [[ "$COMMITLINT" == "success" && "$BACKEND_LINT" == "success" && "$FRONTEND_LINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" && "$SECURITY" == "success" ]]; then
+          if [[ "$COMMITLINT" == "success" && "$BACKEND_LINT" == "success" && "$FRONTEND_LINT" == "success" && "$BACKEND" == "success" && "$FRONTEND" == "success" && "$SECURITY" == "success" && "$DOCKER" == "success" ]]; then
             cat >> $GITHUB_STEP_SUMMARY << 'EOF'
 
           > [!NOTE]
@@ -231,12 +258,12 @@ jobs:
           🐍 Backend Lint  ⚛️ Frontend Lint
                │              │
                ↓              ↓
-               ┌─┴────────────┼──────────┐
-          3️⃣   │              │          │
-          🐍 Backend Tests ⚛️ Frontend  🔐 Security
-               └─┬────────────┴──────────┘
+               ┌─┴────────────┼──────────┬─────────┐
+          3️⃣   │              │          │         │
+          🐍 Backend Tests ⚛️ Frontend  🔐 Sec  🐳 Docker
+               └─┬────────────┴──────────┴─────────┘
                  ↓
-          4️⃣ ✅ CI Success → 🚀 Release → 🐳 Docker
+          4️⃣ ✅ CI Success → 🚀 Release
           ```
 
           EOF
