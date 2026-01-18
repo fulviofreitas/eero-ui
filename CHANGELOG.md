@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.6](https://github.com/fulviofreitas/eero-ui/compare/v3.0.5...v3.0.6) (2026-01-18)
+
+### 🐛 Bug Fixes
+
+* **ci:** use GitHub App for auto-merge to support workflow file changes ([659a329](https://github.com/fulviofreitas/eero-ui/commit/659a32944eb6f0b524fce6d7949aeda0e6cbfe53))
+
 ## [3.0.5](https://github.com/fulviofreitas/eero-ui/compare/v3.0.4...v3.0.5) (2026-01-18)
 
 ### 🐛 Bug Fixes
