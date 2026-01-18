@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.3](https://github.com/fulviofreitas/eero-ui/compare/v3.0.2...v3.0.3) (2026-01-18)
+
+### 🐛 Bug Fixes
+
+* **ci:** use head_ref for PR concurrency group ([2d5780c](https://github.com/fulviofreitas/eero-ui/commit/2d5780cf3d6d32d606fde8146a6ebc16907234ba))
+
+### 📚 Documentation
+
+* document disabled Svelte 5 eslint rules with migration guidance ([4b92d2f](https://github.com/fulviofreitas/eero-ui/commit/4b92d2f3fd5c482a60fc31576e05682bbe1a0642))
+
 ## [3.0.2](https://github.com/fulviofreitas/eero-ui/compare/v3.0.1...v3.0.2) (2026-01-17)
 
 ### 🐛 Bug Fixes
