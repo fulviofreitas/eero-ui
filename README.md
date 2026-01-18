@@ -61,7 +61,7 @@ Full documentation lives in the **[Wiki](../../wiki)**:
 
 ## 🔗 Related
 
-- **[eero-client](https://github.com/fulviofreitas/eero-client)** — Async Python SDK for Eero API
+- **[eero-api](https://github.com/fulviofreitas/eero-api)** — Async Python SDK for Eero API
 
 ---
 

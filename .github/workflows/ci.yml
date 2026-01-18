@@ -4,7 +4,7 @@
 # Chain: Commit Lint → Lint & Format → [Backend Tests ‖ Frontend Tests ‖ Security ‖ Docker] → CI Success
 #
 # Tests both frontend (Svelte) and backend (FastAPI) components.
-# All reusable actions are sourced from fulviofreitas/eero-client/.github/actions/
+# All reusable actions are sourced from fulviofreitas/eero-api/.github/actions/
 # ============================================================================
 
 name: 🧪 CI Pipeline
@@ -48,7 +48,7 @@ jobs:
           fetch-depth: 0
 
       - name: 📝 Validate commits
-        uses: fulviofreitas/eero-client/.github/actions/commitlint@master
+        uses: fulviofreitas/eero-api/.github/actions/commitlint@master
         with:
           from-sha: ${{ github.event.pull_request.base.sha }}
           to-sha: ${{ github.event.pull_request.head.sha }}
@@ -76,7 +76,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🧹 Run Python lint
-        uses: fulviofreitas/eero-client/.github/actions/python-lint@master
+        uses: fulviofreitas/eero-api/.github/actions/python-lint@master
         with:
           src-path: "backend/app/"
           tests-path: "backend/tests/"
@@ -95,7 +95,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 🔍 Run type check & lint
-        uses: fulviofreitas/eero-client/.github/actions/frontend-check@master
+        uses: fulviofreitas/eero-api/.github/actions/frontend-check@master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -130,7 +130,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/eero-client/.github/actions/python-test@master
+        uses: fulviofreitas/eero-api/.github/actions/python-test@master
         with:
           working-directory: backend
           test-path: "tests/"
@@ -152,7 +152,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/eero-client/.github/actions/frontend-test@master
+        uses: fulviofreitas/eero-api/.github/actions/frontend-test@master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -173,7 +173,7 @@ jobs:
           fetch-depth: 0
 
       - name: 🔐 Run Semgrep scan
-        uses: fulviofreitas/eero-client/.github/actions/security-semgrep@master
+        uses: fulviofreitas/eero-api/.github/actions/security-semgrep@master
         with:
           config: "p/python p/javascript ${{ env.SEMGREP_RULES_PATH }}"
           target-path: "."

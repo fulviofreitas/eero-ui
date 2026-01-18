@@ -5,19 +5,19 @@ This project uses **Renovate** with a **GitHub App** for automated dependency ma
 ## Overview
 
 The dependency update system automatically:
-- Tracks new releases of `eero-client` (the core API client)
+- Tracks new releases of `eero-api` (the core API client)
 - Creates PRs **immediately** when dependencies have updates available
 - Auto-merges minor/patch updates for non-critical dependencies
-- Requires manual review for `eero-client` and major updates
-- Triggers instantly when `eero-client` releases a new version
+- Requires manual review for `eero-api` and major updates
+- Triggers instantly when `eero-api` releases a new version
 
 ## Ecosystem Repositories
 
 The Renovate configuration is standardized across all repositories:
 
-| Repository | eero-client Tracking | npm Tracking | Config File |
+| Repository | eero-api Tracking | npm Tracking | Config File |
 |:-----------|:---------------------|:-------------|:------------|
-| **eero-client** | ❌ N/A (is eero-client) | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-client/blob/master/.github/renovate.json5) |
+| **eero-api** | ❌ N/A (is eero-api) | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-api/blob/master/.github/renovate.json5) |
 | **eero-cli** | ✅ `^pyproject\.toml$` | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-cli/blob/master/.github/renovate.json5) |
 | **eero-prometheus-exporter** | ✅ `^pyproject\.toml$` | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/renovate.json5) |
 | **eero-ui** | ✅ `^backend/pyproject\.toml$` | ✅ Yes | [renovate.json5](https://github.com/fulviofreitas/eero-ui/blob/master/.github/renovate.json5) |
@@ -28,14 +28,14 @@ The Renovate configuration is standardized across all repositories:
 
 ```mermaid
 flowchart TB
-    subgraph eero-client ["🔧 eero-client"]
+    subgraph eero-api ["🔧 eero-api"]
         release["🚀 Release v1.3.0"]
         notify["🔔 notify-downstream job"]
         release --> notify
     end
 
     subgraph dispatch ["repository_dispatch"]
-        event["event: eero-client-dependency-update-available"]
+        event["event: eero-api-dependency-update-available"]
     end
 
     notify --> event
@@ -98,7 +98,7 @@ All repositories use the same base configuration. See the config files linked ab
 
 | Rule | Auto-merge | Commit Prefix | Labels |
 |:-----|:-----------|:--------------|:-------|
-| 🔴 **eero-client** | ❌ No | `chore(deps-critical):` | `critical`, `needs-review`, `eero-client` |
+| 🔴 **eero-api** | ❌ No | `chore(deps-critical):` | `critical`, `needs-review`, `eero-api` |
 | 🟡 **Python minor/patch** | ✅ Squash | `chore(deps-python):` | `automerge` |
 | 🟡 **npm minor/patch** | ✅ Squash | `chore(deps-npm):` | `automerge` |
 | 🟢 **GitHub Actions** | ✅ Squash | `chore(deps-actions):` | `automerge` |
@@ -106,12 +106,12 @@ All repositories use the same base configuration. See the config files linked ab
 | 🟣 **Security patches** | Priority 20 | - | - |
 | 🚨 **Vulnerability alerts** | ✅ Yes | - | `security`, `critical` |
 
-### eero-client Updates
+### eero-api Updates
 
-When Renovate detects a new eero-client version:
+When Renovate detects a new eero-api version:
 
-- **Commit Message**: `chore(deps-critical): update eero-client v1.3.0`
-- **Labels**: `critical`, `needs-review`, `eero-client`, `dependencies`
+- **Commit Message**: `chore(deps-critical): update eero-api v1.3.0`
+- **Labels**: `critical`, `needs-review`, `eero-api`, `dependencies`
 - **Reviewers**: Automatically assigned to maintainers
 - **Assignees**: Automatically assigned for accountability
 - **PR Body**: Includes review checklist and relevant links
@@ -127,13 +127,13 @@ All major version updates (any dependency):
 
 ## Cross-Repository Dispatch
 
-When `eero-client` releases a new version, it automatically notifies all downstream repositories via `repository_dispatch`.
+When `eero-api` releases a new version, it automatically notifies all downstream repositories via `repository_dispatch`.
 
 ### Flow
 
 ```mermaid
 sequenceDiagram
-    participant EC as eero-client
+    participant EC as eero-api
     participant GH as GitHub
     participant UI as eero-ui
     participant CLI as eero-cli
@@ -161,7 +161,7 @@ sequenceDiagram
 
 | Repository | Release Workflow | Renovate Workflow |
 |:-----------|:-----------------|:------------------|
-| **eero-client** | [release.yml](https://github.com/fulviofreitas/eero-client/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-client/blob/master/.github/workflows/renovate.yml) |
+| **eero-api** | [release.yml](https://github.com/fulviofreitas/eero-api/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-api/blob/master/.github/workflows/renovate.yml) |
 | **eero-cli** | [release.yml](https://github.com/fulviofreitas/eero-cli/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-cli/blob/master/.github/workflows/renovate.yml) |
 | **eero-prometheus-exporter** | [release.yml](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/workflows/renovate.yml) |
 | **eero-ui** | [release.yml](https://github.com/fulviofreitas/eero-ui/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-ui/blob/master/.github/workflows/renovate.yml) |
@@ -172,7 +172,7 @@ sequenceDiagram
 
 | Trigger | When | Result |
 |:--------|:-----|:-------|
-| `repository_dispatch` | eero-client releases | Immediate PR creation |
+| `repository_dispatch` | eero-api releases | Immediate PR creation |
 | `schedule` | Weekly (Mondays 3 AM UTC) | Checks all dependencies |
 | `workflow_dispatch` | Manual run | On-demand check |
 

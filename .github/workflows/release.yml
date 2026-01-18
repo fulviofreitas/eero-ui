@@ -2,7 +2,7 @@
 # 🚀 Automated Semantic Release
 # ============================================================================
 # Automatically creates releases based on conventional commit messages.
-# Uses reusable actions from eero-client for maintainability.
+# Uses reusable actions from eero-api for maintainability.
 #
 # Chain: CI → Release → Docker
 # Triggers: After CI Pipeline succeeds on main/master
@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
 
       - name: 🚀 Run semantic-release
-        uses: fulviofreitas/eero-client/.github/actions/semantic-release@master
+        uses: fulviofreitas/eero-api/.github/actions/semantic-release@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}

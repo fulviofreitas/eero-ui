@@ -18,9 +18,9 @@ from .routes import auth, devices, eeros, networks, profiles
 
 
 def get_eero_client_version() -> str:
-    """Get the installed eero-client version."""
+    """Get the installed eero-api version."""
     try:
-        return pkg_version("eero-client")
+        return pkg_version("eero-api")
     except Exception:
         return "unknown"
 
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Eero Dashboard API",
-    description="REST API wrapper for eero-client",
+    description="REST API wrapper for eero-api",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs" if settings.debug else None,

@@ -51,10 +51,10 @@
   customManagers: [
     {
       customType: "regex",
-      description: "Track eero-client git dependency version tags",
+      description: "Track eero-api git dependency version tags",
       fileMatch: ["^backend/pyproject\\.toml$"],
       matchStrings: [
-        "eero-client\\s*@\\s*git\\+https://github\\.com/(?<depName>fulviofreitas/eero-client)\\.git@(?<currentValue>v[\\d.]+)",
+        "eero-api\\s*@\\s*git\\+https://github\\.com/(?<depName>fulviofreitas/eero-api)\\.git@(?<currentValue>v[\\d.]+)",
       ],
       datasourceTemplate: "github-tags",
       versioningTemplate: "semver",
@@ -64,20 +64,20 @@
   // Package-specific rules
   packageRules: [
     // ==========================================================================
-    // 🔴 CRITICAL: eero-client - Core API dependency
+    // 🔴 CRITICAL: eero-api - Core API dependency
     // ==========================================================================
     // This is the most important dependency. Updates require:
     // - Manual review by maintainer
     // - Full CI test suite pass
     // - Changelog review for breaking changes
     {
-      matchPackageNames: ["fulviofreitas/eero-client"],
-      groupName: "eero-client",
+      matchPackageNames: ["fulviofreitas/eero-api"],
+      groupName: "eero-api",
       description: "🔴 Core eero API client - requires careful review",
       automerge: false,
 
       // High visibility labels
-      addlabels: ["eero-client", "critical", "needs-review"],
+      addlabels: ["eero-api", "critical", "needs-review"],
 
       // Prioritize this PR above others
       prPriority: 10,
@@ -94,7 +94,7 @@
       prBodyNotes: [
         "## ⚠️ Critical Dependency Update",
         "",
-        "This PR updates `eero-client`, the core API client for eero network communication.",
+        "This PR updates `eero-api`, the core API client for eero network communication.",
         "",
         "### Review Checklist",
         "- [ ] Review the changelog for breaking changes",
@@ -103,8 +103,8 @@
         "- [ ] Check for any deprecated methods",
         "",
         "### Links",
-        "- [eero-client Repository](https://github.com/fulviofreitas/eero-client)",
-        "- [eero-client Releases](https://github.com/fulviofreitas/eero-client/releases)",
+        "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
+        "- [eero-api Releases](https://github.com/fulviofreitas/eero-api/releases)",
       ],
     },
 

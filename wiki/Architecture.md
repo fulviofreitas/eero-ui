@@ -14,7 +14,7 @@
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    FastAPI Backend                           │
-│                 (wraps eero-client SDK)                      │
+│                 (wraps eero-api SDK)                      │
 └─────────────────────────────┬───────────────────────────────┘
                               │ HTTPS
                               ▼
@@ -28,7 +28,7 @@
 | Benefit | Description |
 |---------|-------------|
 | 🔒 **Security** | Eero session tokens stay server-side, never exposed to browser |
-| ♻️ **Reuse** | Leverages existing [eero-client](https://github.com/fulviofreitas/eero-client) Python SDK |
+| ♻️ **Reuse** | Leverages existing [eero-api](https://github.com/fulviofreitas/eero-api) Python SDK |
 | ⚡ **Caching** | Backend can cache API responses (60s TTL) |
 | 🛡️ **Rate Limiting** | Protects against accidental API abuse |
 

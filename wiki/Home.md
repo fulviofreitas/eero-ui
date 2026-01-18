@@ -19,7 +19,7 @@ Welcome to the **Eero UI** documentation! This wiki contains detailed guides for
 ## 🔗 Quick Links
 
 - 🐙 [GitHub Repository](https://github.com/fulviofreitas/eero-ui)
-- 📦 [eero-client SDK](https://github.com/fulviofreitas/eero-client)
+- 📦 [eero-api SDK](https://github.com/fulviofreitas/eero-api)
 - 🐳 [Docker Image](https://ghcr.io/fulviofreitas/eero-ui)
 
 ---

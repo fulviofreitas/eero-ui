@@ -41,8 +41,8 @@ Uses Vitest with Testing Library and MSW for API mocking:
 
 ## Dependencies
 
-This project depends on [eero-client](https://github.com/fulviofreitas/eero-client), a modern async Python client for the Eero API.
+This project depends on [eero-api](https://github.com/fulviofreitas/eero-api), a modern async Python client for the Eero API.
 
 The dependency is automatically installed from GitHub when you install the backend.
 
-> ⚠️ Do not copy eero-client code locally. Always reference it from GitHub.
+> ⚠️ Do not copy eero-api code locally. Always reference it from GitHub.

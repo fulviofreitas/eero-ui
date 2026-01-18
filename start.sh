@@ -33,7 +33,7 @@ if [ -z "$EERO_DASHBOARD_SESSION_SECRET" ]; then
     fi
 fi
 
-# Rebuild if requested (fetches latest eero-client from GitHub)
+# Rebuild if requested (fetches latest eero-api from GitHub)
 if [ "$REBUILD" = true ]; then
     echo "🔄 Rebuilding container (fetching latest dependencies)..."
     docker compose down 2>/dev/null || true

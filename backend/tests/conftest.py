@@ -17,8 +17,8 @@ from app.main import app
 def mock_eero_client():
     """Create a mock EeroClient for unit tests.
 
-    Mock at the external boundary - the eero-client SDK.
-    This is the right place to mock since eero-client
+    Mock at the external boundary - the eero-api SDK.
+    This is the right place to mock since eero-api
     is our external dependency.
     """
     client = MagicMock()

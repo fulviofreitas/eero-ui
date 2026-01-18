@@ -2,7 +2,7 @@
 # 🤖 Auto-Merge Approved PRs
 # ============================================================================
 # Automatically merges pull requests that are approved and pass all checks.
-# Uses the reusable auto-merge action from eero-client.
+# Uses the reusable auto-merge action from eero-api.
 #
 # How it works:
 #   - PRs with the "automerge" label will be merged when ready
@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 🤖 Run automerge
-        uses: fulviofreitas/eero-client/.github/actions/auto-merge@master
+        uses: fulviofreitas/eero-api/.github/actions/auto-merge@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           merge-labels: "automerge"

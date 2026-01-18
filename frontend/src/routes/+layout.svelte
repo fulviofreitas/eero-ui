@@ -141,7 +141,7 @@
 			<div class="sidebar-footer">
 				{#if eeroClientVersion}
 					<div class="version-row">
-						<span class="version-label">eero-client</span>
+						<span class="version-label">eero-api</span>
 						<span class="version-chip">v{eeroClientVersion}</span>
 					</div>
 				{/if}
