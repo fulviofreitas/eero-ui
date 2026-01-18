@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
-* **ci:** migrate workflows to use reusable actions from eero-client ([ddd13c1](https://github.com/fulviofreitas/eero-ui/commit/ddd13c1abfb143082a787f241cddac953f7e1c53))
+* **ci:** migrate workflows to use reusable actions from eero-api ([ddd13c1](https://github.com/fulviofreitas/eero-ui/commit/ddd13c1abfb143082a787f241cddac953f7e1c53))
 * require Python 3.12 minimum ([ff758c5](https://github.com/fulviofreitas/eero-ui/commit/ff758c545ecdc83720ef0cf106d45170c42ec723))
 * **security:** migrate from Opengrep to Semgrep ([b4b3ed3](https://github.com/fulviofreitas/eero-ui/commit/b4b3ed32f1123fceedacfd21fccd3a9759251ac9))
 
@@ -125,7 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
-* **ui:** display eero-client API version in sidebar footer ([4ce5897](https://github.com/fulviofreitas/eero-ui/commit/4ce58978479755a7cd82e8fb3ef462a8771c3ac3))
+* **ui:** display eero-api API version in sidebar footer ([4ce5897](https://github.com/fulviofreitas/eero-ui/commit/4ce58978479755a7cd82e8fb3ef462a8771c3ac3))
 
 ### 📚 Documentation
 
@@ -157,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Features
 
-* **ci:** add Renovate for automated eero-client dependency updates ([530150c](https://github.com/fulviofreitas/eero-ui/commit/530150c9230bdc232429b0210cbb4c21ab991898))
+* **ci:** add Renovate for automated eero-api dependency updates ([530150c](https://github.com/fulviofreitas/eero-ui/commit/530150c9230bdc232429b0210cbb4c21ab991898))
 
 ### 📚 Documentation
 
@@ -244,7 +244,7 @@ Chain: CI → Release → Docker
 ### ✨ Features
 
 - Initial release of Eero UI Dashboard
-- FastAPI backend with eero-client SDK integration
+- FastAPI backend with eero-api SDK integration
 - SvelteKit frontend with modern dashboard UI
 - Device management and monitoring
 - Network configuration and status
