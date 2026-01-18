@@ -52,7 +52,7 @@
     {
       customType: "regex",
       description: "Track eero-api git dependency version tags",
-      fileMatch: ["^backend/pyproject\\.toml$"],
+      managerFilePatterns: ["/^backend/pyproject\\.toml$/"],
       matchStrings: [
         "eero-api\\s*@\\s*git\\+https://github\\.com/(?<depName>fulviofreitas/eero-api)\\.git@(?<currentValue>v[\\d.]+)",
       ],
@@ -77,7 +77,7 @@
       automerge: false,
 
       // High visibility labels
-      addlabels: ["eero-api", "critical", "needs-review"],
+      addLabels: ["eero-api", "critical", "needs-review"],
 
       // Prioritize this PR above others
       prPriority: 10,
