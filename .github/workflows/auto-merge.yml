@@ -29,7 +29,7 @@ on:
   check_suite:
     types:
       - completed
-  status: {}
+  status:
 
 concurrency:
   group: auto-merge-${{ github.event.pull_request.number || github.sha }}
@@ -54,6 +54,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           merge-labels: "automerge"
-          blocking-labels: "wip,do-not-merge"
+          blocking-labels: "wip,do-not-merge,needs-review"
           merge-method: "squash"
           required-approvals: "1"

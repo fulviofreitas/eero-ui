@@ -5,7 +5,7 @@
 # Uses the reusable renovate action from eero-client.
 #
 # Triggers:
-# - Scheduled: Weekly on Mondays at 3 AM UTC
+# - Scheduled: Every 6 hours (4 times daily)
 # - Manual: workflow_dispatch
 # - On eero-client release: repository_dispatch
 # ============================================================================
@@ -14,7 +14,7 @@ name: 🔄 Renovate
 
 on:
   schedule:
-    - cron: "0 3 * * 1"
+    - cron: "0 */6 * * *"
 
   workflow_dispatch:
     inputs:
