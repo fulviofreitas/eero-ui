@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.4](https://github.com/fulviofreitas/eero-ui/compare/v3.0.3...v3.0.4) (2026-01-18)
+
+### 🐛 Bug Fixes
+
+* **ci:** improve Renovate labels and auto-merge blocking ([687eb9c](https://github.com/fulviofreitas/eero-ui/commit/687eb9c9a875049d56e0f43dae70ff28f64f42b2))
+
 ## [3.0.3](https://github.com/fulviofreitas/eero-ui/compare/v3.0.2...v3.0.3) (2026-01-18)
 
 ### 🐛 Bug Fixes
