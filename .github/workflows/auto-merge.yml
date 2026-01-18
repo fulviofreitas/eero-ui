@@ -38,6 +38,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  workflows: write
 
 jobs:
   automerge:
@@ -52,7 +53,9 @@ jobs:
       - name: 🤖 Run automerge
         uses: fulviofreitas/eero-api/.github/actions/auto-merge@master
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use GitHub App for merging (required for PRs that modify workflow files)
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
           merge-labels: "automerge"
           blocking-labels: "wip,do-not-merge,needs-review"
           merge-method: "squash"
