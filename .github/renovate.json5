@@ -24,6 +24,11 @@
   commitMessagePrefix: "chore(deps):",
   commitMessageAction: "update",
 
+  // Prevent long release notes from being included in commit body
+  // This avoids commitlint body-max-line-length failures on squash merge
+  commitBody: "",
+  commitBodyTable: false,
+
   // Labels for all PRs
   labels: ["dependencies", "renovate", "automerge"],
 
