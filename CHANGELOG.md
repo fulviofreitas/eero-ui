@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.1.2](https://github.com/fulviofreitas/eero-ui/compare/v3.1.1...v3.1.2) (2026-01-20)
+
+### 🐛 Bug Fixes
+
+* **ci:** add prTitle config for squash merge commitlint compliance ([a50a018](https://github.com/fulviofreitas/eero-ui/commit/a50a018effb1cc882bc6c56686502f40ed06e72b))
+
 ## [3.1.1](https://github.com/fulviofreitas/eero-ui/compare/v3.1.0...v3.1.1) (2026-01-20)
 
 ### 🐛 Bug Fixes
