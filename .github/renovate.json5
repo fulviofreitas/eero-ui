@@ -19,10 +19,16 @@
   // Branch naming
   branchPrefix: "deps/",
 
-  // Commit message format (semantic commits)
-  // Using "chore" as it's a valid commitlint type for dependency updates
+  // ============================================================================
+  // Commit & PR Title format (MUST be conventional commits for squash merge)
+  // ============================================================================
+  // When auto-merge uses squash, the PR title becomes the commit message.
+  // Both must follow conventional commits format for commitlint to pass.
   commitMessagePrefix: "chore(deps):",
   commitMessageAction: "update",
+
+  // PR title MUST match commit format for squash merges to pass commitlint
+  prTitle: "chore(deps): update {{{depName}}} to {{{newVersion}}}",
 
   // Prevent long release notes from being included in commit body
   // This avoids commitlint body-max-line-length failures on squash merge
@@ -91,9 +97,11 @@
       reviewers: ["fulviofreitas"],
       assignees: ["fulviofreitas"],
 
-      // Custom commit message (prTitle inherits from this)
+      // Custom commit message
       commitMessagePrefix: "chore(deps-critical):",
       commitMessageExtra: "{{newVersion}}",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-critical): update eero-api to {{{newVersion}}}",
 
       // Add detailed PR body note
       prBodyNotes: [
@@ -125,6 +133,8 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-python):",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-python): update python dependencies",
     },
 
     // ==========================================================================
@@ -139,6 +149,8 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-npm):",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-npm): update npm dependencies",
     },
 
     // ==========================================================================
@@ -153,6 +165,8 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-actions):",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-actions): update github actions",
     },
 
     // ==========================================================================
@@ -165,6 +179,8 @@
       addLabels: ["major-update", "needs-review"],
       reviewers: ["fulviofreitas"],
       commitMessagePrefix: "chore(deps-major):",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-major): update {{{depName}}} to {{{newVersion}}}",
     },
 
     // ==========================================================================
