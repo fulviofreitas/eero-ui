@@ -57,6 +57,7 @@
 	// Navigation items (base items)
 	const baseNavItems = [
 		{ path: '/', label: 'Dashboard', icon: '📊' },
+		{ path: '/topology', label: 'Topology', icon: '🗺️' },
 		{ path: '/devices', label: 'Devices', icon: '📱' },
 		{ path: '/eeros', label: 'Eeros', icon: '📡' },
 		{ path: '/profiles', label: 'Profiles', icon: '👥' }

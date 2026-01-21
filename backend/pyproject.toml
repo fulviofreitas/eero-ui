@@ -43,6 +43,13 @@ exclude_lines = [
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "isort>=7.0.0",
+    "ruff>=0.14.13",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
