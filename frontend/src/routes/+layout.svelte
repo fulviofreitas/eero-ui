@@ -18,6 +18,7 @@
 		userName,
 		userRole
 	} from '$stores';
+	import { uiStore, theme } from '$lib/stores/ui';
 	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
@@ -27,6 +28,9 @@
 	let eeroClientVersion: string | null = null;
 
 	onMount(async () => {
+		// Initialize theme from localStorage
+		uiStore.initTheme();
+
 		// Fetch API version info
 		try {
 			const health = await api.health();
@@ -182,6 +186,30 @@
 				<div class="top-bar-right">
 					<div class="signout-row">
 						<span class="status-dot online"></span>
+						<button
+							class="theme-toggle-btn"
+							on:click={() => uiStore.toggleTheme()}
+							title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+							aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+						>
+							{#if $theme === 'dark'}
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<circle cx="12" cy="12" r="5"></circle>
+									<line x1="12" y1="1" x2="12" y2="3"></line>
+									<line x1="12" y1="21" x2="12" y2="23"></line>
+									<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+									<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+									<line x1="1" y1="12" x2="3" y2="12"></line>
+									<line x1="21" y1="12" x2="23" y2="12"></line>
+									<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+									<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+								</svg>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+								</svg>
+							{/if}
+						</button>
 						<button class="signout-btn" on:click={handleLogout} title="Sign out"> Sign out </button>
 					</div>
 					{#if $networksStore.networks.length > 0}
@@ -446,6 +474,27 @@
 		gap: var(--space-2);
 	}
 
+	.theme-toggle-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: 1px solid var(--color-border-muted);
+		padding: 4px;
+		border-radius: 50%;
+		width: 26px;
+		height: 26px;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+	}
+
+	.theme-toggle-btn:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+		background: var(--color-info-bg);
+	}
+
 	.signout-btn {
 		background: none;
 		border: 1px solid var(--color-border-muted);
@@ -460,7 +509,7 @@
 	.signout-btn:hover {
 		border-color: var(--color-danger);
 		color: var(--color-danger);
-		background: rgba(239, 68, 68, 0.1);
+		background: var(--color-danger-bg);
 	}
 
 	.network-bar-inner {
@@ -468,14 +517,14 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding: 6px 14px;
-		background: rgba(255, 255, 255, 0.04);
+		background: var(--color-bg-tertiary);
 		border: 1px solid var(--color-border-muted);
 		border-radius: 20px;
 		transition: all var(--transition-fast);
 	}
 
 	.network-bar-inner:hover {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--color-bg-elevated);
 		border-color: var(--color-border);
 	}
 

@@ -1,7 +1,7 @@
 /**
  * UI Store
  *
- * Manages UI state: toasts, modals, loading states.
+ * Manages UI state: toasts, modals, loading states, theme.
  */
 
 import { writable, derived } from 'svelte/store';
@@ -9,6 +9,8 @@ import { writable, derived } from 'svelte/store';
 // ============================================
 // Types
 // ============================================
+
+type Theme = 'dark' | 'light';
 
 interface Toast {
 	id: string;
@@ -31,17 +33,30 @@ interface UIState {
 	confirmDialog: ConfirmDialog | null;
 	sidebarOpen: boolean;
 	globalLoading: boolean;
+	theme: Theme;
 }
 
 // ============================================
 // Store
 // ============================================
 
+// Get initial theme from localStorage or default to dark
+function getInitialTheme(): Theme {
+	if (typeof window !== 'undefined') {
+		const saved = localStorage.getItem('eero-ui-theme') as Theme | null;
+		if (saved === 'light' || saved === 'dark') {
+			return saved;
+		}
+	}
+	return 'dark';
+}
+
 const initialState: UIState = {
 	toasts: [],
 	confirmDialog: null,
 	sidebarOpen: true,
-	globalLoading: false
+	globalLoading: false,
+	theme: 'dark' // Will be updated on mount
 };
 
 function createUIStore() {
@@ -149,6 +164,44 @@ function createUIStore() {
 				...s,
 				globalLoading: loading
 			}));
+		},
+
+		/**
+		 * Initialize theme from localStorage (call on mount)
+		 */
+		initTheme(): void {
+			const theme = getInitialTheme();
+			update((s) => ({ ...s, theme }));
+			this.applyTheme(theme);
+		},
+
+		/**
+		 * Toggle between light and dark theme
+		 */
+		toggleTheme(): void {
+			update((s) => {
+				const newTheme: Theme = s.theme === 'dark' ? 'light' : 'dark';
+				this.applyTheme(newTheme);
+				return { ...s, theme: newTheme };
+			});
+		},
+
+		/**
+		 * Set specific theme
+		 */
+		setTheme(theme: Theme): void {
+			update((s) => ({ ...s, theme }));
+			this.applyTheme(theme);
+		},
+
+		/**
+		 * Apply theme to document and persist
+		 */
+		applyTheme(theme: Theme): void {
+			if (typeof window !== 'undefined') {
+				document.documentElement.setAttribute('data-theme', theme);
+				localStorage.setItem('eero-ui-theme', theme);
+			}
 		}
 	};
 }
@@ -160,3 +213,4 @@ export const toasts = derived(uiStore, ($ui) => $ui.toasts);
 export const confirmDialog = derived(uiStore, ($ui) => $ui.confirmDialog);
 export const sidebarOpen = derived(uiStore, ($ui) => $ui.sidebarOpen);
 export const globalLoading = derived(uiStore, ($ui) => $ui.globalLoading);
+export const theme = derived(uiStore, ($ui) => $ui.theme);

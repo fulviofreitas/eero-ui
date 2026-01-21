@@ -215,7 +215,7 @@
 		width: 24px;
 		height: 24px;
 		background-color: var(--color-accent);
-		color: var(--color-bg-primary);
+		color: #ffffff;
 		border-radius: 50%;
 		font-size: 0.75rem;
 		font-weight: 600;

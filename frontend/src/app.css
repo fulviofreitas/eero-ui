@@ -8,7 +8,7 @@
 	--font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
 	--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-	/* Color Palette - Dark, operations-focused */
+	/* Color Palette - Dark, operations-focused (default) */
 	--color-bg-primary: #0d1117;
 	--color-bg-secondary: #161b22;
 	--color-bg-tertiary: #21262d;
@@ -61,6 +61,43 @@
 	--transition-fast: 0.1s ease;
 	--transition-normal: 0.2s ease;
 	--transition-slow: 0.3s ease;
+}
+
+/* ============================================
+   Light Theme
+   ============================================ */
+:root[data-theme='light'] {
+	/* Color Palette - Light theme */
+	--color-bg-primary: #ffffff;
+	--color-bg-secondary: #f6f8fa;
+	--color-bg-tertiary: #eaeef2;
+	--color-bg-elevated: #ffffff;
+
+	--color-border: #d0d7de;
+	--color-border-muted: #d8dee4;
+
+	--color-text-primary: #1f2328;
+	--color-text-secondary: #656d76;
+	--color-text-muted: #8c959f;
+
+	/* Status Colors - slightly adjusted for light bg */
+	--color-success: #1a7f37;
+	--color-success-bg: rgba(26, 127, 55, 0.1);
+	--color-warning: #9a6700;
+	--color-warning-bg: rgba(154, 103, 0, 0.1);
+	--color-danger: #cf222e;
+	--color-danger-bg: rgba(207, 34, 46, 0.1);
+	--color-info: #0969da;
+	--color-info-bg: rgba(9, 105, 218, 0.1);
+
+	/* Accent - adjusted for light bg */
+	--color-accent: #0969da;
+	--color-accent-hover: #0550ae;
+
+	/* Shadows - softer for light theme */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+	--shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+	--shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.12);
 }
 
 /* ============================================
@@ -227,7 +264,7 @@ code {
 
 .btn-primary {
 	background-color: var(--color-accent);
-	color: var(--color-bg-primary);
+	color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
