@@ -22,7 +22,9 @@
 		selectedNode,
 		layoutOptionsStore,
 		filteredTopology,
-		type TopologyNodeData
+		type TopologyNodeData,
+		type LayoutType,
+		type NodeDetailLevel
 	} from '$lib/stores/topology';
 
 	import EeroNode from './nodes/EeroNode.svelte';
@@ -33,6 +35,20 @@
 	export let readonly: boolean = false;
 	export let onNodeClick: ((nodeId: string) => void) | undefined = undefined;
 
+	// Layout options for dropdown
+	const layoutOptions: { value: LayoutType; label: string; icon: string }[] = [
+		{ value: 'hierarchy', label: 'Hierarchy (Top-Down)', icon: '📊' },
+		{ value: 'horizontal', label: 'Horizontal (Left-Right)', icon: '📐' },
+		{ value: 'radial', label: 'Radial (Circular)', icon: '🎯' },
+		{ value: 'force', label: 'Force-Directed (Organic)', icon: '🌐' }
+	];
+
+	const detailOptions: { value: NodeDetailLevel; label: string }[] = [
+		{ value: 'minimal', label: 'Minimal (Icon, Name, IP)' },
+		{ value: 'standard', label: 'Standard (+Model, Metrics)' },
+		{ value: 'detailed', label: 'Detailed (All Info)' }
+	];
+
 	// Custom node types registration
 	const nodeTypes: NodeTypes = {
 		gateway: GatewayNode,
@@ -41,11 +57,13 @@
 	};
 
 	// Local reactive state bound to store
-	let nodes = $filteredTopology.nodes;
-	let edges = $filteredTopology.edges;
-
-	// Keep in sync with store changes
-	$: nodes = $filteredTopology.nodes;
+	$: nodes = $filteredTopology.nodes.map((node) => ({
+		...node,
+		data: {
+			...node.data,
+			detailLevel: $layoutOptionsStore.detailLevel
+		}
+	}));
 	$: edges = $filteredTopology.edges;
 
 	// Load topology on mount
@@ -70,8 +88,6 @@
 		topologyStore.selectNode(null);
 	}
 
-	// Navigation is handled from the details panel instead of double-click
-
 	// Keyboard shortcuts
 	function handleKeyDown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
@@ -83,6 +99,26 @@
 	function refresh() {
 		topologyStore.loadTopology();
 	}
+
+	// Handle layout change
+	function handleLayoutChange(event: Event) {
+		const target = event.target as HTMLSelectElement;
+		layoutOptionsStore.update((opts) => ({
+			...opts,
+			layoutType: target.value as LayoutType
+		}));
+		// Re-fetch to recalculate positions
+		topologyStore.loadTopology();
+	}
+
+	// Handle detail level change
+	function handleDetailChange(event: Event) {
+		const target = event.target as HTMLSelectElement;
+		layoutOptionsStore.update((opts) => ({
+			...opts,
+			detailLevel: target.value as NodeDetailLevel
+		}));
+	}
 </script>
 
 <svelte:window on:keydown={handleKeyDown} />
@@ -90,14 +126,43 @@
 <div class="topology-container">
 	<!-- Controls bar -->
 	<div class="map-controls">
+		<div class="control-group">
+			<label class="control-label">Layout:</label>
+			<select
+				class="control-select"
+				value={$layoutOptionsStore.layoutType}
+				on:change={handleLayoutChange}
+			>
+				{#each layoutOptions as opt}
+					<option value={opt.value}>{opt.icon} {opt.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<div class="control-group">
+			<label class="control-label">Detail:</label>
+			<select
+				class="control-select"
+				value={$layoutOptionsStore.detailLevel}
+				on:change={handleDetailChange}
+			>
+				{#each detailOptions as opt}
+					<option value={opt.value}>{opt.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		<div class="control-divider"></div>
+
 		<label class="control-option">
 			<input type="checkbox" bind:checked={$layoutOptionsStore.showDevices} />
-			<span>Show Devices</span>
+			<span>Devices</span>
 		</label>
 		<label class="control-option">
 			<input type="checkbox" bind:checked={$layoutOptionsStore.showOfflineDevices} />
-			<span>Show Offline</span>
+			<span>Offline</span>
 		</label>
+
 		<button class="refresh-btn" on:click={refresh} disabled={$filteredTopology.loading}>
 			{#if $filteredTopology.loading}
 				<span class="loading-spinner small"></span>
@@ -157,6 +222,22 @@
 		</SvelteFlow>
 	{/if}
 
+	<!-- Legend for edge colors -->
+	<div class="edge-legend">
+		<div class="legend-item">
+			<span class="legend-line wired"></span>
+			<span>Wired</span>
+		</div>
+		<div class="legend-item">
+			<span class="legend-line wireless"></span>
+			<span>Wireless</span>
+		</div>
+		<div class="legend-item">
+			<span class="legend-line mesh"></span>
+			<span>Mesh</span>
+		</div>
+	</div>
+
 	<!-- Selected node details panel -->
 	{#if $selectedNode}
 		<div class="details-panel">
@@ -190,6 +271,11 @@
 					{#if $selectedNode.data.mac}
 						<dt>MAC</dt>
 						<dd class="mono">{$selectedNode.data.mac}</dd>
+					{/if}
+
+					{#if $selectedNode.data.connectionType}
+						<dt>Connection</dt>
+						<dd class="capitalize">{$selectedNode.data.connectionType}</dd>
 					{/if}
 
 					{#if $selectedNode.data.meshQuality !== undefined}
@@ -296,11 +382,13 @@
 	.map-controls {
 		position: absolute;
 		top: 12px;
+		left: 12px;
 		right: 12px;
 		z-index: 10;
 		display: flex;
 		align-items: center;
 		gap: 12px;
+		flex-wrap: wrap;
 		background: var(--color-bg-secondary, #12121a);
 		padding: 8px 14px;
 		border-radius: 8px;
@@ -308,19 +396,62 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 
-	.control-option {
+	.control-group {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 12px;
+	}
+
+	.control-label {
+		font-size: 11px;
+		color: var(--color-text-muted, #71717a);
+		white-space: nowrap;
+	}
+
+	.control-select {
+		background: var(--color-bg-tertiary, #1e1e2e);
+		border: 1px solid var(--color-border, #27272a);
+		border-radius: 4px;
+		padding: 4px 8px;
+		font-size: 11px;
+		color: var(--color-text-secondary, #a1a1aa);
+		cursor: pointer;
+		min-width: 140px;
+	}
+
+	.control-select:hover {
+		border-color: var(--color-accent, #3b82f6);
+	}
+
+	.control-select:focus {
+		outline: none;
+		border-color: var(--color-accent, #3b82f6);
+	}
+
+	.control-select option {
+		background: var(--color-bg-secondary, #12121a);
+		color: var(--color-text-primary, #e4e4e7);
+	}
+
+	.control-divider {
+		width: 1px;
+		height: 20px;
+		background: var(--color-border, #27272a);
+	}
+
+	.control-option {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 11px;
 		color: var(--color-text-secondary, #a1a1aa);
 		cursor: pointer;
 		user-select: none;
 	}
 
 	.control-option input[type='checkbox'] {
-		width: 14px;
-		height: 14px;
+		width: 12px;
+		height: 12px;
 		cursor: pointer;
 	}
 
@@ -341,6 +472,7 @@
 		justify-content: center;
 		font-size: 14px;
 		transition: all 0.15s;
+		margin-left: auto;
 	}
 
 	.refresh-btn:hover:not(:disabled) {
@@ -352,6 +484,54 @@
 	.refresh-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* Edge legend */
+	.edge-legend {
+		position: absolute;
+		bottom: 12px;
+		left: 12px;
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		background: var(--color-bg-secondary, #12121a);
+		padding: 8px 14px;
+		border-radius: 8px;
+		border: 1px solid var(--color-border, #27272a);
+		font-size: 11px;
+		color: var(--color-text-secondary, #a1a1aa);
+	}
+
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.legend-line {
+		width: 24px;
+		height: 2px;
+		border-radius: 1px;
+	}
+
+	.legend-line.wired {
+		background: #22c55e;
+	}
+
+	.legend-line.wireless {
+		background: #3b82f6;
+		background: repeating-linear-gradient(
+			90deg,
+			#3b82f6 0px,
+			#3b82f6 6px,
+			transparent 6px,
+			transparent 9px
+		);
+	}
+
+	.legend-line.mesh {
+		background: linear-gradient(90deg, #22c55e, #3b82f6, #f59e0b);
 	}
 
 	/* Loading/Error/Empty overlays */
@@ -416,10 +596,10 @@
 	/* Details panel */
 	.details-panel {
 		position: absolute;
-		top: 60px;
+		top: 70px;
 		right: 12px;
 		width: 260px;
-		max-height: calc(100% - 80px);
+		max-height: calc(100% - 90px);
 		overflow: auto;
 		background: var(--color-bg-secondary, #12121a);
 		border: 1px solid var(--color-border, #27272a);

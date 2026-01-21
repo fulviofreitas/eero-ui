@@ -2,9 +2,11 @@
   Eero Node Component
   
   Custom node for eero mesh nodes in the network topology.
+  Supports minimal, standard, and detailed display modes.
 -->
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
+	import type { NodeDetailLevel } from '$lib/stores/topology';
 
 	export let data: {
 		label: string;
@@ -14,10 +16,12 @@
 		model?: string;
 		wired?: boolean;
 		ipAddress?: string;
+		detailLevel?: NodeDetailLevel;
 	};
 
 	export let selected: boolean = false;
 
+	$: detailLevel = data.detailLevel || 'minimal';
 	$: statusClass = data.status === 'online' ? 'online' : 'offline';
 	$: qualityClass = getQualityClass(data.meshQuality);
 
@@ -36,7 +40,7 @@
 	}
 </script>
 
-<div class="eero-node {statusClass}" class:selected>
+<div class="eero-node {statusClass}" class:selected class:minimal={detailLevel === 'minimal'}>
 	<Handle type="target" position={Position.Top} class="handle" />
 
 	<div class="node-content">
@@ -45,27 +49,32 @@
 			<span class="node-label">{data.label}</span>
 		</div>
 
-		<div class="node-info">
-			<span class="status-dot {statusClass}"></span>
-			<span class="model-text">{data.model || 'eero'}</span>
-		</div>
-
-		<div class="node-metrics">
-			<span class="metric" title="Connected Devices">
-				💻 {data.deviceCount ?? 0}
-			</span>
-			{#if data.meshQuality !== undefined}
-				<span class="metric mesh-quality {qualityClass}" title="Mesh Quality: {data.meshQuality}/5">
-					{getMeshQualityBars(data.meshQuality)}
-				</span>
-			{/if}
-			<span class="metric connection-type">
-				{data.wired ? '🔌' : '📶'}
-			</span>
-		</div>
-
 		{#if data.ipAddress}
 			<div class="node-ip">{data.ipAddress}</div>
+		{/if}
+
+		{#if detailLevel !== 'minimal'}
+			<div class="node-info">
+				<span class="status-dot {statusClass}"></span>
+				<span class="model-text">{data.model || 'eero'}</span>
+			</div>
+
+			<div class="node-metrics">
+				<span class="metric" title="Connected Devices">
+					💻 {data.deviceCount ?? 0}
+				</span>
+				{#if detailLevel === 'detailed' && data.meshQuality !== undefined}
+					<span
+						class="metric mesh-quality {qualityClass}"
+						title="Mesh Quality: {data.meshQuality}/5"
+					>
+						{getMeshQualityBars(data.meshQuality)}
+					</span>
+				{/if}
+				<span class="metric connection-type">
+					{data.wired ? '🔌' : '📶'}
+				</span>
+			</div>
 		{/if}
 	</div>
 
@@ -78,12 +87,17 @@
 		border: 2px solid var(--color-border, #1e1e2e);
 		border-radius: 10px;
 		padding: 12px 16px;
-		min-width: 160px;
+		min-width: 140px;
 		font-family: inherit;
 		transition:
 			border-color 0.2s,
 			box-shadow 0.2s,
 			transform 0.15s;
+	}
+
+	.eero-node.minimal {
+		padding: 8px 12px;
+		min-width: 100px;
 	}
 
 	.eero-node:hover {
@@ -107,27 +121,28 @@
 	.node-content {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 6px;
+		align-items: center;
 	}
 
 	.node-header {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
 	}
 
 	.node-icon {
-		font-size: 18px;
+		font-size: 16px;
 	}
 
 	.node-label {
 		font-weight: 600;
 		color: var(--color-text-primary, #e4e4e7);
-		font-size: 13px;
+		font-size: 12px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 120px;
+		max-width: 100px;
 	}
 
 	.node-info {
@@ -154,15 +169,15 @@
 	}
 
 	.model-text {
-		font-size: 11px;
+		font-size: 10px;
 		color: var(--color-text-muted, #71717a);
 	}
 
 	.node-metrics {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		font-size: 11px;
+		gap: 8px;
+		font-size: 10px;
 		color: var(--color-text-secondary, #a1a1aa);
 	}
 
@@ -194,11 +209,10 @@
 	}
 
 	.node-ip {
-		font-size: 10px;
+		font-size: 9px;
 		font-family: var(--font-mono, monospace);
 		color: var(--color-text-muted, #71717a);
 		text-align: center;
-		margin-top: 2px;
 	}
 
 	:global(.eero-node .handle) {

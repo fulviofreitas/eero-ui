@@ -379,8 +379,8 @@ wheels = [
 
 [[package]]
 name = "eero-api"
-version = "1.4.2"
-source = { git = "https://github.com/fulviofreitas/eero-api.git?rev=v1.4.2#2afa05f5d8942da35454946d31f96a5163620f2a" }
+version = "1.4.3"
+source = { git = "https://github.com/fulviofreitas/eero-api.git?rev=v1.4.3#8e49d5e8eb98f7c16a70cfd6f0a6a0a01f69edec" }
 dependencies = [
     { name = "aiohttp" },
     { name = "keyring" },
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "eero-ui-backend"
-version = "3.1.2"
+version = "3.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -417,7 +417,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", git = "https://github.com/fulviofreitas/eero-api.git?rev=v1.4.2" },
+    { name = "eero-api", git = "https://github.com/fulviofreitas/eero-api.git?rev=v1.4.3" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "pydantic", specifier = ">=2.10.0" },

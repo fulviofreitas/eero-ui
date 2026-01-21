@@ -57,19 +57,20 @@
 	// Navigation items (base items)
 	const baseNavItems = [
 		{ path: '/', label: 'Dashboard', icon: '📊' },
-		{ path: '/topology', label: 'Topology', icon: '🗺️' },
 		{ path: '/devices', label: 'Devices', icon: '📱' },
 		{ path: '/eeros', label: 'Eeros', icon: '📡' },
-		{ path: '/profiles', label: 'Profiles', icon: '👥' }
+		{ path: '/profiles', label: 'Profiles', icon: '👥' },
+		{ path: '/topology', label: 'Topology', icon: '🗺️' }
 	];
 
 	// Dynamic nav items including network link
 	$: navItems = [
-		...baseNavItems.slice(0, 1), // Dashboard
+		baseNavItems[0], // Dashboard
+		{ path: '/topology', label: 'Topology', icon: '🗺️' }, // Topology right after Dashboard
 		$selectedNetwork
 			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: '🌐' }
 			: null,
-		...baseNavItems.slice(1)
+		...baseNavItems.slice(1, 4) // Devices, Eeros, Profiles
 	].filter(Boolean) as { path: string; label: string; icon: string }[];
 
 	async function handleLogout() {
