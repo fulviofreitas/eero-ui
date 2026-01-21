@@ -95,10 +95,38 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 🔍 Run type check & lint
+        id: frontend-check
         uses: fulviofreitas/eero-api/.github/actions/frontend-check@master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: 📊 Add lint results to summary
+        if: always()
+        working-directory: frontend
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## ⚛️ Frontend Lint Results
+
+          EOF
+
+          # Run prettier check and capture output
+          echo "### Prettier (Formatting)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          npx prettier --check . 2>&1 | tail -5 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Run eslint and capture output
+          echo "### ESLint" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          npx eslint . 2>&1 | tail -20 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Run svelte-check and capture output
+          echo "### Svelte Check (TypeScript)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          npx svelte-check --tsconfig ./tsconfig.json 2>&1 | grep -E "(Error|error|Warning|warning|found)" | tail -10 >> $GITHUB_STEP_SUMMARY || echo "No issues found" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # 3️⃣ Backend Tests (Parallel - depends on Backend Lint)
