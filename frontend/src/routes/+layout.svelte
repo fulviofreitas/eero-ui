@@ -142,15 +142,25 @@
 
 			<div class="sidebar-footer">
 				{#if eeroClientVersion}
-					<div class="version-row">
+					<a
+						href="https://github.com/fulviofreitas/eero-api"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="version-row version-link"
+					>
 						<span class="version-label">eero-api</span>
 						<span class="version-chip">v{eeroClientVersion}</span>
-					</div>
+					</a>
 				{/if}
-				<div class="version-row">
+				<a
+					href="https://github.com/fulviofreitas/eero-ui"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="version-row version-link"
+				>
 					<span class="version-label">eero-ui</span>
 					<span class="version-chip">v{__APP_VERSION__}</span>
-				</div>
+				</a>
 			</div>
 		</aside>
 
@@ -333,6 +343,28 @@
 		padding: 2px 8px;
 		border-radius: 10px;
 		border: 1px solid var(--color-border-muted);
+		transition: all var(--transition-fast);
+	}
+
+	.version-link {
+		text-decoration: none;
+		border-radius: var(--radius-sm);
+		padding: 4px 0;
+		margin: -4px 0;
+		transition: all var(--transition-fast);
+	}
+
+	.version-link:hover {
+		background: var(--color-bg-tertiary);
+	}
+
+	.version-link:hover .version-label {
+		color: var(--color-accent);
+	}
+
+	.version-link:hover .version-chip {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
 	}
 
 	/* Main content */
