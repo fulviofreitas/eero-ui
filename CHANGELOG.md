@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.4.0](https://github.com/fulviofreitas/eero-ui/compare/v3.3.0...v3.4.0) (2026-01-21)
+
+### ✨ Features
+
+* **ui:** add clickable links to version badges in sidebar footer ([dd19167](https://github.com/fulviofreitas/eero-ui/commit/dd19167a3ef031c78ecf1ee0bc1659c2639f6707))
+
 ## [3.3.0](https://github.com/fulviofreitas/eero-ui/compare/v3.2.0...v3.3.0) (2026-01-21)
 
 ### ✨ Features
