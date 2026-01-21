@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.2.0](https://github.com/fulviofreitas/eero-ui/compare/v3.1.2...v3.2.0) (2026-01-21)
+
+### ✨ Features
+
+* **topology:** add interactive network topology visualization ([a350622](https://github.com/fulviofreitas/eero-ui/commit/a35062248ae4b918ed8b1c794e40d721b954d220))
+
 ## [3.1.2](https://github.com/fulviofreitas/eero-ui/compare/v3.1.1...v3.1.2) (2026-01-20)
 
 ### 🐛 Bug Fixes
