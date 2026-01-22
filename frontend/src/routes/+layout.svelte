@@ -147,6 +147,17 @@
 			</nav>
 
 			<div class="sidebar-footer">
+				{#if exporterVersion}
+					<a
+						href="https://github.com/fulviofreitas/eero-prometheus-exporter"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="version-row version-link"
+					>
+						<span class="version-label">eero-exporter</span>
+						<span class="version-chip">v{exporterVersion}</span>
+					</a>
+				{/if}
 				{#if eeroClientVersion}
 					<a
 						href="https://github.com/fulviofreitas/eero-api"
@@ -156,17 +167,6 @@
 					>
 						<span class="version-label">eero-api</span>
 						<span class="version-chip">v{eeroClientVersion}</span>
-					</a>
-				{/if}
-				{#if exporterVersion}
-					<a
-						href="https://github.com/fulviofreitas/eero-prometheus-exporter"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="version-row version-link"
-					>
-						<span class="version-label">exporter</span>
-						<span class="version-chip">v{exporterVersion}</span>
 					</a>
 				{/if}
 				<a
