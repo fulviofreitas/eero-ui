@@ -186,66 +186,68 @@
 				<div class="top-bar-right">
 					<div class="signout-row">
 						<span class="status-dot online"></span>
-						<button
-							class="theme-toggle-btn"
-							on:click={() => uiStore.toggleTheme()}
-							title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-							aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-						>
-							{#if $theme === 'dark'}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<circle cx="12" cy="12" r="5"></circle>
-									<line x1="12" y1="1" x2="12" y2="3"></line>
-									<line x1="12" y1="21" x2="12" y2="23"></line>
-									<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-									<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-									<line x1="1" y1="12" x2="3" y2="12"></line>
-									<line x1="21" y1="12" x2="23" y2="12"></line>
-									<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-									<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-								</svg>
-							{:else}
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-								</svg>
-							{/if}
-						</button>
 						<button class="signout-btn" on:click={handleLogout} title="Sign out"> Sign out </button>
 					</div>
 					{#if $networksStore.networks.length > 0}
-						<div class="network-bar-inner">
-							<span class="status-indicator" class:online={$selectedNetwork?.status === 'online'}
-							></span>
-							<select
-								class="network-select"
-								on:change={(e) => handleNetworkChange(e.currentTarget.value)}
+						<div class="network-row">
+							<button
+								class="theme-toggle-btn"
+								on:click={() => uiStore.toggleTheme()}
+								title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+								aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 							>
-								{#each $networksStore.networks as network (network.id)}
-									<option value={network.id} selected={network.id === $selectedNetwork?.id}>
-										{network.name}
-									</option>
-								{/each}
-							</select>
+								{#if $theme === 'dark'}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<circle cx="12" cy="12" r="5"></circle>
+										<line x1="12" y1="1" x2="12" y2="3"></line>
+										<line x1="12" y1="21" x2="12" y2="23"></line>
+										<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+										<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+										<line x1="1" y1="12" x2="3" y2="12"></line>
+										<line x1="21" y1="12" x2="23" y2="12"></line>
+										<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+										<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+									</svg>
+								{:else}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+									</svg>
+								{/if}
+							</button>
+							<div class="network-bar-inner">
+								<span class="status-indicator" class:online={$selectedNetwork?.status === 'online'}
+								></span>
+								<select
+									class="network-select"
+									on:change={(e) => handleNetworkChange(e.currentTarget.value)}
+								>
+									{#each $networksStore.networks as network (network.id)}
+										<option value={network.id} selected={network.id === $selectedNetwork?.id}>
+											{network.name}
+										</option>
+									{/each}
+								</select>
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -530,6 +532,12 @@
 		border-color: var(--color-danger);
 		color: var(--color-danger);
 		background: var(--color-danger-bg);
+	}
+
+	.network-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 
 	.network-bar-inner {
