@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.7.0](https://github.com/fulviofreitas/eero-ui/compare/v3.6.2...v3.7.0) (2026-01-22)
+
+### ✨ Features
+
+* **charts:** add Chart.js visualizations for metrics data ([b2c06d3](https://github.com/fulviofreitas/eero-ui/commit/b2c06d34cd48e5d864ba5219080cf4692900dcd5))
+
 ## [3.6.2](https://github.com/fulviofreitas/eero-ui/compare/v3.6.1...v3.6.2) (2026-01-22)
 
 ### 🐛 Bug Fixes
