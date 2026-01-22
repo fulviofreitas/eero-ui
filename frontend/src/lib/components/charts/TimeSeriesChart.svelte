@@ -62,11 +62,16 @@
 		error = null
 	}: Props = $props();
 
-	let canvas: HTMLCanvasElement | undefined = $state(undefined);
+	let canvasElement: HTMLCanvasElement | null = null;
 	let chart: ChartJS | null = null;
 
-	function createChart() {
-		if (!canvas || chart) return;
+	const hasData = $derived(datasets.length > 0 && datasets.some((ds) => ds.data.length > 0));
+
+	function createChart(canvas: HTMLCanvasElement) {
+		if (chart) {
+			chart.destroy();
+			chart = null;
+		}
 
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
@@ -134,11 +139,7 @@
 	}
 
 	function updateChart() {
-		if (!chart) {
-			// Chart doesn't exist yet, try to create it
-			createChart();
-			return;
-		}
+		if (!chart) return;
 
 		chart.data.datasets = datasets.map((ds) => ({
 			...ds,
@@ -149,29 +150,37 @@
 		chart.update('none');
 	}
 
-	function destroyChart() {
+	// Handle canvas binding - create chart when canvas becomes available
+	function handleCanvas(node: HTMLCanvasElement) {
+		canvasElement = node;
+		createChart(node);
+
+		return {
+			destroy() {
+				if (chart) {
+					chart.destroy();
+					chart = null;
+				}
+				canvasElement = null;
+			}
+		};
+	}
+
+	// Update chart when datasets change
+	$effect(() => {
+		// Access datasets to track changes
+		const _datasets = datasets;
+		if (chart && canvasElement) {
+			updateChart();
+		}
+	});
+
+	onDestroy(() => {
 		if (chart) {
 			chart.destroy();
 			chart = null;
 		}
-	}
-
-	onDestroy(() => {
-		destroyChart();
 	});
-
-	// Create or update chart when canvas becomes available or datasets change
-	$effect(() => {
-		if (canvas && datasets) {
-			if (!chart) {
-				createChart();
-			} else {
-				updateChart();
-			}
-		}
-	});
-
-	const hasData = $derived(datasets.length > 0 && datasets.some((ds) => ds.data.length > 0));
 </script>
 
 <div class="chart-container">
@@ -189,7 +198,7 @@
 			<span>No data available for the selected time range</span>
 		</div>
 	{:else}
-		<canvas bind:this={canvas}></canvas>
+		<canvas use:handleCanvas></canvas>
 	{/if}
 </div>
 
