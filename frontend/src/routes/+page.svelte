@@ -2,13 +2,17 @@
   Dashboard Page
   
   Main dashboard with network overview and quick stats.
+  Inspired by comprehensive Grafana dashboard for eero mesh networks.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$api/client';
-	import type { NetworkDetail, EeroSummary, ProfileSummary } from '$api/types';
+	import type { NetworkDetail, EeroSummary, ProfileSummary, DeviceSummary } from '$api/types';
 	import { devicesStore, deviceCounts, uiStore, selectedNetworkId } from '$stores';
 	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
+	import PieChart from '$lib/components/charts/PieChart.svelte';
+	import BarGauge from '$lib/components/charts/BarGauge.svelte';
+	import ClientCountChart from '$lib/components/charts/ClientCountChart.svelte';
 
 	let network: NetworkDetail | null = null;
 	let eeros: EeroSummary[] = [];
@@ -56,6 +60,63 @@
 	// Computed values for profiles
 	$: totalProfileDevices = profiles.reduce((sum, p) => sum + p.device_count, 0);
 	$: pausedProfiles = profiles.filter((p) => p.paused).length;
+
+	// Computed values for charts
+	$: connectionTypeData = [
+		{ label: 'Wireless', value: $deviceCounts.wireless, color: 'rgba(99, 102, 241, 0.8)' },
+		{ label: 'Wired', value: $deviceCounts.wired, color: 'rgba(251, 146, 60, 0.8)' }
+	];
+
+	$: wifiBandData = [
+		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: 'rgba(34, 197, 94, 0.8)' },
+		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' }
+	];
+
+	$: clientsPerEeroData = eeros.map((eero, index) => ({
+		label: eero.location || eero.model,
+		value: eero.connected_clients_count,
+		color: `hsl(${(index * 360) / Math.max(eeros.length, 1)}, 70%, 60%)`
+	}));
+
+	$: meshQualityItems = eeros
+		.filter((e) => e.mesh_quality_bars !== null)
+		.map((eero) => ({
+			label: eero.location || eero.model,
+			value: eero.mesh_quality_bars ?? 0,
+			maxValue: 5
+		}))
+		.sort((a, b) => b.value - a.value);
+
+	// Top manufacturers from devices
+	$: topManufacturers = (() => {
+		const devices = $devicesStore?.devices ?? [];
+		// Using plain Map for intermediate computation (not reactive state)
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const manufacturerCounts = new Map<string, number>();
+
+		devices.forEach((d: DeviceSummary) => {
+			if (d.connected && d.manufacturer) {
+				const manufacturer = d.manufacturer;
+				manufacturerCounts.set(manufacturer, (manufacturerCounts.get(manufacturer) ?? 0) + 1);
+			}
+		});
+
+		return Array.from(manufacturerCounts.entries())
+			.map(([label, value]) => ({
+				label,
+				value,
+				maxValue: Math.max(...Array.from(manufacturerCounts.values()))
+			}))
+			.sort((a, b) => b.value - a.value)
+			.slice(0, 8);
+	})();
+
+	// Eero status summary
+	$: eeroStatusCounts = {
+		online: eeros.filter((e) => e.status === 'green').length,
+		warning: eeros.filter((e) => e.status === 'yellow').length,
+		offline: eeros.filter((e) => e.status === 'red').length
+	};
 
 	async function runSpeedTest() {
 		if (!network) return;
@@ -270,7 +331,10 @@
 				</div>
 				<span class="card-hint">View all profiles →</span>
 			</a>
+		</div>
 
+		<!-- Speed Test Section - Side by Side -->
+		<div class="speedtest-row">
 			<!-- Speed Test Card -->
 			<div class="card stat-card speed-card">
 				<div class="stat-header">
@@ -321,14 +385,119 @@
 					</p>
 				{/if}
 			</div>
+
+			<!-- Speedtest History Chart -->
+			<div class="speedtest-history">
+				<SpeedtestChart networkId={network.id} />
+			</div>
 		</div>
 
-		<!-- Speedtest History Chart -->
-		{#if network}
-			<section class="chart-section">
-				<SpeedtestChart networkId={network.id} />
-			</section>
-		{/if}
+		<!-- Device Insights Section -->
+		<section class="dashboard-section">
+			<h2 class="section-title">Device Insights</h2>
+			<div class="insights-grid">
+				<!-- Connection Type Distribution -->
+				<div class="card chart-card">
+					<PieChart title="Connection Type" data={connectionTypeData} cutout="55%" />
+				</div>
+
+				<!-- WiFi Band Distribution -->
+				<div class="card chart-card">
+					<PieChart title="WiFi Band" data={wifiBandData} cutout="55%" />
+				</div>
+
+				<!-- Top Manufacturers -->
+				<div class="card chart-card manufacturers-card">
+					<BarGauge
+						title="Top Manufacturers"
+						items={topManufacturers}
+						showValue={true}
+						unit=""
+						colorMode="fixed"
+					/>
+				</div>
+			</div>
+		</section>
+
+		<!-- Eero Health Section -->
+		<section class="dashboard-section">
+			<h2 class="section-title">Eero Health</h2>
+			<div class="eero-health-grid">
+				<!-- Eero Status Summary -->
+				<div class="card stat-card eero-status-summary">
+					<div class="stat-header">
+						<span class="stat-label">Eero Status</span>
+					</div>
+					<div class="eero-status-grid">
+						<div class="status-item online">
+							<span class="status-count">{eeroStatusCounts.online}</span>
+							<span class="status-label">Online</span>
+						</div>
+						{#if eeroStatusCounts.warning > 0}
+							<div class="status-item warning">
+								<span class="status-count">{eeroStatusCounts.warning}</span>
+								<span class="status-label">Warning</span>
+							</div>
+						{/if}
+						{#if eeroStatusCounts.offline > 0}
+							<div class="status-item offline">
+								<span class="status-count">{eeroStatusCounts.offline}</span>
+								<span class="status-label">Offline</span>
+							</div>
+						{/if}
+					</div>
+					<div class="eero-list-compact">
+						{#each eeros as eero}
+							<a href="/eeros/{eero.id}" class="eero-item-compact">
+								<span
+									class="status-dot small"
+									class:online={eero.status === 'green'}
+									class:warning={eero.status === 'yellow'}
+									class:offline={eero.status === 'red'}
+								></span>
+								<span class="eero-name">{eero.location || eero.model}</span>
+								{#if eero.is_gateway}
+									<span class="badge badge-info badge-sm">GW</span>
+								{/if}
+								<span class="eero-clients mono">{eero.connected_clients_count}</span>
+							</a>
+						{/each}
+					</div>
+				</div>
+
+				<!-- Clients per Eero -->
+				<div class="card chart-card">
+					<PieChart title="Clients per Eero" data={clientsPerEeroData} cutout="50%" />
+				</div>
+
+				<!-- Mesh Quality -->
+				<div class="card chart-card mesh-quality-card">
+					<BarGauge
+						title="Mesh Quality"
+						items={meshQualityItems}
+						maxValue={5}
+						showValue={true}
+						unit=" bars"
+						thresholds={[
+							{ value: 0, color: 'var(--color-danger)' },
+							{ value: 40, color: 'var(--color-warning)' },
+							{ value: 70, color: 'var(--color-success)' }
+						]}
+					/>
+				</div>
+			</div>
+		</section>
+
+		<!-- Network Metrics Section -->
+		<section class="dashboard-section">
+			<h2 class="section-title">Network Metrics</h2>
+			<div class="metrics-grid">
+				<!-- Connected Clients Over Time -->
+				<div class="metrics-chart-full">
+					<ClientCountChart />
+				</div>
+			</div>
+		</section>
 	{:else}
 		<div class="empty-state">
 			<p>No network data available.</p>
@@ -608,8 +777,20 @@
 		opacity: 1;
 	}
 
-	.speed-card {
-		grid-column: span 2;
+	/* Speedtest Row - Side by Side Layout */
+	.speedtest-row {
+		display: grid;
+		grid-template-columns: 1fr 2fr;
+		gap: var(--space-4);
+		margin-bottom: var(--space-8);
+	}
+
+	.speedtest-history {
+		min-width: 0; /* Prevent chart overflow */
+	}
+
+	.speedtest-history :global(.speedtest-chart) {
+		height: 100%;
 	}
 
 	.speed-results {
@@ -690,17 +871,177 @@
 		color: var(--color-text-secondary);
 	}
 
-	.chart-section {
-		margin-top: var(--space-6);
+	@media (max-width: 900px) {
+		.speedtest-row {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	@media (max-width: 768px) {
-		.speed-card {
-			grid-column: span 1;
-		}
-
 		.speed-results {
 			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	/* Dashboard Sections */
+	.dashboard-section {
+		margin-bottom: var(--space-8);
+	}
+
+	.section-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		margin-bottom: var(--space-4);
+		color: var(--color-text);
+	}
+
+	/* Insights Grid */
+	.insights-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-4);
+	}
+
+	.chart-card {
+		padding: var(--space-4);
+		min-height: 280px;
+	}
+
+	.manufacturers-card {
+		min-height: 280px;
+	}
+
+	/* Eero Health Grid */
+	.eero-health-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+		gap: var(--space-4);
+	}
+
+	.eero-status-summary {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.eero-status-grid {
+		display: flex;
+		gap: var(--space-4);
+		padding: var(--space-3);
+		background: var(--color-surface-elevated);
+		border-radius: var(--radius-md);
+	}
+
+	.status-item {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.status-count {
+		font-size: 1.5rem;
+		font-weight: 700;
+		font-family: var(--font-mono);
+	}
+
+	.status-item.online .status-count {
+		color: var(--color-success);
+	}
+
+	.status-item.warning .status-count {
+		color: var(--color-warning);
+	}
+
+	.status-item.offline .status-count {
+		color: var(--color-danger);
+	}
+
+	.status-label {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.eero-list-compact {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+
+	.eero-item-compact {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2);
+		background: var(--color-surface-elevated);
+		border-radius: var(--radius-sm);
+		font-size: 0.8125rem;
+		text-decoration: none;
+		color: inherit;
+		transition: background var(--transition-fast);
+	}
+
+	.eero-item-compact:hover {
+		background: var(--color-bg-tertiary);
+	}
+
+	.eero-name {
+		flex: 1;
+		font-weight: 500;
+	}
+
+	.eero-clients {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.status-dot.offline {
+		background-color: var(--color-danger);
+	}
+
+	.mesh-quality-card {
+		min-height: 280px;
+	}
+
+	/* Metrics Grid */
+	.metrics-grid {
+		display: grid;
+		gap: var(--space-4);
+	}
+
+	.metrics-chart-full {
+		grid-column: 1 / -1;
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 1024px) {
+		.insights-grid {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.insights-grid .manufacturers-card {
+			grid-column: 1 / -1;
+		}
+
+		.eero-health-grid {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.eero-health-grid .eero-status-summary {
+			grid-column: 1 / -1;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.insights-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.eero-health-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

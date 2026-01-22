@@ -149,3 +149,62 @@ export async function queryMetricsRange(
 		step
 	});
 }
+
+interface ClientCountHistoryResponse {
+	client_count: MetricsResponse;
+}
+
+/**
+ * Get network client count history for charts
+ */
+export async function getClientCountHistory(
+	start: string,
+	end: string,
+	step = '5m'
+): Promise<TimeSeriesPoint[]> {
+	try {
+		const response = await fetchMetrics<ClientCountHistoryResponse>(
+			'/metrics/network/client_count',
+			{
+				start,
+				end,
+				step
+			}
+		);
+
+		return transformMetricsResponse(response.client_count);
+	} catch (error) {
+		console.error('Failed to fetch client count history:', error);
+		return [];
+	}
+}
+
+interface MeshQualityHistoryResponse {
+	mesh_quality: MetricsResponse;
+}
+
+/**
+ * Get eero mesh quality history for charts
+ */
+export async function getEeroMeshQualityHistory(
+	serial: string,
+	start: string,
+	end: string,
+	step = '5m'
+): Promise<TimeSeriesPoint[]> {
+	try {
+		const response = await fetchMetrics<MeshQualityHistoryResponse>(
+			`/metrics/eeros/${serial}/quality`,
+			{
+				start,
+				end,
+				step
+			}
+		);
+
+		return transformMetricsResponse(response.mesh_quality);
+	} catch (error) {
+		console.error('Failed to fetch eero mesh quality history:', error);
+		return [];
+	}
+}
