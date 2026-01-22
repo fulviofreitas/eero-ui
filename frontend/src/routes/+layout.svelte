@@ -125,7 +125,7 @@
 		<aside class="sidebar">
 			<div class="sidebar-header">
 				<h1 class="logo">
-					<span class="logo-icon">◎</span>
+					<img src="/logo.png" alt="eero" class="logo-img" />
 					<span class="logo-text">eero</span>
 				</h1>
 			</div>
@@ -326,9 +326,10 @@
 		margin: 0;
 	}
 
-	.logo-icon {
-		font-size: 1.5rem;
-		color: var(--color-accent);
+	.logo-img {
+		width: 28px;
+		height: 28px;
+		object-fit: contain;
 	}
 
 	.sidebar-nav {

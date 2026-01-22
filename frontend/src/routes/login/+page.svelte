@@ -51,7 +51,7 @@
 	<div class="login-card">
 		<div class="login-header">
 			<div class="logo">
-				<span class="logo-icon">◎</span>
+				<img src="/logo.png" alt="eero" class="logo-img" />
 				<span class="logo-text">eero</span>
 			</div>
 			<h1>Dashboard</h1>
@@ -174,9 +174,10 @@
 		margin-bottom: var(--space-4);
 	}
 
-	.logo-icon {
-		font-size: 2rem;
-		color: var(--color-accent);
+	.logo-img {
+		width: 40px;
+		height: 40px;
+		object-fit: contain;
 	}
 
 	.login-header h1 {
