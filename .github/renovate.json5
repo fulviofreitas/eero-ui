@@ -58,20 +58,6 @@
   // Include release notes in PRs
   fetchChangeLogs: "pr",
 
-  // Custom manager for git URL dependencies in pyproject.toml
-  customManagers: [
-    {
-      customType: "regex",
-      description: "Track eero-api git dependency version tags",
-      managerFilePatterns: ["/^backend/pyproject\\.toml$/"],
-      matchStrings: [
-        "eero-api\\s*@\\s*git\\+https://github\\.com/(?<depName>fulviofreitas/eero-api)\\.git@(?<currentValue>v[\\d.]+)",
-      ],
-      datasourceTemplate: "github-tags",
-      versioningTemplate: "semver",
-    },
-  ],
-
   // Package-specific rules
   packageRules: [
     // ==========================================================================
@@ -82,7 +68,8 @@
     // - Full CI test suite pass
     // - Changelog review for breaking changes
     {
-      matchPackageNames: ["fulviofreitas/eero-api"],
+      matchPackageNames: ["eero-api"],
+      matchManagers: ["pep621"],
       groupName: "eero-api",
       description: "🔴 Core eero API client - requires careful review",
       automerge: false,
@@ -116,6 +103,7 @@
         "- [ ] Check for any deprecated methods",
         "",
         "### Links",
+        "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
         "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
         "- [eero-api Releases](https://github.com/fulviofreitas/eero-api/releases)",
       ],
