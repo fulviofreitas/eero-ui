@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.14.0](https://github.com/fulviofreitas/eero-ui/compare/v3.13.0...v3.14.0) (2026-01-22)
+
+### ✨ Features
+
+* **dashboard:** add wireless and wired counts to connected clients chart ([f2065e8](https://github.com/fulviofreitas/eero-ui/commit/f2065e814907941070f6c114178d605b6d3694ee))
+
 ## [3.13.0](https://github.com/fulviofreitas/eero-ui/compare/v3.12.4...v3.13.0) (2026-01-22)
 
 ### ✨ Features
