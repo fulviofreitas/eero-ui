@@ -110,10 +110,10 @@ async def get_speedtest_history(
     """
     try:
         download = await victoria_client.query_range(
-            "eero_speedtest_download_mbps", start, end, step
+            "eero_speed_download_mbps", start, end, step
         )
         upload = await victoria_client.query_range(
-            "eero_speedtest_upload_mbps", start, end, step
+            "eero_speed_upload_mbps", start, end, step
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:
