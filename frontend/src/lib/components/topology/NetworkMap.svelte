@@ -490,7 +490,7 @@
 	.edge-legend {
 		position: absolute;
 		bottom: 12px;
-		left: 12px;
+		left: 60px; /* Offset to avoid overlapping with xyflow controls */
 		z-index: 10;
 		display: flex;
 		align-items: center;
