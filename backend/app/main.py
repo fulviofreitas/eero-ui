@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .deps import shutdown_client
-from .routes import auth, devices, eeros, networks, profiles
+from .routes import auth, devices, eeros, metrics, networks, profiles
 
 
 def get_eero_client_version() -> str:
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Eero Dashboard API",
-    description="REST API wrapper for eero-api",
+    description="REST API wrapper for eero-api with embedded metrics",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs" if settings.debug else None,
@@ -85,6 +86,7 @@ app.include_router(networks.router, prefix="/api/networks", tags=["Networks"])
 app.include_router(devices.router, prefix="/api/devices", tags=["Devices"])
 app.include_router(eeros.router, prefix="/api/eeros", tags=["Eeros"])
 app.include_router(profiles.router, prefix="/api/profiles", tags=["Profiles"])
+app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 
 
 # Health check
@@ -96,6 +98,33 @@ async def health_check():
         "version": "1.0.0",
         "eero_client_version": get_eero_client_version(),
     }
+
+
+# Optional: External /metrics endpoint for Prometheus scraping
+# Enabled with EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED=true
+if settings.metrics_endpoint_enabled:
+
+    @app.get("/metrics", include_in_schema=True, tags=["Monitoring"])
+    async def prometheus_metrics_endpoint():
+        """Prometheus metrics endpoint.
+
+        Proxies 90+ metrics from embedded eero-prometheus-exporter.
+        Enable with: EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED=true
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                # Proxy from internal eero-prometheus-exporter
+                response = await client.get(
+                    "http://127.0.0.1:9118/metrics", timeout=30.0
+                )
+                return Response(
+                    content=response.content,
+                    media_type="text/plain; version=0.0.4; charset=utf-8",
+                )
+            except httpx.RequestError:
+                raise HTTPException(
+                    status_code=503, detail="Metrics exporter unavailable"
+                )
 
 
 # Serve static frontend (production)

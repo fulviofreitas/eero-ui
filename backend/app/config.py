@@ -29,6 +29,15 @@ class Settings(BaseModel):
     rate_limit_requests: int = 100
     rate_limit_window: int = 60  # seconds
 
+    # VictoriaMetrics (embedded time-series database)
+    victoria_metrics_url: str = "http://127.0.0.1:8428"
+
+    # Exporter session path (shared with eero-prometheus-exporter)
+    exporter_session_path: str = "/data/session/exporter-session.json"
+
+    # Optional: expose /metrics externally for Prometheus scraping
+    metrics_endpoint_enabled: bool = False
+
     class Config:
         """Pydantic config."""
 
@@ -75,6 +84,19 @@ def get_settings() -> Settings:
             str(Path.home() / ".eero-dashboard" / "session.json"),
         ),
         session_secret=session_secret,
+        # VictoriaMetrics configuration
+        victoria_metrics_url=os.environ.get(
+            "EERO_DASHBOARD_VICTORIA_METRICS_URL", "http://127.0.0.1:8428"
+        ),
+        # Exporter session path (shared with eero-prometheus-exporter)
+        exporter_session_path=os.environ.get(
+            "EERO_EXPORTER_SESSION_PATH", "/data/session/exporter-session.json"
+        ),
+        # Optional: expose /metrics externally
+        metrics_endpoint_enabled=os.environ.get(
+            "EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED", "false"
+        ).lower()
+        == "true",
     )
 
 

@@ -389,11 +389,12 @@ dependencies = [
 
 [[package]]
 name = "eero-ui-backend"
-version = "3.2.0"
+version = "3.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "python-multipart" },
     { name = "slowapi" },
@@ -419,6 +420,7 @@ dev = [
 requires-dist = [
     { name = "eero-api", git = "https://github.com/fulviofreitas/eero-api.git?rev=v1.4.3" },
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
