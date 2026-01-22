@@ -151,17 +151,27 @@ export async function queryMetricsRange(
 }
 
 interface ClientCountHistoryResponse {
-	client_count: MetricsResponse;
+	total: MetricsResponse;
+	wireless: MetricsResponse;
+	wired: MetricsResponse;
+	client_count: MetricsResponse; // backwards compatibility
+}
+
+export interface ClientCountData {
+	total: TimeSeriesPoint[];
+	wireless: TimeSeriesPoint[];
+	wired: TimeSeriesPoint[];
 }
 
 /**
  * Get network client count history for charts
+ * Returns total, wireless, and wired client counts over time
  */
 export async function getClientCountHistory(
 	start: string,
 	end: string,
 	step = '5m'
-): Promise<TimeSeriesPoint[]> {
+): Promise<ClientCountData> {
 	try {
 		const response = await fetchMetrics<ClientCountHistoryResponse>(
 			'/metrics/network/client_count',
@@ -172,10 +182,14 @@ export async function getClientCountHistory(
 			}
 		);
 
-		return transformMetricsResponse(response.client_count);
+		return {
+			total: transformMetricsResponse(response.total),
+			wireless: transformMetricsResponse(response.wireless),
+			wired: transformMetricsResponse(response.wired)
+		};
 	} catch (error) {
 		console.error('Failed to fetch client count history:', error);
-		return [];
+		return { total: [], wireless: [], wired: [] };
 	}
 }
 

@@ -201,7 +201,8 @@ async def get_network_client_count(
 ) -> dict[str, Any]:
     """Get network client count history.
 
-    Returns the number of connected clients over time.
+    Returns the number of connected clients over time, including
+    total, wireless, and wired counts.
 
     Args:
         start: Start time for the range.
@@ -209,13 +210,34 @@ async def get_network_client_count(
         step: Query resolution step.
 
     Returns:
-        Client count history.
+        Client count history (total, wireless, wired).
     """
     try:
-        client_count = await victoria_client.query_range(
+        # Total connected clients
+        total = await victoria_client.query_range(
             "eero_network_clients_count", start, end, step
         )
-        return {"client_count": client_count}
+        # Wireless clients count
+        wireless = await victoria_client.query_range(
+            'count(eero_device_connected{connection_type="wireless"} == 1)',
+            start,
+            end,
+            step,
+        )
+        # Wired clients count
+        wired = await victoria_client.query_range(
+            'count(eero_device_connected{connection_type="wired"} == 1)',
+            start,
+            end,
+            step,
+        )
+        return {
+            "total": total,
+            "wireless": wireless,
+            "wired": wired,
+            # Keep backwards compatibility
+            "client_count": total,
+        }
     except httpx.RequestError as e:
         _LOGGER.error(f"VictoriaMetrics connection error: {e}")
         raise HTTPException(

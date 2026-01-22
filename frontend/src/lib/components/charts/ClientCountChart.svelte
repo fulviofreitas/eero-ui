@@ -2,7 +2,7 @@
   ClientCountChart Component
   
   Displays connected client count over time as a time series chart.
-  Shows total connected devices with time range selector.
+  Shows total, wireless, and wired connected devices with time range selector.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -12,14 +12,30 @@
 	let timeRange: '6h' | '24h' | '7d' = $state('24h');
 	let loading = $state(true);
 	let error: string | null = $state(null);
-	let clientData: Array<{ x: number; y: number }> = $state([]);
+	let totalData: Array<{ x: number; y: number }> = $state([]);
+	let wirelessData: Array<{ x: number; y: number }> = $state([]);
+	let wiredData: Array<{ x: number; y: number }> = $state([]);
 
 	const datasets = $derived([
 		{
-			label: 'Connected Clients',
-			data: clientData,
+			label: 'Total',
+			data: totalData,
 			borderColor: 'rgb(99, 102, 241)',
 			backgroundColor: 'rgba(99, 102, 241, 0.1)',
+			fill: false
+		},
+		{
+			label: 'Wireless',
+			data: wirelessData,
+			borderColor: 'rgb(59, 130, 246)',
+			backgroundColor: 'rgba(59, 130, 246, 0.1)',
+			fill: true
+		},
+		{
+			label: 'Wired',
+			data: wiredData,
+			borderColor: 'rgb(251, 146, 60)',
+			backgroundColor: 'rgba(251, 146, 60, 0.1)',
 			fill: true
 		}
 	]);
@@ -60,7 +76,10 @@
 			const start = getStartTime(timeRange, now);
 			const step = getStep(timeRange);
 
-			clientData = await getClientCountHistory(start.toISOString(), now.toISOString(), step);
+			const data = await getClientCountHistory(start.toISOString(), now.toISOString(), step);
+			totalData = data.total;
+			wirelessData = data.wireless;
+			wiredData = data.wired;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load client count data';
 		} finally {
