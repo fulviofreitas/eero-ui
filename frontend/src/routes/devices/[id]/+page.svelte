@@ -11,6 +11,7 @@
 	import type { DeviceDetail, ProfileSummary } from '$api/types';
 	import { uiStore, devicesStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
 
 	let device: DeviceDetail | null = null;
 	let loading = true;
@@ -536,6 +537,13 @@
 				</dl>
 			</section>
 		</div>
+
+		<!-- Bandwidth History Chart (only for connected devices with MAC address) -->
+		{#if device.connected && device.mac}
+			<section class="device-charts">
+				<BandwidthChart deviceMac={device.mac} />
+			</section>
+		{/if}
 	{/if}
 </div>
 
@@ -800,6 +808,11 @@
 	.status-muted {
 		color: var(--color-text-secondary);
 		background-color: var(--color-bg-tertiary);
+	}
+
+	/* Bandwidth Chart Section */
+	.device-charts {
+		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {

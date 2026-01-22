@@ -1,0 +1,151 @@
+/**
+ * Metrics API Client
+ *
+ * Provides functions to fetch historical metrics data from VictoriaMetrics
+ * via the FastAPI backend for chart visualizations.
+ */
+
+export interface TimeSeriesPoint {
+	x: number; // timestamp in milliseconds
+	y: number; // value
+}
+
+export interface MetricsResponse {
+	status: string;
+	data: {
+		resultType: string;
+		result: Array<{
+			metric: Record<string, string>;
+			values: Array<[number, string]>;
+		}>;
+	};
+}
+
+interface SpeedtestHistoryResponse {
+	download: MetricsResponse;
+	upload: MetricsResponse;
+}
+
+interface BandwidthHistoryResponse {
+	rx: MetricsResponse;
+	tx: MetricsResponse;
+}
+
+/**
+ * Transform Prometheus/VictoriaMetrics response to chart-friendly format
+ */
+function transformMetricsResponse(data: MetricsResponse | undefined): TimeSeriesPoint[] {
+	if (!data?.data?.result?.[0]?.values) {
+		return [];
+	}
+
+	return data.data.result[0].values.map(([timestamp, value]) => ({
+		x: timestamp * 1000, // Convert to milliseconds for Chart.js
+		y: parseFloat(value)
+	}));
+}
+
+/**
+ * Fetch with query parameters helper
+ */
+async function fetchMetrics<T>(path: string, params: Record<string, string>): Promise<T> {
+	const searchParams = new URLSearchParams(params);
+	const url = `/api${path}?${searchParams.toString()}`;
+
+	const response = await fetch(url, {
+		credentials: 'same-origin',
+		headers: {
+			'Content-Type': 'application/json'
+		}
+	});
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+		throw new Error(error.detail || `HTTP ${response.status}`);
+	}
+
+	return response.json();
+}
+
+/**
+ * Get speedtest history for charts
+ */
+export async function getSpeedtestHistory(
+	start: string,
+	end: string,
+	step = '5m'
+): Promise<{ download: TimeSeriesPoint[]; upload: TimeSeriesPoint[] }> {
+	try {
+		const response = await fetchMetrics<SpeedtestHistoryResponse>('/metrics/speedtest/history', {
+			start,
+			end,
+			step
+		});
+
+		return {
+			download: transformMetricsResponse(response.download),
+			upload: transformMetricsResponse(response.upload)
+		};
+	} catch (error) {
+		// Return empty data on error - charts will show "no data available"
+		console.error('Failed to fetch speedtest history:', error);
+		return { download: [], upload: [] };
+	}
+}
+
+/**
+ * Get device bandwidth history for charts
+ */
+export async function getDeviceBandwidth(
+	mac: string,
+	start: string,
+	end: string,
+	step = '1m'
+): Promise<{ rx: TimeSeriesPoint[]; tx: TimeSeriesPoint[] }> {
+	try {
+		// Normalize MAC address (remove colons, lowercase)
+		const normalizedMac = mac.replace(/:/g, '').toLowerCase();
+
+		const response = await fetchMetrics<BandwidthHistoryResponse>(
+			`/metrics/devices/${normalizedMac}/bandwidth`,
+			{
+				start,
+				end,
+				step
+			}
+		);
+
+		return {
+			rx: transformMetricsResponse(response.rx),
+			tx: transformMetricsResponse(response.tx)
+		};
+	} catch (error) {
+		// Return empty data on error - charts will show "no data available"
+		console.error('Failed to fetch device bandwidth:', error);
+		return { rx: [], tx: [] };
+	}
+}
+
+/**
+ * Execute arbitrary PromQL query (instant)
+ */
+export async function queryMetrics(promql: string): Promise<MetricsResponse> {
+	return fetchMetrics<MetricsResponse>('/metrics/query', { query: promql });
+}
+
+/**
+ * Execute PromQL range query
+ */
+export async function queryMetricsRange(
+	promql: string,
+	start: string,
+	end: string,
+	step = '1m'
+): Promise<MetricsResponse> {
+	return fetchMetrics<MetricsResponse>('/metrics/query_range', {
+		query: promql,
+		start,
+		end,
+		step
+	});
+}

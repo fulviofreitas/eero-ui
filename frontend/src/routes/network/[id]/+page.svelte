@@ -6,6 +6,7 @@
 	import type { NetworkDetail } from '$api/types';
 	import { uiStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
 
 	let network: NetworkDetail | null = null;
 	let loading = true;
@@ -814,6 +815,13 @@
 				</section>
 			{/if}
 		</div>
+
+		<!-- Speedtest History Chart -->
+		{#if networkId}
+			<section class="network-charts">
+				<SpeedtestChart {networkId} />
+			</section>
+		{/if}
 	{/if}
 </div>
 
@@ -1407,6 +1415,11 @@
 		background: rgba(59, 130, 246, 0.1);
 		color: #3b82f6;
 		border: 1px solid rgba(59, 130, 246, 0.2);
+	}
+
+	/* Speedtest Chart Section */
+	.network-charts {
+		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {
