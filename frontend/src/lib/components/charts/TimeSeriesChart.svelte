@@ -69,6 +69,21 @@
 
 	const hasData = $derived(datasets.length > 0 && datasets.some((ds) => ds.data.length > 0));
 
+	// Deep clone datasets to avoid Svelte 5 reactivity conflicts with Chart.js
+	// Chart.js uses Object.defineProperty which conflicts with $state proxies
+	function cloneDatasets() {
+		return datasets.map((ds) => ({
+			label: ds.label,
+			data: ds.data.map((point) => ({ x: point.x, y: point.y })),
+			borderColor: ds.borderColor,
+			backgroundColor: ds.backgroundColor,
+			fill: ds.fill,
+			tension: 0.3,
+			pointRadius: 2,
+			borderWidth: 2
+		}));
+	}
+
 	function createChart(canvas: HTMLCanvasElement) {
 		if (chart) {
 			chart.destroy();
@@ -81,12 +96,7 @@
 		chart = new ChartJS(ctx, {
 			type: 'line',
 			data: {
-				datasets: datasets.map((ds) => ({
-					...ds,
-					tension: 0.3,
-					pointRadius: 2,
-					borderWidth: 2
-				}))
+				datasets: cloneDatasets()
 			},
 			options: {
 				responsive: true,
@@ -143,12 +153,7 @@
 	function updateChart() {
 		if (!chart) return;
 
-		chart.data.datasets = datasets.map((ds) => ({
-			...ds,
-			tension: 0.3,
-			pointRadius: 2,
-			borderWidth: 2
-		}));
+		chart.data.datasets = cloneDatasets();
 		chart.update('none');
 	}
 
