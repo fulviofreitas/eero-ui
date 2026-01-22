@@ -1,6 +1,5 @@
 """Authentication routes for the Eero Dashboard."""
 
-import json
 import logging
 from pathlib import Path
 
@@ -144,22 +143,27 @@ async def login(
         )
 
 
-async def _sync_session_to_exporter(user_token: str) -> None:
-    """Write the authenticated session to the shared location.
+async def _sync_session_to_exporter() -> None:
+    """Copy the authenticated session to the shared location.
 
     This allows eero-prometheus-exporter to use the same session
-    for metrics collection.
-
-    Args:
-        user_token: The authenticated user token from eero-api.
+    for metrics collection. Reads from the main session file and
+    copies to the exporter session path.
     """
     try:
-        # Ensure directory exists
+        # Read the session from the main cookie file
+        main_session_path = Path(settings.cookie_file)
+        if not main_session_path.exists():
+            _LOGGER.warning("Main session file not found, cannot sync to exporter")
+            return
+
+        session_content = main_session_path.read_text()
+
+        # Ensure exporter directory exists
         EXPORTER_SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write session in eero-exporter format
-        session_data = {"user_token": user_token}
-        EXPORTER_SESSION_PATH.write_text(json.dumps(session_data))
+        # Copy session to exporter location
+        EXPORTER_SESSION_PATH.write_text(session_content)
 
         _LOGGER.info("Session synced to eero-prometheus-exporter")
     except Exception as e:
@@ -191,8 +195,7 @@ async def verify(
         success = await client.verify(verify_request.code)
         if success:
             # Sync session to eero-prometheus-exporter
-            if client.user_token:
-                await _sync_session_to_exporter(client.user_token)
+            await _sync_session_to_exporter()
 
             return VerifyResponse(
                 success=True,
