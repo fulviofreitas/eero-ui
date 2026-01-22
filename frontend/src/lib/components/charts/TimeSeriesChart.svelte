@@ -5,7 +5,7 @@
   Used as the foundation for SpeedtestChart and BandwidthChart.
 -->
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import {
 		Chart as ChartJS,
 		CategoryScale,
@@ -62,7 +62,7 @@
 		error = null
 	}: Props = $props();
 
-	let canvas: HTMLCanvasElement;
+	let canvas: HTMLCanvasElement | undefined = $state(undefined);
 	let chart: ChartJS | null = null;
 
 	function createChart() {
@@ -134,7 +134,11 @@
 	}
 
 	function updateChart() {
-		if (!chart) return;
+		if (!chart) {
+			// Chart doesn't exist yet, try to create it
+			createChart();
+			return;
+		}
 
 		chart.data.datasets = datasets.map((ds) => ({
 			...ds,
@@ -152,18 +156,18 @@
 		}
 	}
 
-	onMount(() => {
-		createChart();
-	});
-
 	onDestroy(() => {
 		destroyChart();
 	});
 
-	// Reactive update when datasets change
+	// Create or update chart when canvas becomes available or datasets change
 	$effect(() => {
-		if (chart && datasets) {
-			updateChart();
+		if (canvas && datasets) {
+			if (!chart) {
+				createChart();
+			} else {
+				updateChart();
+			}
 		}
 	});
 
