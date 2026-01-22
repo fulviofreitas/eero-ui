@@ -72,11 +72,11 @@
 	// Dynamic nav items including network link
 	$: navItems = [
 		baseNavItems[0], // Dashboard
-		{ path: '/topology', label: 'Topology', icon: '🗺️' }, // Topology right after Dashboard
 		$selectedNetwork
 			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: '🌐' }
 			: null,
-		...baseNavItems.slice(1, 4) // Devices, Eeros, Profiles
+		...baseNavItems.slice(1, 4), // Devices, Eeros, Profiles
+		{ path: '/topology', label: 'Topology', icon: '🗺️' } // Topology at the end
 	].filter(Boolean) as { path: string; label: string; icon: string }[];
 
 	async function handleLogout() {

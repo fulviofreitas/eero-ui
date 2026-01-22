@@ -8,6 +8,7 @@
 	import { api } from '$api/client';
 	import type { NetworkDetail, EeroSummary, ProfileSummary } from '$api/types';
 	import { devicesStore, deviceCounts, uiStore, selectedNetworkId } from '$stores';
+	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
 
 	let network: NetworkDetail | null = null;
 	let eeros: EeroSummary[] = [];
@@ -320,7 +321,14 @@
 					</p>
 				{/if}
 			</div>
-		</div>
+			</div>
+
+		<!-- Speedtest History Chart -->
+		{#if network}
+			<section class="chart-section">
+				<SpeedtestChart networkId={network.id} />
+			</section>
+		{/if}
 	{:else}
 		<div class="empty-state">
 			<p>No network data available.</p>
@@ -680,6 +688,10 @@
 		text-align: center;
 		padding: var(--space-12);
 		color: var(--color-text-secondary);
+	}
+
+	.chart-section {
+		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {
