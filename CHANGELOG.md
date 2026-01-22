@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.10.1](https://github.com/fulviofreitas/eero-ui/compare/v3.10.0...v3.10.1) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **ui:** reorder footer versions and rename exporter label ([4e81693](https://github.com/fulviofreitas/eero-ui/commit/4e81693ec81d2f3032f9177d3e76eeb9648f6752))
+
 ## [3.10.0](https://github.com/fulviofreitas/eero-ui/compare/v3.9.1...v3.10.0) (2026-01-22)
 
 ### ✨ Features
