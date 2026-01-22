@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.13.0](https://github.com/fulviofreitas/eero-ui/compare/v3.12.4...v3.13.0) (2026-01-22)
+
+### ✨ Features
+
+* **dashboard:** add side-by-side speedtest layout and device insights ([774a203](https://github.com/fulviofreitas/eero-ui/commit/774a203ed5f54b95d92e4c92413fc4af0de3c866))
+
 ## [3.12.4](https://github.com/fulviofreitas/eero-ui/compare/v3.12.3...v3.12.4) (2026-01-22)
 
 ### 🐛 Bug Fixes
