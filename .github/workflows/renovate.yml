@@ -8,6 +8,7 @@
 # - Scheduled: Every 6 hours (4 times daily)
 # - Manual: workflow_dispatch
 # - On eero-api release: repository_dispatch
+# - On eero-prometheus-exporter release: repository_dispatch
 # ============================================================================
 
 name: 🔄 Renovate
@@ -45,7 +46,9 @@ on:
           - "true"
 
   repository_dispatch:
-    types: [eero-api-dependency-update-available]
+    types:
+      - eero-api-dependency-update-available
+      - eero-prometheus-exporter-dependency-update-available
 
 concurrency:
   group: renovate
@@ -68,7 +71,10 @@ jobs:
         run: |
           echo "🎯 Trigger: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "📦 eero-api version: ${{ github.event.client_payload.version }}"
+            echo "📦 Repository: ${{ github.event.client_payload.repository }}"
+            echo "🏷️ Version: ${{ github.event.client_payload.version }}"
+            echo "🔖 Tag: ${{ github.event.client_payload.tag }}"
+            echo "👤 Triggered by: ${{ github.event.client_payload.triggered_by }}"
           fi
 
       - name: 🔄 Run Renovate
@@ -97,12 +103,14 @@ jobs:
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             cat >> $GITHUB_STEP_SUMMARY << EOF
 
-          ### 📦 Triggered by eero-api Release
+          ### 📦 Triggered by Dependency Release
 
           | Property | Value |
           |:---------|:------|
+          | 📦 Repository | \`${{ github.event.client_payload.repository || 'unknown' }}\` |
           | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
           | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
+          | 👤 Triggered by | \`${{ github.event.client_payload.triggered_by || 'unknown' }}\` |
 
           EOF
           fi
