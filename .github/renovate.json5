@@ -110,6 +110,55 @@
     },
 
     // ==========================================================================
+    // 🔴 CRITICAL: eero-prometheus-exporter - Metrics collection dependency
+    // ==========================================================================
+    // Embedded metrics exporter for Prometheus. Updates require:
+    // - Manual review by maintainer
+    // - Full CI test suite pass
+    // - Changelog review for breaking changes
+    {
+      matchPackageNames: ["eero-prometheus-exporter"],
+      matchManagers: ["pep621"],
+      groupName: "eero-prometheus-exporter",
+      description: "🔴 Prometheus metrics exporter - requires careful review",
+      automerge: false,
+
+      // High visibility labels
+      addLabels: ["eero-prometheus-exporter", "critical", "needs-review"],
+
+      // Prioritize this PR above others
+      prPriority: 10,
+
+      // Request review from maintainers
+      reviewers: ["fulviofreitas"],
+      assignees: ["fulviofreitas"],
+
+      // Custom commit message
+      commitMessagePrefix: "chore(deps-critical):",
+      commitMessageExtra: "{{newVersion}}",
+      // PR title must match commit format for squash merge commitlint
+      prTitle: "chore(deps-critical): update eero-prometheus-exporter to {{{newVersion}}}",
+
+      // Add detailed PR body note
+      prBodyNotes: [
+        "## ⚠️ Critical Dependency Update",
+        "",
+        "This PR updates `eero-prometheus-exporter`, the embedded Prometheus metrics exporter.",
+        "",
+        "### Review Checklist",
+        "- [ ] Review the changelog for breaking changes",
+        "- [ ] Verify metrics compatibility",
+        "- [ ] Run full test suite locally if needed",
+        "- [ ] Check for any deprecated metrics or CLI flags",
+        "",
+        "### Links",
+        "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
+        "- [eero-prometheus-exporter Repository](https://github.com/fulviofreitas/eero-prometheus-exporter)",
+        "- [eero-prometheus-exporter Releases](https://github.com/fulviofreitas/eero-prometheus-exporter/releases)",
+      ],
+    },
+
+    // ==========================================================================
     // 🟡 Python dependencies: Group minor/patch updates
     // ==========================================================================
     {
