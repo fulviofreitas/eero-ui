@@ -321,7 +321,7 @@
 					</p>
 				{/if}
 			</div>
-			</div>
+		</div>
 
 		<!-- Speedtest History Chart -->
 		{#if network}
