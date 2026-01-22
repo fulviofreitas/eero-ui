@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.12.3](https://github.com/fulviofreitas/eero-ui/compare/v3.12.2...v3.12.3) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **charts:** register LineController for Chart.js ([af4bfb3](https://github.com/fulviofreitas/eero-ui/commit/af4bfb31b64b2f8ce5b6eca8e4b6d71e9b93d42f))
+
 ## [3.12.2](https://github.com/fulviofreitas/eero-ui/compare/v3.12.1...v3.12.2) (2026-01-22)
 
 ### 🐛 Bug Fixes
