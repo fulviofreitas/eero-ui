@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.10.0](https://github.com/fulviofreitas/eero-ui/compare/v3.9.1...v3.10.0) (2026-01-22)
+
+### ✨ Features
+
+* **ui:** add eero-prometheus-exporter version to sidebar footer ([6e9c7b6](https://github.com/fulviofreitas/eero-ui/commit/6e9c7b6dfd6bfc75762a63ada7db5a87976d15ee))
+
 ## [3.9.1](https://github.com/fulviofreitas/eero-ui/compare/v3.9.0...v3.9.1) (2026-01-22)
 
 ### 🐛 Bug Fixes
