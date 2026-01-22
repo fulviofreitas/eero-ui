@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.12.2](https://github.com/fulviofreitas/eero-ui/compare/v3.12.1...v3.12.2) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **charts:** use Svelte action for chart initialization ([8a74099](https://github.com/fulviofreitas/eero-ui/commit/8a7409913c0a1db62e382ecb4fef67dc367c1273))
+
 ## [3.12.1](https://github.com/fulviofreitas/eero-ui/compare/v3.12.0...v3.12.1) (2026-01-22)
 
 ### 🐛 Bug Fixes
