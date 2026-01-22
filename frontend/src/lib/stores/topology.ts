@@ -508,38 +508,40 @@ function transformToTopology(
 		const allDevices = [...connectedDevices, ...disconnectedDevices];
 
 		allDevices.forEach((device, index) => {
-			// Calculate position relative to parent eero based on layout type
+			// Calculate position RELATIVE to parent eero (not absolute)
+			// When using parentId, position is an offset from the parent node
 			const devicesPerRow = 4;
 			const row = Math.floor(index / devicesPerRow);
 			const col = index % devicesPerRow;
-			const offsetX =
-				(col - (Math.min(allDevices.length, devicesPerRow) - 1) / 2) * LAYOUT.deviceSpacingX;
 
-			let x: number;
-			let y: number;
+			let relX: number;
+			let relY: number;
 
 			if (layoutType === 'radial') {
-				// Devices fan out from their eero
-				const deviceAngle =
-					Math.atan2(eeroNode.position.y - 300, eeroNode.position.x - 400) +
-					(index - allDevices.length / 2) * 0.15;
-				const deviceRadius = 120 + row * 60;
-				x = eeroNode.position.x + Math.cos(deviceAngle) * deviceRadius;
-				y = eeroNode.position.y + Math.sin(deviceAngle) * deviceRadius;
+				// Devices fan out from their eero in a semicircle below
+				const angleSpread = Math.PI * 0.8; // 144 degrees spread
+				const startAngle = Math.PI / 2 - angleSpread / 2; // Start from bottom-left
+				const angleStep = allDevices.length > 1 ? angleSpread / (allDevices.length - 1) : 0;
+				const angle = startAngle + index * angleStep;
+				const radius = 100 + row * 50;
+				relX = Math.cos(angle) * radius;
+				relY = Math.sin(angle) * radius + 40; // Offset below the eero
 			} else if (layoutType === 'horizontal') {
 				// Devices to the right of their eero
-				x = eeroNode.position.x + 200 + col * 100;
-				y = eeroNode.position.y + (index - allDevices.length / 2) * 50;
+				relX = 180 + col * 90;
+				relY = (index - allDevices.length / 2) * 45;
 			} else if (layoutType === 'force') {
-				// Devices around their eero organically
+				// Devices around their eero in a circle
 				const angle = (index / allDevices.length) * 2 * Math.PI;
-				const radius = 100 + row * 50;
-				x = eeroNode.position.x + Math.cos(angle) * radius;
-				y = eeroNode.position.y + Math.sin(angle) * radius;
+				const radius = 90 + row * 45;
+				relX = Math.cos(angle) * radius;
+				relY = Math.sin(angle) * radius + 30;
 			} else {
-				// Default hierarchy layout
-				x = eeroNode.position.x + offsetX;
-				y = LAYOUT.deviceY + row * LAYOUT.deviceSpacingY;
+				// Default hierarchy layout - devices below eero in a grid
+				const offsetX =
+					(col - (Math.min(allDevices.length, devicesPerRow) - 1) / 2) * LAYOUT.deviceSpacingX;
+				relX = offsetX;
+				relY = 180 + row * LAYOUT.deviceSpacingY; // Offset below parent
 			}
 
 			const deviceId = device.mac || device.id || `device-${index}`;
@@ -547,7 +549,8 @@ function transformToTopology(
 			nodes.push({
 				id: `device-${deviceId}`,
 				type: 'device',
-				position: { x, y },
+				parentId: `eero-${eeroId}`, // Link to parent eero - devices move with parent
+				position: { x: relX, y: relY }, // Position is now RELATIVE to parent
 				data: {
 					type: 'device',
 					id: deviceId,
