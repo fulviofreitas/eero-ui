@@ -12,6 +12,7 @@
 		LinearScale,
 		PointElement,
 		LineElement,
+		LineController,
 		Title,
 		Tooltip,
 		Legend,
@@ -20,12 +21,13 @@
 	} from 'chart.js';
 	import 'chartjs-adapter-date-fns';
 
-	// Register Chart.js components
+	// Register Chart.js components (LineController is required for type: 'line')
 	ChartJS.register(
 		CategoryScale,
 		LinearScale,
 		PointElement,
 		LineElement,
+		LineController,
 		Title,
 		Tooltip,
 		Legend,
