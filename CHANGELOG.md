@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.11.1](https://github.com/fulviofreitas/eero-ui/compare/v3.11.0...v3.11.1) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **charts:** create chart when canvas becomes available ([18f0054](https://github.com/fulviofreitas/eero-ui/commit/18f0054ab48b737dfdf0ee8cf9bfff3940b484c0))
+
 ## [3.11.0](https://github.com/fulviofreitas/eero-ui/compare/v3.10.1...v3.11.0) (2026-01-22)
 
 ### ✨ Features
