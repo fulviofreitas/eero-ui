@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.12.4](https://github.com/fulviofreitas/eero-ui/compare/v3.12.3...v3.12.4) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **charts:** clone datasets to avoid Svelte 5 reactivity conflict ([56a89d2](https://github.com/fulviofreitas/eero-ui/commit/56a89d22cc1c4754fba38e94600d3200d0c1a4af))
+
 ## [3.12.3](https://github.com/fulviofreitas/eero-ui/compare/v3.12.2...v3.12.3) (2026-01-22)
 
 ### 🐛 Bug Fixes
