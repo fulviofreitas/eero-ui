@@ -12,6 +12,7 @@ from slowapi.util import get_remote_address
 
 from ..config import settings
 from ..deps import get_eero_client
+from ..transformers import check_success, extract_data, extract_id_from_url
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -77,17 +78,23 @@ async def get_auth_status(
 
     if client.is_authenticated:
         try:
-            account = await client.get_account()
-            account_id = account.id
-            premium_status = account.premium_status
+            raw_account = await client.get_account()
+            account = extract_data(raw_account)
 
-            if account.users:
+            # Extract account ID from URL
+            account_id = extract_id_from_url(account.get("url"))
+            premium_status = account.get("premium_status")
+
+            # Get users list
+            users = account.get("users", [])
+            if users and isinstance(users, list) and len(users) > 0:
                 # Get the first user (typically the owner)
-                user = account.users[0]
-                user_email = user.email
-                user_name = user.name
-                user_phone = user.phone
-                user_role = user.role
+                user = users[0]
+                if isinstance(user, dict):
+                    user_email = user.get("email")
+                    user_name = user.get("name")
+                    user_phone = user.get("phone")
+                    user_role = user.get("role")
 
             # Log minimal info - avoid PII in logs
             _LOGGER.debug(f"Auth status check: authenticated, account_id={account_id}")
@@ -119,7 +126,8 @@ async def login(
     Rate limited to 5 attempts per minute per IP address.
     """
     try:
-        success = await client.login(login_request.identifier)
+        raw_result = await client.login(login_request.identifier)
+        success = check_success(raw_result)
         if success:
             return LoginResponse(
                 success=True,
@@ -192,7 +200,8 @@ async def verify(
     Rate limited to 5 attempts per minute per IP address.
     """
     try:
-        success = await client.verify(verify_request.code)
+        raw_result = await client.verify(verify_request.code)
+        success = check_success(raw_result)
         if success:
             # Sync session to eero-prometheus-exporter
             await _sync_session_to_exporter()
@@ -229,7 +238,8 @@ async def logout(
         # Clear exporter session first
         await _clear_exporter_session()
 
-        success = await client.logout()
+        raw_result = await client.logout()
+        success = check_success(raw_result)
         return {"success": success, "message": "Logged out successfully."}
     except Exception as e:
         _LOGGER.error(f"Logout error: {e}")

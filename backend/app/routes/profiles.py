@@ -1,7 +1,6 @@
 """Profile routes for the Eero Dashboard."""
 
 import logging
-import re
 
 from eero import EeroClient
 from eero.exceptions import EeroException
@@ -9,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
+from ..transformers import check_success, extract_data, extract_list, normalize_profile
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -68,91 +68,42 @@ async def list_profiles(
 ) -> list[ProfileSummary]:
     """Get list of all profiles on the network."""
     try:
-        profiles = await client.get_profiles(network_id, refresh_cache=refresh)
+        raw_response = await client.get_profiles(network_id, refresh_cache=refresh)
+        raw_profiles = extract_list(raw_response, "profiles")
 
         result = []
-        for profile in profiles:
-            # Extract profile ID from URL
-            profile_id = None
-            if profile.url:
-                profile_id = profile.url.split("/")[-1]
+        for raw_profile in raw_profiles:
+            profile = normalize_profile(raw_profile)
 
-            # Extract devices from profile
-            device_ids = []
-            profile_devices = []
-            devices_list = (
-                profile.devices
-                if hasattr(profile, "devices") and profile.devices
-                else []
+            # Convert devices to ProfileDevice
+            profile_devices = [
+                ProfileDevice(
+                    id=dev.get("id"),
+                    url=dev.get("url"),
+                    mac=dev.get("mac"),
+                    nickname=dev.get("nickname"),
+                    hostname=dev.get("hostname"),
+                    display_name=dev.get("display_name"),
+                    manufacturer=dev.get("manufacturer"),
+                    connected=dev.get("connected", False),
+                    wireless=dev.get("wireless", False),
+                    paused=dev.get("paused", False),
+                )
+                for dev in profile.get("devices", [])
+            ]
+
+            _LOGGER.debug(
+                f"Profile {profile.get('name')}: {len(profile_devices)} devices"
             )
-
-            for device in devices_list:
-                # Device can be a dict or a Pydantic model
-                if isinstance(device, dict):
-                    device_url = device.get("url", "")
-                    device_id = None
-                    if device_url:
-                        match = re.search(r"/devices/([^/]+)", device_url)
-                        if match:
-                            device_id = match.group(1)
-
-                    if device_id:
-                        device_ids.append(device_id)
-
-                    profile_devices.append(
-                        ProfileDevice(
-                            id=device_id,
-                            url=device_url,
-                            mac=device.get("mac"),
-                            nickname=device.get("nickname"),
-                            hostname=device.get("hostname"),
-                            display_name=device.get("display_name")
-                            or device.get("nickname")
-                            or device.get("hostname"),
-                            manufacturer=device.get("manufacturer"),
-                            connected=device.get("connected", False),
-                            wireless=device.get("wireless", False),
-                            paused=device.get("paused", False),
-                        )
-                    )
-                elif hasattr(device, "url"):
-                    device_url = device.url
-                    device_id = None
-                    if device_url:
-                        match = re.search(r"/devices/([^/]+)", device_url)
-                        if match:
-                            device_id = match.group(1)
-
-                    if device_id:
-                        device_ids.append(device_id)
-
-                    profile_devices.append(
-                        ProfileDevice(
-                            id=device_id,
-                            url=device_url,
-                            mac=getattr(device, "mac", None),
-                            nickname=getattr(device, "nickname", None),
-                            hostname=getattr(device, "hostname", None),
-                            display_name=getattr(device, "display_name", None)
-                            or getattr(device, "nickname", None)
-                            or getattr(device, "hostname", None),
-                            manufacturer=getattr(device, "manufacturer", None),
-                            connected=getattr(device, "connected", False),
-                            wireless=getattr(device, "wireless", False),
-                            paused=getattr(device, "paused", False),
-                        )
-                    )
-
-            _LOGGER.debug(f"Profile {profile.name}: {len(profile_devices)} devices")
 
             result.append(
                 ProfileSummary(
-                    id=profile_id,
-                    url=profile.url,
-                    name=profile.name,
-                    paused=profile.paused,
-                    device_count=len(devices_list),
-                    device_ids=device_ids,
+                    id=profile.get("id"),
+                    url=profile.get("url"),
+                    name=profile.get("name") or "",
+                    paused=profile.get("paused", False),
+                    device_count=profile.get("device_count", 0),
+                    device_ids=profile.get("device_ids", []),
                     devices=profile_devices,
                 )
             )
@@ -175,87 +126,37 @@ async def get_profile(
 ) -> ProfileSummary:
     """Get detailed information about a specific profile."""
     try:
-        profile = await client.get_profile(
+        raw_response = await client.get_profile(
             profile_id, network_id, refresh_cache=refresh
         )
+        profile = normalize_profile(extract_data(raw_response))
 
-        extracted_id = None
-        if profile.url:
-            extracted_id = profile.url.split("/")[-1]
+        # Convert devices to ProfileDevice
+        profile_devices = [
+            ProfileDevice(
+                id=dev.get("id"),
+                url=dev.get("url"),
+                mac=dev.get("mac"),
+                nickname=dev.get("nickname"),
+                hostname=dev.get("hostname"),
+                display_name=dev.get("display_name"),
+                manufacturer=dev.get("manufacturer"),
+                connected=dev.get("connected", False),
+                wireless=dev.get("wireless", False),
+                paused=dev.get("paused", False),
+            )
+            for dev in profile.get("devices", [])
+        ]
 
-        # Extract devices from profile
-        device_ids = []
-        profile_devices = []
-        devices_list = (
-            profile.devices if hasattr(profile, "devices") and profile.devices else []
-        )
-
-        for device in devices_list:
-            # Device can be a dict or a Pydantic model
-            if isinstance(device, dict):
-                device_url = device.get("url", "")
-                device_id = None
-                if device_url:
-                    match = re.search(r"/devices/([^/]+)", device_url)
-                    if match:
-                        device_id = match.group(1)
-
-                if device_id:
-                    device_ids.append(device_id)
-
-                profile_devices.append(
-                    ProfileDevice(
-                        id=device_id,
-                        url=device_url,
-                        mac=device.get("mac"),
-                        nickname=device.get("nickname"),
-                        hostname=device.get("hostname"),
-                        display_name=device.get("display_name")
-                        or device.get("nickname")
-                        or device.get("hostname"),
-                        manufacturer=device.get("manufacturer"),
-                        connected=device.get("connected", False),
-                        wireless=device.get("wireless", False),
-                        paused=device.get("paused", False),
-                    )
-                )
-            elif hasattr(device, "url"):
-                device_url = device.url
-                device_id = None
-                if device_url:
-                    match = re.search(r"/devices/([^/]+)", device_url)
-                    if match:
-                        device_id = match.group(1)
-
-                if device_id:
-                    device_ids.append(device_id)
-
-                profile_devices.append(
-                    ProfileDevice(
-                        id=device_id,
-                        url=device_url,
-                        mac=getattr(device, "mac", None),
-                        nickname=getattr(device, "nickname", None),
-                        hostname=getattr(device, "hostname", None),
-                        display_name=getattr(device, "display_name", None)
-                        or getattr(device, "nickname", None)
-                        or getattr(device, "hostname", None),
-                        manufacturer=getattr(device, "manufacturer", None),
-                        connected=getattr(device, "connected", False),
-                        wireless=getattr(device, "wireless", False),
-                        paused=getattr(device, "paused", False),
-                    )
-                )
-
-        _LOGGER.debug(f"Profile {profile.name}: {len(profile_devices)} devices")
+        _LOGGER.debug(f"Profile {profile.get('name')}: {len(profile_devices)} devices")
 
         return ProfileSummary(
-            id=extracted_id,
-            url=profile.url,
-            name=profile.name,
-            paused=profile.paused,
-            device_count=len(devices_list),
-            device_ids=device_ids,
+            id=profile.get("id"),
+            url=profile.get("url"),
+            name=profile.get("name") or "",
+            paused=profile.get("paused", False),
+            device_count=profile.get("device_count", 0),
+            device_ids=profile.get("device_ids", []),
             devices=profile_devices,
         )
     except EeroException as e:
@@ -274,9 +175,10 @@ async def pause_profile(
 ) -> ProfileAction:
     """Pause internet access for all devices in a profile."""
     try:
-        success = await client.pause_profile(
+        raw_result = await client.pause_profile(
             profile_id, paused=True, network_id=network_id
         )
+        success = check_success(raw_result)
         return ProfileAction(
             success=success,
             profile_id=profile_id,
@@ -303,9 +205,10 @@ async def unpause_profile(
 ) -> ProfileAction:
     """Resume internet access for all devices in a profile."""
     try:
-        success = await client.pause_profile(
+        raw_result = await client.pause_profile(
             profile_id, paused=False, network_id=network_id
         )
+        success = check_success(raw_result)
         return ProfileAction(
             success=success,
             profile_id=profile_id,

@@ -8,9 +8,14 @@ Tests cover:
 - Error scenarios
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
+
+
+def make_raw_response(data, code: int = 200):
+    """Helper to create a raw API response envelope."""
+    return {"meta": {"code": code}, "data": data}
 
 
 class TestAuthStatus:
@@ -29,19 +34,22 @@ class TestAuthStatus:
 
     async def test_status_authenticated(self, auth_client, authenticated_client):
         """Returns user info when authenticated."""
-        # Arrange: mock account data
-        mock_user = MagicMock()
-        mock_user.email = "user@example.com"
-        mock_user.name = "Test User"
-        mock_user.phone = "+1234567890"
-        mock_user.role = "owner"
-
-        mock_account = MagicMock()
-        mock_account.id = "account-123"
-        mock_account.premium_status = "premium"
-        mock_account.users = [mock_user]
-
-        authenticated_client.get_account = AsyncMock(return_value=mock_account)
+        # Arrange: mock account data as raw response
+        mock_account_data = {
+            "url": "/2.2/accounts/account-123",
+            "premium_status": "premium",
+            "users": [
+                {
+                    "email": "user@example.com",
+                    "name": "Test User",
+                    "phone": "+1234567890",
+                    "role": "owner",
+                }
+            ],
+        }
+        authenticated_client.get_account = AsyncMock(
+            return_value=make_raw_response(mock_account_data)
+        )
 
         # Act
         response = await auth_client.get("/api/auth/status")
@@ -61,7 +69,7 @@ class TestLogin:
 
     async def test_login_success(self, async_client, mock_eero_client):
         """Successful login returns success message."""
-        mock_eero_client.login = AsyncMock(return_value=True)
+        mock_eero_client.login = AsyncMock(return_value=make_raw_response({}))
 
         response = await async_client.post(
             "/api/auth/login", json={"identifier": "user@example.com"}
@@ -74,7 +82,10 @@ class TestLogin:
 
     async def test_login_failure(self, async_client, mock_eero_client):
         """Failed login returns success=false."""
-        mock_eero_client.login = AsyncMock(return_value=False)
+        # Return a failed response (code != 200)
+        mock_eero_client.login = AsyncMock(
+            return_value={"meta": {"code": 400}, "data": {}}
+        )
 
         response = await async_client.post(
             "/api/auth/login", json={"identifier": "user@example.com"}
@@ -120,7 +131,7 @@ class TestVerify:
 
     async def test_verify_success(self, async_client, mock_eero_client):
         """Successful verification returns success with network ID."""
-        mock_eero_client.verify = AsyncMock(return_value=True)
+        mock_eero_client.verify = AsyncMock(return_value=make_raw_response({}))
         mock_eero_client.preferred_network_id = "network-123"
 
         response = await async_client.post("/api/auth/verify", json={"code": "123456"})
@@ -132,7 +143,9 @@ class TestVerify:
 
     async def test_verify_failure(self, async_client, mock_eero_client):
         """Failed verification returns success=false."""
-        mock_eero_client.verify = AsyncMock(return_value=False)
+        mock_eero_client.verify = AsyncMock(
+            return_value={"meta": {"code": 400}, "data": {}}
+        )
 
         response = await async_client.post("/api/auth/verify", json={"code": "wrong"})
 
@@ -156,7 +169,7 @@ class TestLogout:
 
     async def test_logout_success(self, auth_client, authenticated_client):
         """Successful logout returns success."""
-        authenticated_client.logout = AsyncMock(return_value=True)
+        authenticated_client.logout = AsyncMock(return_value=make_raw_response({}))
 
         response = await auth_client.post("/api/auth/logout")
 
