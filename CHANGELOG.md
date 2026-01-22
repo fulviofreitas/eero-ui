@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.6.2](https://github.com/fulviofreitas/eero-ui/compare/v3.6.1...v3.6.2) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **ui:** align theme toggle with network selector row ([0cf265d](https://github.com/fulviofreitas/eero-ui/commit/0cf265d207d3ab324ea06f5f86b2e1b81ccfe080))
+
 ## [3.6.1](https://github.com/fulviofreitas/eero-ui/compare/v3.6.0...v3.6.1) (2026-01-22)
 
 ### 🐛 Bug Fixes
