@@ -26,6 +26,14 @@ def get_eero_client_version() -> str:
         return "unknown"
 
 
+def get_exporter_version() -> str:
+    """Get the installed eero-prometheus-exporter version."""
+    try:
+        return pkg_version("eero-prometheus-exporter")
+    except Exception:
+        return None
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -93,11 +101,15 @@ app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {
+    response = {
         "status": "healthy",
         "version": "1.0.0",
         "eero_client_version": get_eero_client_version(),
     }
+    exporter_version = get_exporter_version()
+    if exporter_version:
+        response["exporter_version"] = exporter_version
+    return response
 
 
 # Optional: External /metrics endpoint for Prometheus scraping

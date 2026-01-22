@@ -26,6 +26,7 @@
 
 	let initialized = false;
 	let eeroClientVersion: string | null = null;
+	let exporterVersion: string | null = null;
 
 	onMount(async () => {
 		// Initialize theme from localStorage
@@ -35,6 +36,7 @@
 		try {
 			const health = await api.health();
 			eeroClientVersion = health.eero_client_version;
+			exporterVersion = health.exporter_version ?? null;
 		} catch {
 			// Silently ignore - version display is non-critical
 		}
@@ -154,6 +156,17 @@
 					>
 						<span class="version-label">eero-api</span>
 						<span class="version-chip">v{eeroClientVersion}</span>
+					</a>
+				{/if}
+				{#if exporterVersion}
+					<a
+						href="https://github.com/fulviofreitas/eero-prometheus-exporter"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="version-row version-link"
+					>
+						<span class="version-label">exporter</span>
+						<span class="version-chip">v{exporterVersion}</span>
 					</a>
 				{/if}
 				<a
