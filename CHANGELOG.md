@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.6.1](https://github.com/fulviofreitas/eero-ui/compare/v3.6.0...v3.6.1) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **auth:** copy session file instead of accessing non-existent user_token ([4ab236d](https://github.com/fulviofreitas/eero-ui/commit/4ab236d57ca36efc49d88d4e25fa8692300facb5))
+
 ## [3.6.0](https://github.com/fulviofreitas/eero-ui/compare/v3.5.0...v3.6.0) (2026-01-22)
 
 ### ✨ Features
