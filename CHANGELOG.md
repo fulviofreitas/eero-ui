@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.9.1](https://github.com/fulviofreitas/eero-ui/compare/v3.9.0...v3.9.1) (2026-01-22)
+
+### 🐛 Bug Fixes
+
+* **metrics:** correct speedtest metric names ([11c9a27](https://github.com/fulviofreitas/eero-ui/commit/11c9a2743e0a8e2a8f1d379b69b41793a1cb5d36))
+
 ## [3.9.0](https://github.com/fulviofreitas/eero-ui/compare/v3.8.2...v3.9.0) (2026-01-22)
 
 ### ✨ Features
