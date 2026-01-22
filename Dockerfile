@@ -72,9 +72,10 @@ COPY backend/pyproject.toml ./backend/
 
 # Install Python dependencies with uv and cache mount for faster rebuilds
 # Note: eero-prometheus-exporter includes eero-api as a dependency
+# Version 2.3.1+ includes fix for --session-file and speedtest field name
 WORKDIR /app/backend
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv pip install --system . eero-prometheus-exporter
+    uv pip install --system . "eero-prometheus-exporter==2.3.1"
 
 # Copy backend source
 COPY backend/app ./app

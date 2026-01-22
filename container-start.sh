@@ -26,15 +26,6 @@ echo "============================================"
 # Ensure session directory exists
 mkdir -p "$(dirname "$SESSION_PATH")"
 
-# WORKAROUND: eero-prometheus-exporter has a bug where --session-file is not
-# passed to the collector. Create a symlink from the default location to our
-# session path so the collector can find it.
-# See: https://github.com/your-repo/eero-prometheus-exporter/issues/XXX
-DEFAULT_EXPORTER_SESSION="/root/.config/eero-exporter/session.json"
-mkdir -p "$(dirname "$DEFAULT_EXPORTER_SESSION")"
-ln -sf "$SESSION_PATH" "$DEFAULT_EXPORTER_SESSION"
-echo "  Session symlink: $DEFAULT_EXPORTER_SESSION -> $SESSION_PATH"
-
 # Generate prometheus.yml for VictoriaMetrics scrape config
 cat > /app/prometheus.yml <<EOF
 global:
