@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.11.0](https://github.com/fulviofreitas/eero-ui/compare/v3.10.1...v3.11.0) (2026-01-22)
+
+### ✨ Features
+
+* **ui:** move Topology to last nav position and add speedtest chart to Dashboard ([90a580c](https://github.com/fulviofreitas/eero-ui/commit/90a580c4ed4930966992b1d8382ae80afda2f9f8))
+
 ## [3.10.1](https://github.com/fulviofreitas/eero-ui/compare/v3.10.0...v3.10.1) (2026-01-22)
 
 ### 🐛 Bug Fixes
