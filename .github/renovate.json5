@@ -60,61 +60,35 @@
   // ============================================================================
   packageRules: [
     // ==========================================================================
-    // 🟢 eero-api - Internal dependency (feature release)
+    // 🟢 eero packages - Internal dependencies (grouped together)
     // ==========================================================================
-    // Updates trigger minor version bump via feat(deps): prefix
-    // Note: Match all Python managers to ensure consistent behavior
+    // eero-api and eero-prometheus-exporter must be updated together because
+    // eero-prometheus-exporter pins eero-api to a specific version.
+    // Updates trigger minor version bump via feat(deps): prefix.
     {
-      matchPackageNames: ["eero-api"],
+      matchPackageNames: ["eero-api", "eero-prometheus-exporter"],
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      groupName: "eero-api",
-      description: "🟢 eero-api update (triggers minor release)",
+      groupName: "eero-packages",
+      description: "🟢 eero packages update (triggers minor release)",
       automerge: true,
       automergeType: "pr",
       automergeStrategy: "squash",
-      addLabels: ["eero-api", "feature", "critical", "needs-review"],
+      addLabels: ["eero-packages", "feature", "critical", "needs-review"],
       prPriority: 10,
       commitMessagePrefix: "feat(deps):",
-      commitMessageExtra: "{{newVersion}}",
-      prTitle: "feat(deps): update eero-api to {{{newVersion}}}",
+      prTitle: "feat(deps): update eero packages",
       prBodyNotes: [
-        "## 🟢 eero-api Update",
+        "## 🟢 eero Packages Update",
         "",
-        "This PR updates `eero-api`, the core API client for eero network communication.",
+        "This PR updates the eero ecosystem packages:",
+        "- `eero-api` - Core API client for eero network communication",
+        "- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter",
+        "",
+        "**Note**: These packages are grouped because `eero-prometheus-exporter` depends on a specific version of `eero-api`.",
         "",
         "### Links",
         "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
-        "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
-        "- [eero-api Releases](https://github.com/fulviofreitas/eero-api/releases)",
-      ],
-    },
-
-    // ==========================================================================
-    // 🟢 eero-prometheus-exporter - Internal dependency (feature release)
-    // ==========================================================================
-    // Updates trigger minor version bump via feat(deps): prefix
-    {
-      matchPackageNames: ["eero-prometheus-exporter"],
-      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      groupName: "eero-prometheus-exporter",
-      description: "🟢 eero-prometheus-exporter update (triggers minor release)",
-      automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      addLabels: ["eero-prometheus-exporter", "feature", "critical", "needs-review"],
-      prPriority: 10,
-      commitMessagePrefix: "feat(deps):",
-      commitMessageExtra: "{{newVersion}}",
-      prTitle: "feat(deps): update eero-prometheus-exporter to {{{newVersion}}}",
-      prBodyNotes: [
-        "## 🟢 eero-prometheus-exporter Update",
-        "",
-        "This PR updates `eero-prometheus-exporter`, the embedded Prometheus metrics exporter.",
-        "",
-        "### Links",
         "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
-        "- [eero-prometheus-exporter Repository](https://github.com/fulviofreitas/eero-prometheus-exporter)",
-        "- [eero-prometheus-exporter Releases](https://github.com/fulviofreitas/eero-prometheus-exporter/releases)",
       ],
     },
 
