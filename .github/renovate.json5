@@ -20,6 +20,13 @@
   branchPrefix: "deps/",
 
   // ============================================================================
+  // Package Managers
+  // ============================================================================
+  // Enable Python package managers for backend/pyproject.toml
+  // The pep621 manager handles pyproject.toml with [project] section
+  enabledManagers: ["pep621", "npm", "github-actions"],
+
+  // ============================================================================
   // Commit & PR Title Format
   // ============================================================================
   // When auto-merge uses squash, the PR title becomes the commit message.
