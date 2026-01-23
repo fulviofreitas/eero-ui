@@ -27,13 +27,14 @@
   enabledManagers: ["pep621", "npm", "github-actions"],
 
   // ============================================================================
-  // Commit & PR Title Format
+  // Commit Message Format (PR title is derived from commit message)
   // ============================================================================
-  // When auto-merge uses squash, the PR title becomes the commit message.
+  // The PR title is automatically derived from the commit message.
   // Both must follow conventional commits format for commitlint to pass.
   commitMessagePrefix: "chore(deps):",
   commitMessageAction: "update",
-  prTitle: "chore(deps): update {{{depName}}} to {{{newVersion}}}",
+  commitMessageTopic: "{{{depName}}}",
+  commitMessageExtra: "to {{{newVersion}}}",
 
   // Prevent long release notes in commit body (avoids commitlint failures)
   commitBody: "",
@@ -72,7 +73,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-python):",
-      prTitle: "chore(deps-python): update python dependencies",
+      commitMessageTopic: "python dependencies",
     },
 
     // ==========================================================================
@@ -87,7 +88,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-npm):",
-      prTitle: "chore(deps-npm): update npm dependencies",
+      commitMessageTopic: "npm dependencies",
     },
 
     // ==========================================================================
@@ -102,7 +103,7 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-actions):",
-      prTitle: "chore(deps-actions): update github actions",
+      commitMessageTopic: "github actions",
     },
 
     // ==========================================================================
@@ -116,7 +117,6 @@
       addLabels: ["major-update", "needs-review"],
       reviewers: ["fulviofreitas"],
       commitMessagePrefix: "chore(deps-major):",
-      prTitle: "chore(deps-major): update {{{depName}}} to {{{newVersion}}}",
     },
 
     // ==========================================================================
@@ -145,8 +145,8 @@
       reviewers: ["fulviofreitas"],
       prPriority: 10,
       commitMessagePrefix: "feat(deps):",
-      commitMessageExtra: "{{newVersion}}",
-      prTitle: "feat(deps): update eero-api to {{{newVersion}}}",
+      commitMessageTopic: "eero-api",
+      commitMessageExtra: "to {{{newVersion}}}",
       prBodyNotes: [
         "## 🟢 eero-api Update",
         "",
@@ -174,8 +174,8 @@
       reviewers: ["fulviofreitas"],
       prPriority: 10,
       commitMessagePrefix: "feat(deps):",
-      commitMessageExtra: "{{newVersion}}",
-      prTitle: "feat(deps): update eero-prometheus-exporter to {{{newVersion}}}",
+      commitMessageTopic: "eero-prometheus-exporter",
+      commitMessageExtra: "to {{{newVersion}}}",
       prBodyNotes: [
         "## 🟢 eero-prometheus-exporter Update",
         "",
