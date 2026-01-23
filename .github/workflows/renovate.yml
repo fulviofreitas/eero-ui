@@ -4,6 +4,12 @@
 # Runs Renovate to check for dependency updates and create PRs.
 # Uses the reusable renovate action from eero-api.
 #
+# Key features:
+# - Tracks eero-api and eero-prometheus-exporter dependencies
+# - Auto-merges minor/patch updates for most dependencies
+# - Requires manual review for major updates
+# - Repository caching for faster subsequent runs
+#
 # Triggers:
 # - Scheduled: Every 6 hours (4 times daily)
 # - Manual: workflow_dispatch
@@ -15,6 +21,7 @@ name: 🔄 Renovate
 
 on:
   schedule:
+    # Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
     - cron: "0 */6 * * *"
 
   workflow_dispatch:
@@ -50,6 +57,7 @@ on:
       - eero-api-dependency-update-available
       - eero-prometheus-exporter-dependency-update-available
 
+# Prevent concurrent runs
 concurrency:
   group: renovate
   cancel-in-progress: false
@@ -58,6 +66,9 @@ permissions:
   contents: read
 
 jobs:
+  # ============================================================================
+  # 🔄 Run Renovate
+  # ============================================================================
   renovate:
     name: 🔄 Renovate
     runs-on: ubuntu-latest
@@ -71,12 +82,28 @@ jobs:
         run: |
           echo "🎯 Trigger: ${{ github.event_name }}"
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "📦 Repository: ${{ github.event.client_payload.repository }}"
+            echo "🔗 Source: ${{ github.event.client_payload.repository }}"
+            echo "📦 Package: ${{ github.event.client_payload.package || 'unknown' }}"
             echo "🏷️ Version: ${{ github.event.client_payload.version }}"
             echo "🔖 Tag: ${{ github.event.client_payload.tag }}"
-            echo "👤 Triggered by: ${{ github.event.client_payload.triggered_by }}"
+            echo "👤 Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}"
           fi
 
+      # ========================================================================
+      # ⏳ Wait for PyPI Indexing
+      # ========================================================================
+      # PyPI indexing typically takes 1-5 minutes after package upload.
+      # This step polls PyPI until the new version is available.
+      - name: ⏳ Wait for PyPI indexing
+        if: github.event_name == 'repository_dispatch'
+        uses: fulviofreitas/eero-api/.github/actions/wait-for-pypi@master
+        with:
+          package: ${{ github.event.client_payload.package }}
+          version: ${{ github.event.client_payload.version }}
+
+      # ========================================================================
+      # 🔄 Run Renovate
+      # ========================================================================
       - name: 🔄 Run Renovate
         uses: fulviofreitas/eero-api/.github/actions/renovate@master
         with:
@@ -87,6 +114,9 @@ jobs:
           log-level: ${{ github.event.inputs.log_level || 'info' }}
           reset-cache: ${{ github.event.inputs.reset_cache || 'false' }}
 
+      # ========================================================================
+      # 📝 Summary
+      # ========================================================================
       - name: 📝 Generate summary
         if: always()
         run: |
@@ -95,6 +125,7 @@ jobs:
 
           | Property | Value |
           |:---------|:------|
+          | 📦 Repository | [\`${{ github.repository }}\`](https://github.com/${{ github.repository }}) |
           | 🎯 Trigger | \`${{ github.event_name }}\` |
           | 🧪 Dry Run | \`${{ github.event.inputs.dry_run || 'false' }}\` |
 
@@ -107,7 +138,8 @@ jobs:
 
           | Property | Value |
           |:---------|:------|
-          | 📦 Repository | \`${{ github.event.client_payload.repository || 'unknown' }}\` |
+          | 🔗 Source | [\`${{ github.event.client_payload.repository || 'unknown' }}\`](https://github.com/${{ github.event.client_payload.repository }}) |
+          | 📦 Package | \`${{ github.event.client_payload.package || 'unknown' }}\` |
           | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
           | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
           | 👤 Triggered by | \`${{ github.event.client_payload.triggered_by || 'unknown' }}\` |
