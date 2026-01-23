@@ -1,0 +1,26 @@
+name: 📊 Repository Metrics
+
+on:
+  # Generate on schedule (daily at 00:00 UTC)
+  schedule:
+    - cron: "0 0 * * *"
+  # Generate on push to master
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/metrics.yml"
+  # Allow manual trigger
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metrics:
+    uses: fulviofreitas/eero-api/.github/workflows/reusable-metrics.yml@master
+    with:
+      repo: eero-ui
+      branch: master
+    secrets: inherit

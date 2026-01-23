@@ -68,3 +68,13 @@ Full documentation lives in the **[Wiki](../../wiki)**:
 ## 📄 License
 
 [MIT](LICENSE) — Use freely, contribute gladly!
+
+---
+
+<div align="center">
+
+## 📊 Repository Metrics
+
+![Repository Metrics](./metrics.repository.svg)
+
+</div>
