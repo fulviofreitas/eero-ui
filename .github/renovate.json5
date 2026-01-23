@@ -1,18 +1,18 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
 
-  // Base configuration
+  // ============================================================================
+  // Base Configuration
+  // ============================================================================
   extends: ["config:recommended", ":semanticCommits"],
 
-  // Timezone for scheduling (used for prCreation hours if needed)
+  // Timezone for scheduling
   timezone: "America/Los_Angeles",
 
-  // IMPORTANT: Explicitly set empty schedule to create PRs immediately
-  // Without this, config:recommended applies a default schedule
+  // Create PRs immediately (override default schedule)
   schedule: ["at any time"],
 
-  // PR limits to avoid noise
-  // Note: Set to 0 to disable rate limiting
+  // Disable rate limiting
   prHourlyLimit: 0,
   prConcurrentLimit: 0,
 
@@ -20,73 +20,56 @@
   branchPrefix: "deps/",
 
   // ============================================================================
-  // Commit & PR Title format (MUST be conventional commits for squash merge)
+  // Commit & PR Title Format
   // ============================================================================
   // When auto-merge uses squash, the PR title becomes the commit message.
   // Both must follow conventional commits format for commitlint to pass.
   commitMessagePrefix: "chore(deps):",
   commitMessageAction: "update",
-
-  // PR title MUST match commit format for squash merges to pass commitlint
   prTitle: "chore(deps): update {{{depName}}} to {{{newVersion}}}",
 
-  // Prevent long release notes from being included in commit body
-  // This avoids commitlint body-max-line-length failures on squash merge
+  // Prevent long release notes in commit body (avoids commitlint failures)
   commitBody: "",
   commitBodyTable: false,
 
-  // Labels for all PRs
+  // ============================================================================
+  // Labels & Dashboard
+  // ============================================================================
   labels: ["dependencies", "renovate", "automerge"],
-
-  // Create a dependency dashboard issue
   dependencyDashboard: true,
   dependencyDashboardTitle: "📦 Renovate Dependency Dashboard",
-
-  // Close the Dependency Dashboard issue if there are no more updates
   dependencyDashboardAutoclose: true,
-
-  // Dependency dashboard approval for certain updates
   dependencyDashboardApproval: false,
 
-  // Allow recreating PRs that were closed without merging
-  // This ensures PRs can be recreated after branch deletion or config changes
+  // Allow recreating closed PRs
   recreateWhen: "auto",
 
-  // PR body template with useful information
+  // PR body template
   prBodyTemplate: "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
-
-  // Include release notes in PRs
   fetchChangeLogs: "pr",
 
-  // Package-specific rules
+  // ============================================================================
+  // Package Rules
+  // ============================================================================
   packageRules: [
     // ==========================================================================
-    // 🟢 eero-api - Core API dependency (feature release)
+    // 🟢 eero-api - Internal dependency (feature release)
     // ==========================================================================
-    // Internal eero package - updates trigger minor version bump
+    // Updates trigger minor version bump via feat(deps): prefix
+    // Note: Match all Python managers to ensure consistent behavior
     {
       matchPackageNames: ["eero-api"],
-      matchManagers: ["pep621"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       groupName: "eero-api",
       description: "🟢 eero-api update (triggers minor release)",
-
-      // Auto-merge internal eero packages
       automerge: true,
       automergeType: "pr",
       automergeStrategy: "squash",
-
-      // Labels for eero packages
       addLabels: ["eero-api", "feature", "critical", "needs-review"],
-
-      // Prioritize this PR above others
       prPriority: 10,
-
-      // Feature commit message (triggers minor version bump)
       commitMessagePrefix: "feat(deps):",
       commitMessageExtra: "{{newVersion}}",
       prTitle: "feat(deps): update eero-api to {{{newVersion}}}",
-
-      // Add detailed PR body note
       prBodyNotes: [
         "## 🟢 eero-api Update",
         "",
@@ -100,32 +83,22 @@
     },
 
     // ==========================================================================
-    // 🟢 eero-prometheus-exporter - Metrics collection dependency (feature release)
+    // 🟢 eero-prometheus-exporter - Internal dependency (feature release)
     // ==========================================================================
-    // Internal eero package - updates trigger minor version bump
+    // Updates trigger minor version bump via feat(deps): prefix
     {
       matchPackageNames: ["eero-prometheus-exporter"],
-      matchManagers: ["pep621"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       groupName: "eero-prometheus-exporter",
       description: "🟢 eero-prometheus-exporter update (triggers minor release)",
-
-      // Auto-merge internal eero packages
       automerge: true,
       automergeType: "pr",
       automergeStrategy: "squash",
-
-      // Labels for eero packages
       addLabels: ["eero-prometheus-exporter", "feature", "critical", "needs-review"],
-
-      // Prioritize this PR above others
       prPriority: 10,
-
-      // Feature commit message (triggers minor version bump)
       commitMessagePrefix: "feat(deps):",
       commitMessageExtra: "{{newVersion}}",
       prTitle: "feat(deps): update eero-prometheus-exporter to {{{newVersion}}}",
-
-      // Add detailed PR body note
       prBodyNotes: [
         "## 🟢 eero-prometheus-exporter Update",
         "",
@@ -142,7 +115,7 @@
     // 🟡 Python dependencies: Group minor/patch updates
     // ==========================================================================
     {
-      matchManagers: ["pip_requirements", "pip-compile", "pep621"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       matchUpdateTypes: ["minor", "patch"],
       groupName: "python-minor-patch",
       description: "Python minor/patch updates (auto-merge)",
@@ -150,7 +123,6 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-python):",
-      // PR title must match commit format for squash merge commitlint
       prTitle: "chore(deps-python): update python dependencies",
     },
 
@@ -166,7 +138,6 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-npm):",
-      // PR title must match commit format for squash merge commitlint
       prTitle: "chore(deps-npm): update npm dependencies",
     },
 
@@ -182,12 +153,11 @@
       automergeType: "pr",
       automergeStrategy: "squash",
       commitMessagePrefix: "chore(deps-actions):",
-      // PR title must match commit format for squash merge commitlint
       prTitle: "chore(deps-actions): update github actions",
     },
 
     // ==========================================================================
-    // 🔵 Major updates: Never auto-merge, require review
+    // 🔵 Major updates: Require review
     // ==========================================================================
     {
       matchUpdateTypes: ["major"],
@@ -196,12 +166,11 @@
       addLabels: ["major-update", "needs-review"],
       reviewers: ["fulviofreitas"],
       commitMessagePrefix: "chore(deps-major):",
-      // PR title must match commit format for squash merge commitlint
       prTitle: "chore(deps-major): update {{{depName}}} to {{{newVersion}}}",
     },
 
     // ==========================================================================
-    // 🟣 Security updates: High priority, fast-track
+    // 🟣 Security updates: High priority
     // ==========================================================================
     {
       matchDepTypes: ["devDependencies", "dependencies"],
@@ -212,7 +181,7 @@
     },
   ],
 
-  // Vulnerability alerts configuration (top-level, not inside packageRules)
+  // Vulnerability alerts
   vulnerabilityAlerts: {
     enabled: true,
     labels: ["security", "critical", "automerge"],
