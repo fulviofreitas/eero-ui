@@ -105,10 +105,11 @@
     },
 
     // ==========================================================================
-    // 🔵 Major updates: Require review
+    // 🔵 Major updates: Require review (except eero packages)
     // ==========================================================================
     {
       matchUpdateTypes: ["major"],
+      excludePackageNames: ["eero-api", "eero-prometheus-exporter"],
       description: "Major updates require manual review",
       automerge: false,
       addLabels: ["major-update", "needs-review"],
