@@ -27,6 +27,14 @@
   enabledManagers: ["pep621", "npm", "github-actions"],
 
   // ============================================================================
+  // Lock File Handling
+  // ============================================================================
+  // Disable lock file updates for pep621 (uv.lock) due to known Renovate issues.
+  // The lock file will be regenerated via CI or manually after PR merge.
+  // See: https://github.com/renovatebot/renovate/discussions/37685
+  updateLockFiles: false,
+
+  // ============================================================================
   // Commit Message Format (PR title is derived from commit message)
   // ============================================================================
   // The PR title is automatically derived from the commit message.
