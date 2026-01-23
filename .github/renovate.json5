@@ -60,39 +60,6 @@
   // ============================================================================
   packageRules: [
     // ==========================================================================
-    // 🟢 eero packages - Internal dependencies (grouped together)
-    // ==========================================================================
-    // eero-api and eero-prometheus-exporter must be updated together because
-    // eero-prometheus-exporter pins eero-api to a specific version.
-    // Updates trigger minor version bump via feat(deps): prefix.
-    {
-      matchPackageNames: ["eero-api", "eero-prometheus-exporter"],
-      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      groupName: "eero-packages",
-      description: "🟢 eero packages update (triggers minor release)",
-      automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      addLabels: ["eero-packages", "feature", "critical", "needs-review"],
-      prPriority: 10,
-      commitMessagePrefix: "feat(deps):",
-      prTitle: "feat(deps): update eero packages",
-      prBodyNotes: [
-        "## 🟢 eero Packages Update",
-        "",
-        "This PR updates the eero ecosystem packages:",
-        "- `eero-api` - Core API client for eero network communication",
-        "- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter",
-        "",
-        "**Note**: These packages are grouped because `eero-prometheus-exporter` depends on a specific version of `eero-api`.",
-        "",
-        "### Links",
-        "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
-        "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
-      ],
-    },
-
-    // ==========================================================================
     // 🟡 Python dependencies: Group minor/patch updates
     // ==========================================================================
     {
@@ -159,6 +126,40 @@
       matchPackageNames: ["*"],
       prPriority: 20,
       description: "Security patches get high priority",
+    },
+
+    // ==========================================================================
+    // 🟢 eero packages - Internal dependencies (MUST BE LAST to override major rule)
+    // ==========================================================================
+    // eero-api and eero-prometheus-exporter must be updated together because
+    // eero-prometheus-exporter pins eero-api to a specific version.
+    // Updates trigger minor version bump via feat(deps): prefix.
+    // This rule is placed LAST so it takes precedence over the major updates rule.
+    {
+      matchPackageNames: ["eero-api", "eero-prometheus-exporter"],
+      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
+      groupName: "eero-packages",
+      description: "🟢 eero packages update (triggers minor release)",
+      automerge: true,
+      automergeType: "pr",
+      automergeStrategy: "squash",
+      addLabels: ["eero-packages", "feature", "critical"],
+      prPriority: 10,
+      commitMessagePrefix: "feat(deps):",
+      prTitle: "feat(deps): update eero packages",
+      prBodyNotes: [
+        "## 🟢 eero Packages Update",
+        "",
+        "This PR updates the eero ecosystem packages:",
+        "- `eero-api` - Core API client for eero network communication",
+        "- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter",
+        "",
+        "**Note**: These packages are grouped because `eero-prometheus-exporter` depends on a specific version of `eero-api`.",
+        "",
+        "### Links",
+        "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
+        "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
+      ],
     },
   ],
 
