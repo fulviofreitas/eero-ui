@@ -61,46 +61,36 @@
   // Package-specific rules
   packageRules: [
     // ==========================================================================
-    // 🔴 CRITICAL: eero-api - Core API dependency
+    // 🟢 eero-api - Core API dependency (feature release)
     // ==========================================================================
-    // This is the most important dependency. Updates require:
-    // - Manual review by maintainer
-    // - Full CI test suite pass
-    // - Changelog review for breaking changes
+    // Internal eero package - updates trigger minor version bump
     {
       matchPackageNames: ["eero-api"],
       matchManagers: ["pep621"],
       groupName: "eero-api",
-      description: "🔴 Core eero API client - requires careful review",
-      automerge: false,
+      description: "🟢 eero-api update (triggers minor release)",
 
-      // High visibility labels
-      addLabels: ["eero-api", "critical", "needs-review"],
+      // Auto-merge internal eero packages
+      automerge: true,
+      automergeType: "pr",
+      automergeStrategy: "squash",
+
+      // Labels for eero packages
+      addLabels: ["eero-api", "feature"],
 
       // Prioritize this PR above others
       prPriority: 10,
 
-      // Request review from maintainers
-      reviewers: ["fulviofreitas"],
-      assignees: ["fulviofreitas"],
-
-      // Custom commit message
-      commitMessagePrefix: "chore(deps-critical):",
+      // Feature commit message (triggers minor version bump)
+      commitMessagePrefix: "feat(deps):",
       commitMessageExtra: "{{newVersion}}",
-      // PR title must match commit format for squash merge commitlint
-      prTitle: "chore(deps-critical): update eero-api to {{{newVersion}}}",
+      prTitle: "feat(deps): update eero-api to {{{newVersion}}}",
 
       // Add detailed PR body note
       prBodyNotes: [
-        "## ⚠️ Critical Dependency Update",
+        "## 🟢 eero-api Update",
         "",
         "This PR updates `eero-api`, the core API client for eero network communication.",
-        "",
-        "### Review Checklist",
-        "- [ ] Review the changelog for breaking changes",
-        "- [ ] Verify API compatibility",
-        "- [ ] Run full test suite locally if needed",
-        "- [ ] Check for any deprecated methods",
         "",
         "### Links",
         "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
@@ -110,46 +100,36 @@
     },
 
     // ==========================================================================
-    // 🔴 CRITICAL: eero-prometheus-exporter - Metrics collection dependency
+    // 🟢 eero-prometheus-exporter - Metrics collection dependency (feature release)
     // ==========================================================================
-    // Embedded metrics exporter for Prometheus. Updates require:
-    // - Manual review by maintainer
-    // - Full CI test suite pass
-    // - Changelog review for breaking changes
+    // Internal eero package - updates trigger minor version bump
     {
       matchPackageNames: ["eero-prometheus-exporter"],
       matchManagers: ["pep621"],
       groupName: "eero-prometheus-exporter",
-      description: "🔴 Prometheus metrics exporter - requires careful review",
-      automerge: false,
+      description: "🟢 eero-prometheus-exporter update (triggers minor release)",
 
-      // High visibility labels
-      addLabels: ["eero-prometheus-exporter", "critical", "needs-review"],
+      // Auto-merge internal eero packages
+      automerge: true,
+      automergeType: "pr",
+      automergeStrategy: "squash",
+
+      // Labels for eero packages
+      addLabels: ["eero-prometheus-exporter", "feature"],
 
       // Prioritize this PR above others
       prPriority: 10,
 
-      // Request review from maintainers
-      reviewers: ["fulviofreitas"],
-      assignees: ["fulviofreitas"],
-
-      // Custom commit message
-      commitMessagePrefix: "chore(deps-critical):",
+      // Feature commit message (triggers minor version bump)
+      commitMessagePrefix: "feat(deps):",
       commitMessageExtra: "{{newVersion}}",
-      // PR title must match commit format for squash merge commitlint
-      prTitle: "chore(deps-critical): update eero-prometheus-exporter to {{{newVersion}}}",
+      prTitle: "feat(deps): update eero-prometheus-exporter to {{{newVersion}}}",
 
       // Add detailed PR body note
       prBodyNotes: [
-        "## ⚠️ Critical Dependency Update",
+        "## 🟢 eero-prometheus-exporter Update",
         "",
         "This PR updates `eero-prometheus-exporter`, the embedded Prometheus metrics exporter.",
-        "",
-        "### Review Checklist",
-        "- [ ] Review the changelog for breaking changes",
-        "- [ ] Verify metrics compatibility",
-        "- [ ] Run full test suite locally if needed",
-        "- [ ] Check for any deprecated metrics or CLI flags",
         "",
         "### Links",
         "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
