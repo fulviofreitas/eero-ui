@@ -2,7 +2,6 @@
 
 A sleek **Svelte** dashboard for managing your Eero mesh network. Built for operators who want fast, efficient network control.
 
-[![CI](https://github.com/fulviofreitas/eero-ui/actions/workflows/ci.yml/badge.svg)](https://github.com/fulviofreitas/eero-ui/actions)
 [![Docker](https://ghcr-badge.egpl.dev/fulviofreitas/eero-ui/latest_tag?color=blue&label=docker)](https://ghcr.io/fulviofreitas/eero-ui)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
