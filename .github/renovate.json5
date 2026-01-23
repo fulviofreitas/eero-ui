@@ -76,7 +76,7 @@
       automergeStrategy: "squash",
 
       // Labels for eero packages
-      addLabels: ["eero-api", "feature"],
+      addLabels: ["eero-api", "feature", "critical", "needs-review"],
 
       // Prioritize this PR above others
       prPriority: 10,
@@ -115,7 +115,7 @@
       automergeStrategy: "squash",
 
       // Labels for eero packages
-      addLabels: ["eero-prometheus-exporter", "feature"],
+      addLabels: ["eero-prometheus-exporter", "feature", "critical", "needs-review"],
 
       // Prioritize this PR above others
       prPriority: 10,
