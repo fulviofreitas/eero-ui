@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.0.0](https://github.com/fulviofreitas/eero-ui/compare/v3.14.0...v4.0.0) (2026-01-23)
+
+### ⚠ BREAKING CHANGES
+
+* migrate to eero-api v2.0.0 raw response architecture
+
+### ✨ Features
+
+* **ci:** standardize renovate workflow with reusable actions ([2179f94](https://github.com/fulviofreitas/eero-ui/commit/2179f94e47abd29ac1c62cd274cc02e26915880d))
+* **deps:** update eero-packages ([#59](https://github.com/fulviofreitas/eero-ui/issues/59)) ([3a2ee86](https://github.com/fulviofreitas/eero-ui/commit/3a2ee862ad3316e9c793f938b7e0dee89e8f1ca1))
+* migrate to eero-api v2.0.0 raw response architecture ([d5cd5fc](https://github.com/fulviofreitas/eero-ui/commit/d5cd5fc657c97e196cd965d3fefd131a98176817))
+* **renovate:** treat eero packages as feature releases for minor version bumps ([4356e0c](https://github.com/fulviofreitas/eero-ui/commit/4356e0c76d9601c5ef3ca79d402c44e3385785dd))
+
+### 🐛 Bug Fixes
+
+* **renovate:** enable pep621 manager for backend Python deps ([aca89d5](https://github.com/fulviofreitas/eero-ui/commit/aca89d5d37ae5840ab6dd1b5305919fba92dfb4f))
+* **renovate:** ensure consistent config matching all Python managers ([bb4d337](https://github.com/fulviofreitas/eero-ui/commit/bb4d337e334890a1df953f5d95c9c0d099ab3780))
+* **renovate:** exclude eero packages from major-update rule ([d77bc57](https://github.com/fulviofreitas/eero-ui/commit/d77bc57ec309aff0052ddeeb7f430c5958b2347e))
+* **renovate:** group eero-api and eero-prometheus-exporter together ([25d4e08](https://github.com/fulviofreitas/eero-ui/commit/25d4e0891e40709ef7fe946d321120893ca6ebdb))
+* **renovate:** move eero-packages rule to end for precedence ([ea28fe0](https://github.com/fulviofreitas/eero-ui/commit/ea28fe028982c54b6d4a203b8e8a9a673b91ba08))
+* **renovate:** restore critical and needs-review labels for eero packages ([6f4b208](https://github.com/fulviofreitas/eero-ui/commit/6f4b20875d71712442a3956ca655ea564f294810))
+
 ## [3.14.0](https://github.com/fulviofreitas/eero-ui/compare/v3.13.0...v3.14.0) (2026-01-22)
 
 ### ✨ Features
