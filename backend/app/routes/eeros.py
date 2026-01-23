@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
+from ..transformers import check_success, extract_data, extract_list, normalize_eero
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class EeroDetail(BaseModel):
     model: str
     model_number: str | None = None
     status: str
-    state: str | None = None  # ONLINE, OFFLINE, etc.
+    state: str | None = None
     location: str | None = None
 
     # Role
@@ -139,38 +140,29 @@ async def list_eeros(
 ) -> list[EeroSummary]:
     """Get list of all Eero nodes on the network."""
     try:
-        eeros = await client.get_eeros(network_id, refresh_cache=refresh)
+        raw_response = await client.get_eeros(network_id, refresh_cache=refresh)
+        raw_eeros = extract_list(raw_response, "eeros")
 
         result = []
-        for eero in eeros:
-            # Extract eero ID from URL
-            eero_id = eero.url.split("/")[-1] if eero.url else eero.serial
-
-            # Handle location as string or Location object
-            location = None
-            if eero.location:
-                if isinstance(eero.location, str):
-                    location = eero.location
-                elif hasattr(eero.location, "address"):
-                    location = eero.location.address
-
+        for raw_eero in raw_eeros:
+            eero = normalize_eero(raw_eero)
             result.append(
                 EeroSummary(
-                    id=eero_id,
-                    url=eero.url,
-                    serial=eero.serial,
-                    mac_address=eero.mac_address,
-                    model=eero.model,
-                    status=eero.status,
-                    location=location,
-                    is_gateway=eero.is_gateway or eero.gateway,
-                    is_primary=eero.is_primary or eero.is_primary_node,
-                    connected_clients_count=eero.connected_clients_count,
-                    firmware_version=eero.firmware_version or eero.os_version,
-                    ip_address=eero.ip_address,
-                    mesh_quality_bars=eero.mesh_quality_bars,
-                    led_on=eero.led_on,
-                    wired=eero.wired,
+                    id=eero.get("id") or eero.get("serial") or "",
+                    url=eero.get("url") or "",
+                    serial=eero.get("serial") or "",
+                    mac_address=eero.get("mac_address") or "",
+                    model=eero.get("model") or "",
+                    status=eero.get("status") or "unknown",
+                    location=eero.get("location"),
+                    is_gateway=eero.get("is_gateway", False),
+                    is_primary=eero.get("is_primary", False),
+                    connected_clients_count=eero.get("connected_clients_count", 0),
+                    firmware_version=eero.get("firmware_version"),
+                    ip_address=eero.get("ip_address"),
+                    mesh_quality_bars=eero.get("mesh_quality_bars"),
+                    led_on=eero.get("led_on"),
+                    wired=eero.get("wired", False),
                 )
             )
 
@@ -192,145 +184,114 @@ async def get_eero(
 ) -> EeroDetail:
     """Get detailed information about a specific Eero node."""
     try:
-        eero = await client.get_eero(eero_id, network_id, refresh_cache=refresh)
-
-        eero_id_extracted = eero.url.split("/")[-1] if eero.url else eero.serial
-
-        # Handle location as string or Location object
-        location = None
-        if eero.location:
-            if isinstance(eero.location, str):
-                location = eero.location
-            elif hasattr(eero.location, "address"):
-                location = eero.location.address
-
-        # Extract ethernet port info
-        ethernet_ports = None
-        if (
-            eero.ethernet_status
-            and hasattr(eero.ethernet_status, "statuses")
-            and eero.ethernet_status.statuses
-        ):
-            ethernet_ports = []
-            for port_status in eero.ethernet_status.statuses:
-                port_info = {
-                    "port_name": port_status.port_name,
-                    "interface_number": port_status.interfaceNumber,
-                    "has_carrier": port_status.hasCarrier,
-                    "speed": port_status.speed,
-                    "is_wan_port": port_status.isWanPort,
-                    "is_lte": port_status.isLte,
-                }
-                # Add neighbor info if available
-                if port_status.neighbor and port_status.neighbor.metadata:
-                    port_info["neighbor_location"] = (
-                        port_status.neighbor.metadata.location
-                    )
-                    port_info["neighbor_port"] = port_status.neighbor.metadata.port_name
-                ethernet_ports.append(port_info)
-
-        # Format last_heartbeat
-        last_heartbeat = None
-        if eero.last_heartbeat:
-            if isinstance(eero.last_heartbeat, str):
-                last_heartbeat = eero.last_heartbeat
-            else:
-                last_heartbeat = eero.last_heartbeat.isoformat()
+        raw_response = await client.get_eero(eero_id, network_id, refresh_cache=refresh)
+        eero = normalize_eero(extract_data(raw_response))
 
         # Extract network info
-        network_name = None
-        network_url = None
-        if hasattr(eero, "network") and eero.network:
-            network_name = getattr(eero.network, "name", None)
-            network_url = getattr(eero.network, "url", None)
-
-        # Extract bssids_with_bands
-        bssids_with_bands = None
-        if hasattr(eero, "bssids_with_bands") and eero.bssids_with_bands:
-            bssids_with_bands = [
-                (
-                    {"band": b.band, "ethernet_address": b.ethernet_address}
-                    if hasattr(b, "band")
-                    else b
-                )
-                for b in eero.bssids_with_bands
-            ]
-
-        # Extract IPv6 addresses
-        ipv6_addresses = None
-        if hasattr(eero, "ipv6_addresses") and eero.ipv6_addresses:
-            ipv6_addresses = [
-                {
-                    "address": getattr(addr, "address", str(addr)),
-                    "scope": getattr(addr, "scope", None),
-                    "interface": getattr(addr, "interface", None),
-                }
-                for addr in eero.ipv6_addresses
-            ]
+        network = eero.get("network", {}) or {}
+        network_name = network.get("name") if isinstance(network, dict) else None
+        network_url = network.get("url") if isinstance(network, dict) else None
 
         # Extract organization info
-        organization_name = None
-        organization_id = None
-        if hasattr(eero, "organization") and eero.organization:
-            organization_name = getattr(eero.organization, "name", None)
-            organization_id = getattr(eero.organization, "id", None)
+        org = eero.get("organization", {}) or {}
+        organization_name = org.get("name") if isinstance(org, dict) else None
+        organization_id = org.get("id") if isinstance(org, dict) else None
 
         # Extract power info
-        power_source = None
-        if hasattr(eero, "power_info") and eero.power_info:
-            power_source = getattr(eero.power_info, "power_source", None)
+        power_info = eero.get("power_info", {}) or {}
+        power_source = (
+            power_info.get("power_source") if isinstance(power_info, dict) else None
+        )
 
         # Extract power saving info
+        power_saving = eero.get("power_saving", {}) or {}
         power_saving_active = None
-        if hasattr(eero, "power_saving") and eero.power_saving:
-            if hasattr(eero.power_saving, "schedule"):
-                power_saving_active = getattr(
-                    eero.power_saving.schedule, "active", None
+        if isinstance(power_saving, dict):
+            schedule = power_saving.get("schedule", {})
+            if isinstance(schedule, dict):
+                power_saving_active = schedule.get("active")
+
+        # Format timestamps
+        last_heartbeat = eero.get("last_heartbeat")
+        if last_heartbeat and hasattr(last_heartbeat, "isoformat"):
+            last_heartbeat = last_heartbeat.isoformat()
+
+        # Format bssids_with_bands
+        bssids_with_bands = eero.get("bssids_with_bands")
+        if bssids_with_bands and isinstance(bssids_with_bands, list):
+            bssids_with_bands = [
+                (
+                    {
+                        "band": b.get("band"),
+                        "ethernet_address": b.get("ethernet_address"),
+                    }
+                    if isinstance(b, dict)
+                    else b
                 )
+                for b in bssids_with_bands
+            ]
+
+        # Format IPv6 addresses
+        ipv6_addresses = eero.get("ipv6_addresses")
+        if ipv6_addresses and isinstance(ipv6_addresses, list):
+            ipv6_addresses = [
+                {
+                    "address": (
+                        addr.get("address") if isinstance(addr, dict) else str(addr)
+                    ),
+                    "scope": addr.get("scope") if isinstance(addr, dict) else None,
+                    "interface": (
+                        addr.get("interface") if isinstance(addr, dict) else None
+                    ),
+                }
+                for addr in ipv6_addresses
+            ]
 
         return EeroDetail(
-            id=eero_id_extracted,
-            url=eero.url,
-            serial=eero.serial,
-            mac_address=eero.mac_address,
-            model=eero.model,
-            model_number=eero.model_number,
-            status=eero.status,
-            state=getattr(eero, "state", None),
-            location=location,
-            is_gateway=eero.is_gateway or eero.gateway,
-            is_primary=eero.is_primary or eero.is_primary_node,
-            wired=eero.wired,
-            connection_type=eero.connection_type,
-            mesh_quality_bars=eero.mesh_quality_bars,
-            ip_address=eero.ip_address,
-            using_wan=getattr(eero, "using_wan", None),
-            connected_clients_count=eero.connected_clients_count,
-            connected_wired_clients_count=eero.connected_wired_clients_count,
-            connected_wireless_clients_count=eero.connected_wireless_clients_count,
-            firmware_version=eero.firmware_version,
-            os_version=eero.os_version or eero.os,
-            led_on=eero.led_on,
-            led_brightness=eero.led_brightness,
-            uptime=eero.uptime,
-            cpu_usage=eero.cpu_usage,
-            memory_usage=eero.memory_usage,
-            temperature=eero.temperature,
-            heartbeat_ok=eero.heartbeat_ok,
-            update_available=eero.update_available,
-            provides_wifi=eero.provides_wifi,
-            auto_provisioned=getattr(eero, "auto_provisioned", None),
-            retrograde_capable=getattr(eero, "retrograde_capable", None),
+            id=eero.get("id") or eero.get("serial") or eero_id,
+            url=eero.get("url") or "",
+            serial=eero.get("serial") or "",
+            mac_address=eero.get("mac_address") or "",
+            model=eero.get("model") or "",
+            model_number=eero.get("model_number"),
+            status=eero.get("status") or "unknown",
+            state=eero.get("state"),
+            location=eero.get("location"),
+            is_gateway=eero.get("is_gateway", False),
+            is_primary=eero.get("is_primary", False),
+            wired=eero.get("wired", False),
+            connection_type=eero.get("connection_type"),
+            mesh_quality_bars=eero.get("mesh_quality_bars"),
+            ip_address=eero.get("ip_address"),
+            using_wan=eero.get("using_wan"),
+            connected_clients_count=eero.get("connected_clients_count", 0),
+            connected_wired_clients_count=eero.get("connected_wired_clients_count"),
+            connected_wireless_clients_count=eero.get(
+                "connected_wireless_clients_count"
+            ),
+            firmware_version=eero.get("firmware_version"),
+            os_version=eero.get("os_version"),
+            led_on=eero.get("led_on"),
+            led_brightness=eero.get("led_brightness"),
+            uptime=eero.get("uptime"),
+            cpu_usage=eero.get("cpu_usage"),
+            memory_usage=eero.get("memory_usage"),
+            temperature=eero.get("temperature"),
+            heartbeat_ok=eero.get("heartbeat_ok"),
+            update_available=eero.get("update_available"),
+            provides_wifi=eero.get("provides_wifi"),
+            auto_provisioned=eero.get("auto_provisioned"),
+            retrograde_capable=eero.get("retrograde_capable"),
             last_heartbeat=last_heartbeat,
-            last_reboot=eero.last_reboot,
-            joined=eero.joined,
+            last_reboot=eero.get("last_reboot"),
+            joined=eero.get("joined"),
             network_name=network_name,
             network_url=network_url,
-            bands=eero.bands,
-            wifi_bssids=getattr(eero, "wifi_bssids", None),
+            bands=eero.get("bands"),
+            wifi_bssids=eero.get("wifi_bssids"),
             bssids_with_bands=bssids_with_bands,
-            ethernet_addresses=eero.ethernet_addresses,
-            ethernet_ports=ethernet_ports,
+            ethernet_addresses=eero.get("ethernet_addresses"),
+            ethernet_ports=eero.get("ethernet_ports"),
             ipv6_addresses=ipv6_addresses,
             organization_name=organization_name,
             organization_id=organization_id,
@@ -351,13 +312,10 @@ async def reboot_eero(
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
 ) -> EeroAction:
-    """Reboot an Eero node.
-
-    This will temporarily disconnect all devices connected to this node.
-    The reboot typically takes 2-5 minutes.
-    """
+    """Reboot an Eero node."""
     try:
-        success = await client.reboot_eero(eero_id, network_id=network_id)
+        raw_result = await client.reboot_eero(eero_id, network_id=network_id)
+        success = check_success(raw_result)
         return EeroAction(
             success=success,
             eero_id=eero_id,
@@ -385,7 +343,10 @@ async def set_eero_led(
 ) -> EeroAction:
     """Turn the LED on or off for an Eero node."""
     try:
-        success = await client.set_led(eero_id, enabled=enabled, network_id=network_id)
+        raw_result = await client.set_led(
+            eero_id, enabled=enabled, network_id=network_id
+        )
+        success = check_success(raw_result)
         action = "led_on" if enabled else "led_off"
         return EeroAction(
             success=success,
@@ -414,9 +375,10 @@ async def set_eero_led_brightness(
 ) -> EeroAction:
     """Set the LED brightness for an Eero node."""
     try:
-        success = await client.set_led_brightness(
+        raw_result = await client.set_led_brightness(
             eero_id, brightness=brightness, network_id=network_id
         )
+        success = check_success(raw_result)
         return EeroAction(
             success=success,
             eero_id=eero_id,

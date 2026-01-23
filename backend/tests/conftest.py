@@ -2,6 +2,9 @@
 
 This module provides reusable fixtures for testing FastAPI routes
 with a mocked EeroClient dependency.
+
+As of eero-api v2.0.0, all client methods return raw JSON responses
+in the format {"meta": {...}, "data": {...}}.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -13,6 +16,11 @@ from app.deps import get_eero_client
 from app.main import app
 
 
+def make_raw_response(data, code: int = 200):
+    """Helper to create a raw API response envelope."""
+    return {"meta": {"code": code}, "data": data}
+
+
 @pytest.fixture
 def mock_eero_client():
     """Create a mock EeroClient for unit tests.
@@ -20,20 +28,30 @@ def mock_eero_client():
     Mock at the external boundary - the eero-api SDK.
     This is the right place to mock since eero-api
     is our external dependency.
+
+    As of v2.0.0, all methods return raw JSON responses.
     """
     client = MagicMock()
     client.is_authenticated = False
     client.preferred_network_id = None
 
-    # Async methods
-    client.login = AsyncMock(return_value=True)
-    client.verify = AsyncMock(return_value=True)
-    client.logout = AsyncMock(return_value=True)
-    client.get_account = AsyncMock()
-    client.get_networks = AsyncMock(return_value=[])
-    client.get_devices = AsyncMock(return_value=[])
-    client.get_eeros = AsyncMock(return_value=[])
-    client.get_profiles = AsyncMock(return_value=[])
+    # Async methods - all return raw responses
+    client.login = AsyncMock(return_value=make_raw_response({}))
+    client.verify = AsyncMock(return_value=make_raw_response({}))
+    client.logout = AsyncMock(return_value=make_raw_response({}))
+    client.get_account = AsyncMock(return_value=make_raw_response({}))
+    client.get_networks = AsyncMock(
+        return_value=make_raw_response({"networks": {"count": 0, "data": []}})
+    )
+    client.get_devices = AsyncMock(
+        return_value=make_raw_response({"devices": {"count": 0, "data": []}})
+    )
+    client.get_eeros = AsyncMock(
+        return_value=make_raw_response({"eeros": {"count": 0, "data": []}})
+    )
+    client.get_profiles = AsyncMock(
+        return_value=make_raw_response({"profiles": {"count": 0, "data": []}})
+    )
 
     return client
 

@@ -12,7 +12,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
     "httpx>=0.28.0",
-    "eero-api==1.4.3",
+    "eero-api==2.0.0",
     "eero-prometheus-exporter==2.5.0",
 ]
 

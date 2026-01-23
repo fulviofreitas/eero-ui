@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
+from ..transformers import check_success, extract_data, extract_list, normalize_device
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -137,7 +138,8 @@ async def list_devices(
 ) -> list[DeviceSummary]:
     """Get list of all devices on the network."""
     try:
-        devices = await client.get_devices(network_id, refresh_cache=refresh)
+        raw_response = await client.get_devices(network_id, refresh_cache=refresh)
+        raw_devices = extract_list(raw_response, "devices")
 
         # Parse device_ids filter if provided
         device_id_filter = None
@@ -149,23 +151,24 @@ async def list_devices(
         matched_ids = set()
         skipped_devices = []
 
-        for device in devices:
+        for raw_dev in raw_devices:
             try:
+                device = normalize_device(raw_dev)
+
                 # Filter by connected status if requested
-                if connected_only and not device.connected:
+                if connected_only and not device.get("connected"):
                     continue
 
                 # Filter by profile ID if requested
-                if profile_id and device.profile_id != profile_id:
+                if profile_id and device.get("profile_id") != profile_id:
                     continue
 
                 # Filter by device IDs if requested
                 if device_id_filter:
-                    # Try matching by ID or MAC address
-                    dev_id = device.id
-                    device_mac = (
-                        device.mac.replace(":", "").lower() if device.mac else None
-                    )
+                    dev_id = device.get("id")
+                    device_mac = device.get("mac")
+                    if device_mac:
+                        device_mac = device_mac.replace(":", "").lower()
 
                     if dev_id in device_id_filter:
                         matched_ids.add(dev_id)
@@ -174,74 +177,46 @@ async def list_devices(
                     else:
                         continue
 
-                # Extract signal strength from connectivity
-                signal_strength = None
-                frequency = None
-                if device.connectivity:
-                    if device.connectivity.signal:
-                        try:
-                            signal_strength = int(
-                                device.connectivity.signal.replace(" dBm", "")
-                            )
-                        except (ValueError, AttributeError):
-                            pass
-                    if device.connectivity.frequency:
-                        freq_mhz = device.connectivity.frequency
-                        frequency = "5GHz" if freq_mhz > 4000 else "2.4GHz"
-
-                # Get connected eero name
-                connected_to = None
-                if device.source:
-                    connected_to = device.source.location or device.source.display_name
-
-                # Extract profile info
-                device_profile_id = device.profile_id
-                device_profile_name = None
-                if device.profile:
-                    device_profile_name = device.profile.name
+                # Format last_active
+                last_active = device.get("last_active")
+                if last_active and hasattr(last_active, "isoformat"):
+                    last_active = last_active.isoformat()
 
                 result.append(
                     DeviceSummary(
-                        id=device.id,
-                        url=device.url,
-                        mac=device.mac,
-                        ip=device.ip,
-                        nickname=device.nickname,
-                        hostname=device.hostname,
-                        display_name=device.display_name
-                        or device.nickname
-                        or device.hostname,
-                        manufacturer=device.manufacturer,
-                        model_name=device.model_name,
-                        device_type=device.device_type,
-                        connected=device.connected or False,
-                        wireless=device.wireless or False,
-                        blocked=device.blacklisted or False,
-                        paused=device.paused or False,
-                        is_guest=device.is_guest or False,
-                        connection_type="wireless" if device.wireless else "wired",
-                        signal_strength=signal_strength,
-                        frequency=frequency,
-                        connected_to_eero=connected_to,
-                        last_active=(
-                            device.last_active.isoformat()
-                            if device.last_active
-                            else None
-                        ),
-                        profile_id=device_profile_id,
-                        profile_name=device_profile_name,
+                        id=device.get("id"),
+                        url=device.get("url"),
+                        mac=device.get("mac"),
+                        ip=device.get("ip"),
+                        nickname=device.get("nickname"),
+                        hostname=device.get("hostname"),
+                        display_name=device.get("display_name"),
+                        manufacturer=device.get("manufacturer"),
+                        model_name=device.get("model_name"),
+                        device_type=device.get("device_type"),
+                        connected=device.get("connected", False),
+                        wireless=device.get("wireless", False),
+                        blocked=device.get("blocked", False),
+                        paused=device.get("paused", False),
+                        is_guest=device.get("is_guest", False),
+                        connection_type=device.get("connection_type"),
+                        signal_strength=device.get("signal_strength"),
+                        frequency=device.get("frequency"),
+                        connected_to_eero=device.get("connected_to_eero"),
+                        last_active=last_active,
+                        profile_id=device.get("profile_id"),
+                        profile_name=device.get("profile_name"),
                     )
                 )
             except Exception as e:
-                # Log any device that fails to process - this should NEVER happen
                 _LOGGER.error(
-                    f"CRITICAL: Failed to process device {getattr(device, 'id', 'unknown')}: {e}"
+                    f"CRITICAL: Failed to process device {raw_dev.get('url', 'unknown')}: {e}"
                 )
-                skipped_devices.append(getattr(device, "id", "unknown"))
+                skipped_devices.append(raw_dev.get("url", "unknown"))
 
         if skipped_devices:
             _LOGGER.error(
-                f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors: {skipped_devices}"
+                f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors"
             )
 
         if device_id_filter:
@@ -249,17 +224,9 @@ async def list_devices(
                 f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs"
             )
 
-        # Log counts to identify any discrepancies
         _LOGGER.info(
-            f"Devices API: eero_api_count={len(devices)}, returned_count={len(result)}, filters_applied=(connected_only={connected_only}, profile_id={profile_id}, device_ids={device_ids is not None})"
+            f"Devices API: eero_api_count={len(raw_devices)}, returned_count={len(result)}"
         )
-
-        # CRITICAL: Ensure we're returning exactly what the eero API gives us (when no filters)
-        if not connected_only and not profile_id and not device_ids:
-            if len(devices) != len(result):
-                _LOGGER.warning(
-                    f"DISCREPANCY: eero API returned {len(devices)} devices but we're returning {len(result)}"
-                )
 
         return result
     except EeroException as e:
@@ -279,112 +246,57 @@ async def get_device(
 ) -> DeviceDetail:
     """Get full detailed information about a specific device."""
     try:
-        device = await client.get_device(device_id, network_id, refresh_cache=refresh)
+        raw_response = await client.get_device(
+            device_id, network_id, refresh_cache=refresh
+        )
+        device = normalize_device(extract_data(raw_response))
 
-        # Extract connectivity details
-        signal_strength = None
-        signal_bars = None
-        frequency = None
-        frequency_mhz = None
-        rx_bitrate = None
-        tx_bitrate = None
-
-        if device.connectivity:
-            if device.connectivity.signal:
-                try:
-                    signal_strength = int(
-                        device.connectivity.signal.replace(" dBm", "")
-                    )
-                except (ValueError, AttributeError):
-                    pass
-            signal_bars = device.connectivity.score_bars
-            if device.connectivity.frequency:
-                frequency_mhz = device.connectivity.frequency
-                frequency = "5GHz" if frequency_mhz > 4000 else "2.4GHz"
-            rx_bitrate = device.connectivity.rx_bitrate
-            tx_bitrate = device.connectivity.tx_bitrate
-
-            # Extract TX bitrate from tx_rate_info if not directly available
-            if not tx_bitrate and device.connectivity.tx_rate_info:
-                tx_info = device.connectivity.tx_rate_info
-                if isinstance(tx_info, dict):
-                    # The rate is in rate_bps (bits per second)
-                    rate_bps = tx_info.get("rate_bps")
-                    if rate_bps and isinstance(rate_bps, (int, float)) and rate_bps > 0:
-                        # Convert bps to Mbit/s
-                        rate_mbps = rate_bps / 1_000_000
-                        tx_bitrate = f"{rate_mbps:.1f} MBit/s"
-
-            # Extract RX bitrate from rx_rate_info as fallback
-            if not rx_bitrate and device.connectivity.rx_rate_info:
-                rx_info = device.connectivity.rx_rate_info
-                if isinstance(rx_info, dict):
-                    rate_bps = rx_info.get("rate_bps")
-                    if rate_bps and isinstance(rate_bps, (int, float)) and rate_bps > 0:
-                        rate_mbps = rate_bps / 1_000_000
-                        rx_bitrate = f"{rate_mbps:.1f} MBit/s"
-
-        # Extract connected eero info
-        connected_to = None
-        connected_to_id = None
-        connected_to_model = None
-        if device.source:
-            connected_to = device.source.location or device.source.display_name
-            connected_to_model = device.source.model
-            if device.source.url:
-                # Extract eero ID from URL
-                import re
-
-                match = re.search(r"/eeros/([^/]+)", device.source.url)
-                if match:
-                    connected_to_id = match.group(1)
-
-        # Extract profile info
-        profile_id = device.profile_id
-        profile_name = None
-        if device.profile:
-            profile_name = device.profile.name
+        # Format timestamps
+        last_active = device.get("last_active")
+        if last_active and hasattr(last_active, "isoformat"):
+            last_active = last_active.isoformat()
+        first_active = device.get("first_active")
+        if first_active and hasattr(first_active, "isoformat"):
+            first_active = first_active.isoformat()
 
         return DeviceDetail(
-            id=device.id,
-            url=device.url,
-            mac=device.mac,
-            ip=device.ip,
-            ips=device.ips or [],
-            ipv4=device.ipv4,
-            nickname=device.nickname,
-            hostname=device.hostname,
-            display_name=device.display_name or device.nickname or device.hostname,
-            manufacturer=device.manufacturer,
-            model_name=device.model_name,
-            device_type=device.device_type,
-            connected=device.connected or False,
-            wireless=device.wireless or False,
-            connection_type="wireless" if device.wireless else "wired",
-            blocked=device.blacklisted or False,
-            paused=device.paused or False,
-            is_guest=device.is_guest or False,
-            is_private=device.is_private or False,
-            signal_strength=signal_strength,
-            signal_bars=signal_bars,
-            frequency=frequency,
-            frequency_mhz=frequency_mhz,
-            channel=device.channel,
-            ssid=device.ssid,
-            rx_bitrate=rx_bitrate,
-            tx_bitrate=tx_bitrate,
-            connected_to_eero=connected_to,
-            connected_to_eero_id=connected_to_id,
-            connected_to_eero_model=connected_to_model,
-            profile_id=profile_id,
-            profile_name=profile_name,
-            last_active=device.last_active.isoformat() if device.last_active else None,
-            first_active=(
-                device.first_active.isoformat() if device.first_active else None
-            ),
-            network_id=device.network_id,
-            subnet_kind=device.subnet_kind,
-            auth=device.auth,
+            id=device.get("id"),
+            url=device.get("url"),
+            mac=device.get("mac"),
+            ip=device.get("ip"),
+            ips=device.get("ips") or [],
+            ipv4=device.get("ipv4"),
+            nickname=device.get("nickname"),
+            hostname=device.get("hostname"),
+            display_name=device.get("display_name"),
+            manufacturer=device.get("manufacturer"),
+            model_name=device.get("model_name"),
+            device_type=device.get("device_type"),
+            connected=device.get("connected", False),
+            wireless=device.get("wireless", False),
+            connection_type=device.get("connection_type"),
+            blocked=device.get("blocked", False),
+            paused=device.get("paused", False),
+            is_guest=device.get("is_guest", False),
+            is_private=device.get("is_private", False),
+            signal_strength=device.get("signal_strength"),
+            signal_bars=device.get("signal_bars"),
+            frequency=device.get("frequency"),
+            frequency_mhz=device.get("frequency_mhz"),
+            channel=device.get("channel"),
+            ssid=device.get("ssid"),
+            rx_bitrate=device.get("rx_bitrate"),
+            tx_bitrate=device.get("tx_bitrate"),
+            connected_to_eero=device.get("connected_to_eero"),
+            connected_to_eero_id=device.get("connected_to_eero_id"),
+            connected_to_eero_model=device.get("connected_to_eero_model"),
+            profile_id=device.get("profile_id"),
+            profile_name=device.get("profile_name"),
+            last_active=last_active,
+            first_active=first_active,
+            network_id=device.get("network_id"),
+            subnet_kind=device.get("subnet_kind"),
+            auth=device.get("auth"),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to get device {device_id}: {e}")
@@ -402,9 +314,10 @@ async def block_device(
 ) -> DeviceAction:
     """Block a device from the network."""
     try:
-        success = await client.block_device(
+        raw_result = await client.block_device(
             device_id, blocked=True, network_id=network_id
         )
+        success = check_success(raw_result)
         return DeviceAction(
             success=success,
             device_id=device_id,
@@ -429,9 +342,10 @@ async def unblock_device(
 ) -> DeviceAction:
     """Unblock a device from the network."""
     try:
-        success = await client.block_device(
+        raw_result = await client.block_device(
             device_id, blocked=False, network_id=network_id
         )
+        success = check_success(raw_result)
         return DeviceAction(
             success=success,
             device_id=device_id,
@@ -459,9 +373,10 @@ async def set_device_nickname(
 ) -> DeviceAction:
     """Set a nickname for a device."""
     try:
-        success = await client.set_device_nickname(
+        raw_result = await client.set_device_nickname(
             device_id, request.nickname, network_id=network_id
         )
+        success = check_success(raw_result)
         return DeviceAction(
             success=success,
             device_id=device_id,
@@ -491,9 +406,10 @@ async def prioritize_device(
 ) -> DeviceAction:
     """Prioritize bandwidth for a device."""
     try:
-        success = await client.prioritize_device(
+        raw_result = await client.prioritize_device(
             device_id, duration_minutes=duration_minutes, network_id=network_id
         )
+        success = check_success(raw_result)
         return DeviceAction(
             success=success,
             device_id=device_id,
@@ -518,7 +434,8 @@ async def deprioritize_device(
 ) -> DeviceAction:
     """Remove bandwidth priority from a device."""
     try:
-        success = await client.deprioritize_device(device_id, network_id=network_id)
+        raw_result = await client.deprioritize_device(device_id, network_id=network_id)
+        success = check_success(raw_result)
         return DeviceAction(
             success=success,
             device_id=device_id,

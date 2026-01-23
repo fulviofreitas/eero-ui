@@ -15,6 +15,7 @@ from eero import EeroClient
 from eero.exceptions import EeroAuthenticationException
 
 from .config import settings
+from .transformers import extract_id_from_url, extract_list
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,9 +79,12 @@ async def get_network_id(
 
     # Try to get first network
     try:
-        networks = await client.get_networks()
+        raw_networks = await client.get_networks()
+        networks = extract_list(raw_networks, "networks")
         if networks:
-            return networks[0].id
+            net_id = extract_id_from_url(networks[0].get("url"))
+            if net_id:
+                return net_id
     except EeroAuthenticationException:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

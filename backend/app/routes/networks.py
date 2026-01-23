@@ -8,6 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import require_auth
+from ..transformers import (
+    check_success,
+    extract_data,
+    extract_list,
+    normalize_network,
+)
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -110,22 +116,23 @@ async def list_networks(
 ) -> list[NetworkSummary]:
     """Get list of all networks."""
     try:
-        networks = await client.get_networks(refresh_cache=refresh)
-        return [
-            NetworkSummary(
-                id=net.id,
-                name=net.name,
-                status=(
-                    str(net.status.value)
-                    if hasattr(net.status, "value")
-                    else str(net.status)
-                ),
-                guest_network_enabled=net.guest_network_enabled,
-                public_ip=net.public_ip,
-                isp_name=net.isp_name,
+        raw_response = await client.get_networks(refresh_cache=refresh)
+        networks = extract_list(raw_response, "networks")
+
+        result = []
+        for raw_net in networks:
+            net = normalize_network(raw_net)
+            result.append(
+                NetworkSummary(
+                    id=net.get("id") or "",
+                    name=net.get("name") or "",
+                    status=net.get("status") or "unknown",
+                    guest_network_enabled=net.get("guest_network_enabled", False),
+                    public_ip=net.get("public_ip"),
+                    isp_name=net.get("isp_name"),
+                )
             )
-            for net in networks
-        ]
+        return result
     except EeroException as e:
         _LOGGER.error(f"Failed to get networks: {e}")
         raise HTTPException(
@@ -142,81 +149,74 @@ async def get_network(
 ) -> NetworkDetail:
     """Get detailed information about a specific network."""
     try:
-        network = await client.get_network(network_id, refresh_cache=refresh)
+        raw_network = await client.get_network(network_id, refresh_cache=refresh)
+        network = normalize_network(extract_data(raw_network))
 
         # Get device and eero counts
-        devices = await client.get_devices(network_id)
-        eeros = await client.get_eeros(network_id)
-
-        status_str = (
-            str(network.status.value)
-            if hasattr(network.status, "value")
-            else str(network.status)
-        )
+        raw_devices = await client.get_devices(network_id)
+        raw_eeros = await client.get_eeros(network_id)
+        devices = extract_list(raw_devices, "devices")
+        eeros = extract_list(raw_eeros, "eeros")
 
         # Format created_at if available
-        created_at_str = None
-        if network.created_at:
-            created_at_str = (
-                network.created_at.isoformat()
-                if hasattr(network.created_at, "isoformat")
-                else str(network.created_at)
-            )
+        created_at_str = network.get("created_at")
+        if created_at_str and hasattr(created_at_str, "isoformat"):
+            created_at_str = created_at_str.isoformat()
 
         return NetworkDetail(
-            id=network.id,
-            name=network.name,
-            status=status_str,
-            guest_network_enabled=network.guest_network_enabled,
-            public_ip=network.public_ip,
-            isp_name=network.isp_name,
+            id=network.get("id") or network_id,
+            name=network.get("name") or "",
+            status=network.get("status") or "unknown",
+            guest_network_enabled=network.get("guest_network_enabled", False),
+            public_ip=network.get("public_ip"),
+            isp_name=network.get("isp_name"),
             device_count=len(devices),
             eero_count=len(eeros),
-            speed_test=network.speed_test,
-            health=network.health,
-            settings=network.settings.model_dump() if network.settings else None,
+            speed_test=network.get("speed_test"),
+            health=network.get("health"),
+            settings=network.get("settings"),
             # Additional info
-            owner=getattr(network, "owner", None),
-            display_name=getattr(network, "display_name", None),
-            network_customer_type=getattr(network, "network_customer_type", None),
-            premium_status=getattr(network, "premium_status", None),
+            owner=network.get("owner"),
+            display_name=network.get("display_name"),
+            network_customer_type=network.get("network_customer_type"),
+            premium_status=network.get("premium_status"),
             created_at=created_at_str,
             # Connection
-            gateway=getattr(network, "gateway", None),
-            wan_type=getattr(network, "wan_type", None),
-            gateway_ip=getattr(network, "gateway_ip", None),
-            connection_mode=getattr(network, "connection_mode", None),
+            gateway=network.get("gateway"),
+            wan_type=network.get("wan_type"),
+            gateway_ip=network.get("gateway_ip"),
+            connection_mode=network.get("connection_mode"),
             # Features
-            backup_internet_enabled=getattr(network, "backup_internet_enabled", False),
-            power_saving=getattr(network, "power_saving", False),
-            sqm=getattr(network, "sqm", False),
-            upnp=getattr(network, "upnp", False),
-            thread=getattr(network, "thread", False),
-            band_steering=getattr(network, "band_steering", False),
-            wpa3=getattr(network, "wpa3", False),
-            ipv6_upstream=getattr(network, "ipv6_upstream", False),
+            backup_internet_enabled=network.get("backup_internet_enabled", False),
+            power_saving=network.get("power_saving", False),
+            sqm=network.get("sqm", False),
+            upnp=network.get("upnp", False),
+            thread=network.get("thread", False),
+            band_steering=network.get("band_steering", False),
+            wpa3=network.get("wpa3", False),
+            ipv6_upstream=network.get("ipv6_upstream", False),
             # DNS
-            dns=getattr(network, "dns", None),
-            premium_dns=getattr(network, "premium_dns", None),
+            dns=network.get("dns"),
+            premium_dns=network.get("premium_dns"),
             # Geo IP
-            geo_ip=getattr(network, "geo_ip", None),
+            geo_ip=network.get("geo_ip"),
             # Updates
-            updates=getattr(network, "updates", None),
+            updates=network.get("updates"),
             # DHCP
-            dhcp=network.dhcp.model_dump() if network.dhcp else None,
+            dhcp=network.get("dhcp"),
             # DDNS
-            ddns=getattr(network, "ddns", None),
+            ddns=network.get("ddns"),
             # HomeKit
-            homekit=getattr(network, "homekit", None),
+            homekit=network.get("homekit"),
             # IP Settings
-            ip_settings=getattr(network, "ip_settings", None),
+            ip_settings=network.get("ip_settings"),
             # Premium
-            premium_details=getattr(network, "premium_details", None),
+            premium_details=network.get("premium_details"),
             # Integrations
-            amazon_account_linked=getattr(network, "amazon_account_linked", False),
-            alexa_skill=getattr(network, "alexa_skill", False),
+            amazon_account_linked=network.get("amazon_account_linked", False),
+            alexa_skill=network.get("alexa_skill", False),
             # Timestamps
-            last_reboot=getattr(network, "last_reboot", None),
+            last_reboot=network.get("last_reboot"),
         )
     except EeroException as e:
         _LOGGER.error(f"Failed to get network {network_id}: {e}")
@@ -246,10 +246,11 @@ async def run_speed_test(
     Note: This can take 30-60 seconds to complete.
     """
     try:
-        result = await client.run_speed_test(network_id)
+        raw_result = await client.run_speed_test(network_id)
+        result = extract_data(raw_result)
         return SpeedTestResult(
-            download_mbps=result.get("download", {}).get("value"),
-            upload_mbps=result.get("upload", {}).get("value"),
+            download_mbps=result.get("down", {}).get("value"),
+            upload_mbps=result.get("up", {}).get("value"),
             latency_ms=result.get("latency"),
             timestamp=result.get("date"),
         )
@@ -270,11 +271,12 @@ async def toggle_guest_network(
 ) -> dict:
     """Enable or disable the guest network."""
     try:
-        success = await client.set_guest_network(
+        raw_result = await client.set_guest_network(
             enabled=enabled,
             name=name,
             network_id=network_id,
         )
+        success = check_success(raw_result)
         return {
             "success": success,
             "guest_network_enabled": enabled,
