@@ -1,16 +1,22 @@
-# 🛜 Eero UI Dashboard
+<div align="center">
 
-A sleek **Svelte** dashboard for managing your Eero mesh network. Built for operators who want fast, efficient network control.
+# 🖥️ Eero UI
 
-[![Docker](https://ghcr-badge.egpl.dev/fulviofreitas/eero-ui/latest_tag?color=blue&label=docker)](https://ghcr.io/fulviofreitas/eero-ui)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+**A sleek dashboard for managing your Eero mesh network**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Svelte-FF3E00?logo=svelte&logoColor=white" alt="Svelte">
-  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white" alt="Docker">
-</p>
+[![Svelte](https://img.shields.io/badge/svelte-5-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)](https://svelte.dev)
+[![FastAPI](https://img.shields.io/badge/fastapi-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://ghcr.io/fulviofreitas/eero-ui)
+[![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
+
+---
+
+_A modern, responsive web dashboard for Eero network management._  
+_Built for operators who want fast, efficient network control._
+
+[Get Started](#-quick-start) · [Documentation](#-documentation) · [Features](#-features) · [License](#-license)
+
+</div>
 
 ---
 
