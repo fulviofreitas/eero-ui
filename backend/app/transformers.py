@@ -12,6 +12,9 @@ from typing import Any
 def extract_data(raw_response: Any) -> dict[str, Any]:
     """Extract data from raw API response envelope.
 
+    For single-item endpoints (get_network, get_device, etc.), the data
+    is a dictionary. For list endpoints, use extract_list() instead.
+
     Args:
         raw_response: Raw response from eero-api
 
@@ -25,7 +28,11 @@ def extract_data(raw_response: Any) -> dict[str, Any]:
     # If it has "meta" and "data" keys, it's an envelope - extract data
     if "meta" in raw_response and "data" in raw_response:
         data = raw_response.get("data", {})
-        return dict(data) if isinstance(data, dict) else {}
+        # For single-item endpoints, data is a dict
+        if isinstance(data, dict):
+            return dict(data)
+        # If data is a list, return empty dict (caller should use extract_list)
+        return {}
     # Otherwise return as-is (already extracted or different format)
     return dict(raw_response)
 
@@ -35,51 +42,64 @@ def extract_list(
 ) -> list[dict[str, Any]]:
     """Extract a list from raw API response.
 
-    Handles various nested structures from the Eero API:
+    The real Eero API returns lists directly in the data field:
     - {"meta": {...}, "data": [...]}
-    - {"meta": {...}, "data": {"networks": {"data": [...]}}}
-    - {"meta": {...}, "data": {"eeros": [...]}}
+
+    This function handles:
+    - Direct list in response (already extracted)
+    - Raw response with meta/data envelope
+    - Legacy nested formats for backward compatibility
 
     Args:
         raw_response: Raw response from eero-api
-        list_key: Optional key for the list within data
+        list_key: Optional key for the list within data (legacy, rarely needed)
 
     Returns:
         Extracted list of dictionaries
     """
     if raw_response is None:
         return []
+
+    # If already a list, return it directly
     if isinstance(raw_response, list):
         return list(raw_response)
 
-    data = extract_data(raw_response)
-
-    if isinstance(data, list):
-        return list(data)
-
-    if isinstance(data, dict):
-        # Try specific list_key first
-        if list_key and list_key in data:
-            result = data[list_key]
-            # Handle nested {"key": {"data": [...]}} structure
-            if isinstance(result, dict) and "data" in result:
-                nested = result["data"]
-                if isinstance(nested, list):
-                    return list(nested)
+    # Extract data from envelope if present
+    if isinstance(raw_response, dict):
+        # Standard format: {"meta": {...}, "data": [...]}
+        if "meta" in raw_response and "data" in raw_response:
+            data = raw_response.get("data")
+            # Most common case: data is directly a list
+            if isinstance(data, list):
+                return list(data)
+            # Handle dict data (some endpoints)
+            if isinstance(data, dict):
+                # Try specific list_key first
+                if list_key and list_key in data:
+                    result = data[list_key]
+                    if isinstance(result, list):
+                        return list(result)
+                    # Handle nested {"key": {"data": [...]}} structure
+                    if isinstance(result, dict) and "data" in result:
+                        nested = result["data"]
+                        if isinstance(nested, list):
+                            return list(nested)
+                # Try common list keys as fallback
+                for key in ["data", "networks", "eeros", "devices", "profiles"]:
+                    if key in data:
+                        result = data[key]
+                        if isinstance(result, list):
+                            return list(result)
+                        if isinstance(result, dict) and "data" in result:
+                            nested = result["data"]
+                            if isinstance(nested, list):
+                                return list(nested)
+            return []
+        # No envelope, check if it's a dict with list values
+        if list_key and list_key in raw_response:
+            result = raw_response[list_key]
             if isinstance(result, list):
                 return list(result)
-
-        # Try common list keys
-        for key in ["data", "networks", "eeros", "devices", "profiles"]:
-            if key in data:
-                result = data[key]
-                # Handle nested structure
-                if isinstance(result, dict) and "data" in result:
-                    nested = result["data"]
-                    if isinstance(nested, list):
-                        return list(nested)
-                if isinstance(result, list):
-                    return list(result)
 
     return []
 

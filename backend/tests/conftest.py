@@ -36,22 +36,19 @@ def mock_eero_client():
     client.preferred_network_id = None
 
     # Async methods - all return raw responses
+    # Real API format: {"meta": {...}, "data": [...]} where data is directly a list
     client.login = AsyncMock(return_value=make_raw_response({}))
     client.verify = AsyncMock(return_value=make_raw_response({}))
     client.logout = AsyncMock(return_value=make_raw_response({}))
     client.get_account = AsyncMock(return_value=make_raw_response({}))
-    client.get_networks = AsyncMock(
-        return_value=make_raw_response({"networks": {"count": 0, "data": []}})
-    )
-    client.get_devices = AsyncMock(
-        return_value=make_raw_response({"devices": {"count": 0, "data": []}})
-    )
-    client.get_eeros = AsyncMock(
-        return_value=make_raw_response({"eeros": {"count": 0, "data": []}})
-    )
-    client.get_profiles = AsyncMock(
-        return_value=make_raw_response({"profiles": {"count": 0, "data": []}})
-    )
+    # Networks endpoint returns list directly in data
+    client.get_networks = AsyncMock(return_value=make_raw_response([]))
+    # Devices endpoint returns list directly in data
+    client.get_devices = AsyncMock(return_value=make_raw_response([]))
+    # Eeros endpoint returns list directly in data
+    client.get_eeros = AsyncMock(return_value=make_raw_response([]))
+    # Profiles endpoint returns list directly in data
+    client.get_profiles = AsyncMock(return_value=make_raw_response([]))
 
     return client
 
