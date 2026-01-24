@@ -12,6 +12,7 @@ from ..transformers import (
     check_success,
     extract_data,
     extract_list,
+    normalize_device,
     normalize_dhcp,
     normalize_network,
 )
@@ -154,11 +155,17 @@ async def get_network(
         network = normalize_network(extract_data(raw_network))
 
         # Get device and eero counts (only count connected devices)
+        # Use normalized devices to match dashboard count
         raw_devices = await client.get_devices(network_id)
         raw_eeros = await client.get_eeros(network_id)
-        devices = extract_list(raw_devices, "devices")
+        raw_device_list = extract_list(raw_devices, "devices")
         eeros = extract_list(raw_eeros, "eeros")
-        connected_device_count = len([d for d in devices if d.get("connected")])
+
+        # Normalize devices and count connected ones
+        normalized_devices = [normalize_device(d) for d in raw_device_list]
+        connected_device_count = len(
+            [d for d in normalized_devices if d.get("connected")]
+        )
 
         # Format created_at if available
         created_at_str = network.get("created_at")
