@@ -143,8 +143,8 @@ def normalize_status(status: Any) -> str:
     """Normalize status field which may be nested.
 
     Converts eero API status values to consistent frontend values:
-    - "green" -> "online"
-    - "red" -> "offline"
+    - "green" / "connected" -> "online"
+    - "red" / "disconnected" -> "offline"
     - "yellow" -> "warning"
 
     Args:
@@ -165,7 +165,9 @@ def normalize_status(status: Any) -> str:
     # Map eero API status values to consistent frontend values
     status_map = {
         "green": "online",
+        "connected": "online",
         "red": "offline",
+        "disconnected": "offline",
         "yellow": "warning",
     }
 

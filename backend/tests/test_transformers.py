@@ -126,9 +126,18 @@ class TestNormalizeStatus:
         assert normalize_status("green") == "online"
         assert normalize_status("GREEN") == "online"
 
+    def test_normalizes_connected_to_online(self):
+        """Should normalize 'connected' to 'online'."""
+        assert normalize_status("connected") == "online"
+        assert normalize_status("CONNECTED") == "online"
+
     def test_normalizes_red_to_offline(self):
         """Should normalize 'red' to 'offline'."""
         assert normalize_status("red") == "offline"
+
+    def test_normalizes_disconnected_to_offline(self):
+        """Should normalize 'disconnected' to 'offline'."""
+        assert normalize_status("disconnected") == "offline"
 
     def test_normalizes_yellow_to_warning(self):
         """Should normalize 'yellow' to 'warning'."""
@@ -138,6 +147,7 @@ class TestNormalizeStatus:
         """Should extract and normalize status from dict."""
         assert normalize_status({"status": "green"}) == "online"
         assert normalize_status({"status": "red"}) == "offline"
+        assert normalize_status({"status": "connected"}) == "online"
 
     def test_returns_unknown_for_none(self):
         """Should return 'unknown' for None."""
