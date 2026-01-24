@@ -8,12 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import require_auth
-from ..transformers import (
-    check_success,
-    extract_data,
-    extract_list,
-    normalize_network,
-)
+from ..transformers import check_success, extract_data, extract_list, normalize_network
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
