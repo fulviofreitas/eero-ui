@@ -55,12 +55,11 @@ LABEL org.opencontainers.image.title="eero-ui" \
 
 WORKDIR /app
 
-# Install uv (fast Python package installer), git (for cloning eero-api), and curl (for healthcheck)
+# Install uv (fast Python package installer) and curl (for healthcheck)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    git \
     curl \
     procps
 
