@@ -526,6 +526,50 @@ def normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Normalize DHCP data to frontend-expected format.
+
+    The API returns:
+        {"mode": "custom", "custom": {"start_ip": "...", "end_ip": "...", "subnet_mask": "..."}}
+
+    Frontend expects:
+        {"starting_address": "...", "ending_address": "...", "subnet_mask": "...", "lease_time_seconds": ...}
+
+    Args:
+        dhcp: Raw DHCP data from API
+
+    Returns:
+        Normalized DHCP dictionary or None
+    """
+    if not dhcp or not isinstance(dhcp, dict):
+        return None
+
+    # Try to extract from 'custom' or 'custom_v2' nested objects
+    custom = dhcp.get("custom") or dhcp.get("custom_v2") or {}
+
+    if not isinstance(custom, dict):
+        custom = {}
+
+    # Build normalized DHCP response
+    result = {
+        "mode": dhcp.get("mode"),
+        "starting_address": custom.get("start_ip") or dhcp.get("starting_address"),
+        "ending_address": custom.get("end_ip") or dhcp.get("ending_address"),
+        "subnet_mask": custom.get("subnet_mask") or dhcp.get("subnet_mask"),
+        "subnet_ip": custom.get("subnet_ip") or dhcp.get("subnet_ip"),
+        # Lease time: default to 24 hours (86400 seconds) if not provided
+        "lease_time_seconds": dhcp.get("lease_time_seconds")
+        or custom.get("lease_time_seconds")
+        or 86400,
+    }
+
+    # Only return if we have at least some data
+    if result["starting_address"] or result["ending_address"] or result["subnet_mask"]:
+        return result
+
+    return None
+
+
 def check_success(raw_response: Any) -> bool:
     """Check if a raw API response indicates success.
 

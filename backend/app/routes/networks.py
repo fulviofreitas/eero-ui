@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import require_auth
-from ..transformers import check_success, extract_data, extract_list, normalize_network
+from ..transformers import (
+    check_success,
+    extract_data,
+    extract_list,
+    normalize_dhcp,
+    normalize_network,
+)
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -147,11 +153,12 @@ async def get_network(
         raw_network = await client.get_network(network_id, refresh_cache=refresh)
         network = normalize_network(extract_data(raw_network))
 
-        # Get device and eero counts
+        # Get device and eero counts (only count connected devices)
         raw_devices = await client.get_devices(network_id)
         raw_eeros = await client.get_eeros(network_id)
         devices = extract_list(raw_devices, "devices")
         eeros = extract_list(raw_eeros, "eeros")
+        connected_device_count = len([d for d in devices if d.get("connected")])
 
         # Format created_at if available
         created_at_str = network.get("created_at")
@@ -165,7 +172,7 @@ async def get_network(
             guest_network_enabled=network.get("guest_network_enabled", False),
             public_ip=network.get("public_ip"),
             isp_name=network.get("isp_name"),
-            device_count=len(devices),
+            device_count=connected_device_count,
             eero_count=len(eeros),
             speed_test=network.get("speed_test"),
             health=network.get("health"),
@@ -197,8 +204,8 @@ async def get_network(
             geo_ip=network.get("geo_ip"),
             # Updates
             updates=network.get("updates"),
-            # DHCP
-            dhcp=network.get("dhcp"),
+            # DHCP - normalize to frontend-expected format
+            dhcp=normalize_dhcp(network.get("dhcp")),
             # DDNS
             ddns=network.get("ddns"),
             # HomeKit
