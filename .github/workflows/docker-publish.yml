@@ -2,7 +2,7 @@
 # 🐳 Docker Image Build & Publish
 # ============================================================================
 # Builds multi-platform Docker images and publishes to GitHub Container Registry.
-# Uses reusable actions from eero-api for maintainability.
+# Uses reusable workflow from eero-api for native ARM64 builds.
 #
 # Chain: CI → Release → Docker
 # ============================================================================
@@ -22,44 +22,31 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
-  build-and-push:
-    name: 🏗️ Build & Push
-    runs-on: ubuntu-latest
+  docker:
+    name: 🐳 Docker
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
+    uses: fulviofreitas/eero-api/.github/workflows/docker-build.yml@master
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
-
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: 🐳 Build and push Docker image
-        uses: fulviofreitas/eero-api/.github/actions/docker-build@master
-        with:
-          image-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          context: "."
-          platforms: "linux/amd64,linux/arm64"
-          push: ${{ github.event_name != 'pull_request' }}
-          registry: ${{ env.REGISTRY }}
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-          annotations: |
-            org.opencontainers.image.title=eero-ui
-            org.opencontainers.image.description=A modern web dashboard for managing eero mesh WiFi networks
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/wiki
-            org.opencontainers.image.licenses=MIT
+    with:
+      image-name: ghcr.io/${{ github.repository }}
+      context: "."
+      push: ${{ github.event_name != 'pull_request' }}
+      registry: ghcr.io
+      registry-username: ${{ github.actor }}
+      annotations: |
+        org.opencontainers.image.title=eero-ui
+        org.opencontainers.image.description=A modern web dashboard for managing eero mesh WiFi networks
+        org.opencontainers.image.url=https://github.com/${{ github.repository }}
+        org.opencontainers.image.source=https://github.com/${{ github.repository }}
+        org.opencontainers.image.documentation=https://github.com/${{ github.repository }}/wiki
+        org.opencontainers.image.licenses=MIT
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
