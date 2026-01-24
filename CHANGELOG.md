@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.1.0](https://github.com/fulviofreitas/eero-ui/compare/v4.0.4...v4.1.0) (2026-01-24)
+
+### ✨ Features
+
+* **deps:** update eero packages to compatible versions ([6f38359](https://github.com/fulviofreitas/eero-ui/commit/6f383590f5e8b9e36c27e9ad397b4a4242e3ed7f))
+* **deps:** update eero-api to 2.1.3 ([e6476f3](https://github.com/fulviofreitas/eero-ui/commit/e6476f369d7e5e1b687ba6f449bcdee1b6edfd35))
+* **deps:** update eero-prometheus-exporter to 3.1.1 ([956689d](https://github.com/fulviofreitas/eero-ui/commit/956689dd8907d7d8ca95efe28f1326679a669d21))
+* **deps:** update eero-prometheus-exporter to 3.8.0 ([#62](https://github.com/fulviofreitas/eero-ui/issues/62)) ([6c2c400](https://github.com/fulviofreitas/eero-ui/commit/6c2c40026d5b9b9fe66079147338791de884df1f))
+
+### 🐛 Bug Fixes
+
+* **renovate:** group eero packages to resolve dependency conflicts ([3b19fcf](https://github.com/fulviofreitas/eero-ui/commit/3b19fcfe83b6a36c7a91292326a92b1b49fb987e))
+
 ## [4.0.4](https://github.com/fulviofreitas/eero-ui/compare/v4.0.3...v4.0.4) (2026-01-23)
 
 ### 🐛 Bug Fixes
