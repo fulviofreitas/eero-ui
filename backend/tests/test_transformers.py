@@ -121,18 +121,32 @@ class TestExtractIdFromUrl:
 class TestNormalizeStatus:
     """Tests for normalize_status function."""
 
-    def test_normalizes_string_status(self):
-        """Should return string status as-is."""
-        assert normalize_status("online") == "online"
-        assert normalize_status("green") == "green"
+    def test_normalizes_green_to_online(self):
+        """Should normalize 'green' to 'online'."""
+        assert normalize_status("green") == "online"
+        assert normalize_status("GREEN") == "online"
+
+    def test_normalizes_red_to_offline(self):
+        """Should normalize 'red' to 'offline'."""
+        assert normalize_status("red") == "offline"
+
+    def test_normalizes_yellow_to_warning(self):
+        """Should normalize 'yellow' to 'warning'."""
+        assert normalize_status("yellow") == "warning"
 
     def test_normalizes_dict_status(self):
-        """Should extract status from dict."""
-        assert normalize_status({"status": "offline"}) == "offline"
+        """Should extract and normalize status from dict."""
+        assert normalize_status({"status": "green"}) == "online"
+        assert normalize_status({"status": "red"}) == "offline"
 
     def test_returns_unknown_for_none(self):
         """Should return 'unknown' for None."""
         assert normalize_status(None) == "unknown"
+
+    def test_passes_through_other_values(self):
+        """Should pass through unrecognized values."""
+        assert normalize_status("online") == "online"
+        assert normalize_status("custom") == "custom"
 
 
 class TestNormalizeNetwork:
@@ -157,10 +171,10 @@ class TestNormalizeNetwork:
         assert result["isp_name"] == "Comcast"
 
     def test_normalizes_status(self):
-        """Should normalize status field."""
+        """Should normalize status field to 'online'."""
         raw = {"url": "/networks/1", "status": {"status": "green"}}
         result = normalize_network(raw)
-        assert result["status"] == "green"
+        assert result["status"] == "online"
 
 
 class TestNormalizeDevice:

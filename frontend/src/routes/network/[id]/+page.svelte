@@ -284,11 +284,7 @@
 					</div>
 				</div>
 				<div class="header-meta">
-					<StatusBadge
-						status={network.status === 'green' || network.status === 'online'
-							? 'connected'
-							: 'disconnected'}
-					/>
+					<StatusBadge status={network.status === 'online' ? 'connected' : 'disconnected'} />
 					{#if network.public_ip}
 						<span class="text-muted">•</span>
 						<span class="mono text-muted">{network.public_ip}</span>
@@ -315,11 +311,7 @@
 					<div class="info-row">
 						<dt>Status</dt>
 						<dd>
-							<StatusBadge
-								status={network.status === 'green' || network.status === 'online'
-									? 'connected'
-									: 'disconnected'}
-							/>
+							<StatusBadge status={network.status === 'online' ? 'connected' : 'disconnected'} />
 						</dd>
 					</div>
 					<div class="info-row">

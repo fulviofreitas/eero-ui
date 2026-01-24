@@ -142,17 +142,34 @@ def get_nested(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
 def normalize_status(status: Any) -> str:
     """Normalize status field which may be nested.
 
+    Converts eero API status values to consistent frontend values:
+    - "green" -> "online"
+    - "red" -> "offline"
+    - "yellow" -> "warning"
+
     Args:
         status: Status value (string or {"status": "value"})
 
     Returns:
-        Status string
+        Normalized status string
     """
     if status is None:
         return "unknown"
+
+    # Extract from nested dict if needed
     if isinstance(status, dict):
-        return str(status.get("status", "unknown"))
-    return str(status)
+        status = status.get("status", "unknown")
+
+    status_str = str(status).lower()
+
+    # Map eero API status values to consistent frontend values
+    status_map = {
+        "green": "online",
+        "red": "offline",
+        "yellow": "warning",
+    }
+
+    return status_map.get(status_str, status_str)
 
 
 def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:

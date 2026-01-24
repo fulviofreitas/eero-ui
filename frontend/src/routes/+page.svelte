@@ -111,11 +111,11 @@
 			.slice(0, 8);
 	})();
 
-	// Eero status summary
+	// Eero status summary (backend normalizes: green->online, yellow->warning, red->offline)
 	$: eeroStatusCounts = {
-		online: eeros.filter((e) => e.status === 'green').length,
-		warning: eeros.filter((e) => e.status === 'yellow').length,
-		offline: eeros.filter((e) => e.status === 'red').length
+		online: eeros.filter((e) => e.status === 'online' || e.status === 'green').length,
+		warning: eeros.filter((e) => e.status === 'warning' || e.status === 'yellow').length,
+		offline: eeros.filter((e) => e.status === 'offline' || e.status === 'red').length
 	};
 
 	async function runSpeedTest() {
@@ -265,14 +265,18 @@
 				</div>
 				<div class="stat-value">{eeros.length}</div>
 				<div class="stat-meta">
-					<span class="text-success">{eeros.filter((e) => e.status === 'green').length} online</span
+					<span class="text-success"
+						>{eeros.filter((e) => e.status === 'online' || e.status === 'green').length} online</span
 					>
 				</div>
 				<div class="stat-breakdown">
 					{#each eeros.slice(0, 4) as eero}
 						<div class="breakdown-item">
 							<span class="breakdown-name">
-								<span class="status-dot small" class:online={eero.status === 'green'}></span>
+								<span
+									class="status-dot small"
+									class:online={eero.status === 'online' || eero.status === 'green'}
+								></span>
 								{eero.location || eero.model}
 							</span>
 							<span class="badge {eero.is_gateway ? 'badge-info' : 'badge-neutral'} badge-sm">
@@ -451,9 +455,9 @@
 							<a href="/eeros/{eero.id}" class="eero-item-compact">
 								<span
 									class="status-dot small"
-									class:online={eero.status === 'green'}
-									class:warning={eero.status === 'yellow'}
-									class:offline={eero.status === 'red'}
+									class:online={eero.status === 'online' || eero.status === 'green'}
+									class:warning={eero.status === 'warning' || eero.status === 'yellow'}
+									class:offline={eero.status === 'offline' || eero.status === 'red'}
 								></span>
 								<span class="eero-name">{eero.location || eero.model}</span>
 								{#if eero.is_gateway}
