@@ -160,7 +160,10 @@ async def get_device_signal_history(
             end,
             step,
         )
-        return {"signal_strength": signal_strength, "connection_score": connection_score}
+        return {
+            "signal_strength": signal_strength,
+            "connection_score": connection_score,
+        }
     except httpx.RequestError as e:
         _LOGGER.error(f"VictoriaMetrics connection error: {e}")
         raise HTTPException(
