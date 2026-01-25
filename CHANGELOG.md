@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.2.6](https://github.com/fulviofreitas/eero-ui/compare/v4.2.5...v4.2.6) (2026-01-25)
+
+### 🐛 Bug Fixes
+
+* **metrics:** use correct eero-exporter metrics for device signal history ([0e34627](https://github.com/fulviofreitas/eero-ui/commit/0e34627171efc9383c3d1ca976629e5fb5876b9b))
+
 ## [4.2.5](https://github.com/fulviofreitas/eero-ui/compare/v4.2.4...v4.2.5) (2026-01-25)
 
 ### 🐛 Bug Fixes
