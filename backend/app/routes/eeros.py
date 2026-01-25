@@ -1,6 +1,7 @@
 """Eero node routes for the Eero Dashboard."""
 
 import logging
+from datetime import datetime, timezone
 
 from eero import EeroClient
 from eero.exceptions import EeroException
@@ -12,6 +13,47 @@ from ..transformers import check_success, extract_data, extract_list, normalize_
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
+
+
+def calculate_uptime_seconds(last_reboot: str | None) -> int | None:
+    """Calculate uptime in seconds from last_reboot timestamp.
+
+    Args:
+        last_reboot: ISO format timestamp of last reboot
+
+    Returns:
+        Uptime in seconds, or None if cannot be calculated
+    """
+    if not last_reboot:
+        return None
+    try:
+        # Parse the timestamp - handle various formats
+        reboot_time = None
+        for fmt in [
+            "%Y-%m-%dT%H:%M:%S.%fZ",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S.%f%z",
+        ]:
+            try:
+                reboot_time = datetime.strptime(last_reboot, fmt)
+                break
+            except ValueError:
+                continue
+
+        if reboot_time is None:
+            return None
+
+        # Ensure timezone aware
+        if reboot_time.tzinfo is None:
+            reboot_time = reboot_time.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        delta = now - reboot_time
+        return int(delta.total_seconds())
+    except Exception as e:
+        _LOGGER.debug(f"Failed to calculate uptime from {last_reboot}: {e}")
+        return None
 
 
 class EeroSummary(BaseModel):
@@ -273,7 +315,8 @@ async def get_eero(
             os_version=eero.get("os_version"),
             led_on=eero.get("led_on"),
             led_brightness=eero.get("led_brightness"),
-            uptime=eero.get("uptime"),
+            uptime=eero.get("uptime")
+            or calculate_uptime_seconds(eero.get("last_reboot")),
             cpu_usage=eero.get("cpu_usage"),
             memory_usage=eero.get("memory_usage"),
             temperature=eero.get("temperature"),

@@ -14,6 +14,7 @@ from ..transformers import (
     extract_list,
     normalize_device,
     normalize_dhcp,
+    normalize_eero,
     normalize_network,
 )
 
@@ -167,6 +168,11 @@ async def get_network(
             [d for d in normalized_devices if d.get("connected")]
         )
 
+        # Find gateway eero location
+        normalized_eeros = [normalize_eero(e) for e in eeros]
+        gateway_eero = next((e for e in normalized_eeros if e.get("is_gateway")), None)
+        gateway_location = gateway_eero.get("location") if gateway_eero else None
+
         # Format created_at if available
         created_at_str = network.get("created_at")
         if created_at_str and hasattr(created_at_str, "isoformat"):
@@ -191,7 +197,7 @@ async def get_network(
             premium_status=network.get("premium_status"),
             created_at=created_at_str,
             # Connection
-            gateway=network.get("gateway"),
+            gateway=network.get("gateway") or gateway_location,
             wan_type=network.get("wan_type"),
             gateway_ip=network.get("gateway_ip"),
             connection_mode=network.get("connection_mode"),

@@ -318,10 +318,12 @@
 						<dt>Owner</dt>
 						<dd>{network.owner || '—'}</dd>
 					</div>
-					<div class="info-row">
-						<dt>Type</dt>
-						<dd>{network.network_customer_type || '—'}</dd>
-					</div>
+					{#if network.network_customer_type}
+						<div class="info-row">
+							<dt>Type</dt>
+							<dd>{network.network_customer_type}</dd>
+						</div>
+					{/if}
 					{#if network.premium_status}
 						<div class="info-row">
 							<dt>Premium Status</dt>
