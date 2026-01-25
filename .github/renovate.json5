@@ -1,175 +1,178 @@
 {
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
-
-  // ============================================================================
-  // Base Configuration
-  // ============================================================================
-  extends: ["config:recommended", ":semanticCommits"],
-
-  // Timezone for scheduling
-  timezone: "America/Los_Angeles",
-
-  // Create PRs immediately (override default schedule)
-  schedule: ["at any time"],
-
-  // Disable rate limiting
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':semanticCommits',
+  ],
+  timezone: 'America/Los_Angeles',
+  schedule: [
+    'at any time',
+  ],
   prHourlyLimit: 0,
   prConcurrentLimit: 0,
-
-  // Branch naming
-  branchPrefix: "deps/",
-
-  // ============================================================================
-  // Package Managers
-  // ============================================================================
-  // Enable Python package managers for backend/pyproject.toml
-  // The pep621 manager handles pyproject.toml with [project] section
-  enabledManagers: ["pep621", "npm", "github-actions"],
-
-  // ============================================================================
-  // Commit Message Format (PR title is derived from commit message)
-  // ============================================================================
-  // The PR title is automatically derived from the commit message.
-  // Both must follow conventional commits format for commitlint to pass.
-  commitMessagePrefix: "chore(deps):",
-  commitMessageAction: "update",
-  commitMessageTopic: "{{{depName}}}",
-  commitMessageExtra: "to {{{newVersion}}}",
-
-  // Prevent long release notes in commit body (avoids commitlint failures)
-  commitBody: "",
+  branchPrefix: 'deps/',
+  enabledManagers: [
+    'pep621',
+    'npm',
+    'github-actions',
+  ],
+  commitMessagePrefix: 'chore(deps):',
+  commitMessageAction: 'update',
+  commitMessageTopic: '{{{depName}}}',
+  commitMessageExtra: 'to {{{newVersion}}}',
+  commitBody: '',
   commitBodyTable: false,
-
-  // ============================================================================
-  // Labels & Dashboard
-  // ============================================================================
-  labels: ["dependencies", "renovate", "automerge"],
+  labels: [
+    'dependencies',
+    'renovate',
+    'automerge',
+  ],
   dependencyDashboard: true,
-  dependencyDashboardTitle: "📦 Renovate Dependency Dashboard",
+  dependencyDashboardTitle: '📦 Renovate Dependency Dashboard',
   dependencyDashboardAutoclose: true,
   dependencyDashboardApproval: false,
-
-  // Allow recreating closed PRs
-  recreateWhen: "auto",
-
-  // PR body template
-  prBodyTemplate: "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}",
-  fetchChangeLogs: "pr",
-
-  // ============================================================================
-  // Package Rules
-  // ============================================================================
+  recreateWhen: 'auto',
+  prBodyTemplate: '{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}{{{footer}}}',
+  fetchChangeLogs: 'pr',
   packageRules: [
-    // ==========================================================================
-    // 🟡 Python dependencies: Group minor/patch updates (excludes eero packages)
-    // ==========================================================================
     {
-      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      matchUpdateTypes: ["minor", "patch"],
-      excludePackageNames: ["eero-api", "eero-prometheus-exporter"],
-      groupName: "python-minor-patch",
-      description: "Python minor/patch updates (auto-merge)",
+      matchManagers: [
+        'pep621',
+        'poetry',
+        'pip_requirements',
+        'pip-compile',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+      ],
+      groupName: 'python-minor-patch',
+      description: 'Python minor/patch updates (auto-merge)',
       automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      commitMessagePrefix: "chore(deps-python):",
-      commitMessageTopic: "python dependencies",
+      automergeType: 'pr',
+      automergeStrategy: 'squash',
+      commitMessagePrefix: 'chore(deps-python):',
+      commitMessageTopic: 'python dependencies',
+      matchPackageNames: [
+        '!eero-api',
+        '!eero-prometheus-exporter',
+      ],
     },
-
-    // ==========================================================================
-    // 🟡 Node.js dependencies: Group minor/patch updates
-    // ==========================================================================
     {
-      matchManagers: ["npm"],
-      matchUpdateTypes: ["minor", "patch"],
-      groupName: "npm-minor-patch",
-      description: "npm minor/patch updates (auto-merge)",
+      matchManagers: [
+        'npm',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+      ],
+      groupName: 'npm-minor-patch',
+      description: 'npm minor/patch updates (auto-merge)',
       automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      commitMessagePrefix: "chore(deps-npm):",
-      commitMessageTopic: "npm dependencies",
+      automergeType: 'pr',
+      automergeStrategy: 'squash',
+      commitMessagePrefix: 'chore(deps-npm):',
+      commitMessageTopic: 'npm dependencies',
     },
-
-    // ==========================================================================
-    // 🟢 GitHub Actions: Auto-merge minor/patch updates
-    // ==========================================================================
     {
-      matchManagers: ["github-actions"],
-      matchUpdateTypes: ["minor", "patch"],
-      groupName: "github-actions",
-      description: "GitHub Actions minor/patch updates (auto-merge)",
+      matchManagers: [
+        'github-actions',
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch',
+      ],
+      groupName: 'github-actions',
+      description: 'GitHub Actions minor/patch updates (auto-merge)',
       automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      commitMessagePrefix: "chore(deps-actions):",
-      commitMessageTopic: "github actions",
+      automergeType: 'pr',
+      automergeStrategy: 'squash',
+      commitMessagePrefix: 'chore(deps-actions):',
+      commitMessageTopic: 'github actions',
     },
-
-    // ==========================================================================
-    // 🔵 Major updates: Require review (except eero packages)
-    // ==========================================================================
     {
-      matchUpdateTypes: ["major"],
-      excludePackageNames: ["eero-api", "eero-prometheus-exporter"],
-      description: "Major updates require manual review",
+      matchUpdateTypes: [
+        'major',
+      ],
+      description: 'Major updates require manual review',
       automerge: false,
-      addLabels: ["major-update", "needs-review"],
-      reviewers: ["fulviofreitas"],
-      commitMessagePrefix: "chore(deps-major):",
+      addLabels: [
+        'major-update',
+        'needs-review',
+      ],
+      reviewers: [
+        'fulviofreitas',
+      ],
+      commitMessagePrefix: 'chore(deps-major):',
+      matchPackageNames: [
+        '!eero-api',
+        '!eero-prometheus-exporter',
+      ],
     },
-
-    // ==========================================================================
-    // 🟣 Security updates: High priority
-    // ==========================================================================
     {
-      matchDepTypes: ["devDependencies", "dependencies"],
-      matchUpdateTypes: ["patch"],
-      matchPackageNames: ["*"],
+      matchDepTypes: [
+        'devDependencies',
+        'dependencies',
+      ],
+      matchUpdateTypes: [
+        'patch',
+      ],
+      matchPackageNames: [
+        '*',
+      ],
       prPriority: 20,
-      description: "Security patches get high priority",
+      description: 'Security patches get high priority',
     },
-
-    // ==========================================================================
-    // 🟢 eero-packages - Internal dependencies (GROUPED to resolve conflicts)
-    // ==========================================================================
-    // eero-prometheus-exporter depends on eero-api, so they MUST be updated
-    // together to avoid dependency resolution failures.
-    // Updates trigger minor version bump via feat(deps): prefix.
-    // This rule is placed LAST so it takes precedence over all other rules.
     {
-      matchPackageNames: ["eero-api", "eero-prometheus-exporter"],
-      matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      groupName: "eero-packages",
-      description: "🟢 eero packages update (grouped to resolve dependencies)",
+      matchPackageNames: [
+        'eero-api',
+        'eero-prometheus-exporter',
+      ],
+      matchManagers: [
+        'pep621',
+        'poetry',
+        'pip_requirements',
+        'pip-compile',
+      ],
+      groupName: 'eero-packages',
+      description: '🟢 eero packages update (grouped to resolve dependencies)',
       automerge: false,
-      addLabels: ["eero-packages", "feature", "critical", "needs-review"],
-      reviewers: ["fulviofreitas"],
+      addLabels: [
+        'eero-packages',
+        'feature',
+        'critical',
+        'needs-review',
+      ],
+      reviewers: [
+        'fulviofreitas',
+      ],
       prPriority: 10,
-      commitMessagePrefix: "feat(deps):",
-      commitMessageTopic: "eero packages",
+      commitMessagePrefix: 'feat(deps):',
+      commitMessageTopic: 'eero packages',
       prBodyNotes: [
-        "## 🟢 eero Packages Update",
-        "",
-        "This PR updates eero ecosystem packages:",
-        "- `eero-api` - Core API client for eero network communication",
-        "- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter",
-        "",
-        "These packages are grouped because `eero-prometheus-exporter` depends on `eero-api`.",
-        "",
-        "### Links",
-        "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
-        "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
-        "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
-        "- [eero-prometheus-exporter Repository](https://github.com/fulviofreitas/eero-prometheus-exporter)",
+        '## 🟢 eero Packages Update',
+        '',
+        'This PR updates eero ecosystem packages:',
+        '- `eero-api` - Core API client for eero network communication',
+        '- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter',
+        '',
+        'These packages are grouped because `eero-prometheus-exporter` depends on `eero-api`.',
+        '',
+        '### Links',
+        '- [eero-api on PyPI](https://pypi.org/project/eero-api/)',
+        '- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)',
+        '- [eero-api Repository](https://github.com/fulviofreitas/eero-api)',
+        '- [eero-prometheus-exporter Repository](https://github.com/fulviofreitas/eero-prometheus-exporter)',
       ],
     },
   ],
-
-  // Vulnerability alerts
   vulnerabilityAlerts: {
     enabled: true,
-    labels: ["security", "critical", "automerge"],
+    labels: [
+      'security',
+      'critical',
+      'automerge',
+    ],
     automerge: true,
   },
 }
