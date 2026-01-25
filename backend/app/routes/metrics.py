@@ -124,6 +124,52 @@ async def get_speedtest_history(
         )
 
 
+@router.get("/devices/{device_id}/signal")
+async def get_device_signal_history(
+    device_id: str,
+    start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
+    end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
+    step: str = Query("1m", description="Query resolution step"),
+) -> dict[str, Any]:
+    """Get device signal strength history.
+
+    Returns signal strength (dBm) and connection score over time for a device.
+    Note: eero-prometheus-exporter doesn't provide bandwidth metrics per device,
+    so we show signal quality metrics instead.
+
+    Args:
+        device_id: The device ID (MAC address without colons, lowercase).
+        start: Start time for the range.
+        end: End time for the range.
+        step: Query resolution step.
+
+    Returns:
+        Signal strength (dBm) and connection score history.
+    """
+    try:
+        # eero-prometheus-exporter uses device_id label (MAC without colons)
+        signal_strength = await victoria_client.query_range(
+            f'eero_device_signal_strength_dbm{{device_id="{device_id}"}}',
+            start,
+            end,
+            step,
+        )
+        connection_score = await victoria_client.query_range(
+            f'eero_device_connection_score_bars{{device_id="{device_id}"}}',
+            start,
+            end,
+            step,
+        )
+        return {"signal_strength": signal_strength, "connection_score": connection_score}
+    except httpx.RequestError as e:
+        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metrics service unavailable",
+        )
+
+
+# Keep backwards compatibility with old endpoint
 @router.get("/devices/{mac}/bandwidth")
 async def get_device_bandwidth(
     mac: str,
@@ -131,27 +177,30 @@ async def get_device_bandwidth(
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("1m", description="Query resolution step"),
 ) -> dict[str, Any]:
-    """Get device bandwidth history.
+    """Get device signal history (backwards compatible endpoint).
 
-    Returns RX and TX bitrates over time for a specific device.
+    Note: Bandwidth metrics are not available from eero-prometheus-exporter.
+    This endpoint returns signal strength data instead.
 
     Args:
-        mac: The device MAC address.
+        mac: The device ID (MAC address without colons, lowercase).
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
 
     Returns:
-        RX and TX bitrate history.
+        Signal strength data (labeled as rx/tx for backwards compatibility).
     """
     try:
-        rx = await victoria_client.query_range(
-            f'eero_device_rx_bitrate{{mac="{mac}"}}', start, end, step
+        # Use device_id label format
+        signal = await victoria_client.query_range(
+            f'eero_device_signal_strength_dbm{{device_id="{mac}"}}',
+            start,
+            end,
+            step,
         )
-        tx = await victoria_client.query_range(
-            f'eero_device_tx_bitrate{{mac="{mac}"}}', start, end, step
-        )
-        return {"rx": rx, "tx": tx}
+        # Return signal as both rx and tx for chart compatibility
+        return {"rx": signal, "tx": signal}
     except httpx.RequestError as e:
         _LOGGER.error(f"VictoriaMetrics connection error: {e}")
         raise HTTPException(
@@ -178,11 +227,13 @@ async def get_eero_mesh_quality(
         step: Query resolution step.
 
     Returns:
-        Mesh quality history.
+        Mesh quality history (0-5 bars).
     """
     try:
+        # eero-prometheus-exporter uses eero_eero_mesh_quality_bars metric
+        # with eero_id label containing the serial number
         quality = await victoria_client.query_range(
-            f'eero_mesh_quality_bars{{serial_number="{serial}"}}', start, end, step
+            f'eero_eero_mesh_quality_bars{{eero_id="{serial}"}}', start, end, step
         )
         return {"mesh_quality": quality}
     except httpx.RequestError as e:

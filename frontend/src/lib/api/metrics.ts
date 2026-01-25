@@ -31,6 +31,11 @@ interface BandwidthHistoryResponse {
 	tx: MetricsResponse;
 }
 
+interface SignalHistoryResponse {
+	signal_strength: MetricsResponse;
+	connection_score: MetricsResponse;
+}
+
 /**
  * Transform Prometheus/VictoriaMetrics response to chart-friendly format
  */
@@ -94,7 +99,42 @@ export async function getSpeedtestHistory(
 }
 
 /**
- * Get device bandwidth history for charts
+ * Get device signal strength history for charts
+ * Note: eero-prometheus-exporter doesn't provide bandwidth metrics per device,
+ * so we show signal quality metrics instead.
+ */
+export async function getDeviceSignalHistory(
+	deviceId: string,
+	start: string,
+	end: string,
+	step = '1m'
+): Promise<{ signalStrength: TimeSeriesPoint[]; connectionScore: TimeSeriesPoint[] }> {
+	try {
+		// Normalize device ID (remove colons, lowercase)
+		const normalizedId = deviceId.replace(/:/g, '').toLowerCase();
+
+		const response = await fetchMetrics<SignalHistoryResponse>(
+			`/metrics/devices/${normalizedId}/signal`,
+			{
+				start,
+				end,
+				step
+			}
+		);
+
+		return {
+			signalStrength: transformMetricsResponse(response.signal_strength),
+			connectionScore: transformMetricsResponse(response.connection_score)
+		};
+	} catch (error) {
+		console.error('Failed to fetch device signal history:', error);
+		return { signalStrength: [], connectionScore: [] };
+	}
+}
+
+/**
+ * Get device bandwidth history for charts (legacy - returns signal data)
+ * @deprecated Use getDeviceSignalHistory instead
  */
 export async function getDeviceBandwidth(
 	mac: string,

@@ -1,13 +1,17 @@
 <!--
-  BandwidthChart Component
+  BandwidthChart Component (Signal Strength History)
   
-  Displays device bandwidth history (RX and TX rates) over time.
+  Displays device signal strength history over time.
+  Note: eero-prometheus-exporter doesn't provide bandwidth metrics per device,
+  so this shows signal quality metrics instead which are more useful for
+  understanding device connectivity.
+  
   Includes time range selector for 1h, 6h, or 24h views.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
-	import { getDeviceBandwidth } from '$lib/api/metrics';
+	import { getDeviceSignalHistory } from '$lib/api/metrics';
 
 	interface Props {
 		deviceMac: string;
@@ -18,22 +22,14 @@
 	let timeRange: '1h' | '6h' | '24h' = $state('1h');
 	let loading = $state(true);
 	let error: string | null = $state(null);
-	let rxData: Array<{ x: number; y: number }> = $state([]);
-	let txData: Array<{ x: number; y: number }> = $state([]);
+	let signalData: Array<{ x: number; y: number }> = $state([]);
 
 	const datasets = $derived([
 		{
-			label: 'Receive (RX)',
-			data: rxData,
-			borderColor: 'rgb(54, 162, 235)',
-			backgroundColor: 'rgba(54, 162, 235, 0.1)',
-			fill: true
-		},
-		{
-			label: 'Transmit (TX)',
-			data: txData,
-			borderColor: 'rgb(255, 159, 64)',
-			backgroundColor: 'rgba(255, 159, 64, 0.1)',
+			label: 'Signal Strength',
+			data: signalData,
+			borderColor: 'rgb(99, 102, 241)',
+			backgroundColor: 'rgba(99, 102, 241, 0.1)',
 			fill: true
 		}
 	]);
@@ -74,17 +70,16 @@
 			const start = getStartTime(timeRange, now);
 			const step = getStep(timeRange);
 
-			const data = await getDeviceBandwidth(
+			const data = await getDeviceSignalHistory(
 				deviceMac,
 				start.toISOString(),
 				now.toISOString(),
 				step
 			);
 
-			rxData = data.rx;
-			txData = data.tx;
+			signalData = data.signalStrength;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load bandwidth data';
+			error = e instanceof Error ? e.message : 'Failed to load signal data';
 		} finally {
 			loading = false;
 		}
@@ -102,7 +97,7 @@
 
 <div class="bandwidth-chart">
 	<div class="chart-header">
-		<h3>Bandwidth History</h3>
+		<h3>Signal Strength History</h3>
 		<div class="time-range-selector">
 			<button class:active={timeRange === '1h'} onclick={() => setTimeRange('1h')}> 1h </button>
 			<button class:active={timeRange === '6h'} onclick={() => setTimeRange('6h')}> 6h </button>
@@ -110,7 +105,7 @@
 		</div>
 	</div>
 
-	<TimeSeriesChart title="" {datasets} yAxisLabel="Mbps" {loading} {error} />
+	<TimeSeriesChart title="" {datasets} yAxisLabel="dBm" {loading} {error} />
 </div>
 
 <style>
