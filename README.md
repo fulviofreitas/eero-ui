@@ -20,6 +20,22 @@ _Built for operators who want fast, efficient network control._
 
 ---
 
+## 📸 Screenshots
+
+| Dark Theme | Light Theme |
+|:----------:|:-----------:|
+| ![Dashboard Dark](./screenshots/dashboard.png) | ![Dashboard Light](./screenshots/dashboard-light.png) |
+
+| Devices | Eeros | Profiles |
+|:-------:|:-----:|:--------:|
+| ![Devices](./screenshots/devices.png) | ![Eeros](./screenshots/eeros.png) | ![Profiles](./screenshots/profiles.png) |
+
+| Topology | Network | Login |
+|:--------:|:-------:|:-----:|
+| ![Topology](./screenshots/topology.png) | ![Network](./screenshots/network.png) | ![Login](./screenshots/login.png) |
+
+---
+
 ## ✨ Features
 
 | 📊 Monitor | 🎛️ Control | 🎨 Experience |
