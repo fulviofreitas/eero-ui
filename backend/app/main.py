@@ -42,10 +42,38 @@ logging.basicConfig(
 _LOGGER = logging.getLogger(__name__)
 
 
+async def _sync_session_to_exporter_on_startup() -> None:
+    """Sync existing session to exporter on startup.
+
+    This ensures the exporter can collect metrics even after container restarts
+    when the session was restored from persistent storage.
+    """
+    try:
+        main_session_path = Path(settings.cookie_file)
+        exporter_session_path = Path(
+            settings.exporter_session_path
+            if hasattr(settings, "exporter_session_path")
+            else "/data/session/exporter-session.json"
+        )
+
+        if main_session_path.exists():
+            session_content = main_session_path.read_text()
+            if session_content.strip():  # Only sync if not empty
+                exporter_session_path.parent.mkdir(parents=True, exist_ok=True)
+                exporter_session_path.write_text(session_content)
+                _LOGGER.info("Session synced to exporter on startup")
+        else:
+            _LOGGER.info("No existing session found, exporter will wait for login")
+    except Exception as e:
+        _LOGGER.warning(f"Failed to sync session on startup: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     _LOGGER.info("Starting Eero Dashboard Backend")
+    # Sync session to exporter on startup (for container restarts)
+    await _sync_session_to_exporter_on_startup()
     yield
     _LOGGER.info("Shutting down Eero Dashboard Backend")
     await shutdown_client()
