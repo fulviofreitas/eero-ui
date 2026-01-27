@@ -166,6 +166,13 @@
 		</td>
 	{/if}
 
+	<!-- Device Type -->
+	{#if isVisible('deviceType')}
+		<td class="text-sm">
+			{device.device_type || '—'}
+		</td>
+	{/if}
+
 	<!-- Connection Type -->
 	{#if isVisible('connection')}
 		<td class="text-sm">

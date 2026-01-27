@@ -294,7 +294,7 @@ async def get_device(
             profile_name=device.get("profile_name"),
             last_active=last_active,
             first_active=first_active,
-            network_id=device.get("network_id"),
+            network_id=network_id,  # Use the network_id from the dependency
             subnet_kind=device.get("subnet_kind"),
             auth=device.get("auth"),
         )

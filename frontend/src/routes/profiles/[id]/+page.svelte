@@ -212,6 +212,23 @@
 			{/if}
 		</section>
 
+		<!-- Technical -->
+		<section class="card info-card technical-card">
+			<h2>Technical</h2>
+			<dl class="info-list">
+				<div class="info-row">
+					<dt>Profile ID</dt>
+					<dd class="mono text-sm">{profile.id || '—'}</dd>
+				</div>
+				{#if profile.url}
+					<div class="info-row">
+						<dt>API URL</dt>
+						<dd class="mono text-sm text-muted">{profile.url}</dd>
+					</div>
+				{/if}
+			</dl>
+		</section>
+
 		<!-- Devices Section -->
 		<section class="devices-section">
 			<div class="section-header">
@@ -727,6 +744,42 @@
 	.badge-warning {
 		background-color: var(--color-warning);
 		color: var(--color-bg-primary);
+	}
+
+	/* Technical Card */
+	.technical-card {
+		margin-bottom: var(--space-6);
+	}
+
+	.info-card h2 {
+		font-size: 1rem;
+		margin-bottom: var(--space-4);
+		padding-bottom: var(--space-2);
+		border-bottom: 1px solid var(--color-border-muted);
+	}
+
+	.info-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.info-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-2) 0;
+	}
+
+	.info-row dt {
+		color: var(--color-text-secondary);
+		font-size: 0.875rem;
+	}
+
+	.info-row dd {
+		font-weight: 500;
+		text-align: right;
+		word-break: break-all;
 	}
 
 	@media (max-width: 768px) {

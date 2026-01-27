@@ -13,6 +13,118 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
 
+	/**
+	 * Get the appropriate emoji for a device type
+	 */
+	function getDeviceTypeEmoji(deviceType: string | null, wireless: boolean): string {
+		if (!deviceType) {
+			return wireless ? '📱' : '🖥️';
+		}
+
+		const type = deviceType.toLowerCase();
+
+		// Map device types to emojis
+		const emojiMap: Record<string, string> = {
+			// Mobile devices
+			phone: '📱',
+			mobile: '📱',
+			smartphone: '📱',
+			iphone: '📱',
+			android: '📱',
+			// Tablets
+			tablet: '📲',
+			ipad: '📲',
+			// Computers
+			computer: '💻',
+			laptop: '💻',
+			notebook: '💻',
+			macbook: '💻',
+			desktop: '🖥️',
+			pc: '🖥️',
+			mac: '🖥️',
+			imac: '🖥️',
+			workstation: '🖥️',
+			// Entertainment
+			tv: '📺',
+			television: '📺',
+			smart_tv: '📺',
+			streaming: '📺',
+			streaming_device: '📺',
+			media_player: '📺',
+			appletv: '📺',
+			firetv: '📺',
+			roku: '📺',
+			chromecast: '📺',
+			// Gaming
+			gaming: '🎮',
+			gaming_console: '🎮',
+			game_console: '🎮',
+			playstation: '🎮',
+			xbox: '🎮',
+			nintendo: '🎮',
+			switch: '🎮',
+			// Audio
+			speaker: '🔊',
+			smart_speaker: '🔊',
+			homepod: '🔊',
+			echo: '🔊',
+			alexa: '🔊',
+			sonos: '🔊',
+			// Smart home
+			smart_home: '🏠',
+			iot: '🏠',
+			hub: '🏠',
+			thermostat: '🌡️',
+			camera: '📷',
+			security_camera: '📷',
+			doorbell: '🚪',
+			light: '💡',
+			lighting: '💡',
+			plug: '🔌',
+			smart_plug: '🔌',
+			outlet: '🔌',
+			// Wearables
+			wearable: '⌚',
+			watch: '⌚',
+			smartwatch: '⌚',
+			apple_watch: '⌚',
+			fitness: '⌚',
+			// Network
+			router: '📡',
+			access_point: '📡',
+			network: '📡',
+			bridge: '🌉',
+			extender: '📡',
+			// Printers & Office
+			printer: '🖨️',
+			scanner: '🖨️',
+			// Storage
+			nas: '💾',
+			storage: '💾',
+			server: '🗄️',
+			// Other
+			car: '🚗',
+			vehicle: '🚗',
+			appliance: '🔌',
+			unknown: wireless ? '📱' : '🖥️'
+		};
+
+		// Try exact match first
+		if (emojiMap[type]) {
+			return emojiMap[type];
+		}
+
+		// Try partial matches
+		for (const [key, emoji] of Object.entries(emojiMap)) {
+			if (type.includes(key) || key.includes(type)) {
+				return emoji;
+			}
+		}
+
+		// Default based on connection type
+		return wireless ? '📱' : '🖥️';
+	}
+
 	let device: DeviceDetail | null = null;
 	let loading = true;
 	let error: string | null = null;
@@ -184,7 +296,7 @@
 		<header class="detail-header">
 			<div class="header-info">
 				<div class="header-title">
-					<span class="device-icon">{device.wireless ? '📱' : '🖥️'}</span>
+					<span class="device-icon">{getDeviceTypeEmoji(device.device_type, device.wireless)}</span>
 					<div>
 						<h1>{displayName}</h1>
 						{#if device.manufacturer}
@@ -309,7 +421,18 @@
 					</div>
 					<div class="info-row">
 						<dt>Device Type</dt>
-						<dd>{device.device_type || '—'}</dd>
+						<dd>
+							{#if device.device_type}
+								<span class="device-type-badge">
+									<span class="device-type-emoji"
+										>{getDeviceTypeEmoji(device.device_type, device.wireless)}</span
+									>
+									{device.device_type}
+								</span>
+							{:else}
+								—
+							{/if}
+						</dd>
 					</div>
 				</dl>
 			</section>
@@ -684,6 +807,16 @@
 
 	.text-warning {
 		color: var(--color-warning);
+	}
+
+	.device-type-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.device-type-emoji {
+		font-size: 1.1rem;
 	}
 
 	/* Profile Section */

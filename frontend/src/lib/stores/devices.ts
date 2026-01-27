@@ -30,6 +30,7 @@ interface DeviceFilters {
 		| 'mac'
 		| 'hostname'
 		| 'manufacturer'
+		| 'deviceType'
 		| 'connection'
 		| 'signal'
 		| 'connectedTo'
@@ -401,6 +402,9 @@ export const filteredDevices = derived([devicesStore, deviceFilters], ([$devices
 			case 'manufacturer':
 				comparison = (a.manufacturer || '').localeCompare(b.manufacturer || '');
 				break;
+			case 'deviceType':
+				comparison = (a.device_type || '').localeCompare(b.device_type || '');
+				break;
 			case 'connection':
 				comparison = (a.connection_type || '').localeCompare(b.connection_type || '');
 				break;
@@ -452,6 +456,7 @@ export interface ColumnVisibility {
 	mac: boolean;
 	hostname: boolean;
 	manufacturer: boolean;
+	deviceType: boolean;
 	connection: boolean;
 	signal: boolean;
 	frequency: boolean;
@@ -467,6 +472,7 @@ const defaultColumnVisibility: ColumnVisibility = {
 	mac: true,
 	hostname: false,
 	manufacturer: false,
+	deviceType: false,
 	connection: true,
 	signal: false,
 	frequency: false,

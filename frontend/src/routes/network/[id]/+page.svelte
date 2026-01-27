@@ -808,6 +808,17 @@
 					</dl>
 				</section>
 			{/if}
+
+			<!-- Technical -->
+			<section class="card info-card">
+				<h2>Technical</h2>
+				<dl class="info-list">
+					<div class="info-row">
+						<dt>Network ID</dt>
+						<dd class="mono text-sm">{networkId || '—'}</dd>
+					</div>
+				</dl>
+			</section>
 		</div>
 
 		<!-- Speedtest History Chart -->

@@ -567,6 +567,29 @@
 				</section>
 			{/if}
 
+			<!-- Technical -->
+			<section class="card detail-card">
+				<h2>Technical</h2>
+				<div class="info-grid">
+					<div class="info-item">
+						<span class="info-label">Eero ID</span>
+						<span class="info-value mono text-sm">{eero.id || '—'}</span>
+					</div>
+					{#if eero.serial}
+						<div class="info-item">
+							<span class="info-label">Serial Number</span>
+							<span class="info-value mono text-sm">{eero.serial}</span>
+						</div>
+					{/if}
+					{#if eero.url}
+						<div class="info-item info-item-vertical">
+							<span class="info-label">API URL</span>
+							<span class="info-value mono text-sm text-muted">{eero.url}</span>
+						</div>
+					{/if}
+				</div>
+			</section>
+
 			<!-- Actions Card -->
 			<section class="card detail-card actions-card">
 				<h2>Actions</h2>

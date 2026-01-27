@@ -51,6 +51,13 @@
 			sortKey: 'manufacturer'
 		},
 		{
+			id: 'deviceType',
+			label: 'Device Type',
+			required: false,
+			sortable: true,
+			sortKey: 'deviceType'
+		},
+		{
 			id: 'connection',
 			label: 'Connection Type',
 			required: false,
@@ -500,6 +507,16 @@
 							<th class="sortable" on:click={() => handleSort('manufacturer')}>
 								Manufacturer
 								{#if $deviceFilters.sortBy === 'manufacturer'}
+									<span class="sort-indicator"
+										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
+									>
+								{/if}
+							</th>
+						{/if}
+						{#if $columnVisibility.deviceType}
+							<th class="sortable" on:click={() => handleSort('deviceType')}>
+								Device Type
+								{#if $deviceFilters.sortBy === 'deviceType'}
 									<span class="sort-indicator"
 										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
 									>
