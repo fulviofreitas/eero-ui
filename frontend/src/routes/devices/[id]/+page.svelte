@@ -658,9 +658,9 @@
 			</section>
 
 			<!-- Technical -->
-			<section class="card info-card">
+			<section class="card info-card wide-card">
 				<h2>Technical</h2>
-				<dl class="info-list">
+				<dl class="info-list technical-list">
 					<div class="info-row">
 						<dt>Device ID</dt>
 						<dd class="mono text-sm">{device.id || '—'}</dd>
@@ -766,6 +766,20 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
+	}
+
+	.wide-card {
+		grid-column: 1 / -1;
+	}
+
+	.technical-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: var(--space-2) var(--space-6);
+	}
+
+	.technical-list .info-row {
+		border-bottom: none;
 	}
 
 	.info-card h2 {

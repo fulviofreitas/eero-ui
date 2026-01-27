@@ -810,9 +810,9 @@
 			{/if}
 
 			<!-- Technical -->
-			<section class="card info-card">
+			<section class="card info-card wide-card">
 				<h2>Technical</h2>
-				<dl class="info-list">
+				<dl class="info-list technical-list">
 					<div class="info-row">
 						<dt>Network ID</dt>
 						<dd class="mono text-sm">{networkId || '—'}</dd>
@@ -1012,6 +1012,20 @@
 
 	.speed-test-card {
 		grid-column: span 2;
+	}
+
+	.wide-card {
+		grid-column: 1 / -1;
+	}
+
+	.technical-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: var(--space-2) var(--space-6);
+	}
+
+	.technical-list .info-row {
+		border-bottom: none;
 	}
 
 	.card-header-flex {

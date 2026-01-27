@@ -568,9 +568,9 @@
 			{/if}
 
 			<!-- Technical -->
-			<section class="card detail-card">
+			<section class="card detail-card wide-card">
 				<h2>Technical</h2>
-				<div class="info-grid">
+				<div class="info-grid technical-grid">
 					<div class="info-item">
 						<span class="info-label">Eero ID</span>
 						<span class="info-value mono text-sm">{eero.id || '—'}</span>
@@ -580,9 +580,11 @@
 						<span class="info-value mono text-sm">{$selectedNetworkId || '—'}</span>
 					</div>
 					{#if eero.url}
-						<div class="info-item info-item-vertical">
+						<div class="info-item">
 							<span class="info-label">API URL</span>
-							<span class="info-value mono text-sm text-muted">{eero.url}</span>
+							<span class="info-value mono text-sm text-muted" style="word-break: break-all;"
+								>{eero.url}</span
+							>
 						</div>
 					{/if}
 				</div>
@@ -820,6 +822,12 @@
 
 	.wide-card {
 		grid-column: 1 / -1;
+	}
+
+	.technical-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: var(--space-3) var(--space-6);
 	}
 
 	.action-buttons {

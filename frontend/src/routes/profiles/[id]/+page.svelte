@@ -213,9 +213,9 @@
 		</section>
 
 		<!-- Technical -->
-		<section class="card info-card technical-card">
+		<section class="card info-card technical-card wide-card">
 			<h2>Technical</h2>
-			<dl class="info-list">
+			<dl class="info-list technical-list">
 				<div class="info-row">
 					<dt>Profile ID</dt>
 					<dd class="mono text-sm">{profile.id || '—'}</dd>
@@ -753,6 +753,21 @@
 	/* Technical Card */
 	.technical-card {
 		margin-bottom: var(--space-6);
+	}
+
+	.wide-card {
+		grid-column: 1 / -1;
+	}
+
+	.technical-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: var(--space-2) var(--space-6);
+	}
+
+	.technical-list .info-row {
+		border-bottom: none;
+		padding: var(--space-2) 0;
 	}
 
 	.info-card h2 {
