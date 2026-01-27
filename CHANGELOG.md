@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.4.0](https://github.com/fulviofreitas/eero-ui/compare/v4.3.1...v4.4.0) (2026-01-27)
+
+### ✨ Features
+
+* **frontend:** add Technical block to detail pages and device type enhancements ([e2727c0](https://github.com/fulviofreitas/eero-ui/commit/e2727c0033b24d9098abb7b38f23920bd4107ebf))
+
 ## [4.3.1](https://github.com/fulviofreitas/eero-ui/compare/v4.3.0...v4.3.1) (2026-01-27)
 
 ### 🐛 Bug Fixes
