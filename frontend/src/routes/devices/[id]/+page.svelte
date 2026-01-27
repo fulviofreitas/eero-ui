@@ -83,6 +83,25 @@
 			plug: '🔌',
 			smart_plug: '🔌',
 			outlet: '🔌',
+			// Appliances
+			air_purifier: '🌬️',
+			purifier: '🌬️',
+			fan: '🌀',
+			vacuum: '🧹',
+			robot_vacuum: '🧹',
+			humidifier: '💨',
+			dehumidifier: '💨',
+			heater: '🔥',
+			air_conditioner: '❄️',
+			washer: '🧺',
+			dryer: '🧺',
+			dishwasher: '🍽️',
+			refrigerator: '🧊',
+			fridge: '🧊',
+			oven: '🍳',
+			microwave: '📻',
+			coffee: '☕',
+			appliance: '🔌',
 			// Wearables
 			wearable: '⌚',
 			watch: '⌚',
@@ -105,7 +124,6 @@
 			// Other
 			car: '🚗',
 			vehicle: '🚗',
-			appliance: '🔌',
 			unknown: wireless ? '📱' : '🖥️'
 		};
 

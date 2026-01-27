@@ -575,12 +575,10 @@
 						<span class="info-label">Eero ID</span>
 						<span class="info-value mono text-sm">{eero.id || '—'}</span>
 					</div>
-					{#if eero.serial}
-						<div class="info-item">
-							<span class="info-label">Serial Number</span>
-							<span class="info-value mono text-sm">{eero.serial}</span>
-						</div>
-					{/if}
+					<div class="info-item">
+						<span class="info-label">Network ID</span>
+						<span class="info-value mono text-sm">{$selectedNetworkId || '—'}</span>
+					</div>
 					{#if eero.url}
 						<div class="info-item info-item-vertical">
 							<span class="info-label">API URL</span>

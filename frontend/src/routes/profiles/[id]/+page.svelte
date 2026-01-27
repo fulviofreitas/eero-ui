@@ -9,7 +9,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { ProfileSummary, ProfileDevice } from '$api/types';
-	import { uiStore } from '$stores';
+	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 
 	let profile: ProfileSummary | null = null;
@@ -219,6 +219,10 @@
 				<div class="info-row">
 					<dt>Profile ID</dt>
 					<dd class="mono text-sm">{profile.id || '—'}</dd>
+				</div>
+				<div class="info-row">
+					<dt>Network ID</dt>
+					<dd class="mono text-sm">{$selectedNetworkId || '—'}</dd>
 				</div>
 				{#if profile.url}
 					<div class="info-row">
