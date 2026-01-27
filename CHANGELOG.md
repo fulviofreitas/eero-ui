@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.3.1](https://github.com/fulviofreitas/eero-ui/compare/v4.3.0...v4.3.1) (2026-01-27)
+
+### 🐛 Bug Fixes
+
+* **backend:** sync session to exporter on startup ([b9ce89e](https://github.com/fulviofreitas/eero-ui/commit/b9ce89ef0843098c880a8d3b2201d57a79a52f70))
+
 ## [4.3.0](https://github.com/fulviofreitas/eero-ui/compare/v4.2.6...v4.3.0) (2026-01-26)
 
 ### ✨ Features
