@@ -22,7 +22,9 @@ function escapeCSVValue(value: unknown): string {
 function flattenValue(value: unknown): string {
 	if (value === null || value === undefined) return '';
 	if (Array.isArray(value)) {
-		return value.map((v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v))).join('; ');
+		return value
+			.map((v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)))
+			.join('; ');
 	}
 	if (typeof value === 'object') return JSON.stringify(value);
 	return String(value);
@@ -40,9 +42,7 @@ function inferColumns(data: object[]): ExportColumn[] {
 	}
 	return Array.from(keySet).map((key) => ({
 		key,
-		label: key
-			.replace(/_/g, ' ')
-			.replace(/\b\w/g, (c) => c.toUpperCase())
+		label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 	}));
 }
 
