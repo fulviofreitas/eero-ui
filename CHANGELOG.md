@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.5.0](https://github.com/fulviofreitas/eero-ui/compare/v4.4.1...v4.5.0) (2026-03-05)
+
+### ✨ Features
+
+* **deps:** update eero packages to 3.11.1 ([b054d5d](https://github.com/fulviofreitas/eero-ui/commit/b054d5d9b96580fcff329ac59d96937fbb56f375))
+* **frontend:** add list export in CSV, JSON, and YAML formats ([b7a9eb7](https://github.com/fulviofreitas/eero-ui/commit/b7a9eb7615f01107f9aee69e5e65745dd35a525e))
+
+### 🐛 Bug Fixes
+
+* **frontend:** revert eslint to v9 and fix prettier formatting ([f35dc87](https://github.com/fulviofreitas/eero-ui/commit/f35dc875ba41ce66010fcf7c6fddcd2c8ff371d3))
+
 ## [4.4.1](https://github.com/fulviofreitas/eero-ui/compare/v4.4.0...v4.4.1) (2026-01-27)
 
 ### 🐛 Bug Fixes
