@@ -9,6 +9,7 @@
 	import type { EeroSummary } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import ExportMenu from '$components/common/ExportMenu.svelte';
 
 	let eeros: EeroSummary[] = [];
 	let loading = true;
@@ -94,6 +95,7 @@
 					☰
 				</button>
 			</div>
+			<ExportMenu data={eeros} filename="eeros" disabled={loading} />
 			<button class="btn btn-secondary" on:click={() => fetchEeros(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>

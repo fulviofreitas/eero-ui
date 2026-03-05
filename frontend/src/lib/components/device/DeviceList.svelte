@@ -23,6 +23,7 @@
 	import { api } from '$api/client';
 	import { uiStore } from '$stores';
 	import DeviceRow from './DeviceRow.svelte';
+	import ExportMenu from '$components/common/ExportMenu.svelte';
 
 	let refreshing = false;
 	let columnSelectorOpen = false;
@@ -261,6 +262,9 @@
 					{/if}
 				</div>
 			{/if}
+
+			<!-- Export -->
+			<ExportMenu data={$filteredDevices} filename="devices" disabled={$isDevicesLoading} />
 
 			<!-- Column Selector -->
 			<div class="column-selector">

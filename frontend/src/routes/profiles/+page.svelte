@@ -9,6 +9,7 @@
 	import type { ProfileSummary } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import ExportMenu from '$components/common/ExportMenu.svelte';
 
 	let profiles: ProfileSummary[] = [];
 	let loading = true;
@@ -85,6 +86,7 @@
 					☰
 				</button>
 			</div>
+			<ExportMenu data={profiles} filename="profiles" disabled={loading} />
 			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
