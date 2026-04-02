@@ -2,7 +2,7 @@
 # 🔄 Renovate - Automated Dependency Updates
 # ============================================================================
 # Runs Renovate to check for dependency updates and create PRs.
-# Uses the reusable renovate action from eero-api.
+# Uses the reusable renovate action from workflow-arsenal.
 #
 # Key features:
 # - Tracks eero-api and eero-prometheus-exporter dependencies
@@ -96,7 +96,7 @@ jobs:
       # This step polls PyPI until the new version is available.
       - name: ⏳ Wait for PyPI indexing
         if: github.event_name == 'repository_dispatch'
-        uses: fulviofreitas/eero-api/.github/actions/wait-for-pypi@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/wait-for-pypi@master
         with:
           package: ${{ github.event.client_payload.package }}
           version: ${{ github.event.client_payload.version }}
@@ -105,7 +105,7 @@ jobs:
       # 🔄 Run Renovate
       # ========================================================================
       - name: 🔄 Run Renovate
-        uses: fulviofreitas/eero-api/.github/actions/renovate@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/renovate@master
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}

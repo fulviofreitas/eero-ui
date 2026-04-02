@@ -2,7 +2,7 @@
 # 📚 Sync Wiki
 # ============================================================================
 # Syncs the wiki/ directory to the GitHub Wiki.
-# Uses the reusable wiki-sync action from eero-api.
+# Uses the reusable wiki-sync action from workflow-arsenal.
 # ============================================================================
 
 name: 📚 Sync Wiki
@@ -32,6 +32,6 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 🔄 Sync wiki
-        uses: fulviofreitas/eero-api/.github/actions/wiki-sync@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/wiki-sync@master
         with:
           wiki-path: wiki/
