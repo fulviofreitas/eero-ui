@@ -38,6 +38,8 @@ export default [
 			],
 			// Allow case declarations (common pattern in reducers/handlers)
 			'no-case-declarations': 'off',
+			// ESLint 10: disable no-useless-assignment (false positives in Svelte reactive patterns)
+			'no-useless-assignment': 'off',
 			// Svelte-specific: downgrade to warnings for existing codebase
 			'svelte/valid-compile': ['warn', { ignoreWarnings: true }],
 			'svelte/no-unused-svelte-ignore': 'warn',
