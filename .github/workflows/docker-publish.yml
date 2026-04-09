@@ -14,8 +14,6 @@ on:
     workflows: ["🚀 Release"]
     types: [completed]
     branches: [master]
-  pull_request:
-    branches: [master]
   workflow_dispatch:
 
 concurrency:
