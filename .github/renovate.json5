@@ -123,9 +123,7 @@
     // 🟣 Security updates: High priority
     // ==========================================================================
     {
-      matchDepTypes: ["devDependencies", "dependencies"],
       matchUpdateTypes: ["patch"],
-      matchPackageNames: ["*"],
       prPriority: 20,
       description: "Security patches get high priority",
     },
