@@ -12,8 +12,8 @@ dependencies = [
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
     "httpx>=0.28.0",
-    "eero-api==4.0.3",
-    "eero-prometheus-exporter==3.12.1",
+    "eero-api==4.0.5",
+    "eero-prometheus-exporter==3.13.0",
 ]
 
 [project.optional-dependencies]
