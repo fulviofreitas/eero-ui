@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.8.1](https://github.com/fulviofreitas/eero-ui/compare/v4.8.0...v4.8.1) (2026-04-13)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump pytest from 9.0.2 to 9.0.3 in /backend ([5afda2f](https://github.com/fulviofreitas/eero-ui/commit/5afda2fe89241e890df9651d0e758ddb28f1ee4b))
+
 ## [4.8.0](https://github.com/fulviofreitas/eero-ui/compare/v4.7.0...v4.8.0) (2026-04-13)
 
 ### ✨ Features
