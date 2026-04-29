@@ -58,9 +58,10 @@
 			// Optimistic update
 			profile = { ...profile, paused: !profile.paused };
 
-			const result = profile.paused
-				? await api.profiles.unpause(profileId)
-				: await api.profiles.pause(profileId);
+			const result =
+				action === 'pause'
+					? await api.profiles.pause(profileId)
+					: await api.profiles.unpause(profileId);
 
 			if (result.success) {
 				uiStore.success(result.message || `Profile ${action}d successfully`);
