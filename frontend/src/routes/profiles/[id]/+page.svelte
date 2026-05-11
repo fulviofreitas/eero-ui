@@ -17,6 +17,9 @@
 	let error: string | null = null;
 	let actionLoading = false;
 	let viewMode: 'blocks' | 'list' = 'blocks';
+	let showRenameModal = false;
+	let renameValue = '';
+	let renaming = false;
 
 	$: profileId = $page.params.id;
 	$: devices = profile?.devices || [];
@@ -127,6 +130,41 @@
 	function getDeviceKey(device: ProfileDevice, index: number): string {
 		return device.id || device.mac || `device-${index}`;
 	}
+
+	function openRenameModal() {
+		renameValue = profile?.name ?? '';
+		showRenameModal = true;
+	}
+
+	async function handleRenameProfile() {
+		const name = renameValue.trim();
+		if (!name || !profileId) return;
+		renaming = true;
+		try {
+			profile = await api.profiles.rename(profileId, name);
+			uiStore.success(`Profile renamed to "${name}"`);
+			showRenameModal = false;
+		} catch (err) {
+			uiStore.error(err instanceof Error ? err.message : 'Failed to rename profile');
+		} finally {
+			renaming = false;
+		}
+	}
+
+	function handleDeleteProfile() {
+		if (!profileId) return;
+		uiStore.confirm({
+			title: 'Delete Profile',
+			message: 'Are you sure? Devices assigned to this profile will become unassigned.',
+			confirmText: 'Delete',
+			danger: true,
+			onConfirm: async () => {
+				await api.profiles.delete(profileId);
+				uiStore.success('Profile deleted');
+				goto('/profiles');
+			}
+		});
+	}
 </script>
 
 <svelte:head>
@@ -173,6 +211,12 @@
 					disabled={actionLoading}
 				>
 					↻ Refresh
+				</button>
+				<button class="btn btn-secondary" on:click={openRenameModal} disabled={actionLoading}>
+					✎ Rename
+				</button>
+				<button class="btn btn-danger" on:click={handleDeleteProfile} disabled={actionLoading}>
+					Delete
 				</button>
 				<button
 					class="btn {profile.paused ? 'btn-primary' : 'btn-warning'}"
@@ -411,6 +455,48 @@
 				</div>
 			{/if}
 		</section>
+
+		{#if showRenameModal}
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+			<div class="modal-backdrop" on:click={() => (showRenameModal = false)}>
+				<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+				<div class="modal-card card" on:click|stopPropagation>
+					<h2>Rename Profile</h2>
+					<form on:submit|preventDefault={handleRenameProfile}>
+						<label class="modal-label" for="rename-profile-input">New name</label>
+						<!-- svelte-ignore a11y_autofocus -->
+						<input
+							id="rename-profile-input"
+							class="modal-input"
+							type="text"
+							bind:value={renameValue}
+							disabled={renaming}
+							autofocus
+						/>
+						<div class="modal-actions">
+							<button
+								type="button"
+								class="btn btn-secondary"
+								on:click={() => (showRenameModal = false)}
+								disabled={renaming}
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								class="btn btn-primary"
+								disabled={renaming || !renameValue.trim()}
+							>
+								{#if renaming}
+									<span class="loading-spinner"></span>
+								{/if}
+								Save
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -820,5 +906,67 @@
 		.header-meta {
 			padding-left: 0;
 		}
+	}
+
+	.btn-danger {
+		background-color: var(--color-danger);
+		color: white;
+	}
+
+	.btn-danger:hover:not(:disabled) {
+		opacity: 0.85;
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background-color: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.modal-card {
+		width: 100%;
+		max-width: 400px;
+		padding: var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.modal-card h2 {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+
+	.modal-label {
+		display: block;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+		margin-bottom: var(--space-2);
+	}
+
+	.modal-input {
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		background-color: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text-primary);
+		font-size: 0.9375rem;
+		box-sizing: border-box;
+	}
+
+	.modal-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
 	}
 </style>
