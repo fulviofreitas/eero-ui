@@ -154,6 +154,16 @@ export interface NetworkDetail extends NetworkSummary {
 	last_reboot: string | null;
 }
 
+export interface NetworkRenameRequest {
+	name: string;
+}
+
+export interface NetworkRenameResponse {
+	success: boolean;
+	network_id: string;
+	name: string;
+}
+
 export interface SpeedTestResult {
 	// Normalized format from backend
 	download_mbps?: number | null;
@@ -413,6 +423,14 @@ export interface ProfileAction {
 	profile_id: string;
 	action: string;
 	message: string | null;
+}
+
+export interface ProfileCreateRequest {
+	name: string;
+}
+
+export interface ProfileRenameRequest {
+	name: string;
 }
 
 // ============================================

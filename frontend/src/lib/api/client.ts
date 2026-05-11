@@ -33,7 +33,7 @@ export class ApiClientError extends Error {
  * HTTP client configuration
  */
 interface RequestConfig {
-	method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+	method?: 'GET' | 'PATCH' | 'POST' | 'PUT' | 'DELETE';
 	body?: unknown;
 	params?: Record<string, string | number | boolean>;
 	headers?: Record<string, string>;
@@ -220,6 +220,12 @@ export const api = {
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/guest-network`, {
 				method: 'PUT',
 				params: { enabled, ...(name && { name }) }
+			}),
+
+		setName: (networkId: string, name: string) =>
+			fetchWithHandling<import('./types').NetworkRenameResponse>(`/networks/${networkId}/name`, {
+				method: 'PUT',
+				body: { name }
 			})
 	},
 
@@ -325,6 +331,23 @@ export const api = {
 		unpause: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}/unpause`, {
 				method: 'POST'
+			}),
+
+		create: (name: string) =>
+			fetchWithHandling<import('./types').ProfileSummary>('/profiles', {
+				method: 'POST',
+				body: { name }
+			}),
+
+		rename: (profileId: string, name: string) =>
+			fetchWithHandling<import('./types').ProfileSummary>(`/profiles/${profileId}`, {
+				method: 'PATCH',
+				body: { name }
+			}),
+
+		delete: (profileId: string) =>
+			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}`, {
+				method: 'DELETE'
 			})
 	}
 };

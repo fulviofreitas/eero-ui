@@ -16,6 +16,9 @@
 	let error: string | null = null;
 	let viewMode: 'blocks' | 'list' = 'blocks';
 	let lastNetworkId: string | null = null;
+	let showCreateModal = false;
+	let newProfileName = '';
+	let creating = false;
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
@@ -54,6 +57,23 @@
 
 	function getProfileKey(profile: ProfileSummary, index: number): string {
 		return profile.id || `profile-${index}`;
+	}
+
+	async function handleCreateProfile() {
+		const name = newProfileName.trim();
+		if (!name) return;
+		creating = true;
+		try {
+			await api.profiles.create(name);
+			uiStore.success(`Profile "${name}" created`);
+			showCreateModal = false;
+			newProfileName = '';
+			await fetchProfiles(true);
+		} catch (err) {
+			uiStore.error(err instanceof Error ? err.message : 'Failed to create profile');
+		} finally {
+			creating = false;
+		}
 	}
 </script>
 
@@ -94,6 +114,9 @@
 					↻
 				{/if}
 				Refresh
+			</button>
+			<button class="btn btn-primary" on:click={() => (showCreateModal = true)}>
+				+ New profile
 			</button>
 		</div>
 	</header>
@@ -174,6 +197,49 @@
 					{/each}
 				</tbody>
 			</table>
+		</div>
+	{/if}
+
+	{#if showCreateModal}
+		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+		<div class="modal-backdrop" on:click={() => (showCreateModal = false)}>
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+			<div class="modal-card card" on:click|stopPropagation>
+				<h2>New Profile</h2>
+				<form on:submit|preventDefault={handleCreateProfile}>
+					<label class="modal-label" for="new-profile-name">Profile name</label>
+					<!-- svelte-ignore a11y_autofocus -->
+					<input
+						id="new-profile-name"
+						class="modal-input"
+						type="text"
+						bind:value={newProfileName}
+						placeholder="e.g. Kids"
+						disabled={creating}
+						autofocus
+					/>
+					<div class="modal-actions">
+						<button
+							type="button"
+							class="btn btn-secondary"
+							on:click={() => (showCreateModal = false)}
+							disabled={creating}
+						>
+							Cancel
+						</button>
+						<button
+							type="submit"
+							class="btn btn-primary"
+							disabled={creating || !newProfileName.trim()}
+						>
+							{#if creating}
+								<span class="loading-spinner"></span>
+							{/if}
+							Create
+						</button>
+					</div>
+				</form>
+			</div>
 		</div>
 	{/if}
 </div>
@@ -397,5 +463,58 @@
 	.badge-warning {
 		background-color: var(--color-warning);
 		color: var(--color-bg-primary);
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background-color: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.modal-card {
+		width: 100%;
+		max-width: 400px;
+		padding: var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.modal-card h2 {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+
+	.modal-label {
+		display: block;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+		margin-bottom: var(--space-2);
+	}
+
+	.modal-input {
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		background-color: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text-primary);
+		font-size: 0.9375rem;
+		box-sizing: border-box;
+	}
+
+	.modal-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
 	}
 </style>

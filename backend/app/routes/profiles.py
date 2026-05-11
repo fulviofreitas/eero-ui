@@ -60,6 +60,24 @@ class ProfileAction(BaseModel):
     message: str | None = None
 
 
+class ProfileCreateRequest(BaseModel):
+    """Request body for creating a profile."""
+
+    name: str
+
+    class Config:
+        extra = "ignore"
+
+
+class ProfileRenameRequest(BaseModel):
+    """Request body for renaming a profile."""
+
+    name: str
+
+    class Config:
+        extra = "ignore"
+
+
 @router.get("", response_model=list[ProfileSummary])
 async def list_profiles(
     client: EeroClient = Depends(require_auth),
@@ -224,4 +242,133 @@ async def unpause_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to resume profile. Please try again.",
+        )
+
+
+@router.post("", response_model=ProfileSummary, status_code=status.HTTP_201_CREATED)
+async def create_profile(
+    body: ProfileCreateRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ProfileSummary:
+    """Create a new profile on the network."""
+    if not body.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profile name cannot be empty",
+        )
+    try:
+        raw_response = await client.create_profile(body.name.strip(), network_id)
+        profile = normalize_profile(extract_data(raw_response))
+
+        profile_devices = [
+            ProfileDevice(
+                id=dev.get("id"),
+                url=dev.get("url"),
+                mac=dev.get("mac"),
+                nickname=dev.get("nickname"),
+                hostname=dev.get("hostname"),
+                display_name=dev.get("display_name"),
+                manufacturer=dev.get("manufacturer"),
+                connected=dev.get("connected", False),
+                wireless=dev.get("wireless", False),
+                paused=dev.get("paused", False),
+            )
+            for dev in profile.get("devices", [])
+        ]
+
+        return ProfileSummary(
+            id=profile.get("id"),
+            url=profile.get("url"),
+            name=profile.get("name") or "",
+            paused=profile.get("paused", False),
+            device_count=profile.get("device_count", 0),
+            device_ids=profile.get("device_ids", []),
+            devices=profile_devices,
+        )
+    except EeroException as e:
+        _LOGGER.error(f"Failed to create profile: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create profile. Please try again.",
+        )
+
+
+@router.patch("/{profile_id}", response_model=ProfileSummary)
+async def rename_profile(
+    profile_id: str,
+    body: ProfileRenameRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ProfileSummary:
+    """Rename an existing profile."""
+    if not body.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profile name cannot be empty",
+        )
+    try:
+        raw_response = await client.rename_profile(
+            profile_id, body.name.strip(), network_id
+        )
+        profile = normalize_profile(extract_data(raw_response))
+
+        profile_devices = [
+            ProfileDevice(
+                id=dev.get("id"),
+                url=dev.get("url"),
+                mac=dev.get("mac"),
+                nickname=dev.get("nickname"),
+                hostname=dev.get("hostname"),
+                display_name=dev.get("display_name"),
+                manufacturer=dev.get("manufacturer"),
+                connected=dev.get("connected", False),
+                wireless=dev.get("wireless", False),
+                paused=dev.get("paused", False),
+            )
+            for dev in profile.get("devices", [])
+        ]
+
+        return ProfileSummary(
+            id=profile.get("id"),
+            url=profile.get("url"),
+            name=profile.get("name") or "",
+            paused=profile.get("paused", False),
+            device_count=profile.get("device_count", 0),
+            device_ids=profile.get("device_ids", []),
+            devices=profile_devices,
+        )
+    except EeroException as e:
+        _LOGGER.error(f"Failed to rename profile {profile_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Profile not found: {profile_id}",
+        )
+
+
+@router.delete("/{profile_id}", response_model=ProfileAction)
+async def delete_profile(
+    profile_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ProfileAction:
+    """Delete a profile from the network. Devices assigned to this profile will become unassigned."""
+    try:
+        raw_result = await client.delete_profile(profile_id, network_id)
+        success = check_success(raw_result)
+        return ProfileAction(
+            success=success,
+            profile_id=profile_id,
+            action="delete",
+            message=(
+                "Profile deleted. Assigned devices are now unassigned."
+                if success
+                else "Failed to delete profile."
+            ),
+        )
+    except EeroException as e:
+        _LOGGER.error(f"Failed to delete profile {profile_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete profile. Please try again.",
         )
