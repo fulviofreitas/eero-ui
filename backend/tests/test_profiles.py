@@ -35,7 +35,9 @@ class TestListProfiles:
         assert len(data) == 1
         assert data[0]["name"] == "Kids"
 
-    async def test_list_profiles_eero_exception(self, auth_client, authenticated_client):
+    async def test_list_profiles_eero_exception(
+        self, auth_client, authenticated_client
+    ):
         """EeroException returns 500."""
         authenticated_client.get_profiles = AsyncMock(
             side_effect=EeroException("API error")
@@ -97,7 +99,9 @@ class TestCreateProfile:
         assert response.status_code == 400
         authenticated_client.create_profile.assert_not_called()
 
-    async def test_create_profile_eero_exception(self, auth_client, authenticated_client):
+    async def test_create_profile_eero_exception(
+        self, auth_client, authenticated_client
+    ):
         """EeroException returns 500."""
         authenticated_client.create_profile = AsyncMock(
             side_effect=EeroException("create failed")
@@ -138,7 +142,9 @@ class TestRenameProfile:
         assert response.status_code == 400
         authenticated_client.rename_profile.assert_not_called()
 
-    async def test_rename_profile_eero_exception(self, auth_client, authenticated_client):
+    async def test_rename_profile_eero_exception(
+        self, auth_client, authenticated_client
+    ):
         """EeroException returns 404."""
         authenticated_client.rename_profile = AsyncMock(
             side_effect=EeroException("not found")
@@ -168,7 +174,9 @@ class TestDeleteProfile:
         assert data["action"] == "delete"
         authenticated_client.delete_profile.assert_called_once()
 
-    async def test_delete_profile_eero_exception(self, auth_client, authenticated_client):
+    async def test_delete_profile_eero_exception(
+        self, auth_client, authenticated_client
+    ):
         """EeroException returns 500."""
         authenticated_client.delete_profile = AsyncMock(
             side_effect=EeroException("delete failed")
