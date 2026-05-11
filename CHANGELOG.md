@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.12.0](https://github.com/fulviofreitas/eero-ui/compare/v4.11.0...v4.12.0) (2026-05-11)
+
+### ✨ Features
+
+* **networks:** expose rename-network endpoint and UI ([1a7cfff](https://github.com/fulviofreitas/eero-ui/commit/1a7cfff17c9177da8839676da4248414648bbc41))
+* **profiles:** expose create/rename/delete profile across backend and UI ([fdf7e1a](https://github.com/fulviofreitas/eero-ui/commit/fdf7e1a53a3efa5f43b86c839731624686727ddb))
+
 ## [4.11.0](https://github.com/fulviofreitas/eero-ui/compare/v4.10.0...v4.11.0) (2026-05-11)
 
 ### ✨ Features
