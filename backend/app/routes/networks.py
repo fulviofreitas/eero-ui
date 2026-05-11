@@ -112,6 +112,15 @@ class SpeedTestResult(BaseModel):
     timestamp: str | None = None
 
 
+class NetworkRenameRequest(BaseModel):
+    """Request body for renaming a network."""
+
+    name: str
+
+    class Config:
+        extra = "ignore"
+
+
 @router.get("", response_model=list[NetworkSummary])
 async def list_networks(
     client: EeroClient = Depends(require_auth),
@@ -301,4 +310,28 @@ async def toggle_guest_network(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update guest network settings. Please try again.",
+        )
+
+
+@router.put("/{network_id}/name")
+async def rename_network(
+    network_id: str,
+    body: NetworkRenameRequest,
+    client: EeroClient = Depends(require_auth),
+) -> dict:
+    """Rename a network. Routed via /networks/{id}/settings (fixed in eero-api 4.1.2)."""
+    if not body.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Network name cannot be empty",
+        )
+    try:
+        raw_result = await client.set_network_name(body.name.strip(), network_id)
+        success = check_success(raw_result)
+        return {"success": success, "network_id": network_id, "name": body.name.strip()}
+    except EeroException as e:
+        _LOGGER.error(f"Failed to rename network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to rename network. Please try again.",
         )

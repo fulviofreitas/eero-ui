@@ -13,6 +13,9 @@
 	let error: string | null = null;
 	let speedTestLoading = false;
 	let guestToggleLoading = false;
+	let showRenameModal = false;
+	let renameValue = '';
+	let renaming = false;
 
 	$: networkId = $page.params.id;
 
@@ -77,6 +80,29 @@
 			uiStore.error(err instanceof Error ? err.message : 'Failed to toggle guest network');
 		} finally {
 			guestToggleLoading = false;
+		}
+	}
+
+	function openRenameNetworkModal() {
+		renameValue = network?.name ?? '';
+		showRenameModal = true;
+	}
+
+	async function handleRenameNetwork() {
+		const name = renameValue.trim();
+		if (!name || !networkId) return;
+		renaming = true;
+		try {
+			const result = await api.networks.setName(networkId, name);
+			if (network) {
+				network = { ...network, name: result.name };
+			}
+			uiStore.success(`Network renamed to "${result.name}"`);
+			showRenameModal = false;
+		} catch (err) {
+			uiStore.error(err instanceof Error ? err.message : 'Failed to rename network');
+		} finally {
+			renaming = false;
 		}
 	}
 
@@ -294,6 +320,9 @@
 			<div class="header-actions">
 				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)} disabled={loading}>
 					↻ Refresh
+				</button>
+				<button class="btn btn-secondary" on:click={openRenameNetworkModal} disabled={loading}>
+					✎ Rename
 				</button>
 			</div>
 		</header>
@@ -826,6 +855,48 @@
 			<section class="network-charts">
 				<SpeedtestChart {networkId} />
 			</section>
+		{/if}
+
+		{#if showRenameModal}
+			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+			<div class="modal-backdrop" on:click={() => (showRenameModal = false)}>
+				<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+				<div class="modal-card card" on:click|stopPropagation>
+					<h2>Rename Network</h2>
+					<form on:submit|preventDefault={handleRenameNetwork}>
+						<label class="modal-label" for="rename-network-input">New name</label>
+						<!-- svelte-ignore a11y_autofocus -->
+						<input
+							id="rename-network-input"
+							class="modal-input"
+							type="text"
+							bind:value={renameValue}
+							disabled={renaming}
+							autofocus
+						/>
+						<div class="modal-actions">
+							<button
+								type="button"
+								class="btn btn-secondary"
+								on:click={() => (showRenameModal = false)}
+								disabled={renaming}
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								class="btn btn-primary"
+								disabled={renaming || !renameValue.trim()}
+							>
+								{#if renaming}
+									<span class="loading-spinner"></span>
+								{/if}
+								Save
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -1480,5 +1551,58 @@
 			flex-direction: column;
 			align-items: stretch;
 		}
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background-color: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.modal-card {
+		width: 100%;
+		max-width: 400px;
+		padding: var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.modal-card h2 {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+
+	.modal-label {
+		display: block;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+		margin-bottom: var(--space-2);
+	}
+
+	.modal-input {
+		width: 100%;
+		padding: var(--space-2) var(--space-3);
+		background-color: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text-primary);
+		font-size: 0.9375rem;
+		box-sizing: border-box;
+	}
+
+	.modal-input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-3);
 	}
 </style>
