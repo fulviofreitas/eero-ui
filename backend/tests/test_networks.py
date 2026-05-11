@@ -44,12 +44,8 @@ class TestGetNetwork:
         authenticated_client.get_network = AsyncMock(
             return_value=make_raw_response(sample_network)
         )
-        authenticated_client.get_devices = AsyncMock(
-            return_value=make_raw_response([])
-        )
-        authenticated_client.get_eeros = AsyncMock(
-            return_value=make_raw_response([])
-        )
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
 
         response = await auth_client.get("/api/networks/net-1")
 
@@ -90,7 +86,9 @@ class TestRenameNetwork:
         assert response.status_code == 400
         authenticated_client.set_network_name.assert_not_called()
 
-    async def test_rename_network_eero_exception(self, auth_client, authenticated_client):
+    async def test_rename_network_eero_exception(
+        self, auth_client, authenticated_client
+    ):
         """EeroException returns 500."""
         authenticated_client.set_network_name = AsyncMock(
             side_effect=EeroException("rename failed")
