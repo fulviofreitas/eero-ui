@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.13.0](https://github.com/fulviofreitas/eero-ui/compare/v4.12.0...v4.13.0) (2026-05-12)
+
+### ✨ Features
+
+* **deps:** update eero packages to 3.14.0 ([8a0331d](https://github.com/fulviofreitas/eero-ui/commit/8a0331d3d836d309b54f62b3472d1ebba0e2e538))
+
 ## [4.12.0](https://github.com/fulviofreitas/eero-ui/compare/v4.11.0...v4.12.0) (2026-05-11)
 
 ### ✨ Features
