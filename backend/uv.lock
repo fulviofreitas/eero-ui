@@ -394,7 +394,7 @@ wheels = [
 
 [[package]]
 name = "eero-prometheus-exporter"
-version = "3.13.1"
+version = "3.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eero-api" },
@@ -403,14 +403,14 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/9c/0c2966cf3e0e84e511746d42c25f3c1bd763a2b6d63636c53c025f377627/eero_prometheus_exporter-3.13.1.tar.gz", hash = "sha256:e357aab79d44f75336404641c34c4feb33a3a8d81c0ee79b02f11e3978a84b93", size = 37185, upload-time = "2026-04-21T02:35:36.482Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/10/1f74a606a1113394f574eef3d78c7b6dd67a1080e682a41d2e9178fd4716/eero_prometheus_exporter-3.14.0.tar.gz", hash = "sha256:cc23fb4667774fc5d6e7f73263ebf3739a9ce1efa05d71ba0601d9775f1f9da1", size = 37183, upload-time = "2026-05-11T22:13:36.969Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/52/e9903d5c8825f901c47a3e458db322fcdb4703fea1ce78968a21fc3261ae/eero_prometheus_exporter-3.13.1-py3-none-any.whl", hash = "sha256:27b8b2a0459dfe3aaedbd61d1c7f901e61f6f66bdadb75ce15881aaccc90eeae", size = 37467, upload-time = "2026-04-21T02:35:35.355Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/ad/1d41621c27cadba3bffd158ea00e559aca45db465b89f20efb43421cbd54/eero_prometheus_exporter-3.14.0-py3-none-any.whl", hash = "sha256:348a490e122fc38f6893ef16a542d19654b1cfb7e553837f660a69dcde7c55ec", size = 37466, upload-time = "2026-05-11T22:13:35.868Z" },
 ]
 
 [[package]]
 name = "eero-ui-backend"
-version = "4.11.0"
+version = "4.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -441,7 +441,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "eero-api", specifier = "==4.1.2" },
-    { name = "eero-prometheus-exporter", specifier = "==3.13.1" },
+    { name = "eero-prometheus-exporter", specifier = "==3.14.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
