@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.14.1](https://github.com/fulviofreitas/eero-ui/compare/v4.14.0...v4.14.1) (2026-05-21)
+
+### 🐛 Bug Fixes
+
+* coerce uptime and numeric fields from dict shapes ([695d51e](https://github.com/fulviofreitas/eero-ui/commit/695d51e0207efb6a68faeb7f9ebf3d429470404e)), closes [fulviofreitas/eero-prometheus-exporter#61](https://github.com/fulviofreitas/eero-prometheus-exporter/issues/61)
+
 ## [4.14.0](https://github.com/fulviofreitas/eero-ui/compare/v4.13.0...v4.14.0) (2026-05-12)
 
 ### ✨ Features
