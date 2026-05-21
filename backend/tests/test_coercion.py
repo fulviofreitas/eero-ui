@@ -9,12 +9,11 @@ Tests cover:
 """
 
 import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app._coercion import _UNKNOWN_DICT_LOGGED, coerce_numeric
-
 
 # ========================== coerce_numeric Tests ==========================
 
@@ -124,9 +123,7 @@ class TestCoerceNumericDict:
             coerce_numeric({"foo": 1}, field_name="uptime")
             coerce_numeric({"foo": 1}, field_name="uptime")  # duplicate — no extra log
 
-        debug_records = [
-            r for r in caplog.records if "unknown dict shape" in r.message
-        ]
+        debug_records = [r for r in caplog.records if "unknown dict shape" in r.message]
         assert len(debug_records) == 1
 
     def test_different_unknown_shapes_each_logged_once(self, caplog):
@@ -135,9 +132,7 @@ class TestCoerceNumericDict:
             coerce_numeric({"foo": 1}, field_name="uptime")
             coerce_numeric({"bar": 2}, field_name="uptime")
 
-        debug_records = [
-            r for r in caplog.records if "unknown dict shape" in r.message
-        ]
+        debug_records = [r for r in caplog.records if "unknown dict shape" in r.message]
         assert len(debug_records) == 2
 
     def test_empty_dict_returns_none(self):
