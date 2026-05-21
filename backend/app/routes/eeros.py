@@ -8,6 +8,7 @@ from eero.exceptions import EeroException
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
+from .._coercion import coerce_numeric
 from ..deps import get_network_id, require_auth
 from ..transformers import check_success, extract_data, extract_list, normalize_eero
 
@@ -289,6 +290,16 @@ async def get_eero(
                 for addr in ipv6_addresses
             ]
 
+        # Coerce numeric performance fields — the Eero Cloud API may return
+        # these as dicts (e.g. {"seconds": N}) instead of plain numbers.
+        # coerce_numeric() always yields float | None so callers are safe.
+        _raw_uptime = coerce_numeric(eero.get("uptime"), field_name="uptime")
+        uptime_seconds: int | None = (
+            int(_raw_uptime)
+            if _raw_uptime is not None
+            else calculate_uptime_seconds(eero.get("last_reboot"))
+        )
+
         return EeroDetail(
             id=eero.get("id") or eero.get("serial") or eero_id,
             url=eero.get("url") or "",
@@ -315,11 +326,14 @@ async def get_eero(
             os_version=eero.get("os_version"),
             led_on=eero.get("led_on"),
             led_brightness=eero.get("led_brightness"),
-            uptime=eero.get("uptime")
-            or calculate_uptime_seconds(eero.get("last_reboot")),
-            cpu_usage=eero.get("cpu_usage"),
-            memory_usage=eero.get("memory_usage"),
-            temperature=eero.get("temperature"),
+            uptime=uptime_seconds,
+            cpu_usage=coerce_numeric(eero.get("cpu_usage"), field_name="cpu_usage"),
+            memory_usage=coerce_numeric(
+                eero.get("memory_usage"), field_name="memory_usage"
+            ),
+            temperature=coerce_numeric(
+                eero.get("temperature"), field_name="temperature"
+            ),
             heartbeat_ok=eero.get("heartbeat_ok"),
             update_available=eero.get("update_available"),
             provides_wifi=eero.get("provides_wifi"),

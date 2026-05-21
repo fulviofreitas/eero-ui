@@ -8,6 +8,8 @@ This module provides extraction and normalization functions.
 
 from typing import Any
 
+from ._coercion import coerce_numeric
+
 
 def extract_data(raw_response: Any) -> dict[str, Any]:
     """Extract data from raw API response envelope.
@@ -438,10 +440,14 @@ def normalize_eero(raw: dict[str, Any]) -> dict[str, Any]:
         "os_version": raw.get("os_version") or raw.get("os"),
         "led_on": raw.get("led_on"),
         "led_brightness": raw.get("led_brightness"),
-        "uptime": raw.get("uptime"),
-        "cpu_usage": raw.get("cpu_usage"),
-        "memory_usage": raw.get("memory_usage"),
-        "temperature": raw.get("temperature"),
+        "uptime": coerce_numeric(raw.get("uptime"), field_name="uptime"),
+        "cpu_usage": coerce_numeric(raw.get("cpu_usage"), field_name="cpu_usage"),
+        "memory_usage": coerce_numeric(
+            raw.get("memory_usage"), field_name="memory_usage"
+        ),
+        "temperature": coerce_numeric(
+            raw.get("temperature"), field_name="temperature"
+        ),
         "heartbeat_ok": raw.get("heartbeat_ok"),
         "update_available": raw.get("update_available"),
         "provides_wifi": raw.get("provides_wifi"),
