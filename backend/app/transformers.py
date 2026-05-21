@@ -445,9 +445,7 @@ def normalize_eero(raw: dict[str, Any]) -> dict[str, Any]:
         "memory_usage": coerce_numeric(
             raw.get("memory_usage"), field_name="memory_usage"
         ),
-        "temperature": coerce_numeric(
-            raw.get("temperature"), field_name="temperature"
-        ),
+        "temperature": coerce_numeric(raw.get("temperature"), field_name="temperature"),
         "heartbeat_ok": raw.get("heartbeat_ok"),
         "update_available": raw.get("update_available"),
         "provides_wifi": raw.get("provides_wifi"),
