@@ -9,53 +9,243 @@
 #   - PRs are ready when: approved + all required checks pass + up to date
 #   - Uses squash merge strategy by default
 #
-# Trigger strategy:
-#   - workflow_run: fires AFTER CI Pipeline completes (primary trigger)
-#   - pull_request_review: fires when a review is submitted
-#   - pull_request (labeled only): fires when automerge label is added manually
-#     after checks have already passed
+# Authorization gate (defense against malicious label/approval):
+#   - Only the repository owner (REPO_OWNER) may auto-merge PRs they did not
+#     author. PRs authored by trusted bots (ff-renovate[bot], dependabot[bot])
+#     are also allowed. All other PRs require an APPROVED review from
+#     REPO_OWNER before the merge job will run.
 #
-# NOTE: We intentionally exclude pull_request events like opened/synchronize
-# because they fire BEFORE CI checks complete, causing premature merges.
+# Workflow-file tamper protection:
+#   - Uses `pull_request_target` (not `pull_request`) so the workflow that
+#     RUNS is always the version on the base branch (master). A PR that
+#     edits this file cannot bypass the gate — the modified file only
+#     becomes active after it has been merged into master, which requires
+#     going through this same gate.
+#   - `pull_request_review` is intentionally NOT a trigger here: it has no
+#     `_target` variant and would run the PR's version of the workflow.
+#     After approving a non-owner PR, toggle the `automerge` label (or wait
+#     for the next CI re-run) to retrigger this workflow.
+#   - `check_suite` and `status` always run the workflow from the default
+#     branch, so they are already tamper-safe.
 # ============================================================================
 
 name: 🤖 Auto-Merge
 
 on:
-  workflow_run:
-    workflows: ["🧪 CI Pipeline"]
-    types:
-      - completed
-  pull_request_review:
-    types:
-      - submitted
-  pull_request:
+  pull_request_target:
     types:
       - labeled
       - unlabeled
+      - synchronize
+      - opened
+      - edited
+      - ready_for_review
+      - reopened
+      - unlocked
+  check_suite:
+    types:
+      - completed
+  status:
 
 concurrency:
-  group: auto-merge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.sha }}
+  group: auto-merge-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: read
+  contents: read
+  pull-requests: read
+
+env:
+  # Single source of truth for who can approve auto-merges.
+  REPO_OWNER: fulviofreitas
+  # Comma-separated list of bot logins whose PRs may auto-merge without an
+  # explicit approval. Keep this list tight — any account here can land code
+  # via the auto-merge path.
+  TRUSTED_BOTS: "ff-renovate[bot],dependabot[bot]"
 
 jobs:
+  # ==========================================================================
+  # 🔒 Authorization gate
+  # --------------------------------------------------------------------------
+  # Runs with read-only token. Inspects every PR associated with the triggering
+  # event and decides whether the merge job is allowed to escalate to the App
+  # token. Fails closed: if any PR in scope is unauthorized, the merge job is
+  # skipped and the offending PR(s) are reported in the run summary.
+  # ==========================================================================
+  gate:
+    name: 🔒 Authorization gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - name: 🔒 Validate PR author or owner approval
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_SHA: ${{ github.event.check_suite.head_sha }}
+          STATUS_SHA: ${{ github.event.sha }}
+        run: |
+          set -euo pipefail
+
+          IFS=',' read -r -a TRUSTED <<< "$TRUSTED_BOTS"
+
+          # ------------------------------------------------------------------
+          # Collect PR numbers in scope of this event.
+          # ------------------------------------------------------------------
+          PR_NUMBERS=()
+          if [[ -n "${EVENT_PR_NUMBER:-}" ]]; then
+            PR_NUMBERS+=("$EVENT_PR_NUMBER")
+          elif [[ "$EVENT_NAME" == "check_suite" ]]; then
+            mapfile -t PR_NUMBERS < <(
+              jq -r '.check_suite.pull_requests[]?.number // empty' "$GITHUB_EVENT_PATH"
+            )
+            # check_suite payload omits PRs from forks — fall back to the SHA.
+            if [[ ${#PR_NUMBERS[@]} -eq 0 && -n "${EVENT_SHA:-}" ]]; then
+              mapfile -t PR_NUMBERS < <(
+                gh api "repos/$REPO/commits/$EVENT_SHA/pulls" \
+                  --jq '.[] | select(.state == "open") | .number'
+              )
+            fi
+          elif [[ "$EVENT_NAME" == "status" && -n "${STATUS_SHA:-}" ]]; then
+            mapfile -t PR_NUMBERS < <(
+              gh api "repos/$REPO/commits/$STATUS_SHA/pulls" \
+                --jq '.[] | select(.state == "open") | .number'
+            )
+          fi
+
+          if [[ ${#PR_NUMBERS[@]} -eq 0 ]]; then
+            echo "ℹ️ No open PRs associated with this event — nothing to merge."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## 🔒 Authorization gate"
+              echo
+              echo "No open PRs tied to this event. Skipping merge."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # ------------------------------------------------------------------
+          # Evaluate each PR. Fail closed on any unauthorized PR that carries
+          # the automerge label.
+          # ------------------------------------------------------------------
+          {
+            echo "## 🔒 Authorization gate"
+            echo
+            echo "| PR | Author | Has \`automerge\` | Owner approved | Decision |"
+            echo "|---:|:-------|:----------------|:---------------|:---------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          BLOCKED=0
+          ELIGIBLE=0
+
+          for pr in "${PR_NUMBERS[@]}"; do
+            PR_JSON=$(gh api "repos/$REPO/pulls/$pr")
+            AUTHOR=$(echo "$PR_JSON" | jq -r '.user.login')
+            HAS_AUTOMERGE=$(echo "$PR_JSON" | jq -r '[.labels[].name] | index("automerge") | tostring')
+
+            if [[ "$HAS_AUTOMERGE" == "null" ]]; then
+              echo "| #$pr | \`$AUTHOR\` | no | — | ⏭️ skipped (no automerge label) |" \
+                >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            # Owner-authored — always allowed.
+            if [[ "$AUTHOR" == "$REPO_OWNER" ]]; then
+              echo "| #$pr | \`$AUTHOR\` | yes | n/a | ✅ owner-authored |" \
+                >> "$GITHUB_STEP_SUMMARY"
+              ELIGIBLE=$((ELIGIBLE + 1))
+              continue
+            fi
+
+            # Trusted bot — always allowed.
+            IS_BOT=false
+            for bot in "${TRUSTED[@]}"; do
+              if [[ "$AUTHOR" == "$bot" ]]; then
+                IS_BOT=true
+                break
+              fi
+            done
+            if [[ "$IS_BOT" == "true" ]]; then
+              echo "| #$pr | \`$AUTHOR\` | yes | n/a | ✅ trusted bot |" \
+                >> "$GITHUB_STEP_SUMMARY"
+              ELIGIBLE=$((ELIGIBLE + 1))
+              continue
+            fi
+
+            # Otherwise require the latest review by REPO_OWNER to be APPROVED.
+            # Latest is the most recent submitted_at — supersedes any earlier
+            # APPROVED that was followed by CHANGES_REQUESTED, etc.
+            LATEST_OWNER_STATE=$(
+              gh api "repos/$REPO/pulls/$pr/reviews" --paginate \
+                | jq -r --arg user "$REPO_OWNER" '
+                    [.[] | select(.user.login == $user)
+                         | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+                    | sort_by(.submitted_at) | last | .state // "NONE"
+                  '
+            )
+
+            if [[ "$LATEST_OWNER_STATE" == "APPROVED" ]]; then
+              echo "| #$pr | \`$AUTHOR\` | yes | ✅ | ✅ owner-approved |" \
+                >> "$GITHUB_STEP_SUMMARY"
+              ELIGIBLE=$((ELIGIBLE + 1))
+            else
+              echo "| #$pr | \`$AUTHOR\` | yes | ❌ (\`$LATEST_OWNER_STATE\`) | 🛑 BLOCKED |" \
+                >> "$GITHUB_STEP_SUMMARY"
+              BLOCKED=$((BLOCKED + 1))
+            fi
+          done
+
+          {
+            echo
+            if [[ $BLOCKED -gt 0 ]]; then
+              echo "> [!WARNING]"
+              echo "> $BLOCKED PR(s) carry the \`automerge\` label but are not authored"
+              echo "> by \`$REPO_OWNER\`, not from a trusted bot, and have no APPROVED"
+              echo "> review from \`$REPO_OWNER\`. The merge job is **skipped**."
+            elif [[ $ELIGIBLE -eq 0 ]]; then
+              echo "> [!NOTE]"
+              echo "> No PRs in this event carry the \`automerge\` label."
+            else
+              echo "> [!TIP]"
+              echo "> $ELIGIBLE PR(s) authorized — proceeding to merge step."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ $BLOCKED -gt 0 || $ELIGIBLE -eq 0 ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ==========================================================================
+  # 🤖 Auto-merge
+  # --------------------------------------------------------------------------
+  # Only runs when the gate confirmed every PR in scope is owner-authored,
+  # owner-approved, or from a trusted bot. Escalates to the App token here.
+  # ==========================================================================
   automerge:
     name: 🤖 Auto-Merge
+    needs: gate
+    if: needs.gate.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Skip if CI Pipeline failed (workflow_run trigger)
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v6
+        with:
+          # Belt-and-suspenders: pull_request_target already defaults to the
+          # base ref, but pinning explicitly prevents future edits from
+          # accidentally checking out PR-supplied code.
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          persist-credentials: false
 
       - name: 🤖 Run automerge
         uses: fulviofreitas/workflow-arsenal/.github/actions/auto-merge@master
