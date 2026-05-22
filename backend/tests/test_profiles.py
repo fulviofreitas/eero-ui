@@ -1,8 +1,7 @@
 """Tests for profile routes."""
 
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock
 
-import pytest
 from eero.exceptions import EeroException
 
 
@@ -224,6 +223,7 @@ class TestUnpauseProfile:
 # Helpers for assign-devices tests
 # ---------------------------------------------------------------------------
 
+
 def _make_device(dev_id: str, network_id: str = "network-123") -> dict:
     """Build a raw device dict matching the eero API envelope shape."""
     return {
@@ -269,7 +269,6 @@ class TestAssignDevicesToProfile:
             return_value=make_raw_response(raw_devices)
         )
 
-        existing_url = f"/2.2/networks/{network_id}/devices/device-0"
         authenticated_client.get_profile_devices = AsyncMock(
             return_value=make_raw_response(
                 _make_profile_with_devices(profile_id, network_id, ["device-0"])

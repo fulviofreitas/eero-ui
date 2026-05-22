@@ -405,16 +405,16 @@ async def assign_devices_to_profile(
                 )
 
         # --- Step 2: Fetch the profile's current device URLs ---
-        raw_profile_resp = await client.get_profile_devices(
-            profile_id, network_id
-        )
+        raw_profile_resp = await client.get_profile_devices(profile_id, network_id)
         profile_data = extract_data(raw_profile_resp)
         current_devices_raw = profile_data.get("devices", [])
         if isinstance(current_devices_raw, dict):
             current_devices_raw = current_devices_raw.get("data", [])
 
         current_urls: set[str] = set()
-        for entry in current_devices_raw if isinstance(current_devices_raw, list) else []:
+        for entry in (
+            current_devices_raw if isinstance(current_devices_raw, list) else []
+        ):
             # Entry may be {"url": "..."} or a plain string
             if isinstance(entry, dict):
                 url = entry.get("url")
@@ -427,9 +427,7 @@ async def assign_devices_to_profile(
 
         # --- Step 3: Merge and call set_profile_devices ONCE ---
         final_urls = list(current_urls | selected_urls)
-        await client.set_profile_devices(
-            profile_id, final_urls, network_id
-        )
+        await client.set_profile_devices(profile_id, final_urls, network_id)
 
         assigned_count = len(selected_urls)
         _LOGGER.info(
@@ -447,9 +445,7 @@ async def assign_devices_to_profile(
         )
 
     except EeroException as e:
-        _LOGGER.error(
-            "Failed to assign devices to profile %s: %s", profile_id, e
-        )
+        _LOGGER.error("Failed to assign devices to profile %s: %s", profile_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to assign devices to profile. Please try again.",

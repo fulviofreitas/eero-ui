@@ -280,7 +280,7 @@ function createDevicesStore() {
 					d.id && deviceIds.includes(d.id)
 						? { ...d, profile_id: profileId, profile_name: profileName }
 						: d
-				),
+				)
 			}));
 
 			try {
@@ -297,7 +297,7 @@ function createDevicesStore() {
 						if (!d.id || !deviceIds.includes(d.id)) return d;
 						const prev = previousState.devices.find((p) => p.id === d.id);
 						return prev ?? d;
-					}),
+					})
 				}));
 				throw error;
 			}

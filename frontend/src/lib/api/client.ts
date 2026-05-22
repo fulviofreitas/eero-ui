@@ -355,7 +355,7 @@ export const api = {
 				`/profiles/${profileId}/assign-devices`,
 				{
 					method: 'POST',
-					body: { device_ids: deviceIds },
+					body: { device_ids: deviceIds }
 				}
 			)
 	}

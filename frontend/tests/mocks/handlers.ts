@@ -212,7 +212,7 @@ export const handlers = [
 			success: true,
 			profile_id: params.profileId,
 			assigned_count: body.device_ids.length,
-			message: null,
+			message: null
 		});
 	}),
 
