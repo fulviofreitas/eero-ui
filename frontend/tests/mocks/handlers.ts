@@ -206,6 +206,16 @@ export const handlers = [
 		});
 	}),
 
+	http.post('/api/profiles/:profileId/assign-devices', async ({ params, request }) => {
+		const body = (await request.json()) as { device_ids: string[] };
+		return HttpResponse.json({
+			success: true,
+			profile_id: params.profileId,
+			assigned_count: body.device_ids.length,
+			message: null
+		});
+	}),
+
 	// ============================================
 	// Health endpoint
 	// ============================================

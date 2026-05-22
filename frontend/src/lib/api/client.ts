@@ -348,7 +348,16 @@ export const api = {
 		delete: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}`, {
 				method: 'DELETE'
-			})
+			}),
+
+		assignDevices: (profileId: string, deviceIds: string[]) =>
+			fetchWithHandling<import('./types').ProfileAssignDevicesResponse>(
+				`/profiles/${profileId}/assign-devices`,
+				{
+					method: 'POST',
+					body: { device_ids: deviceIds }
+				}
+			)
 	}
 };
 

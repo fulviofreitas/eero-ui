@@ -198,16 +198,15 @@
 
 	async function handleProfileChange(profileId: string | null, profileName: string) {
 		if (!device?.id) return;
+		if (profileId === null) return; // removing profile not yet supported by this endpoint
 
 		changingProfile = true;
 		profileDropdownOpen = false;
 
 		try {
-			// Note: This would require a backend endpoint to assign device to profile
-			uiStore.success(
-				`Would assign device to "${profileName}". (API endpoint needed for profile assignment)`
-			);
-			// await fetchDevice(true);
+			await devicesStore.assignToProfile([device.id], profileId, profileName);
+			uiStore.success(`Device assigned to "${profileName}"`);
+			await fetchDevice(true);
 		} catch (err) {
 			uiStore.error(err instanceof Error ? err.message : 'Failed to change profile');
 		} finally {
