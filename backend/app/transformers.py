@@ -8,7 +8,27 @@ This module provides extraction and normalization functions.
 
 from typing import Any
 
-from ._coercion import coerce_numeric
+from ._coercion import coerce_bool, coerce_int, coerce_numeric
+
+
+def _as_str_list(value: Any) -> list[str] | None:
+    """Coerce a raw value into a list of strings, or None.
+
+    The Eero Cloud API normally returns ``bands``, ``wifi_bssids`` and
+    ``ethernet_addresses`` as flat string lists, but occasionally wraps the
+    entries in objects. Non-scalar entries are dropped so downstream model
+    validation (which expects ``list[str]``) never sees an unexpected shape.
+
+    Args:
+        value: Raw value from the API response.
+
+    Returns:
+        A list of strings, or None when there is no usable data.
+    """
+    if not isinstance(value, list):
+        return None
+    result = [str(item) for item in value if isinstance(item, (str, int, float))]
+    return result or None
 
 
 def extract_data(raw_response: Any) -> dict[str, Any]:
@@ -207,6 +227,17 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     # Extract public_ip - may be in public_ip or wan_ip
     public_ip = raw.get("public_ip") or raw.get("wan_ip")
 
+    # Extract guest network status. The Eero Cloud API returns this as a
+    # nested object: {"guest_network": {"enabled": bool, "name": str, ...}}.
+    # Older/alternate shapes used flat top-level keys, so fall back to those.
+    guest_network = raw.get("guest_network")
+    if isinstance(guest_network, dict):
+        guest_network_enabled = bool(coerce_bool(guest_network.get("enabled")))
+        guest_network_name = guest_network.get("name")
+    else:
+        guest_network_enabled = bool(coerce_bool(raw.get("guest_network_enabled")))
+        guest_network_name = raw.get("guest_network_name")
+
     return {
         "id": net_id,
         "url": raw.get("url"),
@@ -214,8 +245,8 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
         "status": status,
         "isp_name": isp_name,
         "public_ip": public_ip,
-        "guest_network_enabled": raw.get("guest_network_enabled", False),
-        "guest_network_name": raw.get("guest_network_name"),
+        "guest_network_enabled": guest_network_enabled,
+        "guest_network_name": guest_network_name,
         "speed_test": raw.get("speed_test") or raw.get("speed"),
         "health": raw.get("health"),
         "settings": raw.get("settings"),
@@ -389,6 +420,12 @@ def normalize_eero(raw: dict[str, Any]) -> dict[str, Any]:
     if isinstance(location, dict):
         location = location.get("address") or location.get("name")
 
+    # Handle status as string or nested object ({"status": "green"}). The
+    # Eero Cloud API has been observed to return both shapes for eeros.
+    status = raw.get("status")
+    if isinstance(status, dict):
+        status = status.get("status")
+
     # Extract ethernet port info
     ethernet_ports = None
     ethernet_status = raw.get("ethernet_status", {})
@@ -421,43 +458,69 @@ def normalize_eero(raw: dict[str, Any]) -> dict[str, Any]:
         "mac_address": raw.get("mac_address"),
         "model": raw.get("model"),
         "model_number": raw.get("model_number"),
-        "status": raw.get("status"),
+        "status": status,
         "state": raw.get("state"),
         "location": location,
-        "is_gateway": raw.get("gateway", False) or raw.get("is_gateway", False),
-        "is_primary": raw.get("is_primary", False) or raw.get("is_primary_node", False),
-        "wired": raw.get("wired", False),
+        "is_gateway": bool(
+            coerce_bool(raw.get("gateway")) or coerce_bool(raw.get("is_gateway"))
+        ),
+        "is_primary": bool(
+            coerce_bool(raw.get("is_primary"))
+            or coerce_bool(raw.get("is_primary_node"))
+        ),
+        "wired": bool(coerce_bool(raw.get("wired"))),
         "connection_type": raw.get("connection_type"),
-        "mesh_quality_bars": raw.get("mesh_quality_bars"),
+        "mesh_quality_bars": coerce_int(
+            raw.get("mesh_quality_bars"), field_name="mesh_quality_bars"
+        ),
         "ip_address": raw.get("ip_address"),
-        "using_wan": raw.get("using_wan"),
-        "connected_clients_count": raw.get("connected_clients_count", 0),
-        "connected_wired_clients_count": raw.get("connected_wired_clients_count"),
-        "connected_wireless_clients_count": raw.get("connected_wireless_clients_count"),
+        "using_wan": coerce_bool(raw.get("using_wan"), field_name="using_wan"),
+        "connected_clients_count": coerce_int(
+            raw.get("connected_clients_count"), field_name="connected_clients_count"
+        )
+        or 0,
+        "connected_wired_clients_count": coerce_int(
+            raw.get("connected_wired_clients_count"),
+            field_name="connected_wired_clients_count",
+        ),
+        "connected_wireless_clients_count": coerce_int(
+            raw.get("connected_wireless_clients_count"),
+            field_name="connected_wireless_clients_count",
+        ),
         "firmware_version": raw.get("firmware_version")
         or raw.get("os_version")
         or raw.get("os"),
         "os_version": raw.get("os_version") or raw.get("os"),
-        "led_on": raw.get("led_on"),
-        "led_brightness": raw.get("led_brightness"),
+        "led_on": coerce_bool(raw.get("led_on"), field_name="led_on"),
+        "led_brightness": coerce_int(
+            raw.get("led_brightness"), field_name="led_brightness"
+        ),
         "uptime": coerce_numeric(raw.get("uptime"), field_name="uptime"),
         "cpu_usage": coerce_numeric(raw.get("cpu_usage"), field_name="cpu_usage"),
         "memory_usage": coerce_numeric(
             raw.get("memory_usage"), field_name="memory_usage"
         ),
         "temperature": coerce_numeric(raw.get("temperature"), field_name="temperature"),
-        "heartbeat_ok": raw.get("heartbeat_ok"),
-        "update_available": raw.get("update_available"),
-        "provides_wifi": raw.get("provides_wifi"),
-        "auto_provisioned": raw.get("auto_provisioned"),
-        "retrograde_capable": raw.get("retrograde_capable"),
+        "heartbeat_ok": coerce_bool(raw.get("heartbeat_ok"), field_name="heartbeat_ok"),
+        "update_available": coerce_bool(
+            raw.get("update_available"), field_name="update_available"
+        ),
+        "provides_wifi": coerce_bool(
+            raw.get("provides_wifi"), field_name="provides_wifi"
+        ),
+        "auto_provisioned": coerce_bool(
+            raw.get("auto_provisioned"), field_name="auto_provisioned"
+        ),
+        "retrograde_capable": coerce_bool(
+            raw.get("retrograde_capable"), field_name="retrograde_capable"
+        ),
         "last_heartbeat": raw.get("last_heartbeat"),
         "last_reboot": raw.get("last_reboot"),
         "joined": raw.get("joined"),
-        "bands": raw.get("bands"),
-        "wifi_bssids": raw.get("wifi_bssids"),
+        "bands": _as_str_list(raw.get("bands")),
+        "wifi_bssids": _as_str_list(raw.get("wifi_bssids")),
         "bssids_with_bands": raw.get("bssids_with_bands"),
-        "ethernet_addresses": raw.get("ethernet_addresses"),
+        "ethernet_addresses": _as_str_list(raw.get("ethernet_addresses")),
         "ethernet_ports": ethernet_ports,
         "ipv6_addresses": raw.get("ipv6_addresses"),
         "organization": raw.get("organization"),

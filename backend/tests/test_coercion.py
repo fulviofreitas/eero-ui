@@ -6,6 +6,8 @@ Tests cover:
 - Unknown dict shapes return None and log once (dedup)
 - Recursive dict coercion
 - Boolean inputs treated as non-numeric
+- coerce_int truncation and None passthrough
+- coerce_bool with bool, int, str tokens, dict shapes, and None
 """
 
 import logging
@@ -13,7 +15,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app._coercion import _UNKNOWN_DICT_LOGGED, coerce_numeric
+from app._coercion import (
+    _UNKNOWN_DICT_LOGGED,
+    coerce_bool,
+    coerce_int,
+    coerce_numeric,
+)
 
 # ========================== coerce_numeric Tests ==========================
 
@@ -267,3 +274,95 @@ class TestEerosRouteUptimeCoercion:
 
         assert response.status_code == 200
         assert response.json()["cpu_usage"] == pytest.approx(23.7)
+
+
+# ============================ coerce_int Tests ============================
+
+
+class TestCoerceInt:
+    """Tests for the coerce_int helper."""
+
+    def test_int_passthrough(self):
+        """A plain int is returned unchanged."""
+        assert coerce_int(42) == 42
+
+    def test_float_is_truncated(self):
+        """A float is truncated toward zero."""
+        assert coerce_int(75.9) == 75
+
+    def test_numeric_string(self):
+        """A numeric string is parsed."""
+        assert coerce_int("12") == 12
+
+    def test_dict_with_count_key(self):
+        """A dict shape is coerced via its candidate key."""
+        assert coerce_int({"count": 9}) == 9
+
+    def test_none_returns_none(self):
+        """None passes through as None."""
+        assert coerce_int(None) is None
+
+    def test_unknown_dict_returns_none(self):
+        """An unknown dict shape degrades to None."""
+        assert coerce_int({"bars": 3}) is None
+
+    def test_non_numeric_string_returns_none(self):
+        """A non-numeric string degrades to None."""
+        assert coerce_int("abc") is None
+
+
+# ============================ coerce_bool Tests ===========================
+
+
+class TestCoerceBool:
+    """Tests for the coerce_bool helper."""
+
+    def test_true_passthrough(self):
+        """A real bool is returned unchanged."""
+        assert coerce_bool(True) is True
+
+    def test_false_passthrough(self):
+        """A real False is returned unchanged."""
+        assert coerce_bool(False) is False
+
+    def test_none_returns_none(self):
+        """None passes through as None."""
+        assert coerce_bool(None) is None
+
+    def test_int_nonzero_is_true(self):
+        """A non-zero int is truthy."""
+        assert coerce_bool(1) is True
+
+    def test_int_zero_is_false(self):
+        """Zero is falsy."""
+        assert coerce_bool(0) is False
+
+    @pytest.mark.parametrize("token", ["true", "True", "1", "yes", "on", "enabled"])
+    def test_truthy_strings(self, token):
+        """Recognised truthy string tokens coerce to True."""
+        assert coerce_bool(token) is True
+
+    @pytest.mark.parametrize("token", ["false", "0", "no", "off", "disabled", ""])
+    def test_falsy_strings(self, token):
+        """Recognised falsy string tokens coerce to False."""
+        assert coerce_bool(token) is False
+
+    def test_unrecognised_string_returns_none(self):
+        """An unrecognised string degrades to None."""
+        assert coerce_bool("maybe") is None
+
+    def test_dict_with_enabled_key(self):
+        """A dict with an 'enabled' key is unwrapped."""
+        assert coerce_bool({"enabled": True}) is True
+
+    def test_non_empty_dict_without_known_key_is_true(self):
+        """A populated structured value implies the feature is set."""
+        assert coerce_bool({"min_required_firmware": "7.5.0"}) is True
+
+    def test_empty_dict_is_false(self):
+        """An empty dict coerces to False."""
+        assert coerce_bool({}) is False
+
+    def test_list_returns_none(self):
+        """An unsupported type degrades to None."""
+        assert coerce_bool(["x"]) is None
