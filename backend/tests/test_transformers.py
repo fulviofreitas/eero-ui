@@ -186,6 +186,38 @@ class TestNormalizeNetwork:
         result = normalize_network(raw)
         assert result["status"] == "online"
 
+    def test_guest_network_enabled_from_nested_object(self):
+        """Should read guest network status from the nested guest_network object.
+
+        The Eero Cloud API returns guest network status as a nested object:
+        {"guest_network": {"enabled": true, "name": "..."}}.
+        """
+        raw = {
+            "url": "/networks/1",
+            "guest_network": {"enabled": True, "name": "Guest WiFi"},
+        }
+        result = normalize_network(raw)
+        assert result["guest_network_enabled"] is True
+        assert result["guest_network_name"] == "Guest WiFi"
+
+    def test_guest_network_disabled_from_nested_object(self):
+        """Should report guest network disabled when nested enabled is False."""
+        raw = {"url": "/networks/1", "guest_network": {"enabled": False}}
+        result = normalize_network(raw)
+        assert result["guest_network_enabled"] is False
+
+    def test_guest_network_defaults_false_when_absent(self):
+        """Should default to False when no guest network data is present."""
+        raw = {"url": "/networks/1"}
+        result = normalize_network(raw)
+        assert result["guest_network_enabled"] is False
+
+    def test_guest_network_legacy_top_level_key(self):
+        """Should fall back to the legacy flat guest_network_enabled key."""
+        raw = {"url": "/networks/1", "guest_network_enabled": True}
+        result = normalize_network(raw)
+        assert result["guest_network_enabled"] is True
+
 
 class TestNormalizeDevice:
     """Tests for normalize_device function."""
@@ -281,6 +313,57 @@ class TestNormalizeEero:
         raw = {"url": "/eeros/1", "location": {"address": "Kitchen"}}
         result = normalize_eero(raw)
         assert result["location"] == "Kitchen"
+
+    def test_unwraps_nested_status_dict(self):
+        """Should unwrap a nested status object to a plain string."""
+        raw = {"url": "/eeros/1", "status": {"status": "green"}}
+        result = normalize_eero(raw)
+        assert result["status"] == "green"
+
+    def test_coerces_dict_shaped_client_counts(self):
+        """Should coerce dict-shaped numeric count fields to ints."""
+        raw = {
+            "url": "/eeros/1",
+            "connected_clients_count": {"count": 9},
+            "mesh_quality_bars": {"value": 4},
+        }
+        result = normalize_eero(raw)
+        assert result["connected_clients_count"] == 9
+        assert result["mesh_quality_bars"] == 4
+
+    def test_connected_clients_count_defaults_to_zero(self):
+        """Should default connected_clients_count to 0 when absent or null."""
+        assert normalize_eero({"url": "/eeros/1"})["connected_clients_count"] == 0
+        raw = {"url": "/eeros/1", "connected_clients_count": None}
+        assert normalize_eero(raw)["connected_clients_count"] == 0
+
+    def test_coerces_object_shaped_update_available(self):
+        """Should coerce an object-shaped update_available to a bool."""
+        raw = {"url": "/eeros/1", "update_available": {"min_firmware": "7.5"}}
+        assert normalize_eero(raw)["update_available"] is True
+
+    def test_coerces_string_booleans(self):
+        """Should coerce string boolean values to real booleans."""
+        raw = {"url": "/eeros/1", "led_on": "true", "heartbeat_ok": "false"}
+        result = normalize_eero(raw)
+        assert result["led_on"] is True
+        assert result["heartbeat_ok"] is False
+
+    def test_sanitizes_malformed_bands_list(self):
+        """Should drop non-scalar band entries so the value stays list[str]."""
+        raw = {"url": "/eeros/1", "bands": [{"band": "2.4"}, {"band": "5"}]}
+        assert normalize_eero(raw)["bands"] is None
+
+    def test_keeps_valid_string_lists(self):
+        """Should keep well-formed string lists unchanged."""
+        raw = {
+            "url": "/eeros/1",
+            "bands": ["2.4", "5"],
+            "ethernet_addresses": ["AA:BB:CC:DD:EE:FF"],
+        }
+        result = normalize_eero(raw)
+        assert result["bands"] == ["2.4", "5"]
+        assert result["ethernet_addresses"] == ["AA:BB:CC:DD:EE:FF"]
 
 
 class TestNormalizeProfile:

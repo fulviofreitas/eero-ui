@@ -2,18 +2,40 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from eero import EeroClient
 from eero.exceptions import EeroException
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from .._coercion import coerce_numeric
+from .._coercion import coerce_int, coerce_numeric
 from ..deps import get_network_id, require_auth
 from ..transformers import check_success, extract_data, extract_list, normalize_eero
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
+
+
+def _safe_str(value: Any) -> str:
+    """Coerce a value to a non-None string for required string fields.
+
+    Required ``str`` fields on the response models must never receive None
+    or a non-string value, otherwise model validation fails and the request
+    returns HTTP 500. This guarantees a plain string regardless of the raw
+    API value's shape.
+
+    Args:
+        value: Raw value from the (normalized) API response.
+
+    Returns:
+        The value as a string, or an empty string when it is None.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def calculate_uptime_seconds(last_reboot: str | None) -> int | None:
@@ -189,25 +211,40 @@ async def list_eeros(
         result = []
         for raw_eero in raw_eeros:
             eero = normalize_eero(raw_eero)
-            result.append(
-                EeroSummary(
-                    id=eero.get("id") or eero.get("serial") or "",
-                    url=eero.get("url") or "",
-                    serial=eero.get("serial") or "",
-                    mac_address=eero.get("mac_address") or "",
-                    model=eero.get("model") or "",
-                    status=eero.get("status") or "unknown",
-                    location=eero.get("location"),
-                    is_gateway=eero.get("is_gateway", False),
-                    is_primary=eero.get("is_primary", False),
-                    connected_clients_count=eero.get("connected_clients_count", 0),
-                    firmware_version=eero.get("firmware_version"),
-                    ip_address=eero.get("ip_address"),
-                    mesh_quality_bars=eero.get("mesh_quality_bars"),
-                    led_on=eero.get("led_on"),
-                    wired=eero.get("wired", False),
+            try:
+                result.append(
+                    EeroSummary(
+                        id=_safe_str(eero.get("id") or eero.get("serial")),
+                        url=_safe_str(eero.get("url")),
+                        serial=_safe_str(eero.get("serial")),
+                        mac_address=_safe_str(eero.get("mac_address")),
+                        model=_safe_str(eero.get("model")),
+                        status=eero.get("status") or "unknown",
+                        location=eero.get("location"),
+                        is_gateway=eero.get("is_gateway", False),
+                        is_primary=eero.get("is_primary", False),
+                        connected_clients_count=eero.get("connected_clients_count", 0),
+                        firmware_version=eero.get("firmware_version"),
+                        ip_address=eero.get("ip_address"),
+                        mesh_quality_bars=eero.get("mesh_quality_bars"),
+                        led_on=eero.get("led_on"),
+                        wired=eero.get("wired", False),
+                    )
                 )
-            )
+            except ValidationError as e:
+                # An unexpected response shape for one eero must not blank
+                # the entire list — degrade that entry to a minimal summary.
+                _LOGGER.error("Eero summary failed validation, degrading entry: %s", e)
+                result.append(
+                    EeroSummary(
+                        id=_safe_str(eero.get("id") or eero.get("serial")),
+                        url=_safe_str(eero.get("url")),
+                        serial=_safe_str(eero.get("serial")),
+                        mac_address=_safe_str(eero.get("mac_address")),
+                        model=_safe_str(eero.get("model")),
+                        status="unknown",
+                    )
+                )
 
         return result
     except EeroException as e:
@@ -238,7 +275,11 @@ async def get_eero(
         # Extract organization info
         org = eero.get("organization", {}) or {}
         organization_name = org.get("name") if isinstance(org, dict) else None
-        organization_id = org.get("id") if isinstance(org, dict) else None
+        organization_id = (
+            coerce_int(org.get("id"), field_name="organization_id")
+            if isinstance(org, dict)
+            else None
+        )
 
         # Extract power info
         power_info = eero.get("power_info", {}) or {}
@@ -259,20 +300,20 @@ async def get_eero(
         if last_heartbeat and hasattr(last_heartbeat, "isoformat"):
             last_heartbeat = last_heartbeat.isoformat()
 
-        # Format bssids_with_bands
+        # Format bssids_with_bands — keep only dict entries so the field
+        # always matches the declared list[dict] type.
         bssids_with_bands = eero.get("bssids_with_bands")
-        if bssids_with_bands and isinstance(bssids_with_bands, list):
+        if isinstance(bssids_with_bands, list):
             bssids_with_bands = [
-                (
-                    {
-                        "band": b.get("band"),
-                        "ethernet_address": b.get("ethernet_address"),
-                    }
-                    if isinstance(b, dict)
-                    else b
-                )
+                {
+                    "band": b.get("band"),
+                    "ethernet_address": b.get("ethernet_address"),
+                }
                 for b in bssids_with_bands
-            ]
+                if isinstance(b, dict)
+            ] or None
+        else:
+            bssids_with_bands = None
 
         # Format IPv6 addresses
         ipv6_addresses = eero.get("ipv6_addresses")
@@ -300,61 +341,81 @@ async def get_eero(
             else calculate_uptime_seconds(eero.get("last_reboot"))
         )
 
-        return EeroDetail(
-            id=eero.get("id") or eero.get("serial") or eero_id,
-            url=eero.get("url") or "",
-            serial=eero.get("serial") or "",
-            mac_address=eero.get("mac_address") or "",
-            model=eero.get("model") or "",
-            model_number=eero.get("model_number"),
-            status=eero.get("status") or "unknown",
-            state=eero.get("state"),
-            location=eero.get("location"),
-            is_gateway=eero.get("is_gateway", False),
-            is_primary=eero.get("is_primary", False),
-            wired=eero.get("wired", False),
-            connection_type=eero.get("connection_type"),
-            mesh_quality_bars=eero.get("mesh_quality_bars"),
-            ip_address=eero.get("ip_address"),
-            using_wan=eero.get("using_wan"),
-            connected_clients_count=eero.get("connected_clients_count", 0),
-            connected_wired_clients_count=eero.get("connected_wired_clients_count"),
-            connected_wireless_clients_count=eero.get(
-                "connected_wireless_clients_count"
-            ),
-            firmware_version=eero.get("firmware_version"),
-            os_version=eero.get("os_version"),
-            led_on=eero.get("led_on"),
-            led_brightness=eero.get("led_brightness"),
-            uptime=uptime_seconds,
-            cpu_usage=coerce_numeric(eero.get("cpu_usage"), field_name="cpu_usage"),
-            memory_usage=coerce_numeric(
-                eero.get("memory_usage"), field_name="memory_usage"
-            ),
-            temperature=coerce_numeric(
-                eero.get("temperature"), field_name="temperature"
-            ),
-            heartbeat_ok=eero.get("heartbeat_ok"),
-            update_available=eero.get("update_available"),
-            provides_wifi=eero.get("provides_wifi"),
-            auto_provisioned=eero.get("auto_provisioned"),
-            retrograde_capable=eero.get("retrograde_capable"),
-            last_heartbeat=last_heartbeat,
-            last_reboot=eero.get("last_reboot"),
-            joined=eero.get("joined"),
-            network_name=network_name,
-            network_url=network_url,
-            bands=eero.get("bands"),
-            wifi_bssids=eero.get("wifi_bssids"),
-            bssids_with_bands=bssids_with_bands,
-            ethernet_addresses=eero.get("ethernet_addresses"),
-            ethernet_ports=eero.get("ethernet_ports"),
-            ipv6_addresses=ipv6_addresses,
-            organization_name=organization_name,
-            organization_id=organization_id,
-            power_source=power_source,
-            power_saving_active=power_saving_active,
-        )
+        eero_id_value = _safe_str(eero.get("id") or eero.get("serial") or eero_id)
+
+        try:
+            return EeroDetail(
+                id=eero_id_value,
+                url=_safe_str(eero.get("url")),
+                serial=_safe_str(eero.get("serial")),
+                mac_address=_safe_str(eero.get("mac_address")),
+                model=_safe_str(eero.get("model")),
+                model_number=eero.get("model_number"),
+                status=eero.get("status") or "unknown",
+                state=eero.get("state"),
+                location=eero.get("location"),
+                is_gateway=eero.get("is_gateway", False),
+                is_primary=eero.get("is_primary", False),
+                wired=eero.get("wired", False),
+                connection_type=eero.get("connection_type"),
+                mesh_quality_bars=eero.get("mesh_quality_bars"),
+                ip_address=eero.get("ip_address"),
+                using_wan=eero.get("using_wan"),
+                connected_clients_count=eero.get("connected_clients_count", 0),
+                connected_wired_clients_count=eero.get("connected_wired_clients_count"),
+                connected_wireless_clients_count=eero.get(
+                    "connected_wireless_clients_count"
+                ),
+                firmware_version=eero.get("firmware_version"),
+                os_version=eero.get("os_version"),
+                led_on=eero.get("led_on"),
+                led_brightness=eero.get("led_brightness"),
+                uptime=uptime_seconds,
+                cpu_usage=coerce_numeric(eero.get("cpu_usage"), field_name="cpu_usage"),
+                memory_usage=coerce_numeric(
+                    eero.get("memory_usage"), field_name="memory_usage"
+                ),
+                temperature=coerce_numeric(
+                    eero.get("temperature"), field_name="temperature"
+                ),
+                heartbeat_ok=eero.get("heartbeat_ok"),
+                update_available=eero.get("update_available"),
+                provides_wifi=eero.get("provides_wifi"),
+                auto_provisioned=eero.get("auto_provisioned"),
+                retrograde_capable=eero.get("retrograde_capable"),
+                last_heartbeat=last_heartbeat,
+                last_reboot=eero.get("last_reboot"),
+                joined=eero.get("joined"),
+                network_name=network_name,
+                network_url=network_url,
+                bands=eero.get("bands"),
+                wifi_bssids=eero.get("wifi_bssids"),
+                bssids_with_bands=bssids_with_bands,
+                ethernet_addresses=eero.get("ethernet_addresses"),
+                ethernet_ports=eero.get("ethernet_ports"),
+                ipv6_addresses=ipv6_addresses,
+                organization_name=organization_name,
+                organization_id=organization_id,
+                power_source=power_source,
+                power_saving_active=power_saving_active,
+            )
+        except ValidationError as e:
+            # The Eero Cloud API returned a shape that does not match the
+            # EeroDetail model. Degrade gracefully to a minimal record
+            # instead of returning HTTP 500, so the detail page still loads.
+            _LOGGER.error(
+                "Eero %s response failed validation, returning degraded " "detail: %s",
+                eero_id,
+                e,
+            )
+            return EeroDetail(
+                id=eero_id_value,
+                url=_safe_str(eero.get("url")),
+                serial=_safe_str(eero.get("serial")),
+                mac_address=_safe_str(eero.get("mac_address")),
+                model=_safe_str(eero.get("model")),
+                status="unknown",
+            )
     except EeroException as e:
         _LOGGER.error(f"Failed to get eero {eero_id}: {e}")
         raise HTTPException(

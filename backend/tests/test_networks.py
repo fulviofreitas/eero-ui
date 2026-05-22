@@ -54,6 +54,32 @@ class TestGetNetwork:
         assert data["name"] == "Home"
         assert data["status"] == "online"
 
+    async def test_get_network_guest_network_enabled(
+        self, auth_client, authenticated_client
+    ):
+        """Reports the guest network as enabled from the nested object.
+
+        Regression test for issue #194: the Eero Cloud API returns guest
+        network status as a nested ``guest_network`` object, not a flat
+        ``guest_network_enabled`` boolean.
+        """
+        network = {
+            "url": "/2.2/networks/net-1",
+            "name": "Home",
+            "status": "online",
+            "guest_network": {"enabled": True, "name": "Guest WiFi"},
+        }
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response(network)
+        )
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
+
+        response = await auth_client.get("/api/networks/net-1")
+
+        assert response.status_code == 200
+        assert response.json()["guest_network_enabled"] is True
+
 
 class TestRenameNetwork:
     """Tests for PUT /api/networks/{network_id}/name."""
