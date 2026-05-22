@@ -264,6 +264,46 @@ function createDevicesStore() {
 		},
 
 		/**
+		 * Assign one or more devices to a profile (with optimistic update)
+		 */
+		async assignToProfile(
+			deviceIds: string[],
+			profileId: string,
+			profileName: string
+		): Promise<boolean> {
+			const previousState = get({ subscribe });
+
+			// Optimistic update — apply new profile to all targeted devices
+			update((s) => ({
+				...s,
+				devices: s.devices.map((d) =>
+					d.id && deviceIds.includes(d.id)
+						? { ...d, profile_id: profileId, profile_name: profileName }
+						: d
+				),
+			}));
+
+			try {
+				const result = await api.profiles.assignDevices(profileId, deviceIds);
+				if (!result.success) {
+					throw new Error(result.message || 'Failed to assign devices to profile');
+				}
+				return true;
+			} catch (error) {
+				// Rollback all affected devices to their previous state
+				update((s) => ({
+					...s,
+					devices: s.devices.map((d) => {
+						if (!d.id || !deviceIds.includes(d.id)) return d;
+						const prev = previousState.devices.find((p) => p.id === d.id);
+						return prev ?? d;
+					}),
+				}));
+				throw error;
+			}
+		},
+
+		/**
 		 * Set device nickname
 		 */
 		async setNickname(deviceId: string, nickname: string): Promise<boolean> {

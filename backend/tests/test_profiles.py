@@ -1,7 +1,8 @@
 """Tests for profile routes."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
+import pytest
 from eero.exceptions import EeroException
 
 
@@ -217,3 +218,212 @@ class TestUnpauseProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "unpause"
+
+
+# ---------------------------------------------------------------------------
+# Helpers for assign-devices tests
+# ---------------------------------------------------------------------------
+
+def _make_device(dev_id: str, network_id: str = "network-123") -> dict:
+    """Build a raw device dict matching the eero API envelope shape."""
+    return {
+        "url": f"/2.2/networks/{network_id}/devices/{dev_id}",
+        "mac": f"aa:bb:cc:dd:ee:{dev_id[-2:]}",
+        "nickname": f"Device {dev_id}",
+        "connected": True,
+        "wireless": True,
+    }
+
+
+def _make_profile_with_devices(
+    profile_id: str,
+    network_id: str,
+    existing_device_ids: list[str],
+) -> dict:
+    """Build a raw profile data dict (the 'data' field of the envelope)."""
+    return {
+        "url": f"/2.2/networks/{network_id}/profiles/{profile_id}",
+        "name": "Kids",
+        "paused": False,
+        "devices": [
+            {"url": f"/2.2/networks/{network_id}/devices/{d}"}
+            for d in existing_device_ids
+        ],
+    }
+
+
+class TestAssignDevicesToProfile:
+    """Tests for POST /api/profiles/{profile_id}/assign-devices."""
+
+    async def test_three_devices_single_sdk_call_with_merge(
+        self, auth_client, authenticated_client
+    ):
+        """Assigning 3 devices results in exactly ONE set_profile_devices call
+        that contains all 3 new URLs merged with any pre-existing device URLs."""
+        network_id = "network-123"
+        profile_id = "profile-1"
+
+        # Network has 4 devices; profile already owns device-0
+        raw_devices = [_make_device(f"device-{i}", network_id) for i in range(4)]
+        authenticated_client.get_devices = AsyncMock(
+            return_value=make_raw_response(raw_devices)
+        )
+
+        existing_url = f"/2.2/networks/{network_id}/devices/device-0"
+        authenticated_client.get_profile_devices = AsyncMock(
+            return_value=make_raw_response(
+                _make_profile_with_devices(profile_id, network_id, ["device-0"])
+            )
+        )
+
+        authenticated_client.set_profile_devices = AsyncMock(
+            return_value=make_raw_response({})
+        )
+
+        # Assign devices 1, 2, 3 (device-0 already there, should be preserved)
+        response = await auth_client.post(
+            f"/api/profiles/{profile_id}/assign-devices",
+            json={"device_ids": ["device-1", "device-2", "device-3"]},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["profile_id"] == profile_id
+        assert data["assigned_count"] == 3
+
+        # Must be called exactly once
+        authenticated_client.set_profile_devices.assert_called_once()
+
+        # The URL list passed must contain all 4 device URLs (merge of old + new)
+        call_args = authenticated_client.set_profile_devices.call_args
+        # Positional: (profile_id, device_urls, network_id)
+        passed_urls: list[str] = call_args.args[1]
+        expected_urls = {
+            f"/2.2/networks/{network_id}/devices/device-{i}" for i in range(4)
+        }
+        assert set(passed_urls) == expected_urls
+
+    async def test_empty_device_ids_returns_200_with_count_zero(
+        self, auth_client, authenticated_client
+    ):
+        """Empty device_ids list is a no-op: count 0, existing devices preserved."""
+        network_id = "network-123"
+        profile_id = "profile-1"
+
+        authenticated_client.get_devices = AsyncMock(
+            return_value=make_raw_response([_make_device("device-0", network_id)])
+        )
+
+        authenticated_client.get_profile_devices = AsyncMock(
+            return_value=make_raw_response(
+                _make_profile_with_devices(profile_id, network_id, ["device-0"])
+            )
+        )
+
+        authenticated_client.set_profile_devices = AsyncMock(
+            return_value=make_raw_response({})
+        )
+
+        response = await auth_client.post(
+            f"/api/profiles/{profile_id}/assign-devices",
+            json={"device_ids": []},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["assigned_count"] == 0
+
+        # set_profile_devices still called once (preserving existing devices)
+        authenticated_client.set_profile_devices.assert_called_once()
+        passed_urls = authenticated_client.set_profile_devices.call_args.args[1]
+        # Existing device-0 must still be in the list
+        existing_url = f"/2.2/networks/{network_id}/devices/device-0"
+        assert existing_url in passed_urls
+
+    async def test_eero_exception_on_get_devices_returns_500(
+        self, auth_client, authenticated_client
+    ):
+        """EeroException during get_devices propagates as HTTP 500."""
+        authenticated_client.get_devices = AsyncMock(
+            side_effect=EeroException("network error")
+        )
+        authenticated_client.set_profile_devices = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/profiles/profile-1/assign-devices",
+            json={"device_ids": ["device-1"]},
+        )
+
+        assert response.status_code == 500
+        authenticated_client.set_profile_devices.assert_not_called()
+
+    async def test_eero_exception_on_set_profile_devices_returns_500(
+        self, auth_client, authenticated_client
+    ):
+        """EeroException from set_profile_devices propagates as HTTP 500."""
+        network_id = "network-123"
+        profile_id = "profile-1"
+
+        authenticated_client.get_devices = AsyncMock(
+            return_value=make_raw_response([_make_device("device-1", network_id)])
+        )
+        authenticated_client.get_profile_devices = AsyncMock(
+            return_value=make_raw_response(
+                _make_profile_with_devices(profile_id, network_id, [])
+            )
+        )
+        authenticated_client.set_profile_devices = AsyncMock(
+            side_effect=EeroException("write error")
+        )
+
+        response = await auth_client.post(
+            f"/api/profiles/{profile_id}/assign-devices",
+            json={"device_ids": ["device-1"]},
+        )
+
+        assert response.status_code == 500
+
+    async def test_missing_device_id_skipped_gracefully(
+        self, auth_client, authenticated_client
+    ):
+        """Device IDs not found in the network are silently skipped."""
+        network_id = "network-123"
+        profile_id = "profile-1"
+
+        authenticated_client.get_devices = AsyncMock(
+            return_value=make_raw_response([_make_device("device-1", network_id)])
+        )
+        authenticated_client.get_profile_devices = AsyncMock(
+            return_value=make_raw_response(
+                _make_profile_with_devices(profile_id, network_id, [])
+            )
+        )
+        authenticated_client.set_profile_devices = AsyncMock(
+            return_value=make_raw_response({})
+        )
+
+        # "ghost-device" does not exist in the network
+        response = await auth_client.post(
+            f"/api/profiles/{profile_id}/assign-devices",
+            json={"device_ids": ["device-1", "ghost-device"]},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        # Only 1 device could be resolved
+        assert data["assigned_count"] == 1
+        passed_urls = authenticated_client.set_profile_devices.call_args.args[1]
+        assert f"/2.2/networks/{network_id}/devices/device-1" in passed_urls
+        # ghost-device URL must not appear
+        assert not any("ghost-device" in u for u in passed_urls)
+
+    async def test_missing_body_returns_422(self, auth_client, authenticated_client):
+        """Missing request body returns 422 validation error."""
+        response = await auth_client.post(
+            "/api/profiles/profile-1/assign-devices",
+            content=b"",
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422

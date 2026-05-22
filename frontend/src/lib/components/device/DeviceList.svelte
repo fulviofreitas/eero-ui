@@ -122,18 +122,20 @@
 	async function assignToProfile(profileId: string, profileName: string) {
 		if (selectedCount === 0) return;
 
+		const ids = Array.from($selectedDevices);
 		assigningProfile = true;
 
 		try {
-			// Note: This would require a backend endpoint to assign devices to profiles
-			// For now, show a message about the feature
-			uiStore.success(
-				`Would assign ${selectedCount} device(s) to "${profileName}". (API endpoint needed)`
-			);
+			await devicesStore.assignToProfile(ids, profileId, profileName);
+			uiStore.success(`Assigned ${ids.length} device(s) to "${profileName}"`);
 			profileSelectorOpen = false;
+			clearSelection();
 			toggleSelectionMode();
+			await devicesStore.fetch(true);
 		} catch (_error) {
-			uiStore.error('Failed to assign devices to profile');
+			uiStore.error(
+				_error instanceof Error ? _error.message : 'Failed to assign devices to profile'
+			);
 		} finally {
 			assigningProfile = false;
 		}

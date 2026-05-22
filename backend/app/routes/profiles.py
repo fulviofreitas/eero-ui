@@ -346,6 +346,116 @@ async def rename_profile(
         )
 
 
+class AssignDevicesRequest(BaseModel):
+    """Request body for assigning devices to a profile."""
+
+    device_ids: list[str]
+
+    class Config:
+        extra = "ignore"
+
+
+class AssignDevicesResponse(BaseModel):
+    """Response for assign-devices endpoint."""
+
+    success: bool
+    profile_id: str
+    assigned_count: int
+    message: str | None = None
+
+
+@router.post("/{profile_id}/assign-devices", response_model=AssignDevicesResponse)
+async def assign_devices_to_profile(
+    profile_id: str,
+    body: AssignDevicesRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> AssignDevicesResponse:
+    """Assign devices to a profile by merging with the existing device list.
+
+    This endpoint performs a single set_profile_devices call with the
+    union of currently-assigned devices and the requested device IDs,
+    preventing overwrites caused by multiple per-device calls.
+    """
+    from ..transformers import normalize_device
+
+    try:
+        # --- Step 1: Build a map of device_id -> device_url from the network ---
+        raw_devices_resp = await client.get_devices(network_id)
+        raw_devices = extract_list(raw_devices_resp, "devices")
+        device_url_map: dict[str, str] = {}
+        for raw_dev in raw_devices:
+            normalized = normalize_device(raw_dev)
+            dev_id = normalized.get("id")
+            dev_url = normalized.get("url")
+            if dev_id and dev_url:
+                device_url_map[dev_id] = dev_url
+
+        # Resolve requested device IDs to URLs; skip unresolvable ones
+        selected_urls: set[str] = set()
+        for dev_id in body.device_ids:
+            url = device_url_map.get(dev_id)
+            if url:
+                selected_urls.add(url)
+            else:
+                _LOGGER.warning(
+                    "Device ID %s not found in network %s — skipping",
+                    dev_id,
+                    network_id,
+                )
+
+        # --- Step 2: Fetch the profile's current device URLs ---
+        raw_profile_resp = await client.get_profile_devices(
+            profile_id, network_id
+        )
+        profile_data = extract_data(raw_profile_resp)
+        current_devices_raw = profile_data.get("devices", [])
+        if isinstance(current_devices_raw, dict):
+            current_devices_raw = current_devices_raw.get("data", [])
+
+        current_urls: set[str] = set()
+        for entry in current_devices_raw if isinstance(current_devices_raw, list) else []:
+            # Entry may be {"url": "..."} or a plain string
+            if isinstance(entry, dict):
+                url = entry.get("url")
+            elif isinstance(entry, str):
+                url = entry
+            else:
+                url = None
+            if url:
+                current_urls.add(url)
+
+        # --- Step 3: Merge and call set_profile_devices ONCE ---
+        final_urls = list(current_urls | selected_urls)
+        await client.set_profile_devices(
+            profile_id, final_urls, network_id
+        )
+
+        assigned_count = len(selected_urls)
+        _LOGGER.info(
+            "Assigned %d device(s) to profile %s (total after merge: %d)",
+            assigned_count,
+            profile_id,
+            len(final_urls),
+        )
+
+        return AssignDevicesResponse(
+            success=True,
+            profile_id=profile_id,
+            assigned_count=assigned_count,
+            message=f"Successfully assigned {assigned_count} device(s) to profile.",
+        )
+
+    except EeroException as e:
+        _LOGGER.error(
+            "Failed to assign devices to profile %s: %s", profile_id, e
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign devices to profile. Please try again.",
+        )
+
+
 @router.delete("/{profile_id}", response_model=ProfileAction)
 async def delete_profile(
     profile_id: str,

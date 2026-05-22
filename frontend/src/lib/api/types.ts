@@ -425,6 +425,13 @@ export interface ProfileAction {
 	message: string | null;
 }
 
+export interface ProfileAssignDevicesResponse {
+	success: boolean;
+	profile_id: string;
+	assigned_count: number;
+	message: string | null;
+}
+
 export interface ProfileCreateRequest {
 	name: string;
 }
