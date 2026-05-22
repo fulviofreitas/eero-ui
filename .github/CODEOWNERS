@@ -1,0 +1,23 @@
+# ============================================================================
+# Code Owners
+# ============================================================================
+# Combined with branch protection's "require_code_owner_reviews" setting,
+# any PR modifying a path below must have an APPROVED review from a listed
+# owner before it can merge to master.
+#
+# Scope is intentionally narrow: only the security-sensitive paths that
+# could bypass or weaken auto-merge / release controls. Everything else is
+# governed by the auto-merge gate in .github/workflows/auto-merge.yml.
+# ============================================================================
+
+# All GitHub Actions workflows and reusable actions — a change here can
+# disable the auto-merge gate or alter who can release.
+/.github/workflows/   @fulviofreitas
+/.github/actions/     @fulviofreitas
+
+# This file itself — prevent removing the owner rule via a sneaky PR.
+/.github/CODEOWNERS   @fulviofreitas
+
+# Renovate config — controls which dependency updates auto-merge and at
+# what cadence; loosening it could land an unreviewed compromised package.
+/.github/renovate.json5   @fulviofreitas
