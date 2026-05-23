@@ -59,6 +59,15 @@ permissions:
   issues: read
   pull-requests: read
 
+# Pin the model — Copilot CLI's built-in default is a premium model
+# (claude-sonnet-4.5+) that is not available on all Copilot tiers, which
+# causes runs to fail with "400 The requested model is not supported."
+# gpt-4o is universally available (Copilot Free / Pro / Business / Enterprise)
+# and is more than enough horsepower for a structured triage task.
+engine:
+  id: copilot
+  model: gpt-4o
+
 network: defaults
 
 timeout-minutes: 10
