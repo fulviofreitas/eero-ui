@@ -31,6 +31,22 @@ description: |
 on:
   issues:
     types: [opened, reopened]
+  # Allow triage to run for any authenticated user (including external
+  # contributors with read-only repo access). gh-aw defaults this to
+  # [admin, maintainer, write] to protect against prompt injection on
+  # untrusted issue bodies — but for a triage workflow that is the
+  # entire point: external reporters MUST be able to trigger it.
+  #
+  # The blast radius is bounded by safe-outputs:
+  #   - add-labels is restricted to a fixed `allowed:` list, capped at
+  #     10, and `target: triggering` (only the issue that fired).
+  #   - add-comment is capped at 1 and `target: triggering`.
+  #   - The agent job runs read-only; it cannot push code, close issues,
+  #     assign issues, or modify the issue body.
+  # Worst case from a malicious prompt-injected issue body: an off-topic
+  # comment and/or a few extra (still allow-listed) labels — both
+  # trivially undone by a maintainer.
+  roles: all
 
 # Skip bot-authored issues (renovate, dependabot, etc.) entirely — the agent
 # adds no value on machine-generated dependency dashboards and would burn
