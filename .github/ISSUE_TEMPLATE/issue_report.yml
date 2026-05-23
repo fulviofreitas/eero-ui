@@ -1,0 +1,124 @@
+name: 🖥️ Issue Report
+description: Tell us what's going wrong in the UI
+title: "[<TYPE>]: <short description>"
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        👋 Hey, thanks for taking the time to file this! Sorry the UI is misbehaving — share what you've got below and we'll dig in. No need to fill every field.
+
+        > 🔒 A quick heads up: please scrub any secrets (session tokens, cookies, personal IPs, MAC addresses, network IDs) before posting.
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: 🏷️ What kind of issue is this?
+      options:
+        - 🐛 Bug / wrong behavior
+        - 🎨 Visual / layout / theme
+        - 💥 Blank page / crash
+        - 🔐 Authentication / login
+        - 🔌 API request fails
+        - 🐢 Performance
+        - 🐳 Docker / deployment
+        - ❓ Question / how-to
+        - ✨ Feature request
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: 📄 Page or view affected
+      description: e.g. Dashboard, Devices, Eeros, Profiles, Login. Leave blank if not page-specific.
+      placeholder: Devices
+    validations:
+      required: false
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 💬 What happened? What did you expect?
+      placeholder: I clicked X, expected Y, but saw Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔁 How can we reproduce it?
+      value: |
+        1. Go to ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 Screenshots or screen recording
+      description: Drag-and-drop here — super helpful for visual bugs.
+    validations:
+      required: false
+
+  - type: textarea
+    id: browser-console
+    attributes:
+      label: 🌐 Browser console errors
+      description: |
+        Open DevTools (`F12` on Windows/Linux, `Cmd+Opt+I` on macOS) → Console tab → copy any red errors.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: backend-logs
+    attributes:
+      label: 📋 Backend logs
+      description: |
+        Grab them with whichever fits:
+        - 🐳 Docker: `docker logs eero-ui`
+        - 🧩 Compose: `docker compose logs eero-ui`
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: 📦 eero-ui version
+      description: Image tag, release version, or git SHA.
+      placeholder: 1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: browser-os
+    attributes:
+      label: 🌐 Browser + OS
+      placeholder: Chrome 130 on macOS 15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: 🚀 How are you running it?
+      options:
+        - 🐳 Docker
+        - 🧩 Docker Compose
+        - ☸️ Kubernetes
+        - 💻 Local dev
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 🎁 Anything else?
+      description: Reverse proxy in front? Browser extensions? Theme or viewport? Workarounds you tried?
+    validations:
+      required: false
