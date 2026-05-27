@@ -92,6 +92,7 @@ safe-outputs:
       - critical
       - security
       - javascript
+      - try-fix
       - needs-review
   add-comment:
     target: triggering
@@ -124,6 +125,7 @@ These are the only labels you may apply. They all already exist in the repositor
 - `critical` — explicit "UI completely broken" for everyone, or credential exposure
 - `security` — security-relevant: authentication, session tokens, cookie storage, CORS, Docker image / container privileges
 - `javascript` — frontend-only issues (visual / layout / theme / browser-console errors) clearly isolated to JS/CSS
+- `try-fix` — set ONLY when the issue is a well-scoped bug with reproduction steps and you're confident a coding agent could attempt a fix (a separate `draft-fix` workflow watches for this label and hands the issue off to the GitHub Copilot Coding Agent)
 - `needs-review` — you genuinely cannot classify the issue; flag it for a human
 
 ## Step 1 — Gather context
@@ -158,6 +160,16 @@ Add `javascript` only when the problem is clearly frontend-only (browser console
 Add `good first issue` only when the scope is genuinely small (single CSS tweak, single string change, obvious bug fix).
 
 Add `help wanted` when the issue is actionable but maintainers would welcome an outside contribution.
+
+Add `try-fix` ONLY when ALL of the following hold:
+- You already applied `bug` (never apply `try-fix` to questions, feature requests, docs, duplicates, or `needs-review` issues).
+- The issue has concrete reproduction steps OR a precise component + observed behaviour (something a coding agent could open a file and start from).
+- The scope is small / localised — a likely 1–3 file change, not "rewrite X" or "the whole UI is broken".
+- You did NOT apply `critical` (critical issues need human eyes first — don't dispatch an autonomous agent at them).
+- You did NOT apply `needs-review` (if you're unsure about the category, you're definitely unsure whether to hand off).
+- The reporter is not asking for a design decision or new feature in disguise.
+
+When in doubt, do NOT apply `try-fix`. A maintainer can always add it manually later.
 
 Add `needs-review` only if the issue truly does not fit any of the categories above — prefer under-labelling to guessing.
 
