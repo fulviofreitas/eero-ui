@@ -69,7 +69,8 @@
 
 	$: wifiBandData = [
 		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: 'rgba(34, 197, 94, 0.8)' },
-		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' }
+		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' },
+		{ label: '6 GHz', value: $deviceCounts.freq6, color: 'rgba(59, 130, 246, 0.8)' }
 	];
 
 	$: clientsPerEeroData = eeros.map((eero, index) => ({

@@ -202,7 +202,7 @@ export interface DeviceSummary {
 	is_guest: boolean;
 	connection_type: 'wireless' | 'wired' | null;
 	signal_strength: number | null;
-	frequency: '2.4GHz' | '5GHz' | null;
+	frequency: '2.4GHz' | '5GHz' | '6GHz' | null;
 	connected_to_eero: string | null;
 	last_active: string | null;
 	profile_id: string | null;
