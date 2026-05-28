@@ -203,12 +203,12 @@ jobs:
              scope — no refactoring of unrelated code, no new features.
           3. Add or update a test that fails before your fix and passes after.
              Follow existing test conventions in this repo.
-          4. Run the local test command (`npm test`) and the linter
-             (`npm run lint`). Note the result summaries in your final answer.
-          5. Commit your changes (small, focused commits). Do NOT push and do
+          4. Commit your changes (small, focused commits). Do NOT push and do
              NOT open a PR — a later step does that. Just make the code changes
-             and commit them locally.
-          6. End your final response with a structured summary in this format:
+             and commit them locally. Do NOT run the test suite or linter —
+             a maintainer will validate on review (saves agent turns, lets
+             you focus on the patch itself).
+          5. End your final response with a structured summary in this format:
 
              ```
              ## Summary
@@ -217,14 +217,11 @@ jobs:
              ## Files changed
              - path/to/file: <brief note>
 
-             ## Tests
-             <result of running npm test>
-
              ## Reviewer notes
              - <anything a reviewer should pay extra attention to>
              ```
 
-          7. If after investigating you genuinely cannot determine a safe fix,
+          6. If after investigating you genuinely cannot determine a safe fix,
              do NOT make code changes. Just provide a summary explaining what
              you looked at, what you tried, and what's missing. The later step
              will open a draft PR with just the investigation note.
@@ -276,6 +273,7 @@ jobs:
           echo "--- claude run (streaming) ---"
           cat /tmp/prompt/full.md | claude \
             --print \
+            --model opus \
             --max-turns 50 \
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(yarn:*),Bash(pnpm:*),Bash(tsc:*),Bash(eslint:*),Bash(prettier:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(find:*),Bash(echo:*),Bash(mkdir:*),Bash(rm:*),Bash(mv:*),Bash(cp:*)" \
             2>&1 | tee /tmp/claude-output.txt
@@ -339,9 +337,3 @@ jobs:
             echo "A maintainer will take a look. [Actions run](${RUN_URL})"
           } > /tmp/nochange-comment.md
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/nochange-comment.md
-
-      - name: Post failure note
-        if: failure()
-        run: |
-          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body "⚠️ Sorry @${ISSUE_AUTHOR}, the Claude Code draft-fix attempt did not complete successfully — a maintainer will take a closer look. Details: [Actions run](${RUN_URL})."
