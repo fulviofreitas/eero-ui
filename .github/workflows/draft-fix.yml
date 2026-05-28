@@ -77,10 +77,32 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Acknowledge handoff (so the reporter sees something immediately)
+        # Posted BEFORE the heavy Claude Code step runs. If that step succeeds,
+        # Claude Code will follow up with a PR link; if it fails, the
+        # on-failure step at the bottom posts an apology + run URL.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR_LOGIN: ${{ github.event.issue.user.login }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > /tmp/comment.md <<'EOF'
+          🛠️ Handing this off to **Claude Code** for a draft fix attempt, @AUTHOR_PLACEHOLDER!
+
+          What happens next:
+          - Claude Code (running on the maintainer's Claude Pro/Max subscription) will browse the repo, propose a minimal patch, run the test suite, and open a **draft pull request** linked back to this issue.
+          - The PR is a starting point — a maintainer will review and iterate before anything ships.
+          - Typically takes a few minutes. Live progress: [Actions run](RUN_URL_PLACEHOLDER).
+
+          _If this hand-off was a mistake (e.g. this is a feature request, not a bug), just remove the `try-fix` label and nothing further will happen._
+          EOF
+          sed -i "s|AUTHOR_PLACEHOLDER|${AUTHOR_LOGIN}|g; s|RUN_URL_PLACEHOLDER|${RUN_URL}|g" /tmp/comment.md
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md
+
       - name: Checkout base branch
-        # Default checkout — base branch, no PR head. Standard prompt-injection
-        # defense per claude-code-action's docs/security.md.
-        uses: actions/checkout@v4
+        # actions/checkout@v6.0.2 — pinned to full commit SHA for supply-chain safety
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
@@ -186,3 +208,13 @@ jobs:
             <untrusted_issue_body>
             ${{ github.event.issue.body }}
             </untrusted_issue_body>
+
+      - name: Post failure note (only if Claude Code step failed)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR_LOGIN: ${{ github.event.issue.user.login }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "⚠️ Sorry @${AUTHOR_LOGIN}, the Claude Code draft-fix attempt did not complete successfully — a maintainer will take a closer look. Details: [Actions run](${RUN_URL})."
