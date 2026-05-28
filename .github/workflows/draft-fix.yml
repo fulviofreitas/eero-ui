@@ -339,9 +339,9 @@ jobs:
           else
             # Stage any unstaged modifications and amend into a commit if needed
             if [ -n "$(git status --porcelain)" ]; then
-              # ':!frontend/node_modules' guards against the pre-installed
-              # node_modules symlink leaking into the PR.
-              git add -A -- ':!frontend/node_modules'
+              # The symlink at frontend/node_modules is registered in
+              # .git/info/exclude by the link step, so `git add -A` skips it.
+              git add -A
               git commit -m "Draft fix for issue #${ISSUE_NUMBER}"
             fi
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
