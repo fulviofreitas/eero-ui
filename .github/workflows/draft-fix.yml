@@ -249,17 +249,26 @@ jobs:
         # --print: non-interactive single-turn execution.
         # --allowed-tools: explicit allowlist; everything else is denied.
         # --max-turns: bound to prevent runaway loops.
-        # --output-format text: keep stdout sane for capture into PR body.
+        # `tee` (not `>`) so output streams live to the Actions log AND is
+        # captured for the PR body — making failures debuggable.
         run: |
+          set -o pipefail
+          echo "--- claude --version ---"
+          claude --version || true
+          echo "--- node --version ---"
+          node --version || true
+          echo "--- prompt size ---"
+          wc -c /tmp/prompt/full.md
+          echo "--- token presence (length only) ---"
+          echo "CLAUDE_CODE_OAUTH_TOKEN length: ${#CLAUDE_CODE_OAUTH_TOKEN}"
+          echo "--- claude run (streaming) ---"
           claude \
             --print \
             --max-turns 25 \
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(yarn:*),Bash(pnpm:*),Bash(tsc:*),Bash(eslint:*),Bash(prettier:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(find:*),Bash(echo:*),Bash(mkdir:*),Bash(rm:*),Bash(mv:*),Bash(cp:*)" \
-            --output-format text \
-            < /tmp/prompt/full.md \
-            > /tmp/claude-output.txt 2>&1
-          echo "--- Claude Code output (tail) ---"
-          tail -120 /tmp/claude-output.txt
+            "$(cat /tmp/prompt/full.md)" \
+            2>&1 | tee /tmp/claude-output.txt
+          echo "--- claude exit: $? ---"
 
       - name: Detect changes
         id: changes
