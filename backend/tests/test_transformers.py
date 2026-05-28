@@ -252,6 +252,29 @@ class TestNormalizeDevice:
         assert result["frequency"] == "5GHz"
         assert result["signal_bars"] == 4
 
+    def test_maps_6ghz_frequency(self):
+        """Should map frequencies in the 6GHz band (>=5925 MHz) to '6GHz'.
+
+        WiFi 6E devices report a frequency in the 5925-7125 MHz range. Without
+        this mapping, those connections were lumped in with 5GHz, hiding the
+        band from the device view and the WiFi Band pie chart.
+        """
+        raw_6ghz = {
+            "url": "/devices/1",
+            "connectivity": {"frequency": 6200},
+        }
+        raw_5ghz_top = {
+            "url": "/devices/2",
+            "connectivity": {"frequency": 5800},
+        }
+        raw_24ghz = {
+            "url": "/devices/3",
+            "connectivity": {"frequency": 2412},
+        }
+        assert normalize_device(raw_6ghz)["frequency"] == "6GHz"
+        assert normalize_device(raw_5ghz_top)["frequency"] == "5GHz"
+        assert normalize_device(raw_24ghz)["frequency"] == "2.4GHz"
+
     def test_extracts_source_eero(self):
         """Should extract connected eero info from source."""
         raw = {
