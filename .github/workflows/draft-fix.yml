@@ -324,10 +324,18 @@ jobs:
             echo
             echo "_This is a DRAFT pull request opened automatically by Claude Code in response to the \`try-fix\` label. A maintainer will review before anything ships._"
             echo
-            echo "<details><summary>Claude Code session log (tail)</summary>"
+            echo "<details><summary>Claude Code session — stderr tail</summary>"
             echo
             echo '```'
-            tail -200 /tmp/claude-output.txt
+            tail -120 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr captured)"
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "<details><summary>Tool call summary</summary>"
+            echo
+            echo '```'
+            jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | "\(.name): \(.input | tostring | .[0:140])"' /tmp/claude-events.jsonl 2>/dev/null | head -80 || echo "(no events)"
             echo '```'
             echo
             echo "</details>"
@@ -347,10 +355,18 @@ jobs:
           {
             echo "ℹ️ Claude Code investigated this but did not produce a code change, @${ISSUE_AUTHOR}."
             echo
-            echo "<details><summary>Session log (tail)</summary>"
+            echo "<details><summary>Session — stderr tail</summary>"
             echo
             echo '```'
-            tail -100 /tmp/claude-output.txt
+            tail -80 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr)"
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "<details><summary>Tool calls</summary>"
+            echo
+            echo '```'
+            jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | "\(.name): \(.input | tostring | .[0:140])"' /tmp/claude-events.jsonl 2>/dev/null | head -60 || echo "(no events)"
             echo '```'
             echo
             echo "</details>"
