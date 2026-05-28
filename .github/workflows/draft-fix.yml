@@ -262,11 +262,10 @@ jobs:
           echo "--- token presence (length only) ---"
           echo "CLAUDE_CODE_OAUTH_TOKEN length: ${#CLAUDE_CODE_OAUTH_TOKEN}"
           echo "--- claude run (streaming) ---"
-          claude \
+          cat /tmp/prompt/full.md | claude \
             --print \
             --max-turns 25 \
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(yarn:*),Bash(pnpm:*),Bash(tsc:*),Bash(eslint:*),Bash(prettier:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(find:*),Bash(echo:*),Bash(mkdir:*),Bash(rm:*),Bash(mv:*),Bash(cp:*)" \
-            "$(cat /tmp/prompt/full.md)" \
             2>&1 | tee /tmp/claude-output.txt
           echo "--- claude exit: $? ---"
 
