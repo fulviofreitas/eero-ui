@@ -138,18 +138,15 @@ jobs:
         run: |
           python3 -m pip install --break-system-packages --no-deps -e backend || true
 
-      - name: Configure git identity
-        # The next step pins the git author to the github-actions bot so
-        # the commits inside the PR are attributed to the same account that
-        # opens the PR (via GITHUB_TOKEN). Verified-bot-authored, easy to
-        # filter, doesn't leak a vendor name into the repo log.
+      - name: Configure git identity and trust the workspace
+        # Container UID != host UID that did actions/checkout, so git's
+        # default protection refuses to recognise /github/workspace as a
+        # repo until we add it as a safe.directory. Then set identity
+        # globally so subsequent git ops in any step pick it up.
         run: |
-          # Use the github-actions bot identity so commits are attributed
-          # to the same account that creates the PR (via GITHUB_TOKEN). The
-          # 41898282+... email format matches GitHub's standard noreply alias
-          # for the github-actions bot, so commits show as verified-bot-authored.
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Create fix branch
         run: |
