@@ -127,11 +127,19 @@ jobs:
         # image was built against, just symlink the pre-installed
         # node_modules — instant. If they differ, fall back to `npm ci`
         # (slower but correct).
+        #
+        # IMPORTANT: a symlink at frontend/node_modules is NOT matched by
+        # the repo's `node_modules/` gitignore rule (trailing slash =
+        # directory-only). To stop the symlink from leaking into the
+        # auto-opened PR, register it in the local-only excludes file.
         run: |
           if [ -f frontend/package-lock.json ] && [ -f /opt/frontend/package-lock.json ] \
              && diff -q frontend/package-lock.json /opt/frontend/package-lock.json > /dev/null 2>&1; then
             echo "lockfile matches image — symlinking pre-installed node_modules"
             ln -s /opt/frontend/node_modules frontend/node_modules
+            # Per-checkout exclude (not committed; lives in .git/info/)
+            grep -qxF 'frontend/node_modules' .git/info/exclude 2>/dev/null \
+              || echo 'frontend/node_modules' >> .git/info/exclude
           else
             echo "lockfile mismatch (or no image cache) — running npm ci"
             (cd frontend && npm ci --no-audit --no-fund --prefer-offline)
@@ -331,7 +339,9 @@ jobs:
           else
             # Stage any unstaged modifications and amend into a commit if needed
             if [ -n "$(git status --porcelain)" ]; then
-              git add -A
+              # ':!frontend/node_modules' guards against the pre-installed
+              # node_modules symlink leaking into the PR.
+              git add -A -- ':!frontend/node_modules'
               git commit -m "Draft fix for issue #${ISSUE_NUMBER}"
             fi
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
