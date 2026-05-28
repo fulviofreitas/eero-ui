@@ -90,10 +90,10 @@ jobs:
       - name: Acknowledge handoff
         run: |
           cat > /tmp/ack-comment.md <<'EOF'
-          🛠️ Handing this off to **Claude Code** for a draft fix attempt, @AUTHOR_PLACEHOLDER!
+          🛠️ Handing this off to the **automated draft-fix agent**, @AUTHOR_PLACEHOLDER!
 
           What happens next:
-          - Claude Code (running on the maintainer's Claude Pro/Max subscription) will browse the repo, propose a minimal patch, run the test suite, and open a **draft pull request** linked back to this issue.
+          - An automated agent will browse the repo, propose a minimal patch, run the test suite, and open a **draft pull request** linked back to this issue.
           - The PR is a starting point — a maintainer will review and iterate before anything ships.
           - Typically takes a few minutes. Live progress: [Actions run](RUN_URL_PLACEHOLDER).
 
@@ -128,16 +128,21 @@ jobs:
         run: npm ci --no-audit --no-fund --prefer-offline
 
       - name: Configure git identity
-        # Identifies AI-generated commits clearly. The bot has no GitHub
-        # account so commits will show as unverified — that's intentional;
-        # a maintainer signs off via PR review and merge.
+        # The next step pins the git author to the github-actions bot so
+        # the commits inside the PR are attributed to the same account that
+        # opens the PR (via GITHUB_TOKEN). Verified-bot-authored, easy to
+        # filter, doesn't leak a vendor name into the repo log.
         run: |
-          git config user.name 'claude-code[bot]'
-          git config user.email 'claude-code[bot]@users.noreply.github.com'
+          # Use the github-actions bot identity so commits are attributed
+          # to the same account that creates the PR (via GITHUB_TOKEN). The
+          # 41898282+... email format matches GitHub's standard noreply alias
+          # for the github-actions bot, so commits show as verified-bot-authored.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
       - name: Create fix branch
         run: |
-          BRANCH="claude-code/fix-issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID}"
+          BRANCH="draft-fix/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID}"
           git checkout -b "$BRANCH"
           echo "FIX_BRANCH=$BRANCH" >> "$GITHUB_ENV"
 
@@ -322,9 +327,9 @@ jobs:
           {
             echo "Fixes #${ISSUE_NUMBER}"
             echo
-            echo "_This is a DRAFT pull request opened automatically by Claude Code in response to the \`try-fix\` label. A maintainer will review before anything ships._"
+            echo "_This is a DRAFT pull request opened automatically by the draft-fix workflow in response to the \`try-fix\` label. A maintainer will review before anything ships._"
             echo
-            echo "<details><summary>Claude Code session — stderr tail</summary>"
+            echo "<details><summary>Agent session — stderr tail</summary>"
             echo
             echo '```'
             tail -120 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr captured)"
@@ -353,7 +358,7 @@ jobs:
         if: steps.changes.outputs.has_changes == 'false'
         run: |
           {
-            echo "ℹ️ Claude Code investigated this but did not produce a code change, @${ISSUE_AUTHOR}."
+            echo "ℹ️ The automated agent investigated this but did not produce a code change, @${ISSUE_AUTHOR}."
             echo
             echo "<details><summary>Session — stderr tail</summary>"
             echo
@@ -418,7 +423,7 @@ jobs:
           fi
 
           {
-            echo "## 🛠️ Claude Code Draft-Fix"
+            echo "## 🛠️ Draft-Fix Agent"
             echo
             echo "**Repo:** \`$GITHUB_REPOSITORY\`  "
             echo "**Issue:** [#${ISSUE_NUMBER} — ${ISSUE_TITLE}](${{ github.server_url }}/$GITHUB_REPOSITORY/issues/${ISSUE_NUMBER})  "
@@ -446,7 +451,7 @@ jobs:
               echo "> ⚠️ The agent hit the 50-turn cap before producing a fix. Consider bumping \`--max-turns\` or pre-installing more dependencies."
               echo
             fi
-            echo "<details><summary>Claude Code stderr (last 80 lines)</summary>"
+            echo "<details><summary>Agent stderr (last 80 lines)</summary>"
             echo
             echo '\`\`\`'
             tail -80 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr captured)"
