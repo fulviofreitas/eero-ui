@@ -374,3 +374,83 @@ jobs:
             echo "A maintainer will take a look. [Actions run](${RUN_URL})"
           } > /tmp/nochange-comment.md
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/nochange-comment.md
+
+      - name: Write GitHub Step Summary
+        if: always()
+        run: |
+          set +e
+          # Did the claude run hit max turns?
+          MAX_TURNS_HIT="no"
+          if grep -q "Reached max turns" /tmp/claude-stderr.log 2>/dev/null; then
+            MAX_TURNS_HIT="yes"
+          fi
+
+          # Did we end up pushing a branch and opening a PR?
+          PR_URL=""
+          if [ -n "${FIX_BRANCH:-}" ]; then
+            PR_URL=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$FIX_BRANCH" --state open --json url --jq '.[0].url // ""' 2>/dev/null)
+          fi
+
+          # Count tool calls by name from the stream-json events
+          TOOL_TABLE=""
+          if [ -f /tmp/claude-events.jsonl ]; then
+            TOOL_TABLE=$(jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | .name' /tmp/claude-events.jsonl 2>/dev/null \
+              | sort | uniq -c | sort -rn | awk 'BEGIN{print "| Tool | Calls |"; print "|---|---|"} {print "| `" $2 "` | " $1 " |"}')
+          fi
+
+          # Files changed (between base branch and the fix branch, if pushed)
+          FILES_TABLE=""
+          if [ -n "$PR_URL" ] || [ -n "${FIX_BRANCH:-}" ]; then
+            BASE="${{ github.event.repository.default_branch }}"
+            FILES_TABLE=$(git diff --numstat "origin/$BASE..HEAD" 2>/dev/null \
+              | awk 'BEGIN{print "| File | +Add | -Del |"; print "|---|---:|---:|"} {print "| `" $3 "` | " $1 " | " $2 " |"}')
+          fi
+
+          # Status emoji + label
+          if [ -n "$PR_URL" ]; then
+            STATUS="✅ Draft PR opened"
+          elif [ "$MAX_TURNS_HIT" = "yes" ]; then
+            STATUS="⏱️ Agent hit max turns without producing changes"
+          elif [ -f /tmp/claude-events.jsonl ] && [ -s /tmp/claude-events.jsonl ]; then
+            STATUS="ℹ️ Agent ran but produced no code changes"
+          else
+            STATUS="❌ Agent did not run successfully"
+          fi
+
+          {
+            echo "## 🛠️ Claude Code Draft-Fix"
+            echo
+            echo "**Repo:** \`$GITHUB_REPOSITORY\`  "
+            echo "**Issue:** [#${ISSUE_NUMBER} — ${ISSUE_TITLE}](${{ github.server_url }}/$GITHUB_REPOSITORY/issues/${ISSUE_NUMBER})  "
+            echo "**Reporter:** @${ISSUE_AUTHOR}  "
+            echo "**Status:** $STATUS"
+            if [ -n "$PR_URL" ]; then
+              echo "  "
+              echo "**Pull request:** $PR_URL  "
+              echo "**Branch:** \`${FIX_BRANCH}\`"
+            fi
+            echo
+            if [ -n "$FILES_TABLE" ]; then
+              echo "### Files changed"
+              echo
+              echo "$FILES_TABLE"
+              echo
+            fi
+            if [ -n "$TOOL_TABLE" ]; then
+              echo "### Agent activity"
+              echo
+              echo "$TOOL_TABLE"
+              echo
+            fi
+            if [ "$MAX_TURNS_HIT" = "yes" ]; then
+              echo "> ⚠️ The agent hit the 50-turn cap before producing a fix. Consider bumping \`--max-turns\` or pre-installing more dependencies."
+              echo
+            fi
+            echo "<details><summary>Claude Code stderr (last 80 lines)</summary>"
+            echo
+            echo '\`\`\`'
+            tail -80 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr captured)"
+            echo '\`\`\`'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
