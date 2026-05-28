@@ -334,10 +334,16 @@ jobs:
       - name: Detect changes
         id: changes
         run: |
-          if git diff --quiet HEAD && git diff --cached --quiet HEAD && [ -z "$(git status --porcelain)" ] && [ -z "$(git log origin/${{ github.event.repository.default_branch }}..HEAD 2>/dev/null)" ]; then
+          BASE_REF="origin/${{ github.event.repository.default_branch }}"
+          # Squash anything Claude did (commits and/or working-tree changes)
+          # back down to a single delta from the base branch, so the
+          # protected-paths revert below is guaranteed to take effect.
+          # --mixed: keep working tree, reset index + HEAD.
+          git reset --mixed "$BASE_REF" 2>/dev/null || true
+
+          if git diff --quiet HEAD && [ -z "$(git status --porcelain)" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
-            # Stage any unstaged modifications and amend into a commit if needed
             if [ -n "$(git status --porcelain)" ]; then
               # Defensive guard: revert any changes the agent made to
               # workflow/config dirs. The prompt forbids these but tools
@@ -345,7 +351,12 @@ jobs:
               # them anyway. Without this revert, GitHub rejects the push:
               # "refusing to allow a GitHub App to create or update workflow
               # ... without `workflows` permission".
-              git checkout -- .github/workflows .github/agents .github/aw .github/docker 2>/dev/null || true
+              # Revert any changes to protected paths to the base branch state.
+              # The GITHUB_TOKEN deliberately lacks `workflows: write`, so any
+              # change under these dirs would be rejected on push.
+              git checkout "$BASE_REF" -- .github/workflows .github/agents .github/aw .github/docker 2>/dev/null || true
+              # Also drop any net-new files in those dirs that the reset did not touch.
+              git clean -fd .github/workflows .github/agents .github/aw .github/docker 2>/dev/null || true
               # The symlink at frontend/node_modules is registered in
               # .git/info/exclude by the link step, so `git add -A` skips it.
               git add -A
