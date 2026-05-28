@@ -252,6 +252,23 @@ class TestNormalizeDevice:
         assert result["frequency"] == "5GHz"
         assert result["signal_bars"] == 4
 
+    def test_derives_frequency_band_from_mhz(self):
+        """Should bucket frequency_mhz into 2.4GHz / 5GHz / 6GHz bands."""
+        cases = [
+            (2412, "2.4GHz"),
+            (2462, "2.4GHz"),
+            (5200, "5GHz"),
+            (5805, "5GHz"),
+            (5925, "6GHz"),
+            (6175, "6GHz"),
+            (7115, "6GHz"),
+        ]
+        for freq_mhz, expected in cases:
+            raw = {"url": "/devices/1", "connectivity": {"frequency": freq_mhz}}
+            assert normalize_device(raw)["frequency"] == expected, (
+                f"{freq_mhz} MHz should map to {expected}"
+            )
+
     def test_extracts_source_eero(self):
         """Should extract connected eero info from source."""
         raw = {
