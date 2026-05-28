@@ -70,6 +70,14 @@ jobs:
       github.event.issue.state == 'open'
 
     runs-on: ubuntu-latest
+    container:
+      # Pre-baked image with Node, Python, Claude Code CLI, gh CLI, jq,
+      # AND the repo's deps. Built by .github/workflows/build-draft-fix-image.yml.
+      # GITHUB_TOKEN is used to pull from GHCR (per-run, repo-scoped).
+      image: ghcr.io/${{ github.repository_owner }}/eero-ui-draft-fix:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 15
 
     env:
@@ -111,21 +119,24 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: 22
+      - name: Link or refresh frontend node_modules
+        # If the workspace's frontend/package-lock.json matches what the
+        # image was built against, just symlink the pre-installed
+        # node_modules — instant. If they differ, fall back to `npm ci`
+        # (slower but correct).
+        run: |
+          if [ -f frontend/package-lock.json ] && [ -f /opt/frontend/package-lock.json ] \
+             && diff -q frontend/package-lock.json /opt/frontend/package-lock.json > /dev/null 2>&1; then
+            echo "lockfile matches image — symlinking pre-installed node_modules"
+            ln -s /opt/frontend/node_modules frontend/node_modules
+          else
+            echo "lockfile mismatch (or no image cache) — running npm ci"
+            (cd frontend && npm ci --no-audit --no-fund --prefer-offline)
+          fi
 
-      - name: Install Claude Code CLI
-        # The CLI honours CLAUDE_CODE_OAUTH_TOKEN env var directly, bypassing
-        # the broken SDK auth path in claude-code-action@v1.
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Cache npm + install project dependencies
-        # Pre-install node_modules so Claude doesn't burn turns on
-        # `npm install`. setup-node already enabled caching above.
-        if: hashFiles('package-lock.json') != ''
-        run: npm ci --no-audit --no-fund --prefer-offline
+      - name: Register checked-out backend project (deps already in image)
+        run: |
+          python3 -m pip install --break-system-packages --no-deps -e backend || true
 
       - name: Configure git identity
         # The next step pins the git author to the github-actions bot so
@@ -214,12 +225,16 @@ jobs:
              scope — no refactoring of unrelated code, no new features.
           3. Add or update a test that fails before your fix and passes after.
              Follow existing test conventions in this repo.
-          4. Commit your changes (small, focused commits). Do NOT push and do
-             NOT open a PR — a later step does that. Just make the code changes
-             and commit them locally. Do NOT run the test suite or linter —
-             a maintainer will validate on review (saves agent turns, lets
-             you focus on the patch itself).
-          5. End your final response with a structured summary in this format:
+          4. Run the local test command (`npm test (frontend) and pytest (backend)`) and the linter
+             (`npm run lint (frontend) and ruff check . (backend)`). Dependencies are pre-installed in the
+             container image, so tests should start immediately. If a test
+             fails because of your change, iterate. If a pre-existing test
+             fails unrelated to your change, note it in the summary and
+             move on.
+          5. Commit your changes (small, focused commits). Do NOT push and do
+             NOT open a PR — a later step does that. Just make the code
+             changes and commit them locally.
+          6. End your final response with a structured summary in this format:
 
              ```
              ## Summary
@@ -228,11 +243,14 @@ jobs:
              ## Files changed
              - path/to/file: <brief note>
 
+             ## Tests
+             <result of running the test/lint commands>
+
              ## Reviewer notes
              - <anything a reviewer should pay extra attention to>
              ```
 
-          6. If after investigating you genuinely cannot determine a safe fix,
+          7. If after investigating you genuinely cannot determine a safe fix,
              do NOT make code changes. Just provide a summary explaining what
              you looked at, what you tried, and what's missing. The later step
              will open a draft PR with just the investigation note.
@@ -290,7 +308,7 @@ jobs:
           cat /tmp/prompt/full.md | claude \
             --print \
             --model opus \
-            --max-turns 50 \
+            --max-turns 60 \
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(yarn:*),Bash(pnpm:*),Bash(tsc:*),Bash(eslint:*),Bash(prettier:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(find:*),Bash(echo:*),Bash(mkdir:*),Bash(rm:*),Bash(mv:*),Bash(cp:*)" \
             --output-format stream-json \
             --verbose \

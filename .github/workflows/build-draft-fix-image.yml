@@ -1,0 +1,69 @@
+# Build the draft-fix runtime image and push to GHCR.
+#
+# Triggers:
+#   - push to master that touches the Dockerfile, frontend/package*.json,
+#     or backend/pyproject.toml
+#   - weekly schedule (refresh transitive dep versions + base image)
+#   - manual workflow_dispatch
+#
+# Image: ghcr.io/fulviofreitas/eero-ui-draft-fix:latest
+# Consumed by .github/workflows/draft-fix.yml via the `container:` key.
+#
+# Security: only secrets.GITHUB_TOKEN used for registry auth.
+
+name: Build Draft-Fix Image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/docker/draft-fix.Dockerfile'
+      - '.github/workflows/build-draft-fix-image.yml'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'backend/pyproject.toml'
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: build-draft-fix-image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: .github/docker/draft-fix.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/eero-ui-draft-fix:latest
+            ghcr.io/${{ github.repository_owner }}/eero-ui-draft-fix:${{ github.sha }}
+          cache-from: type=gha,scope=draft-fix
+          cache-to: type=gha,scope=draft-fix,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Pre-baked tooling + deps for the draft-fix agent workflow on eero-ui.
+            org.opencontainers.image.licenses=MIT
