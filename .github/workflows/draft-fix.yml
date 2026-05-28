@@ -70,6 +70,9 @@ jobs:
       github.event.issue.state == 'open'
 
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     container:
       # Pre-baked image with Node, Python, Claude Code CLI, gh CLI, jq,
       # AND the repo's deps. Built by .github/workflows/build-draft-fix-image.yml.
