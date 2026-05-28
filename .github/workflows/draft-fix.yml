@@ -121,6 +121,12 @@ jobs:
         # the broken SDK auth path in claude-code-action@v1.
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Cache npm + install project dependencies
+        # Pre-install node_modules so Claude doesn't burn turns on
+        # `npm install`. setup-node already enabled caching above.
+        if: hashFiles('package-lock.json') != ''
+        run: npm ci --no-audit --no-fund --prefer-offline
+
       - name: Configure git identity
         # Identifies AI-generated commits clearly. The bot has no GitHub
         # account so commits will show as unverified — that's intentional;
@@ -270,15 +276,30 @@ jobs:
           wc -c /tmp/prompt/full.md
           echo "--- token presence (length only) ---"
           echo "CLAUDE_CODE_OAUTH_TOKEN length: ${#CLAUDE_CODE_OAUTH_TOKEN}"
-          echo "--- claude run (streaming) ---"
+          echo "--- claude run (stream-json to /tmp/claude-events.jsonl, summary streamed below) ---"
+          # stream-json + --verbose emits one JSON event per message/turn.
+          # We capture the full event stream to a file and tee a compact
+          # human-readable summary to stdout so the live Actions log shows
+          # per-turn progress (tool name + short description) without
+          # dumping all the JSON.
           cat /tmp/prompt/full.md | claude \
             --print \
             --model opus \
             --max-turns 50 \
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(yarn:*),Bash(pnpm:*),Bash(tsc:*),Bash(eslint:*),Bash(prettier:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(grep:*),Bash(find:*),Bash(echo:*),Bash(mkdir:*),Bash(rm:*),Bash(mv:*),Bash(cp:*)" \
-            2>&1 | tee /tmp/claude-output.txt
-          echo "--- claude exit: $? ---"
-
+            --output-format stream-json \
+            --verbose \
+            2> /tmp/claude-stderr.log \
+            | tee /tmp/claude-events.jsonl \
+            | jq -r --unbuffered 'select(.type=="assistant" or .type=="user" or .type=="result") | (.type + " :: " + (try (.message.content[0].text // .message.content[0].name // .message.content[0].input.command // .result // "(no preview)") | tostring | .[0:200]))' || true
+          echo "--- claude exit code: ${PIPESTATUS[1]} ---"
+          echo "--- claude stderr (last 50 lines) ---"
+          tail -50 /tmp/claude-stderr.log || true
+          # Render a "what happened" summary from the JSONL events
+          echo "--- session summary ---"
+          jq -s 'group_by(.type) | map({type: .[0].type, count: length})' /tmp/claude-events.jsonl 2>/dev/null || echo "(no events captured)"
+          echo "--- tool calls ---"
+          jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | "\(.name): \(.input | tostring | .[0:120])"' /tmp/claude-events.jsonl 2>/dev/null | head -60 || true
       - name: Detect changes
         id: changes
         run: |
