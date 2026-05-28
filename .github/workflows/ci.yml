@@ -13,6 +13,10 @@ on:
   push:
     branches: [master]
   pull_request:
+    # Include ready_for_review so CI runs when a draft PR is promoted to
+    # ready (opened/synchronize/reopened are the default types — specifying
+    # any types here replaces the default, so they all need to be listed).
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [master]
   workflow_dispatch:
 

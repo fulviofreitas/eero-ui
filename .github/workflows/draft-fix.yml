@@ -412,10 +412,30 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Mint App token for branch push + PR creation
+        # PRs created using ${{ secrets.GITHUB_TOKEN }} do NOT trigger
+        # downstream workflows (GitHub anti-recursion policy). Mint a
+        # short-lived token from the renovate GitHub App, scoped to THIS
+        # repo, and use it for `git push` + `gh pr create`. The PR then
+        # has an App actor and CI fires on `pull_request.opened`.
+        # Everything else (issue comments, etc.) keeps using GITHUB_TOKEN.
+        id: pr_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
       - name: Push and open draft PR
         if: steps.changes.outputs.has_changes == 'true'
+        env:
+          # Use the App-scoped token (NOT GITHUB_TOKEN) for git push and
+          # gh pr create so the PR event has an App actor and CI fires.
+          GH_TOKEN: ${{ steps.pr_token.outputs.token }}
+          PR_TOKEN: ${{ steps.pr_token.outputs.token }}
         run: |
-          git push -u origin "$FIX_BRANCH"
+          git push -u "https://x-access-token:${PR_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$FIX_BRANCH":"$FIX_BRANCH"
           # Build PR body from Claude's summary
           {
             echo "Fixes #${ISSUE_NUMBER}"
