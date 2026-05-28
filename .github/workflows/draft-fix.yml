@@ -339,6 +339,13 @@ jobs:
           else
             # Stage any unstaged modifications and amend into a commit if needed
             if [ -n "$(git status --porcelain)" ]; then
+              # Defensive guard: revert any changes the agent made to
+              # workflow/config dirs. The prompt forbids these but tools
+              # the agent runs (auto-formatters, compile passes) may touch
+              # them anyway. Without this revert, GitHub rejects the push:
+              # "refusing to allow a GitHub App to create or update workflow
+              # ... without `workflows` permission".
+              git checkout -- .github/workflows .github/agents .github/aw .github/docker 2>/dev/null || true
               # The symlink at frontend/node_modules is registered in
               # .git/info/exclude by the link step, so `git add -A` skips it.
               git add -A
