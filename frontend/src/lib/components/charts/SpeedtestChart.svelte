@@ -5,7 +5,7 @@
   Includes time range selector for 24h, 7d, or 30d views.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
 	import { getSpeedtestHistory } from '$lib/api/metrics';
 
@@ -13,8 +13,7 @@
 		networkId: string;
 	}
 
-	// networkId will be used in future for network-specific filtering
-	let { networkId: _networkId }: Props = $props();
+	let { networkId }: Props = $props();
 
 	let timeRange: '24h' | '7d' | '30d' = $state('24h');
 	let loading = $state(true);
@@ -75,7 +74,12 @@
 			const start = getStartTime(timeRange, now);
 			const step = getStep(timeRange);
 
-			const data = await getSpeedtestHistory(start.toISOString(), now.toISOString(), step);
+			const data = await getSpeedtestHistory(
+				start.toISOString(),
+				now.toISOString(),
+				step,
+				networkId
+			);
 
 			downloadData = data.download;
 			uploadData = data.upload;
@@ -91,8 +95,11 @@
 		loadData();
 	}
 
-	onMount(() => {
-		loadData();
+	$effect(() => {
+		// Reload when the parent switches networks; do not retrigger on
+		// timeRange changes (those are handled via setTimeRange).
+		networkId;
+		untrack(() => loadData());
 	});
 </script>
 

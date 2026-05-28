@@ -12,6 +12,11 @@ router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
 
 
+def _escape_label_value(value: str) -> str:
+    """Escape a PromQL label value (backslash and double-quote)."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 @router.get("/health")
 async def metrics_health() -> dict[str, Any]:
     """Check health of metrics infrastructure.
@@ -95,25 +100,43 @@ async def get_speedtest_history(
     start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("5m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Optional network ID to scope the query"
+    ),
 ) -> dict[str, Any]:
     """Get speedtest history for charts.
 
-    Returns download and upload speeds over time.
+    Returns download and upload speeds over time. When ``network_id`` is
+    supplied, the underlying PromQL is filtered by the exporter's
+    ``network_id`` label so accounts with multiple networks see data for
+    only the requested network.
 
     Args:
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
+        network_id: Optional network identifier used to scope the query.
 
     Returns:
         Download and upload speed history.
     """
+    # The eero-prometheus-exporter labels speed metrics with network_id, so
+    # an unfiltered query for an account with multiple networks returns one
+    # series per network. Downstream consumers typically pick result[0],
+    # which can surface data from the wrong network (issue #201).
+    download_query = "eero_speed_download_mbps"
+    upload_query = "eero_speed_upload_mbps"
+    if network_id:
+        safe_network_id = _escape_label_value(network_id)
+        download_query = f'eero_speed_download_mbps{{network_id="{safe_network_id}"}}'
+        upload_query = f'eero_speed_upload_mbps{{network_id="{safe_network_id}"}}'
+
     try:
         download = await victoria_client.query_range(
-            "eero_speed_download_mbps", start, end, step
+            download_query, start, end, step
         )
         upload = await victoria_client.query_range(
-            "eero_speed_upload_mbps", start, end, step
+            upload_query, start, end, step
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:
