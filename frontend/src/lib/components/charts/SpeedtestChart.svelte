@@ -13,8 +13,7 @@
 		networkId: string;
 	}
 
-	// networkId will be used in future for network-specific filtering
-	let { networkId: _networkId }: Props = $props();
+	let { networkId }: Props = $props();
 
 	let timeRange: '24h' | '7d' | '30d' = $state('24h');
 	let loading = $state(true);
@@ -75,7 +74,12 @@
 			const start = getStartTime(timeRange, now);
 			const step = getStep(timeRange);
 
-			const data = await getSpeedtestHistory(start.toISOString(), now.toISOString(), step);
+			const data = await getSpeedtestHistory(
+				start.toISOString(),
+				now.toISOString(),
+				step,
+				networkId
+			);
 
 			downloadData = data.download;
 			uploadData = data.upload;

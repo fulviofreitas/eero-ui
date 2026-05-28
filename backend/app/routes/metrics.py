@@ -95,25 +95,32 @@ async def get_speedtest_history(
     start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("5m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Filter results to a specific network"
+    ),
 ) -> dict[str, Any]:
     """Get speedtest history for charts.
 
-    Returns download and upload speeds over time.
+    Returns download and upload speeds over time. When network_id is
+    provided, results are filtered to that network so multi-network
+    accounts don't see another network's series picked arbitrarily.
 
     Args:
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
+        network_id: Optional network ID to filter the metrics by.
 
     Returns:
         Download and upload speed history.
     """
+    selector = f'{{network_id="{network_id}"}}' if network_id else ""
     try:
         download = await victoria_client.query_range(
-            "eero_speed_download_mbps", start, end, step
+            f"eero_speed_download_mbps{selector}", start, end, step
         )
         upload = await victoria_client.query_range(
-            "eero_speed_upload_mbps", start, end, step
+            f"eero_speed_upload_mbps{selector}", start, end, step
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:

@@ -78,14 +78,18 @@ async function fetchMetrics<T>(path: string, params: Record<string, string>): Pr
 export async function getSpeedtestHistory(
 	start: string,
 	end: string,
-	step = '5m'
+	step = '5m',
+	networkId?: string
 ): Promise<{ download: TimeSeriesPoint[]; upload: TimeSeriesPoint[] }> {
 	try {
-		const response = await fetchMetrics<SpeedtestHistoryResponse>('/metrics/speedtest/history', {
-			start,
-			end,
-			step
-		});
+		const params: Record<string, string> = { start, end, step };
+		if (networkId) {
+			params.network_id = networkId;
+		}
+		const response = await fetchMetrics<SpeedtestHistoryResponse>(
+			'/metrics/speedtest/history',
+			params
+		);
 
 		return {
 			download: transformMetricsResponse(response.download),
