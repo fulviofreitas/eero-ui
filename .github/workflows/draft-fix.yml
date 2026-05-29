@@ -280,12 +280,28 @@ jobs:
              scope — no refactoring of unrelated code, no new features.
           3. Add or update a test that fails before your fix and passes after.
              Follow existing test conventions in this repo.
-          4. Run the local test command (`npm test (frontend) and pytest (backend)`) and the linter
-             (`npm run lint (frontend) and ruff check . (backend)`). Dependencies are pre-installed in the
-             container image, so tests should start immediately. If a test
-             fails because of your change, iterate. If a pre-existing test
-             fails unrelated to your change, note it in the summary and
-             move on.
+          4. **Run tests AND linter — ALL must pass before you commit.** The
+             container image pre-installs all dependencies; these start
+             immediately. Run each command below and verify it exits 0:
+
+             Test commands (run in this order, all must exit 0):
+             - `(cd frontend && npm test)`
+             - `(cd backend && pytest)`
+
+             Lint commands (run AFTER tests pass, all must exit 0):
+             - `(cd frontend && npm run lint)`
+             - `(cd backend && ruff check .)`
+
+             Iteration policy:
+             - If a test fails because of your change → fix it. Iterate.
+             - If a lint failure is in code YOU touched → fix it. Iterate.
+             - If a pre-existing failure is in code you did NOT touch and
+               is unrelated to your change → state this explicitly in the
+               summary and skip ONLY that specific failure. Do NOT use
+               "pre-existing" as a blanket excuse to skip everything.
+             - If you cannot make your changes pass tests/lint within your
+               remaining turn budget → do NOT commit broken code. Pivot to
+               an investigation-only PR per step 7.
           5. Commit your changes (small, focused commits). Do NOT push and do
              NOT open a PR — a later step does that. Just make the code
              changes and commit them locally.
@@ -407,7 +423,7 @@ jobs:
               # The symlink at frontend/node_modules is registered in
               # .git/info/exclude by the link step, so `git add -A` skips it.
               git add -A
-              git commit -m "Draft fix for issue #${ISSUE_NUMBER}"
+              git commit -m "fix(draft-fix): auto-drafted fix for issue #${ISSUE_NUMBER}"
             fi
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
