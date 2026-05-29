@@ -1,6 +1,7 @@
 """Metrics routes for querying historical data from VictoriaMetrics."""
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -10,6 +11,27 @@ from ..services.victoria import victoria_client
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
+
+# Network IDs from the eero API are alphanumeric with hyphens/underscores.
+# Restrict to that character class before interpolating into PromQL so a
+# crafted network_id can't break out of the label selector.
+_SAFE_NETWORK_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _network_label_selector(network_id: str | None) -> str:
+    """Build a PromQL label selector that scopes a metric to a network.
+
+    Returns an empty string when no network_id is provided so the query
+    behaves as before. Raises 400 if the network_id is malformed.
+    """
+    if not network_id:
+        return ""
+    if not _SAFE_NETWORK_ID.match(network_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid network_id",
+        )
+    return f'{{network_id="{network_id}"}}'
 
 
 @router.get("/health")
@@ -95,25 +117,35 @@ async def get_speedtest_history(
     start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("5m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Scope results to a single network"
+    ),
 ) -> dict[str, Any]:
     """Get speedtest history for charts.
 
     Returns download and upload speeds over time.
 
+    When ``network_id`` is provided, the underlying PromQL is scoped to that
+    network so accounts with multiple networks see only the requested one;
+    otherwise series from all networks are returned and the caller is
+    responsible for picking the relevant one.
+
     Args:
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
+        network_id: Optional network ID to filter by.
 
     Returns:
         Download and upload speed history.
     """
+    selector = _network_label_selector(network_id)
     try:
         download = await victoria_client.query_range(
-            "eero_speed_download_mbps", start, end, step
+            f"eero_speed_download_mbps{selector}", start, end, step
         )
         upload = await victoria_client.query_range(
-            "eero_speed_upload_mbps", start, end, step
+            f"eero_speed_upload_mbps{selector}", start, end, step
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:
