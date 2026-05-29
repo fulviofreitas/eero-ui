@@ -252,6 +252,26 @@ class TestNormalizeDevice:
         assert result["frequency"] == "5GHz"
         assert result["signal_bars"] == 4
 
+    def test_classifies_2_4ghz_band(self):
+        """Frequencies below 4000 MHz should be reported as 2.4GHz."""
+        raw = {"url": "/devices/1", "connectivity": {"frequency": 2437}}
+        assert normalize_device(raw)["frequency"] == "2.4GHz"
+
+    def test_classifies_6ghz_band(self):
+        """Frequencies at or above 5925 MHz should be reported as 6GHz.
+
+        Wi-Fi 6E/7 use the 6 GHz band (5925-7125 MHz). Previously these
+        were mislabeled as 5GHz (see issue #202).
+        """
+        raw = {"url": "/devices/1", "connectivity": {"frequency": 6175}}
+        assert normalize_device(raw)["frequency"] == "6GHz"
+        # Boundary: channel 1 center frequency in the 6 GHz band
+        raw_boundary = {"url": "/devices/1", "connectivity": {"frequency": 5955}}
+        assert normalize_device(raw_boundary)["frequency"] == "6GHz"
+        # Just below the boundary stays on 5 GHz
+        raw_5ghz_top = {"url": "/devices/1", "connectivity": {"frequency": 5825}}
+        assert normalize_device(raw_5ghz_top)["frequency"] == "5GHz"
+
     def test_extracts_source_eero(self):
         """Should extract connected eero info from source."""
         raw = {
