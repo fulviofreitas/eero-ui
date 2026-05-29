@@ -23,7 +23,7 @@ interface DeviceFilters {
 	search: string;
 	status: 'all' | 'connected' | 'disconnected' | 'blocked';
 	connectionType: 'all' | 'wireless' | 'wired';
-	frequency: 'all' | '2.4GHz' | '5GHz';
+	frequency: 'all' | '2.4GHz' | '5GHz' | '6GHz';
 	sortBy:
 		| 'name'
 		| 'ip'
@@ -479,7 +479,8 @@ export const deviceCounts = derived(devicesStore, ($devices) => {
 		wireless: devices.filter((d) => d.wireless && d.connected).length,
 		wired: devices.filter((d) => !d.wireless && d.connected).length,
 		freq24: devices.filter((d) => d.frequency === '2.4GHz' && d.connected).length,
-		freq5: devices.filter((d) => d.frequency === '5GHz' && d.connected).length
+		freq5: devices.filter((d) => d.frequency === '5GHz' && d.connected).length,
+		freq6: devices.filter((d) => d.frequency === '6GHz' && d.connected).length
 	};
 });
 

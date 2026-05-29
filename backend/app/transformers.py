@@ -313,7 +313,14 @@ def normalize_device(raw: dict[str, Any]) -> dict[str, Any]:
         signal_bars = connectivity.get("score_bars")
         frequency_mhz = connectivity.get("frequency")
         if frequency_mhz:
-            frequency = "5GHz" if frequency_mhz > 4000 else "2.4GHz"
+            # WiFi bands per IEEE/FCC: 6 GHz starts at 5925 MHz (Wi-Fi 6E/7),
+            # 5 GHz from ~5150 MHz, 2.4 GHz below that.
+            if frequency_mhz >= 5925:
+                frequency = "6GHz"
+            elif frequency_mhz > 4000:
+                frequency = "5GHz"
+            else:
+                frequency = "2.4GHz"
         rx_bitrate = connectivity.get("rx_bitrate")
         tx_bitrate = connectivity.get("tx_bitrate")
 
