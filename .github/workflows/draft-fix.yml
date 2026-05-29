@@ -452,29 +452,38 @@ jobs:
           PR_TOKEN: ${{ steps.pr_token.outputs.token }}
         run: |
           git push -u "https://x-access-token:${PR_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$FIX_BRANCH":"$FIX_BRANCH"
-          # Build PR body from Claude's summary
+          # Extract the agent's own structured summary from the stream-json
+          # events. Prefer the final "result" event; fall back to the last
+          # assistant text. Placeholder if neither captured.
+          AGENT_SUMMARY=""
+          if [ -f /tmp/claude-events.jsonl ]; then
+            AGENT_SUMMARY=$(jq -rs 'map(select(.type=="result")) | .[-1].result // ""' /tmp/claude-events.jsonl 2>/dev/null || true)
+            if [ -z "$AGENT_SUMMARY" ]; then
+              AGENT_SUMMARY=$(jq -rs '
+                map(select(.type=="assistant"))
+                | .[-1].message.content
+                | map(select(.type=="text"))
+                | .[0].text // ""
+              ' /tmp/claude-events.jsonl 2>/dev/null || true)
+            fi
+          fi
+          if [ -z "$AGENT_SUMMARY" ]; then
+            AGENT_SUMMARY="_(No agent summary captured. See the Actions run for what was done.)_"
+          fi
+
+          # Build PR body: closes the issue + agent's structured summary +
+          # footer disclaimer. stderr / tool-call dumps now live in the
+          # step summary (run page), not in the PR description.
           {
-            echo "Fixes #${ISSUE_NUMBER}"
+            echo "Closes #${ISSUE_NUMBER}"
             echo
-            echo "_This is a DRAFT pull request opened automatically by the draft-fix workflow in response to the \`try-fix\` label. A maintainer will review before anything ships._"
+            echo "$AGENT_SUMMARY"
             echo
-            echo "<details><summary>Agent session — stderr tail</summary>"
+            echo "---"
             echo
-            echo '```'
-            tail -120 /tmp/claude-stderr.log 2>/dev/null || echo "(no stderr captured)"
-            echo '```'
+            echo "_This is a DRAFT pull request opened automatically by the draft-fix workflow in response to the \`try-fix\` label on issue #${ISSUE_NUMBER}. A maintainer will review before anything ships._"
             echo
-            echo "</details>"
-            echo
-            echo "<details><summary>Tool call summary</summary>"
-            echo
-            echo '```'
-            jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | "\(.name): \(.input | tostring | .[0:140])"' /tmp/claude-events.jsonl 2>/dev/null | head -80 || echo "(no events)"
-            echo '```'
-            echo
-            echo "</details>"
-            echo
-            echo "[Actions run](${RUN_URL})"
+            echo "_[Workflow run](${RUN_URL}) · [Issue #${ISSUE_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER})_"
           } > /tmp/pr-body.md
           gh pr create \
             --draft \
