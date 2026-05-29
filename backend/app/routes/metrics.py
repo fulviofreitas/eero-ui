@@ -90,30 +90,50 @@ async def query_range(
         )
 
 
+def _network_label_selector(network_id: str | None) -> str:
+    """Build a PromQL label selector restricting metrics to a network.
+
+    Returns an empty string when ``network_id`` is not provided so callers
+    keep backwards-compatible (unfiltered) behavior.
+    """
+    if not network_id:
+        return ""
+    # Escape double quotes and backslashes to prevent label-selector injection.
+    escaped = network_id.replace("\\", "\\\\").replace('"', '\\"')
+    return f'{{network_id="{escaped}"}}'
+
+
 @router.get("/speedtest/history")
 async def get_speedtest_history(
     start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("5m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Restrict results to a specific network"
+    ),
 ) -> dict[str, Any]:
     """Get speedtest history for charts.
 
-    Returns download and upload speeds over time.
+    Returns download and upload speeds over time for the requested network.
+    When ``network_id`` is omitted the query is unfiltered (backwards
+    compatible) which may interleave data from multiple networks.
 
     Args:
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
+        network_id: Optional network identifier used to filter the series.
 
     Returns:
         Download and upload speed history.
     """
+    selector = _network_label_selector(network_id)
     try:
         download = await victoria_client.query_range(
-            "eero_speed_download_mbps", start, end, step
+            f"eero_speed_download_mbps{selector}", start, end, step
         )
         upload = await victoria_client.query_range(
-            "eero_speed_upload_mbps", start, end, step
+            f"eero_speed_upload_mbps{selector}", start, end, step
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:
