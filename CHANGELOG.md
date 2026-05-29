@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.15.3](https://github.com/fulviofreitas/eero-ui/compare/v4.15.2...v4.15.3) (2026-05-29)
+
+### 🐛 Bug Fixes
+
+* **draft-fix:** auto-drafted fix for issue [#201](https://github.com/fulviofreitas/eero-ui/issues/201) ([#223](https://github.com/fulviofreitas/eero-ui/issues/223)) ([2e67f11](https://github.com/fulviofreitas/eero-ui/commit/2e67f11a64cc86b857622a3c9e5997587f8961da))
+
+### 📚 Documentation
+
+* **wiki:** document all environment variables and metrics storage ([e20cd10](https://github.com/fulviofreitas/eero-ui/commit/e20cd1034b89991b34a72d670e5d56eeaef57ff9))
+
 ## [4.15.2](https://github.com/fulviofreitas/eero-ui/compare/v4.15.1...v4.15.2) (2026-05-22)
 
 ### 🐛 Bug Fixes
