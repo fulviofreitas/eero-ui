@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.15.6](https://github.com/fulviofreitas/eero-ui/compare/v4.15.5...v4.15.6) (2026-06-22)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump idna from 3.11 to 3.15 in /backend ([1a162c1](https://github.com/fulviofreitas/eero-ui/commit/1a162c1604580fe90055fb1e8656386495dff058))
+
 ## [4.15.5](https://github.com/fulviofreitas/eero-ui/compare/v4.15.4...v4.15.5) (2026-06-22)
 
 ### 🐛 Bug Fixes
