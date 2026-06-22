@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [4.15.5](https://github.com/fulviofreitas/eero-ui/compare/v4.15.4...v4.15.5) (2026-06-22)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump undici from 7.25.0 to 7.28.0 in /frontend ([f1ac64c](https://github.com/fulviofreitas/eero-ui/commit/f1ac64cbfaad40a88ff8029b02c64be340f2c286))
+* **deps:** bump aiohttp from 3.13.5 to 3.14.1 in /backend ([b6f813f](https://github.com/fulviofreitas/eero-ui/commit/b6f813f9043754861c35cb2ed9c6fce49a47d7a6))
+* **deps:** bump cryptography from 46.0.7 to 48.0.1 in /backend ([9c04527](https://github.com/fulviofreitas/eero-ui/commit/9c04527e02b80d2d55ab8e4137337e6695baa609))
+* **deps:** bump starlette from 0.50.0 to 1.3.1 in /backend ([0d894e2](https://github.com/fulviofreitas/eero-ui/commit/0d894e2a8365c659b893eb7271c8c09122f2c06a))
+
 ## [4.15.4](https://github.com/fulviofreitas/eero-ui/compare/v4.15.3...v4.15.4) (2026-05-29)
 
 ### 🐛 Bug Fixes

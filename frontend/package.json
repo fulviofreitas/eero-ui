@@ -1,6 +1,6 @@
 {
 	"name": "eero-ui",
-	"version": "4.15.4",
+	"version": "4.15.5",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -36,7 +36,7 @@
 		"jsdom": "^29.0.0",
 		"msw": "^2.2.0",
 		"prettier": "^3.2.0",
-		"prettier-plugin-svelte": "^3.1.0",
+		"prettier-plugin-svelte": "^4.0.0",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",
 		"tslib": "^2.6.0",
