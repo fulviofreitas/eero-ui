@@ -1,6 +1,6 @@
 {
 	"name": "eero-ui",
-	"version": "4.15.6",
+	"version": "5.0.0",
 	"private": true,
 	"type": "module",
 	"scripts": {

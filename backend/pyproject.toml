@@ -1,6 +1,6 @@
 [project]
 name = "eero-ui-backend"
-version = "4.15.6"
+version = "5.0.0"
 description = "FastAPI backend for the Eero UI Dashboard"
 requires-python = ">=3.12"
 license = { text = "MIT" }

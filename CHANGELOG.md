@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.0.0](https://github.com/fulviofreitas/eero-ui/compare/v4.15.6...v5.0.0) (2026-07-07)
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* fix(deps): regenerate lockfile to fix missing @types/d3-color entry
+* **deps:** eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* style: fix prettier formatting in StatusBadge.svelte
+
+* fix(deps): downgrade cookie override to ^0.7.0 for SvelteKit compatibility
+* eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* style: fix prettier formatting in StatusBadge.svelte
+* eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+* **deps:** fixes required. All 171 backend tests pass.
+
+### ✨ Features
+
+* **deps:** update eero-prometheus-exporter to 3.18.3 ([8b8e91b](https://github.com/fulviofreitas/eero-ui/commit/8b8e91b97ebac6584b380b8c83b07f84c5291a3e))
+* **deps:** upgrade eero-api to 5.0.0 and eero-prometheus-exporter to 3.18.0 ([2490d57](https://github.com/fulviofreitas/eero-ui/commit/2490d57386ff5fcf14c45658075fde45854d87eb)), closes [#241](https://github.com/fulviofreitas/eero-ui/issues/241) [#256](https://github.com/fulviofreitas/eero-ui/issues/256)
+* upgrade eero-api to v5.0.0 and eero-prometheus-exporter to v3.18.0 ([#296](https://github.com/fulviofreitas/eero-ui/issues/296)) ([08b42e3](https://github.com/fulviofreitas/eero-ui/commit/08b42e35b238f9a3518271eec1b66601147112d0))
+
+### 🐛 Bug Fixes
+
+* **deps:** downgrade cookie override to ^0.7.0 for SvelteKit compatibility ([#298](https://github.com/fulviofreitas/eero-ui/issues/298)) ([eb40244](https://github.com/fulviofreitas/eero-ui/commit/eb40244abfeaa094e6450e21b480ac8dc58af019))
+* **deps:** regenerate lockfile to fix missing @types/d3-color entry ([#299](https://github.com/fulviofreitas/eero-ui/issues/299)) ([2357bbd](https://github.com/fulviofreitas/eero-ui/commit/2357bbdc92ae793f720350077856b6e5d426aa8e))
+
+### 💄 Styles
+
+* fix prettier formatting in StatusBadge.svelte ([#297](https://github.com/fulviofreitas/eero-ui/issues/297)) ([f860b97](https://github.com/fulviofreitas/eero-ui/commit/f860b97aae541f2bd42385c450a0118ac194cabd))
+
 ## [4.15.6](https://github.com/fulviofreitas/eero-ui/compare/v4.15.5...v4.15.6) (2026-06-22)
 
 ### 🐛 Bug Fixes
