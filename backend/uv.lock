@@ -395,21 +395,21 @@ wheels = [
 
 [[package]]
 name = "eero-api"
-version = "4.2.0"
+version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "keyring" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/ed/bda5ce2ab40ff072f59cece68f196ec0a3130f48a105b638a1cca01c3212/eero_api-4.2.0.tar.gz", hash = "sha256:40002fe8c84b641cc770bbedcde5ce1b78448614274040cbb148b42deaafd6f4", size = 39357, upload-time = "2026-05-18T03:05:00.435Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/75/96/3290bc0f2d21a8a2659d7fc72db702e5daa25eeb595bdef03d74785e3981/eero_api-5.0.0.tar.gz", hash = "sha256:8773873721b57329275bba1ee7cfe56dbc589fe0cf4aa6f5200ddd669b0857de", size = 43266, upload-time = "2026-06-11T13:46:34.929Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/fe/7c4b9defa82c2b2749cea87fc8c26e31ff338ef6f39b5d66e2d2c8fb0f38/eero_api-4.2.0-py3-none-any.whl", hash = "sha256:ef6451651362a103de3e1322cb4e8da61afbb10d6efda3a4cbc7c3c3318ab013", size = 56910, upload-time = "2026-05-18T03:04:59.351Z" },
+    { url = "https://files.pythonhosted.org/packages/10/af/d86b0dfb5bff0c29a30c963c6da46de0385ca738f9c23693b9ec7ba7407e/eero_api-5.0.0-py3-none-any.whl", hash = "sha256:50d71940f892dea6782f45e445db7a15cb4892f43b763ec12e4c0a1a0aa0a333", size = 60274, upload-time = "2026-06-11T13:46:33.791Z" },
 ]
 
 [[package]]
 name = "eero-prometheus-exporter"
-version = "3.16.2"
+version = "3.18.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eero-api" },
@@ -419,14 +419,14 @@ dependencies = [
     { name = "typer" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/28/ede2f4063414266c601e8e7b2d5762ff726ba29007fc2838da71a29e574c/eero_prometheus_exporter-3.16.2.tar.gz", hash = "sha256:5c6d2a674c2410347774624a4b0a6b4b004b55e2eec9603edac156b929afc40d", size = 45967, upload-time = "2026-05-21T03:09:45.701Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/55/022c8284f6730347a16eabe2ac71e0b9bd7d2ad37ea36097dc211a3f0064/eero_prometheus_exporter-3.18.3.tar.gz", hash = "sha256:aca2e41556a60e9c60a6d23f6feee5eb647f7ccfd6d634eae1fa6a8acbe705e1", size = 45964, upload-time = "2026-06-22T05:31:19.243Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/4d/097dbd592f91108a21669eb166bd479d483b1aca1a7d34610f4d768797df/eero_prometheus_exporter-3.16.2-py3-none-any.whl", hash = "sha256:ae6256a636ff2e901e6644fd8a08d8549c84643d0c50d014d8383f781d232dfe", size = 41918, upload-time = "2026-05-21T03:09:44.496Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/a9/2ef41355e1e0589bb1f4d7ce5ed50f81159ec13648266f4227cfa874ce81/eero_prometheus_exporter-3.18.3-py3-none-any.whl", hash = "sha256:e96a0d06142df78d2f9c074a0a15c1b45996497ea14f1f3bcbaeaed810b19c71", size = 41916, upload-time = "2026-06-22T05:31:18.242Z" },
 ]
 
 [[package]]
 name = "eero-ui-backend"
-version = "4.15.4"
+version = "4.15.6"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -456,8 +456,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", specifier = "==4.2.0" },
-    { name = "eero-prometheus-exporter", specifier = "==3.16.2" },
+    { name = "eero-api", specifier = "==5.0.0" },
+    { name = "eero-prometheus-exporter", specifier = "==3.18.3" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
