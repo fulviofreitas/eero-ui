@@ -5,14 +5,7 @@
 -->
 <script lang="ts">
 	export let status:
-		| 'online'
-		| 'offline'
-		| 'connected'
-		| 'disconnected'
-		| 'blocked'
-		| 'paused'
-		| 'warning'
-		| string;
+		'online' | 'offline' | 'connected' | 'disconnected' | 'blocked' | 'paused' | 'warning' | string;
 	export let showDot: boolean = true;
 	export let size: 'sm' | 'md' = 'md';
 
