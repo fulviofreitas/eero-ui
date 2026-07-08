@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.1.0](https://github.com/fulviofreitas/eero-ui/compare/v5.0.0...v5.1.0) (2026-07-08)
+
+### ✨ Features
+
+* **ui:** add mobile sidebar toggle with hamburger button ([#302](https://github.com/fulviofreitas/eero-ui/issues/302)) ([05a7c98](https://github.com/fulviofreitas/eero-ui/commit/05a7c9839881368a9ad67938c176a2a580302944))
+
 ## [5.0.0](https://github.com/fulviofreitas/eero-ui/compare/v4.15.6...v5.0.0) (2026-07-07)
 
 ### ⚠ BREAKING CHANGES
