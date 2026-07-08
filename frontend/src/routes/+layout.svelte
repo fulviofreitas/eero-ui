@@ -676,8 +676,9 @@
 		color: var(--color-accent);
 	}
 
-	/* Overlay backdrop — only rendered on mobile via {#if} in template */
+	/* Overlay backdrop — hidden on desktop, enabled in mobile media query */
 	.sidebar-overlay {
+		display: none;
 		position: fixed;
 		inset: 0;
 		background: rgba(0, 0, 0, 0.5);
@@ -700,6 +701,10 @@
 
 		.sidebar-toggle {
 			display: flex;
+		}
+
+		.sidebar-overlay {
+			display: block;
 		}
 	}
 </style>
