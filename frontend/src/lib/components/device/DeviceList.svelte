@@ -419,6 +419,13 @@
 				>
 					5 GHz ({$deviceCounts.freq5})
 				</button>
+				<button
+					class="filter-btn"
+					class:active={$deviceFilters.frequency === '6GHz'}
+					on:click={() => handleFrequencyFilter('6GHz')}
+				>
+					6 GHz ({$deviceCounts.freq6})
+				</button>
 			</div>
 		</div>
 	</div>

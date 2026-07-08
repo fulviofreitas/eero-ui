@@ -201,11 +201,12 @@
 		<main class="main-content">
 			<!-- Top bar with account info and network selector -->
 			<div class="top-bar">
-				<!-- Hamburger toggle (mobile only) -->
+				<!-- Hamburger toggle -->
 				<button
 					class="sidebar-toggle"
 					on:click={() => uiStore.toggleSidebar()}
 					aria-label="Toggle navigation"
+					aria-expanded={$sidebarOpen}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
