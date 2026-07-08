@@ -51,6 +51,16 @@ function getInitialTheme(): Theme {
 	return 'dark';
 }
 
+// Persist sidebar state; first-time visitors default open on desktop, closed on mobile
+function getInitialSidebarOpen(): boolean {
+	if (typeof window !== 'undefined') {
+		const saved = localStorage.getItem('eero-ui-sidebar-open');
+		if (saved !== null) return saved === 'true';
+		return window.innerWidth > 768;
+	}
+	return true;
+}
+
 const initialState: UIState = {
 	toasts: [],
 	confirmDialog: null,
@@ -147,13 +157,24 @@ function createUIStore() {
 		},
 
 		/**
-		 * Toggle sidebar
+		 * Initialize sidebar state from localStorage (call on mount)
+		 */
+		initSidebar(): void {
+			const sidebarOpen = getInitialSidebarOpen();
+			update((s) => ({ ...s, sidebarOpen }));
+		},
+
+		/**
+		 * Toggle sidebar and persist preference
 		 */
 		toggleSidebar(): void {
-			update((s) => ({
-				...s,
-				sidebarOpen: !s.sidebarOpen
-			}));
+			update((s) => {
+				const sidebarOpen = !s.sidebarOpen;
+				if (typeof window !== 'undefined') {
+					localStorage.setItem('eero-ui-sidebar-open', String(sidebarOpen));
+				}
+				return { ...s, sidebarOpen };
+			});
 		},
 
 		/**

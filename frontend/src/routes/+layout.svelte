@@ -29,8 +29,8 @@
 	let exporterVersion: string | null = null;
 
 	onMount(async () => {
-		// Initialize theme from localStorage
 		uiStore.initTheme();
+		uiStore.initSidebar();
 
 		// Fetch API version info
 		try {
