@@ -129,7 +129,7 @@
 	</main>
 {:else}
 	<!-- Main app layout -->
-	<div class="app-layout">
+	<div class="app-layout" class:sidebar-open={$sidebarOpen}>
 		<!-- Sidebar overlay (mobile) -->
 		{#if $sidebarOpen}
 			<div
@@ -201,11 +201,12 @@
 		<main class="main-content">
 			<!-- Top bar with account info and network selector -->
 			<div class="top-bar">
-				<!-- Hamburger toggle (mobile only) -->
+				<!-- Hamburger toggle -->
 				<button
 					class="sidebar-toggle"
 					on:click={() => uiStore.toggleSidebar()}
 					aria-label="Toggle navigation"
+					aria-expanded={$sidebarOpen}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -362,6 +363,11 @@
 		left: 0;
 		bottom: 0;
 		z-index: 50;
+		transition: transform var(--transition-normal);
+	}
+
+	.sidebar:not(.open) {
+		transform: translateX(-100%);
 	}
 
 	.sidebar-header {
@@ -473,11 +479,16 @@
 	/* Main content */
 	.main-content {
 		flex: 1;
-		margin-left: 240px;
+		margin-left: 0;
 		min-height: 100vh;
 		overflow-x: auto;
 		display: flex;
 		flex-direction: column;
+		transition: margin-left var(--transition-normal);
+	}
+
+	.app-layout.sidebar-open .main-content {
+		margin-left: 240px;
 	}
 
 	/* Top bar with account and network */
@@ -656,9 +667,9 @@
 		padding-top: var(--space-4);
 	}
 
-	/* Hamburger toggle button — hidden on desktop */
+	/* Hamburger toggle button */
 	.sidebar-toggle {
-		display: none;
+		display: flex;
 		align-items: center;
 		justify-content: center;
 		background: none;
@@ -686,23 +697,12 @@
 	}
 
 	@media (max-width: 768px) {
-		.sidebar {
-			transform: translateX(-100%);
-			transition: transform var(--transition-normal);
-		}
-
-		.sidebar.open {
-			transform: translateX(0);
-		}
-
-		.main-content {
+		/* Sidebar overlays content on mobile — never push the main content */
+		.app-layout.sidebar-open .main-content {
 			margin-left: 0;
 		}
 
-		.sidebar-toggle {
-			display: flex;
-		}
-
+		/* Show overlay backdrop on mobile when sidebar is open */
 		.sidebar-overlay {
 			display: block;
 		}
