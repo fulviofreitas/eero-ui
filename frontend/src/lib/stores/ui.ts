@@ -157,6 +157,13 @@ function createUIStore() {
 		},
 
 		/**
+		 * Close sidebar
+		 */
+		closeSidebar(): void {
+			update((s) => ({ ...s, sidebarOpen: false }));
+		},
+
+		/**
 		 * Set global loading state
 		 */
 		setGlobalLoading(loading: boolean): void {

@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import {
 		authStore,
 		isAuthenticated,
@@ -18,7 +18,7 @@
 		userName,
 		userRole
 	} from '$stores';
-	import { uiStore, theme } from '$lib/stores/ui';
+	import { uiStore, theme, sidebarOpen } from '$lib/stores/ui';
 	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
@@ -79,6 +79,13 @@
 		{ path: '/topology', label: 'Topology', icon: '🗺️' } // Topology at the end
 	].filter(Boolean) as { path: string; label: string; icon: string }[];
 
+	// Close sidebar on navigation (mobile only)
+	afterNavigate(() => {
+		if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+			uiStore.closeSidebar();
+		}
+	});
+
 	async function handleLogout() {
 		networksStore.clear();
 		await authStore.logout();
@@ -123,8 +130,17 @@
 {:else}
 	<!-- Main app layout -->
 	<div class="app-layout">
+		<!-- Sidebar overlay (mobile) -->
+		{#if $sidebarOpen}
+			<div
+				class="sidebar-overlay"
+				role="presentation"
+				on:click={() => uiStore.closeSidebar()}
+			></div>
+		{/if}
+
 		<!-- Sidebar -->
-		<aside class="sidebar">
+		<aside class="sidebar" class:open={$sidebarOpen}>
 			<div class="sidebar-header">
 				<h1 class="logo">
 					<img src="/logo.png" alt="eero" class="logo-img" />
@@ -185,6 +201,29 @@
 		<main class="main-content">
 			<!-- Top bar with account info and network selector -->
 			<div class="top-bar">
+				<!-- Hamburger toggle (mobile only) -->
+				<button
+					class="sidebar-toggle"
+					on:click={() => uiStore.toggleSidebar()}
+					aria-label="Toggle navigation"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<line x1="3" y1="6" x2="21" y2="6"></line>
+						<line x1="3" y1="12" x2="21" y2="12"></line>
+						<line x1="3" y1="18" x2="21" y2="18"></line>
+					</svg>
+				</button>
+
 				<!-- Account info (left) -->
 				<div class="account-info">
 					{#if $userName || $userEmail}
@@ -617,14 +656,50 @@
 		padding-top: var(--space-4);
 	}
 
+	/* Hamburger toggle button — hidden on desktop */
+	.sidebar-toggle {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: 1px solid var(--color-border-muted);
+		padding: 6px;
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: all var(--transition-fast);
+		flex-shrink: 0;
+	}
+
+	.sidebar-toggle:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
+	/* Overlay backdrop — only rendered on mobile via {#if} in template */
+	.sidebar-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 49;
+	}
+
 	@media (max-width: 768px) {
 		.sidebar {
 			transform: translateX(-100%);
 			transition: transform var(--transition-normal);
 		}
 
+		.sidebar.open {
+			transform: translateX(0);
+		}
+
 		.main-content {
 			margin-left: 0;
+		}
+
+		.sidebar-toggle {
+			display: flex;
 		}
 	}
 </style>
