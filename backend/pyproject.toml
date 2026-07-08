@@ -1,6 +1,6 @@
 [project]
 name = "eero-ui-backend"
-version = "4.15.2"
+version = "5.0.0"
 description = "FastAPI backend for the Eero UI Dashboard"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -12,8 +12,8 @@ dependencies = [
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
     "httpx>=0.28.0",
-    "eero-api==4.2.0",
-    "eero-prometheus-exporter==3.16.2",
+    "eero-api==5.0.0",
+    "eero-prometheus-exporter==3.18.3",
 ]
 
 [project.optional-dependencies]

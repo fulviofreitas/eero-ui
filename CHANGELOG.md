@@ -6,6 +6,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.0.0](https://github.com/fulviofreitas/eero-ui/compare/v4.15.6...v5.0.0) (2026-07-07)
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* fix(deps): regenerate lockfile to fix missing @types/d3-color entry
+* **deps:** eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* style: fix prettier formatting in StatusBadge.svelte
+
+* fix(deps): downgrade cookie override to ^0.7.0 for SvelteKit compatibility
+* eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+
+* style: fix prettier formatting in StatusBadge.svelte
+* eero-api v5.0.0 introduces breaking API changes requiring updated response handling and transformers
+* **deps:** fixes required. All 171 backend tests pass.
+
+### ✨ Features
+
+* **deps:** update eero-prometheus-exporter to 3.18.3 ([8b8e91b](https://github.com/fulviofreitas/eero-ui/commit/8b8e91b97ebac6584b380b8c83b07f84c5291a3e))
+* **deps:** upgrade eero-api to 5.0.0 and eero-prometheus-exporter to 3.18.0 ([2490d57](https://github.com/fulviofreitas/eero-ui/commit/2490d57386ff5fcf14c45658075fde45854d87eb)), closes [#241](https://github.com/fulviofreitas/eero-ui/issues/241) [#256](https://github.com/fulviofreitas/eero-ui/issues/256)
+* upgrade eero-api to v5.0.0 and eero-prometheus-exporter to v3.18.0 ([#296](https://github.com/fulviofreitas/eero-ui/issues/296)) ([08b42e3](https://github.com/fulviofreitas/eero-ui/commit/08b42e35b238f9a3518271eec1b66601147112d0))
+
+### 🐛 Bug Fixes
+
+* **deps:** downgrade cookie override to ^0.7.0 for SvelteKit compatibility ([#298](https://github.com/fulviofreitas/eero-ui/issues/298)) ([eb40244](https://github.com/fulviofreitas/eero-ui/commit/eb40244abfeaa094e6450e21b480ac8dc58af019))
+* **deps:** regenerate lockfile to fix missing @types/d3-color entry ([#299](https://github.com/fulviofreitas/eero-ui/issues/299)) ([2357bbd](https://github.com/fulviofreitas/eero-ui/commit/2357bbdc92ae793f720350077856b6e5d426aa8e))
+
+### 💄 Styles
+
+* fix prettier formatting in StatusBadge.svelte ([#297](https://github.com/fulviofreitas/eero-ui/issues/297)) ([f860b97](https://github.com/fulviofreitas/eero-ui/commit/f860b97aae541f2bd42385c450a0118ac194cabd))
+
+## [4.15.6](https://github.com/fulviofreitas/eero-ui/compare/v4.15.5...v4.15.6) (2026-06-22)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump idna from 3.11 to 3.15 in /backend ([1a162c1](https://github.com/fulviofreitas/eero-ui/commit/1a162c1604580fe90055fb1e8656386495dff058))
+
+## [4.15.5](https://github.com/fulviofreitas/eero-ui/compare/v4.15.4...v4.15.5) (2026-06-22)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump undici from 7.25.0 to 7.28.0 in /frontend ([f1ac64c](https://github.com/fulviofreitas/eero-ui/commit/f1ac64cbfaad40a88ff8029b02c64be340f2c286))
+* **deps:** bump aiohttp from 3.13.5 to 3.14.1 in /backend ([b6f813f](https://github.com/fulviofreitas/eero-ui/commit/b6f813f9043754861c35cb2ed9c6fce49a47d7a6))
+* **deps:** bump cryptography from 46.0.7 to 48.0.1 in /backend ([9c04527](https://github.com/fulviofreitas/eero-ui/commit/9c04527e02b80d2d55ab8e4137337e6695baa609))
+* **deps:** bump starlette from 0.50.0 to 1.3.1 in /backend ([0d894e2](https://github.com/fulviofreitas/eero-ui/commit/0d894e2a8365c659b893eb7271c8c09122f2c06a))
+
+## [4.15.4](https://github.com/fulviofreitas/eero-ui/compare/v4.15.3...v4.15.4) (2026-05-29)
+
+### 🐛 Bug Fixes
+
+* **draft-fix:** auto-drafted fix for issue [#202](https://github.com/fulviofreitas/eero-ui/issues/202) ([#222](https://github.com/fulviofreitas/eero-ui/issues/222)) ([95ce361](https://github.com/fulviofreitas/eero-ui/commit/95ce361c617a5a82f5927ba0fdcd892d96505061))
+
+## [4.15.3](https://github.com/fulviofreitas/eero-ui/compare/v4.15.2...v4.15.3) (2026-05-29)
+
+### 🐛 Bug Fixes
+
+* **draft-fix:** auto-drafted fix for issue [#201](https://github.com/fulviofreitas/eero-ui/issues/201) ([#223](https://github.com/fulviofreitas/eero-ui/issues/223)) ([2e67f11](https://github.com/fulviofreitas/eero-ui/commit/2e67f11a64cc86b857622a3c9e5997587f8961da))
+
+### 📚 Documentation
+
+* **wiki:** document all environment variables and metrics storage ([e20cd10](https://github.com/fulviofreitas/eero-ui/commit/e20cd1034b89991b34a72d670e5d56eeaef57ff9))
+
 ## [4.15.2](https://github.com/fulviofreitas/eero-ui/compare/v4.15.1...v4.15.2) (2026-05-22)
 
 ### 🐛 Bug Fixes
