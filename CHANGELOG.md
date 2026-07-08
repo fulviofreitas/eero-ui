@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.2.0](https://github.com/fulviofreitas/eero-ui/compare/v5.1.0...v5.2.0) (2026-07-08)
+
+### ✨ Features
+
+* **ui:** collapsible sidebar for all viewports ([#305](https://github.com/fulviofreitas/eero-ui/issues/305)) ([710d115](https://github.com/fulviofreitas/eero-ui/commit/710d115fa46593bb1341ec00d989c0ed7b8b2988))
+
+### 🐛 Bug Fixes
+
+* **ui:** persist sidebar state and default closed on mobile ([bfc7d78](https://github.com/fulviofreitas/eero-ui/commit/bfc7d78828dfbf4338d9c29d1167a123b1431c20))
+
 ## [5.1.0](https://github.com/fulviofreitas/eero-ui/compare/v5.0.0...v5.1.0) (2026-07-08)
 
 ### ✨ Features
