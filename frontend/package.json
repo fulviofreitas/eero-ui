@@ -17,7 +17,7 @@
 		"test:coverage": "svelte-kit sync && vitest run --coverage"
 	},
 	"overrides": {
-		"cookie": "^1.0.2",
+		"cookie": "^2.0.0",
 		"esbuild": "^0.28.0"
 	},
 	"devDependencies": {
