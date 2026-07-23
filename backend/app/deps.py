@@ -4,8 +4,8 @@ import logging
 
 # Import eero client from parent package
 import sys
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import Depends, HTTPException, status
 

@@ -1,7 +1,7 @@
 """Eero node routes for the Eero Dashboard."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from eero import EeroClient
@@ -69,9 +69,9 @@ def calculate_uptime_seconds(last_reboot: str | None) -> int | None:
 
         # Ensure timezone aware
         if reboot_time.tzinfo is None:
-            reboot_time = reboot_time.replace(tzinfo=timezone.utc)
+            reboot_time = reboot_time.replace(tzinfo=UTC)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = now - reboot_time
         return int(delta.total_seconds())
     except Exception as e:
