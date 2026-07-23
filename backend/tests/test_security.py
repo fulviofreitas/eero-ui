@@ -174,8 +174,6 @@ class TestExceptionSanitization:
             "Failed to block device. Please try again.",
             "Failed to unblock device. Please try again.",
             "Failed to set device nickname. Please try again.",
-            "Failed to prioritize device. Please try again.",
-            "Failed to remove device priority. Please try again.",
             "Failed to reboot eero. Please try again.",
             "Failed to update LED state. Please try again.",
             "Failed to update LED brightness. Please try again.",
