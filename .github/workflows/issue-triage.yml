@@ -1,0 +1,25 @@
+# Delegates to the shared reusable workflow in fulviofreitas/workflow-arsenal.
+# All triage logic (LLM call, label safety caps, App-authored writes) lives
+# there — this file only wires up the repo-specific inputs.
+
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  models: read
+
+jobs:
+  triage:
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/agentic-triage.yml@master
+    with:
+      allowed_labels: 'bug,documentation,enhancement,feature,javascript,question,good first issue,help wanted,critical,security,try-fix,needs-review'
+      stack_description: 'TypeScript/JavaScript web UI on top of the eero-api SDK; Docker/Compose/K8s deployment'
+    secrets:
+      RENOVATE_APP_ID: ${{ secrets.RENOVATE_APP_ID }}
+      RENOVATE_APP_PRIVATE_KEY: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
