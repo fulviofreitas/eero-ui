@@ -129,6 +129,25 @@
     },
 
     // ==========================================================================
+    // 🔒 cookie: cap at <2.0.0 until SvelteKit supports cookie 2.x
+    // ==========================================================================
+    // cookie 2.0.0 is ESM-only and renamed `parse`/`serialize` to
+    // `parseCookie`/`stringifySetCookie`. SvelteKit's adapter still emits
+    // `import { parse, serialize } from "cookie"`, so the prod build fails
+    // (see PR #320 → reverted in #344). SvelteKit 2.70.1 (latest as of
+    // 2026-07-24) still transitively declares cookie ^0.6.0.
+    //
+    // We keep the override at ^1.0.2 (CVE-2024-47764 safe, SvelteKit-compat).
+    // Revisit when SvelteKit ships a release that consumes cookie 2.x.
+    {
+      matchPackageNames: ["cookie"],
+      matchManagers: ["npm"],
+      allowedVersions: "<2.0.0",
+      description: "Block cookie 2.x — SvelteKit adapter still uses removed named exports",
+      addLabels: ["blocked-upstream"],
+    },
+
+    // ==========================================================================
     // 🟢 eero-packages - Internal dependencies (GROUPED to resolve conflicts)
     // ==========================================================================
     // eero-prometheus-exporter depends on eero-api, so they MUST be updated
