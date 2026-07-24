@@ -58,3 +58,19 @@ include = ["app*"]
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff.lint]
+ignore = [
+    # FastAPI dependency-injection idiom: Depends/Query/Body/etc. in argument
+    # defaults is the framework's standard pattern; extend-immutable-calls
+    # would also work but this is one-line and covers all call sites.
+    "B008",
+    # The backend intentionally uses `except Exception:` at logging/boundary
+    # sites (version lookups, session sync, per-device processing) to
+    # log-and-continue on unexpected upstream errors.
+    "BLE001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# strptime is followed by an explicit tz assignment; DTZ007 is a false positive.
+"app/routes/eeros.py" = ["DTZ007"]
