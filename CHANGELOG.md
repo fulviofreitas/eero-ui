@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.2.3](https://github.com/fulviofreitas/eero-ui/compare/v5.2.2...v5.2.3) (2026-07-24)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump brace-expansion from 5.0.5 to 5.0.7 in /frontend ([#333](https://github.com/fulviofreitas/eero-ui/issues/333)) ([09b5d2d](https://github.com/fulviofreitas/eero-ui/commit/09b5d2d78fbb3d521b22c15ff53f519515b7c9ef))
+
+### ♻️ Refactoring
+
+* **ci:** migrate issue-triage and draft-fix to workflow-arsenal reusables ([e4e46c3](https://github.com/fulviofreitas/eero-ui/commit/e4e46c34450502aacb91a49906b45ead0c9bc029))
+
 ## [5.2.2](https://github.com/fulviofreitas/eero-ui/compare/v5.2.1...v5.2.2) (2026-07-21)
 
 ### 🐛 Bug Fixes
