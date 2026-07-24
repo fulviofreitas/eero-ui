@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.3.0](https://github.com/fulviofreitas/eero-ui/compare/v5.2.4...v5.3.0) (2026-07-24)
+
+### ✨ Features
+
+* **deps:** bump eero-api to ^6.0.0 and eero-prometheus-exporter to ^3.18.7 ([#345](https://github.com/fulviofreitas/eero-ui/issues/345)) ([9f4594f](https://github.com/fulviofreitas/eero-ui/commit/9f4594f7946adc0ae57a79283c0281d8f83c3fe8)), closes [#338](https://github.com/fulviofreitas/eero-ui/issues/338) [#342](https://github.com/fulviofreitas/eero-ui/issues/342) [#341](https://github.com/fulviofreitas/eero-ui/issues/341) [#331](https://github.com/fulviofreitas/eero-ui/issues/331)
+
 ## [5.2.4](https://github.com/fulviofreitas/eero-ui/compare/v5.2.3...v5.2.4) (2026-07-24)
 
 ### 🐛 Bug Fixes
