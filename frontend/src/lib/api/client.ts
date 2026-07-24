@@ -267,17 +267,6 @@ export const api = {
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/nickname`, {
 				method: 'PUT',
 				body: { nickname }
-			}),
-
-		prioritize: (deviceId: string, durationMinutes = 0) =>
-			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/prioritize`, {
-				method: 'POST',
-				params: { duration_minutes: durationMinutes }
-			}),
-
-		deprioritize: (deviceId: string) =>
-			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/deprioritize`, {
-				method: 'POST'
 			})
 	},
 
