@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.2.4](https://github.com/fulviofreitas/eero-ui/compare/v5.2.3...v5.2.4) (2026-07-24)
+
+### 🐛 Bug Fixes
+
+* **devices:** remove dead prioritize/deprioritize routes ([#338](https://github.com/fulviofreitas/eero-ui/issues/338)) ([#342](https://github.com/fulviofreitas/eero-ui/issues/342)) ([624296e](https://github.com/fulviofreitas/eero-ui/commit/624296eb56f233e7ba6e271e4db0d9b318f2cb56)), closes [fulviofreitas/eero-api#111](https://github.com/fulviofreitas/eero-api/issues/111) [#112](https://github.com/fulviofreitas/eero-ui/issues/112)
+
 ## [5.2.3](https://github.com/fulviofreitas/eero-ui/compare/v5.2.2...v5.2.3) (2026-07-24)
 
 ### 🐛 Bug Fixes
