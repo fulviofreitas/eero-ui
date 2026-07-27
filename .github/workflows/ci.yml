@@ -32,7 +32,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   SEMGREP_RULES_PATH: security-rules
   SARIF_OUTPUT: semgrep.sarif
 
