@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.3.3](https://github.com/fulviofreitas/eero-ui/compare/v5.3.2...v5.3.3) (2026-09-02)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump postcss-selector-parser in /frontend ([#382](https://github.com/fulviofreitas/eero-ui/issues/382)) ([f194e1a](https://github.com/fulviofreitas/eero-ui/commit/f194e1a19c94bee02133d68a3cef02c9201fd41a))
+
 ## [5.3.2](https://github.com/fulviofreitas/eero-ui/compare/v5.3.1...v5.3.2) (2026-08-06)
 
 ### 🐛 Bug Fixes
