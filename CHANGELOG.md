@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.3.4](https://github.com/fulviofreitas/eero-ui/compare/v5.3.3...v5.3.4) (2026-09-11)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump @humanfs/node from 0.16.7 to 0.16.8 in /frontend ([#383](https://github.com/fulviofreitas/eero-ui/issues/383)) ([88d2fdc](https://github.com/fulviofreitas/eero-ui/commit/88d2fdce6541bbd6b95a9fa3292184e1894d060b))
+
 ## [5.3.3](https://github.com/fulviofreitas/eero-ui/compare/v5.3.2...v5.3.3) (2026-09-02)
 
 ### 🐛 Bug Fixes
