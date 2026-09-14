@@ -7,6 +7,8 @@
 	import { uiStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
+	import DnsSettingsCard from '$lib/components/network/DnsSettingsCard.svelte';
+	import DnsCachingCard from '$lib/components/network/DnsCachingCard.svelte';
 
 	let network: NetworkDetail | null = null;
 	let loading = true;
@@ -624,38 +626,9 @@
 			{/if}
 
 			<!-- DNS -->
-			{#if network.dns}
-				<section class="card info-card">
-					<h2>DNS Configuration</h2>
-					<dl class="info-list">
-						<div class="info-row">
-							<dt>Mode</dt>
-							<dd>
-								<span class="badge badge-info">{formatSimpleValue(network.dns.mode)}</span>
-							</dd>
-						</div>
-						<div class="info-row">
-							<dt>Caching</dt>
-							<dd>
-								<span class="badge {network.dns.caching ? 'badge-success' : 'badge-neutral'}">
-									{network.dns.caching ? 'Enabled' : 'Disabled'}
-								</span>
-							</dd>
-						</div>
-						{#if network.dns.parent?.ips}
-							<div class="info-row">
-								<dt>Upstream DNS</dt>
-								<dd class="mono text-sm">{network.dns.parent.ips.join(', ')}</dd>
-							</div>
-						{/if}
-						{#if network.dns.custom?.ips}
-							<div class="info-row">
-								<dt>Custom DNS</dt>
-								<dd class="mono text-sm">{network.dns.custom.ips.join(', ')}</dd>
-							</div>
-						{/if}
-					</dl>
-				</section>
+			{#if networkId}
+				<DnsSettingsCard {networkId} />
+				<DnsCachingCard {networkId} />
 			{/if}
 
 			<!-- Premium DNS -->

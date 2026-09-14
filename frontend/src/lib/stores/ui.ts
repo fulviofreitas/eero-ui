@@ -22,6 +22,8 @@ interface Toast {
 interface ConfirmDialog {
 	title: string;
 	message: string;
+	/** Optional bullet points rendered under the message (e.g. multiple distinct warnings). */
+	details?: string[];
 	confirmText?: string;
 	cancelText?: string;
 	danger?: boolean;

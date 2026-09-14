@@ -1,9 +1,11 @@
 """Network routes for the Eero Dashboard."""
 
+import ipaddress
 import logging
+from typing import Literal
 
 from eero import EeroClient
-from eero.exceptions import EeroAPIException, EeroException
+from eero.exceptions import EeroAPIException, EeroException, EeroValidationException
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -14,6 +16,7 @@ from ..transformers import (
     extract_list,
     normalize_device,
     normalize_dhcp,
+    normalize_dns,
     normalize_eero,
     normalize_network,
 )
@@ -311,6 +314,285 @@ async def toggle_guest_network(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update guest network settings. Please try again.",
         )
+
+
+class DnsFamilyState(BaseModel):
+    """Normalized DNS state for a single address family."""
+
+    mode: Literal["custom", "automatic"]
+    servers: list[str] = []
+
+
+class DnsProvider(BaseModel):
+    """A single entry from the API's DNS test-server catalogue."""
+
+    name: str | None = None
+    ipv4: list[str] = []
+    ipv6: list[str] = []
+
+
+class DnsSettings(BaseModel):
+    """Normalized DNS settings for a network. Shared contract with the frontend."""
+
+    ipv4: DnsFamilyState
+    ipv6: DnsFamilyState
+    caching: bool = False
+    parent_ips: list[str] = []
+    providers: list[DnsProvider] = []
+
+
+class DnsFamilyUpdate(BaseModel):
+    """Requested DNS state for a single address family."""
+
+    mode: Literal["custom", "automatic"]
+    servers: list[str] = []
+
+    class Config:
+        extra = "ignore"
+
+
+class DnsUpdateRequest(BaseModel):
+    """Request body for updating DNS settings.
+
+    A family left as ``None`` is untouched by the update - it is not
+    equivalent to an empty/automatic request for that family.
+    """
+
+    ipv4: DnsFamilyUpdate | None = None
+    ipv6: DnsFamilyUpdate | None = None
+    caching: bool | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class DnsUpdateResponse(BaseModel):
+    """Response body for a DNS update."""
+
+    success: bool
+    changed: bool
+    dns: DnsSettings
+
+
+def _parse_family_servers(
+    field: Literal["ipv4", "ipv6"], servers: list[str]
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Validate DNS server literals for one address family.
+
+    Mirrors the SDK's own validation (``eero.api.dns._validate_servers``) so
+    malformed input is rejected with a 400 before any network round trip,
+    instead of surfacing later as a less specific SDK error.
+
+    Args:
+        field: "ipv4" or "ipv6" - the family this list was submitted under.
+        servers: Candidate DNS server address strings.
+
+    Returns:
+        Parsed, validated IP address objects, in the order supplied.
+
+    Raises:
+        HTTPException: 400 if the list is too long or any entry is not a
+            valid, correctly-versioned IP literal.
+    """
+    expected_version = 4 if field == "ipv4" else 6
+    if len(servers) > 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At most 2 {field} DNS servers are supported (got {len(servers)})",
+        )
+
+    parsed: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for entry in servers:
+        candidate = entry.strip() if isinstance(entry, str) else ""
+        if not candidate or "%" in candidate:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{entry!r} is not a valid {field} DNS server address",
+            )
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{entry!r} is not a valid IP address",
+            )
+        if address.version != expected_version:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{entry!r} is an IPv{address.version} address but was "
+                    f"submitted in the {field} field"
+                ),
+            )
+        parsed.append(address)
+    return parsed
+
+
+@router.get("/{network_id}/dns", response_model=DnsSettings)
+async def get_dns(
+    network_id: str,
+    client: EeroClient = Depends(require_auth),
+) -> DnsSettings:
+    """Get DNS configuration for a network."""
+    try:
+        raw_response = await client.get_dns_settings(network_id)
+        raw_network = extract_data(raw_response)
+        return DnsSettings(**normalize_dns(raw_network))
+    except EeroException as e:
+        _LOGGER.error(f"Failed to get DNS settings for network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve DNS settings. Please try again.",
+        )
+
+
+@router.put("/{network_id}/dns", response_model=DnsUpdateResponse)
+async def update_dns(
+    network_id: str,
+    body: DnsUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> DnsUpdateResponse:
+    """Update DNS settings for a network.
+
+    A DNS write reboots every eero on the network (see ``eero.api.dns``), so
+    this route reads the current configuration first and skips the write
+    entirely when nothing would actually change. IPv6 addresses are compared
+    as parsed `ipaddress` objects, never as strings, because the API stores
+    them fully expanded: a value written as "2606:4700:4700::1111" reads back
+    as "2606:4700:4700:0:0:0:0:1111", and a naive string comparison would
+    falsely report a change (and reboot the mesh) on every read-modify-write
+    cycle.
+    """
+    if body.ipv4 is None and body.ipv6 is None and body.caching is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one of ipv4, ipv6, or caching must be provided",
+        )
+
+    # 1. Syntactic validation first - reject malformed input before any
+    # network round trip. Only meaningful for mode="custom" with servers
+    # supplied; "automatic" and mode-only re-enable are resolved below once
+    # we know the currently-stored servers.
+    parsed_requests: dict[str, list[ipaddress.IPv4Address | ipaddress.IPv6Address]] = {}
+    for field, update in (("ipv4", body.ipv4), ("ipv6", body.ipv6)):
+        if update is not None and update.mode == "custom" and update.servers:
+            parsed_requests[field] = _parse_family_servers(field, update.servers)
+
+    # 2. Read current state - required for the no-op guard and to resolve a
+    # mode-only "custom" re-enable (empty servers) to concrete addresses.
+    try:
+        raw_response = await client.get_dns_settings(network_id)
+    except EeroException as e:
+        _LOGGER.error(f"Failed to read DNS settings for network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to read current DNS settings. Please try again.",
+        )
+    current_dns = normalize_dns(extract_data(raw_response))
+
+    custom_writes: dict[str, list[str]] = {}
+    clear_families: list[str] = []
+
+    for field, update in (("ipv4", body.ipv4), ("ipv6", body.ipv6)):
+        if update is None:
+            continue
+
+        current_mode = current_dns[field]["mode"]
+        current_servers = current_dns[field]["servers"]
+        current_addresses = [ipaddress.ip_address(s) for s in current_servers]
+
+        if update.mode == "custom":
+            if update.servers:
+                target_addresses = parsed_requests[field]
+            else:
+                if not current_addresses:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"No custom {field} servers are currently stored to "
+                            "re-enable; supply servers explicitly"
+                        ),
+                    )
+                target_addresses = current_addresses
+
+            if current_mode != "custom" or target_addresses != current_addresses:
+                custom_writes[field] = [str(a) for a in target_addresses]
+        else:
+            if current_mode != "automatic":
+                clear_families.append(field)
+
+    caching_changed = (
+        body.caching is not None and body.caching != current_dns["caching"]
+    )
+
+    if not custom_writes and not clear_families and not caching_changed:
+        return DnsUpdateResponse(
+            success=True, changed=False, dns=DnsSettings(**current_dns)
+        )
+
+    _LOGGER.warning(
+        "Applying DNS changes for network %s - this reboots every eero on "
+        "the network and interrupts client connectivity",
+        network_id,
+    )
+
+    try:
+        # Dispatch the narrowest SDK call(s) that express the change. Each
+        # write is a separate reboot risk, so families sharing the same
+        # target action (both -> custom, or both -> automatic) are combined
+        # into a single PUT; otherwise each changed family gets its own
+        # targeted call, leaving the untouched family alone.
+        if "ipv4" in custom_writes and "ipv6" in custom_writes:
+            combined = custom_writes["ipv4"] + custom_writes["ipv6"]
+            await client.set_custom_dns(combined, network_id=network_id)
+        elif "ipv4" in custom_writes:
+            await client.set_custom_dns_ipv4(custom_writes["ipv4"], network_id=network_id)
+        elif "ipv6" in custom_writes:
+            await client.set_custom_dns_ipv6(custom_writes["ipv6"], network_id=network_id)
+
+        if len(clear_families) == 2:
+            await client.clear_custom_dns(family=None, network_id=network_id)
+        elif len(clear_families) == 1:
+            await client.clear_custom_dns(
+                family=clear_families[0], network_id=network_id
+            )
+
+        if caching_changed:
+            await client.set_dns_caching(body.caching, network_id=network_id)
+    except EeroValidationException as e:
+        _LOGGER.warning(f"DNS validation error for network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"field": e.field, "message": str(e)},
+        )
+    except EeroException as e:
+        _LOGGER.error(f"Failed to update DNS settings for network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update DNS settings. Please try again.",
+        )
+
+    # 3. Re-read so the response reflects what the API actually stored,
+    # falling back to a projected view if the follow-up read fails - the
+    # write itself already succeeded.
+    try:
+        final_raw = await client.get_dns_settings(network_id)
+        final_dns = normalize_dns(extract_data(final_raw))
+    except EeroException:
+        final_dns = dict(current_dns)
+        if "ipv4" in custom_writes:
+            final_dns["ipv4"] = {"mode": "custom", "servers": custom_writes["ipv4"]}
+        if "ipv6" in custom_writes:
+            final_dns["ipv6"] = {"mode": "custom", "servers": custom_writes["ipv6"]}
+        for family in clear_families:
+            final_dns[family] = {
+                "mode": "automatic",
+                "servers": current_dns[family]["servers"],
+            }
+        if caching_changed:
+            final_dns["caching"] = body.caching
+
+    return DnsUpdateResponse(success=True, changed=True, dns=DnsSettings(**final_dns))
 
 
 @router.put("/{network_id}/name")

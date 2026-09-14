@@ -84,6 +84,41 @@ export const handlers = [
 		});
 	}),
 
+	http.get('/api/networks/:networkId/dns', () => {
+		return HttpResponse.json({
+			ipv4: { mode: 'automatic', servers: [] },
+			ipv6: { mode: 'automatic', servers: [] },
+			caching: true,
+			parent_ips: ['203.0.113.1'],
+			providers: [
+				{
+					name: 'Cloudflare',
+					ipv4: ['1.1.1.1', '1.0.0.1'],
+					ipv6: ['2606:4700:4700::1111', '2606:4700:4700::1001']
+				}
+			]
+		});
+	}),
+
+	http.put('/api/networks/:networkId/dns', async ({ request }) => {
+		const body = (await request.json()) as {
+			ipv4?: { mode: string; servers: string[] };
+			ipv6?: { mode: string; servers: string[] };
+			caching?: boolean;
+		};
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			dns: {
+				ipv4: body.ipv4 ?? { mode: 'automatic', servers: [] },
+				ipv6: body.ipv6 ?? { mode: 'automatic', servers: [] },
+				caching: body.caching ?? true,
+				parent_ips: ['203.0.113.1'],
+				providers: []
+			}
+		});
+	}),
+
 	// ============================================
 	// Device endpoints
 	// ============================================

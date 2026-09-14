@@ -10,6 +10,7 @@ from app.transformers import (
     extract_id_from_url,
     extract_list,
     normalize_device,
+    normalize_dns,
     normalize_eero,
     normalize_network,
     normalize_profile,
@@ -419,6 +420,121 @@ class TestNormalizeProfile:
         }
         result = normalize_profile(raw)
         assert result["device_count"] == 1
+
+
+class TestNormalizeDns:
+    """Tests for normalize_dns function."""
+
+    def test_normalizes_full_shape(self):
+        """Should normalize both address families, caching and providers."""
+        raw_network = {
+            "dns": {
+                "mode": "custom",
+                "custom": {"ips": ["1.1.1.1", "1.0.0.1"]},
+                "parent": {"ips": ["8.8.8.8"]},
+                "caching": True,
+                "default_test_servers": [
+                    {
+                        "name": "Cloudflare",
+                        "ipv4": ["1.1.1.1", "1.0.0.1"],
+                        "ipv6": ["2606:4700:4700::1111", "2606:4700:4700::1001"],
+                    }
+                ],
+            },
+            "ipv6": {
+                "name_servers": {
+                    "mode": "custom",
+                    "custom": ["2606:4700:4700:0:0:0:0:1111"],
+                }
+            },
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"] == {"mode": "custom", "servers": ["1.1.1.1", "1.0.0.1"]}
+        # Fully-expanded IPv6 from the API is compressed on read.
+        assert result["ipv6"] == {
+            "mode": "custom",
+            "servers": ["2606:4700:4700::1111"],
+        }
+        assert result["caching"] is True
+        assert result["parent_ips"] == ["8.8.8.8"]
+        assert result["providers"] == [
+            {
+                "name": "Cloudflare",
+                "ipv4": ["1.1.1.1", "1.0.0.1"],
+                "ipv6": ["2606:4700:4700::1111", "2606:4700:4700::1001"],
+            }
+        ]
+
+    def test_tolerates_missing_dns_key(self):
+        """A network payload without a dns key should yield defaults."""
+        result = normalize_dns({})
+
+        assert result["ipv4"] == {"mode": "automatic", "servers": []}
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+        assert result["caching"] is False
+        assert result["parent_ips"] == []
+        assert result["providers"] == []
+
+    def test_tolerates_dns_none(self):
+        """A network payload with dns=None should yield defaults, not raise."""
+        result = normalize_dns({"dns": None})
+
+        assert result["ipv4"] == {"mode": "automatic", "servers": []}
+        assert result["caching"] is False
+
+    def test_tolerates_missing_ipv6_key(self):
+        """A network payload with no ipv6 key at all should not raise."""
+        raw_network = {
+            "dns": {"mode": "custom", "custom": {"ips": ["1.1.1.1"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"] == {"mode": "custom", "servers": ["1.1.1.1"]}
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+
+    def test_tolerates_ipv6_container_not_a_dict(self):
+        """A malformed ipv6 value should be ignored rather than raise."""
+        result = normalize_dns({"ipv6": "not-a-dict"})
+
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+
+    def test_skips_unparseable_ip_entries(self):
+        """Unparseable entries in a server list are dropped, not raised."""
+        raw_network = {
+            "dns": {"mode": "custom", "custom": {"ips": ["1.1.1.1", "not-an-ip"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["servers"] == ["1.1.1.1"]
+
+    def test_filters_entries_by_family(self):
+        """An IPv6 literal in the ipv4 custom list is filtered out on read."""
+        raw_network = {
+            "dns": {
+                "mode": "custom",
+                "custom": {"ips": ["1.1.1.1", "2606:4700:4700::1111"]},
+            },
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["servers"] == ["1.1.1.1"]
+
+    def test_defaults_missing_mode_to_automatic(self):
+        """A missing mode field defaults to automatic for both families."""
+        raw_network = {
+            "dns": {"custom": {"ips": ["1.1.1.1"]}},
+            "ipv6": {"name_servers": {"custom": ["2606:4700:4700::1111"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["mode"] == "automatic"
+        assert result["ipv6"]["mode"] == "automatic"
 
 
 class TestCheckSuccess:

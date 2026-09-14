@@ -22,11 +22,66 @@ export class ApiClientError extends Error {
 	constructor(
 		public status: number,
 		public detail: string,
-		public type?: string
+		public type?: string,
+		/**
+		 * Field name for validation failures, when the API identified one.
+		 * Lets a form render the error inline against the offending input.
+		 */
+		public field?: string
 	) {
 		super(detail);
 		this.name = 'ApiClientError';
 	}
+}
+
+/**
+ * Coerce an API `detail` payload into a human-readable string, and pull out a
+ * field name when one is present.
+ *
+ * `detail` is not always a string. FastAPI's own request-validation errors
+ * return an array of `{loc, msg, type}` objects, and our DNS route returns a
+ * `{field, message}` object so the form can highlight the offending input.
+ * Normalising here keeps every caller honest — otherwise a validation failure
+ * renders as "[object Object]".
+ */
+function normalizeDetail(detail: unknown, fallback: string): { detail: string; field?: string } {
+	if (typeof detail === 'string' && detail) {
+		return { detail };
+	}
+
+	// Our own `{field, message}` shape.
+	if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+		const record = detail as Record<string, unknown>;
+		const message = typeof record.message === 'string' ? record.message : undefined;
+		const field = typeof record.field === 'string' ? record.field : undefined;
+		if (message) {
+			return { detail: message, field };
+		}
+	}
+
+	// FastAPI request-validation shape: [{loc: [...], msg, type}, ...]
+	if (Array.isArray(detail) && detail.length > 0) {
+		const messages: string[] = [];
+		let field: string | undefined;
+		for (const item of detail) {
+			if (!item || typeof item !== 'object') continue;
+			const record = item as Record<string, unknown>;
+			if (typeof record.msg === 'string') {
+				messages.push(record.msg);
+			}
+			if (!field && Array.isArray(record.loc)) {
+				// `loc` is e.g. ["body", "ipv4", "servers"] - the last segment
+				// is the field the user can actually act on.
+				const last = record.loc[record.loc.length - 1];
+				if (typeof last === 'string') field = last;
+			}
+		}
+		if (messages.length > 0) {
+			return { detail: messages.join('; '), field };
+		}
+	}
+
+	return { detail: fallback };
 }
 
 /**
@@ -64,10 +119,8 @@ function buildUrl(path: string, params?: Record<string, string | number | boolea
 async function parseError(response: Response): Promise<ApiError> {
 	try {
 		const data = await response.json();
-		return {
-			detail: data.detail || `HTTP ${response.status}`,
-			type: data.type
-		};
+		const { detail, field } = normalizeDetail(data.detail, `HTTP ${response.status}`);
+		return { detail, type: data.type, field };
 	} catch {
 		return {
 			detail: `HTTP ${response.status}: ${response.statusText}`
@@ -119,13 +172,13 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 				const error = await parseError(response);
 				// Dispatch event for global auth handling
 				window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-				throw new ApiClientError(401, error.detail, error.type);
+				throw new ApiClientError(401, error.detail, error.type, error.field);
 			}
 
 			// Handle other errors
 			if (!response.ok) {
 				const error = await parseError(response);
-				throw new ApiClientError(response.status, error.detail, error.type);
+				throw new ApiClientError(response.status, error.detail, error.type, error.field);
 			}
 
 			// Parse response
@@ -226,6 +279,15 @@ export const api = {
 			fetchWithHandling<import('./types').NetworkRenameResponse>(`/networks/${networkId}/name`, {
 				method: 'PUT',
 				body: { name }
+			}),
+
+		getDns: (networkId: string) =>
+			fetchWithHandling<import('./types').DnsSettings>(`/networks/${networkId}/dns`),
+
+		setDns: (networkId: string, body: import('./types').DnsUpdateRequest) =>
+			fetchWithHandling<import('./types').DnsUpdateResponse>(`/networks/${networkId}/dns`, {
+				method: 'PUT',
+				body
 			})
 	},
 
