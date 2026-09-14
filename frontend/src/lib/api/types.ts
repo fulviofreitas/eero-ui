@@ -80,6 +80,7 @@ export interface NetworkDetail extends NetworkSummary {
 	band_steering: boolean;
 	wpa3: boolean;
 	ipv6_upstream: boolean;
+	ipv6: Record<string, unknown> | null;
 
 	// DNS
 	dns: {
@@ -163,6 +164,53 @@ export interface NetworkRenameResponse {
 	network_id: string;
 	name: string;
 }
+
+// ============================================
+// DNS Settings
+//
+// Editing DNS reboots every eero on the network (~5 minutes after the API
+// responds), so this is intentionally its own dedicated slice rather than
+// folded into NetworkDetail.settings.
+// ============================================
+
+export interface DnsFamilySettings {
+	mode: 'custom' | 'automatic';
+	servers: string[];
+}
+
+export interface DnsProvider {
+	name: string;
+	ipv4: string[];
+	ipv6: string[];
+}
+
+export interface DnsSettings {
+	ipv4: DnsFamilySettings;
+	ipv6: DnsFamilySettings;
+	caching: boolean;
+	parent_ips: string[];
+	providers: DnsProvider[];
+}
+
+export interface DnsFamilyUpdate {
+	mode: 'custom' | 'automatic';
+	servers: string[];
+}
+
+export interface DnsUpdateRequest {
+	ipv4?: DnsFamilyUpdate;
+	ipv6?: DnsFamilyUpdate;
+	caching?: boolean;
+}
+
+export interface DnsUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	dns: DnsSettings;
+}
+
+/** Form field identifiers used for inline validation/error mapping. */
+export type DnsFieldName = 'ipv4Primary' | 'ipv4Secondary' | 'ipv6Primary' | 'ipv6Secondary';
 
 export interface SpeedTestResult {
 	// Normalized format from backend
@@ -447,6 +495,8 @@ export interface ProfileRenameRequest {
 export interface ApiError {
 	detail: string;
 	type?: string;
+	/** Field name for validation failures, when the API identified one. */
+	field?: string;
 }
 
 export interface ApiResponse<T> {

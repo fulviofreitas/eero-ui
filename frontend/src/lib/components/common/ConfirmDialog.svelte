@@ -54,6 +54,14 @@
 				{$confirmDialog.message}
 			</p>
 
+			{#if $confirmDialog.details && $confirmDialog.details.length > 0}
+				<ul class="modal-details">
+					{#each $confirmDialog.details as detail}
+						<li>{detail}</li>
+					{/each}
+				</ul>
+			{/if}
+
 			<div class="modal-actions">
 				<button class="btn btn-secondary" on:click={handleCancel} disabled={loading}>
 					{$confirmDialog.cancelText || 'Cancel'}
@@ -102,6 +110,15 @@
 	.modal-message {
 		color: var(--color-text-secondary);
 		margin-bottom: var(--space-6);
+	}
+
+	.modal-details {
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-6);
+		padding-left: var(--space-5);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
 	.modal-actions {

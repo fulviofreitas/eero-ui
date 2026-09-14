@@ -6,6 +6,7 @@ As of eero-api v2.0.0, all responses are raw JSON in the format:
 This module provides extraction and normalization functions.
 """
 
+import ipaddress
 from typing import Any
 
 from ._coercion import coerce_bool, coerce_int, coerce_numeric
@@ -269,6 +270,7 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
         "created_at": raw.get("created_at"),
         "geo_ip": raw.get("geo_ip"),
         "dns": raw.get("dns"),
+        "ipv6": raw.get("ipv6"),
         "premium_dns": raw.get("premium_dns"),
         "updates": raw.get("updates"),
         "ddns": raw.get("ddns"),
@@ -642,6 +644,106 @@ def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
         return result
 
     return None
+
+
+def _normalize_ip_list(value: Any, family: int | None = None) -> list[str]:
+    """Coerce a raw value into a list of normalised (compressed) IP strings.
+
+    Un-parseable entries are skipped rather than raised, since this is used
+    exclusively on read paths where tolerance matters more than strictness.
+
+    Args:
+        value: Raw value from the API response (expected to be a list).
+        family: If given (4 or 6), entries of the other family are skipped.
+
+    Returns:
+        A list of normalised IP address strings.
+    """
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            continue
+        try:
+            address = ipaddress.ip_address(entry.strip())
+        except ValueError:
+            continue
+        if family is not None and address.version != family:
+            continue
+        result.append(str(address))
+    return result
+
+
+def normalize_dns(raw_network: dict[str, Any]) -> dict[str, Any]:
+    """Normalize DNS settings from a raw network response.
+
+    The Eero API stores IPv4 and IPv6 DNS configuration as two independent,
+    asymmetrically-shaped objects on the network resource:
+
+        data.dns.mode                  "custom" | "automatic"
+        data.dns.custom.ips            [...]
+        data.dns.parent.ips            [...]              (ISP upstream, read-only)
+        data.dns.caching               bool
+        data.dns.default_test_servers  [{name, ipv4, ipv6}, ...]
+        data.ipv6.name_servers.mode    "custom" | "automatic"
+        data.ipv6.name_servers.custom  [...]
+
+    IPv6 addresses are stored fully expanded by the API (e.g.
+    ``2606:4700:4700:0:0:0:0:1111``); this function normalises every address
+    through ``ipaddress`` so servers are always emitted in compressed form.
+
+    Args:
+        raw_network: Raw network data (not yet extracted/normalized).
+
+    Returns:
+        Normalized DNS dictionary matching the shared frontend/backend contract.
+    """
+    dns = raw_network.get("dns")
+    if not isinstance(dns, dict):
+        dns = {}
+
+    ipv6_container = raw_network.get("ipv6")
+    if not isinstance(ipv6_container, dict):
+        ipv6_container = {}
+    name_servers = ipv6_container.get("name_servers")
+    if not isinstance(name_servers, dict):
+        name_servers = {}
+
+    ipv4_custom = dns.get("custom")
+    if not isinstance(ipv4_custom, dict):
+        ipv4_custom = {}
+    ipv4_servers = _normalize_ip_list(ipv4_custom.get("ips"), family=4)
+
+    ipv6_servers = _normalize_ip_list(name_servers.get("custom"), family=6)
+
+    parent = dns.get("parent")
+    if not isinstance(parent, dict):
+        parent = {}
+    parent_ips = _normalize_ip_list(parent.get("ips"))
+
+    providers: list[dict[str, Any]] = []
+    for entry in dns.get("default_test_servers") or []:
+        if not isinstance(entry, dict):
+            continue
+        providers.append(
+            {
+                "name": entry.get("name"),
+                "ipv4": _normalize_ip_list(entry.get("ipv4"), family=4),
+                "ipv6": _normalize_ip_list(entry.get("ipv6"), family=6),
+            }
+        )
+
+    ipv4_mode = dns.get("mode") or "automatic"
+    ipv6_mode = name_servers.get("mode") or "automatic"
+
+    return {
+        "ipv4": {"mode": ipv4_mode, "servers": ipv4_servers},
+        "ipv6": {"mode": ipv6_mode, "servers": ipv6_servers},
+        "caching": bool(coerce_bool(dns.get("caching"))),
+        "parent_ips": parent_ips,
+        "providers": providers,
+    }
 
 
 def check_success(raw_response: Any) -> bool:
