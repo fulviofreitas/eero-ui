@@ -54,6 +54,17 @@ Object.defineProperty(window, 'CustomEvent', {
 // instead, since Svelte awaits that event before detaching the element - so
 // this fires 'finish' on a real EventTarget, on the next microtask, exactly
 // once.
+// jsdom also has no `Element.prototype.getAnimations` - Svelte 5's `animate:flip` (DataTable's
+// device/eero/profile rows, WP9 § 6.2 Tier 3 "motion polish") calls it unconditionally on every
+// `each` block update to check for/cancel in-flight animations, regardless of whether this
+// particular update actually triggers a flip. An empty array (no animations ever "in flight" in
+// jsdom) is the correct/safe stub - it just means every update is treated as "safe to move".
+if (!Element.prototype.getAnimations) {
+	Element.prototype.getAnimations = function () {
+		return [];
+	};
+}
+
 if (!Element.prototype.animate) {
 	Element.prototype.animate = function () {
 		const target = new EventTarget();

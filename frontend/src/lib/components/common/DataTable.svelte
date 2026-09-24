@@ -49,10 +49,12 @@
 
 <script lang="ts" generics="T">
 	import { onMount } from 'svelte';
+	import { flip } from 'svelte/animate';
 	import { SvelteSet } from 'svelte/reactivity';
 	import EmptyState from './EmptyState.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import Icon from './Icon.svelte';
+	import { flipDuration } from '$lib/motion';
 
 	interface Props {
 		/** Stable identifier for this table; used as the localStorage key for column visibility. */
@@ -95,6 +97,14 @@
 		 * that column is already visible (see DeviceList's name column).
 		 */
 		onVisibleColumnsChange?: (visible: Set<string>) => void;
+		/**
+		 * When true, DataTable's own body renders without `animate:flip` on re-sort/re-filter.
+		 * Defaults to false (flip enabled). This is the seam for a future virtualized body (§ 6.1):
+		 * a virtual-scrolling list recycles DOM nodes across unrelated rows, so animating a
+		 * "move" on those nodes would visually flip the wrong rows. Only consulted when `body` is
+		 * not supplied - a caller-supplied `body` owns its own animation strategy.
+		 */
+		virtualized?: boolean;
 	}
 
 	let {
@@ -118,7 +128,8 @@
 		body,
 		rowClass,
 		onRowClick,
-		onVisibleColumnsChange
+		onVisibleColumnsChange,
+		virtualized = false
 	}: Props = $props();
 
 	function handleRowKeydown(event: KeyboardEvent, row: T) {
@@ -391,6 +402,7 @@
 							tabindex={onRowClick ? 0 : undefined}
 							onclick={onRowClick ? () => onRowClick(row) : undefined}
 							onkeydown={onRowClick ? (e) => handleRowKeydown(e, row) : undefined}
+							animate:flip={{ duration: virtualized ? 0 : flipDuration(200) }}
 						>
 							{#if selectable}
 								<td class="select-col">

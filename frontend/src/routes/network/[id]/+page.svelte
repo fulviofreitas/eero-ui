@@ -370,6 +370,7 @@
 						speedTest={network.speed_test}
 						loading={speedTestLoading}
 						elapsedSeconds={$speedTestProgress.elapsedSeconds}
+						error={$speedTestProgress.error}
 						onRunTest={handleSpeedTest}
 					/>
 					{#if network.health}

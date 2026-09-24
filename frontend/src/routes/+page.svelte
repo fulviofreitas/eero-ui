@@ -13,7 +13,14 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$api/client';
 	import type { NetworkDetail, EeroSummary, ProfileSummary, DeviceSummary } from '$api/types';
-	import { devicesStore, deviceCounts, uiStore, selectedNetworkId, networksStore } from '$stores';
+	import {
+		devicesStore,
+		deviceCounts,
+		uiStore,
+		selectedNetworkId,
+		networksStore,
+		speedTestFor
+	} from '$stores';
 	import PageHeader from '$components/common/PageHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import ClientCountChart from '$lib/components/charts/ClientCountChart.svelte';
@@ -32,6 +39,11 @@
 	let loading = $state(true);
 	let speedTestLoading = $state(false);
 	let lastNetworkId: string | null = $state(null);
+	// `speedTestFor` always returns a store (falling back to its own defaultSpeedTestState when
+	// the id has no entry yet), so a placeholder id when no network is selected is safe - it just
+	// resolves to the same "not running, no result" default and keeps every consumer below
+	// non-nullable instead of needing a `speedTestProgress ? ... : ...` guard at each read.
+	let speedTestProgress = $derived.by(() => speedTestFor(network?.id ?? '__no-network__'));
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
@@ -204,7 +216,13 @@
 			<ProfileStatCard {profiles} totalDevices={totalProfileDevices} pausedCount={pausedProfiles} />
 		</div>
 
-		<SpeedTestCard {network} loading={speedTestLoading} onRunTest={runSpeedTest} />
+		<SpeedTestCard
+			{network}
+			loading={speedTestLoading}
+			elapsedSeconds={$speedTestProgress.elapsedSeconds}
+			error={$speedTestProgress.error}
+			onRunTest={runSpeedTest}
+		/>
 
 		<DeviceInsightsSection {connectionTypeData} {wifiBandData} {topManufacturers} />
 

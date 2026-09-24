@@ -59,6 +59,100 @@ const initialFilters: DeviceFilters = {
 	sortOrder: 'asc'
 };
 
+/** Default filter state, exported for callers (DeviceList's URL/localStorage fallback chain) that need it without importing the whole store. */
+export const defaultDeviceFilters: DeviceFilters = initialFilters;
+export type { DeviceFilters };
+
+/**
+ * URL-encoded filters (WP9 § 6.2 Tier 3 "URL-encoded, debounced, persisted filters").
+ *
+ * Query keys are short and stable (`q`/`status`/`conn`/`band`/`sort`/`dir`) rather than mirroring
+ * the store's own field names 1:1, so the URL stays a shareable/bookmarkable link rather than an
+ * internal implementation detail leaking into it.
+ */
+export const DEVICE_FILTERS_STORAGE_KEY = 'eero-ui:device-filters';
+const DEVICE_FILTER_QUERY_KEYS = ['q', 'status', 'conn', 'band', 'sort', 'dir'] as const;
+
+const VALID_STATUS = new Set<DeviceFilters['status']>([
+	'all',
+	'connected',
+	'disconnected',
+	'blocked'
+]);
+const VALID_CONNECTION = new Set<DeviceFilters['connectionType']>(['all', 'wireless', 'wired']);
+const VALID_FREQUENCY = new Set<DeviceFilters['frequency']>(['all', '2.4GHz', '5GHz', '6GHz']);
+const VALID_SORT_BY = new Set<DeviceFilters['sortBy']>([
+	'name',
+	'ip',
+	'mac',
+	'hostname',
+	'manufacturer',
+	'deviceType',
+	'connection',
+	'signal',
+	'connectedTo',
+	'profile',
+	'last_active'
+]);
+const VALID_SORT_ORDER = new Set<DeviceFilters['sortOrder']>(['asc', 'desc']);
+
+/** True when the URL carries any of the device-filter query keys - used to decide whether the URL or localStorage wins on initial load. */
+export function hasDeviceFilterParams(params: URLSearchParams): boolean {
+	return DEVICE_FILTER_QUERY_KEYS.some((key) => params.has(key));
+}
+
+/** Serialize filters to URL query params, omitting anything at its default value so a "clean" filter state produces a clean URL. */
+export function deviceFiltersToSearchParams(filters: DeviceFilters): URLSearchParams {
+	const params = new URLSearchParams();
+	if (filters.search) params.set('q', filters.search);
+	if (filters.status !== initialFilters.status) params.set('status', filters.status);
+	if (filters.connectionType !== initialFilters.connectionType) {
+		params.set('conn', filters.connectionType);
+	}
+	if (filters.frequency !== initialFilters.frequency) params.set('band', filters.frequency);
+	if (filters.sortBy !== initialFilters.sortBy) params.set('sort', filters.sortBy);
+	if (filters.sortOrder !== initialFilters.sortOrder) params.set('dir', filters.sortOrder);
+	return params;
+}
+
+/** Parse filters from URL query params, falling back to defaults for anything missing or invalid. */
+export function deviceFiltersFromSearchParams(params: URLSearchParams): DeviceFilters {
+	const status = params.get('status');
+	const conn = params.get('conn');
+	const band = params.get('band');
+	const sort = params.get('sort');
+	const dir = params.get('dir');
+	return {
+		search: params.get('q') ?? initialFilters.search,
+		status: VALID_STATUS.has(status as DeviceFilters['status'])
+			? (status as DeviceFilters['status'])
+			: initialFilters.status,
+		connectionType: VALID_CONNECTION.has(conn as DeviceFilters['connectionType'])
+			? (conn as DeviceFilters['connectionType'])
+			: initialFilters.connectionType,
+		frequency: VALID_FREQUENCY.has(band as DeviceFilters['frequency'])
+			? (band as DeviceFilters['frequency'])
+			: initialFilters.frequency,
+		sortBy: VALID_SORT_BY.has(sort as DeviceFilters['sortBy'])
+			? (sort as DeviceFilters['sortBy'])
+			: initialFilters.sortBy,
+		sortOrder: VALID_SORT_ORDER.has(dir as DeviceFilters['sortOrder'])
+			? (dir as DeviceFilters['sortOrder'])
+			: initialFilters.sortOrder
+	};
+}
+
+/** Parse filters persisted to localStorage, tolerating missing/malformed JSON (private-mode quota, older shape, etc). */
+export function deviceFiltersFromStorage(raw: string | null): DeviceFilters {
+	if (!raw) return { ...initialFilters };
+	try {
+		const parsed = JSON.parse(raw) as Partial<DeviceFilters>;
+		return { ...initialFilters, ...parsed };
+	} catch {
+		return { ...initialFilters };
+	}
+}
+
 // ============================================
 // Query Parser
 // ============================================
@@ -265,6 +359,51 @@ function createDevicesStore() {
 				}));
 				throw error;
 			}
+		},
+
+		/**
+		 * Bulk block (WP9 § 6.2 Tier 3 "bulk block/unblock"). Runs sequentially, one
+		 * `blockDevice` per id, so each device's own pessimistic/unverified/422-on-no-MAC
+		 * behaviour is unchanged - this only aggregates the per-device outcomes rather than
+		 * introducing a new bulk-specific code path.
+		 */
+		async blockMany(
+			deviceIds: string[]
+		): Promise<{ ok: string[]; failed: { id: string; message: string }[] }> {
+			const ok: string[] = [];
+			const failed: { id: string; message: string }[] = [];
+			for (const id of deviceIds) {
+				try {
+					await this.blockDevice(id);
+					ok.push(id);
+				} catch (error) {
+					failed.push({
+						id,
+						message: error instanceof Error ? error.message : 'Failed to block device'
+					});
+				}
+			}
+			return { ok, failed };
+		},
+
+		/** Bulk unblock - same sequential aggregation as blockMany, over the Verified `unblockDevice`. */
+		async unblockMany(
+			deviceIds: string[]
+		): Promise<{ ok: string[]; failed: { id: string; message: string }[] }> {
+			const ok: string[] = [];
+			const failed: { id: string; message: string }[] = [];
+			for (const id of deviceIds) {
+				try {
+					await this.unblockDevice(id);
+					ok.push(id);
+				} catch (error) {
+					failed.push({
+						id,
+						message: error instanceof Error ? error.message : 'Failed to unblock device'
+					});
+				}
+			}
+			return { ok, failed };
 		},
 
 		/**

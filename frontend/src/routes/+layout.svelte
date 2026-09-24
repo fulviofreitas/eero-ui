@@ -6,7 +6,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto, afterNavigate } from '$app/navigation';
+	import { goto, afterNavigate, onNavigate } from '$app/navigation';
+	import { shouldUseViewTransition } from '$lib/motion';
 	import {
 		authStore,
 		isAuthenticated,
@@ -142,6 +143,21 @@
 		if (typeof window !== 'undefined' && window.innerWidth <= 768) {
 			uiStore.closeSidebar();
 		}
+	});
+
+	// Motion polish (WP9 § 6.2 Tier 3): wrap route changes in a View Transition when the browser
+	// supports it and the user hasn't asked for reduced motion (shouldUseViewTransition - see
+	// lib/motion.ts). SvelteKit's own `document.startViewTransition` promise settles once the DOM
+	// update `navigation.complete` resolves, so the whole thing is a one-line guard around that.
+	onNavigate((navigation) => {
+		if (!shouldUseViewTransition()) return;
+
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+		});
 	});
 
 	async function handleLogout() {

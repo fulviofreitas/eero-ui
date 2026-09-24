@@ -12,10 +12,12 @@
 		speedTest: SpeedTestResult | null;
 		loading: boolean;
 		elapsedSeconds: number;
+		/** Set once a run fails or times out (see stores/networks.ts's SpeedTestState.error). */
+		error?: string | null;
 		onRunTest: () => void;
 	}
 
-	let { speedTest, loading, elapsedSeconds, onRunTest }: Props = $props();
+	let { speedTest, loading, elapsedSeconds, error = null, onRunTest }: Props = $props();
 
 	function formatSpeed(mbps: number | null): string {
 		if (mbps === null) return '—';
@@ -45,6 +47,17 @@
 		<p class="text-muted text-sm">
 			Running… {elapsedSeconds}s (this can take up to 90 seconds)
 		</p>
+		<progress
+			class="speed-test-progress"
+			max={90}
+			value={Math.min(elapsedSeconds, 90)}
+			aria-label="Speed test progress"
+			aria-valuenow={Math.min(elapsedSeconds, 90)}
+			aria-valuemin={0}
+			aria-valuemax={90}
+		></progress>
+	{:else if error}
+		<p class="text-danger text-sm" role="alert">{error}</p>
 	{:else if speedTest && (speedTest.download_mbps || speedTest.upload_mbps)}
 		<div class="speed-results">
 			<div class="speed-item download">
@@ -167,6 +180,13 @@
 	.speed-timestamp {
 		margin-top: var(--space-4);
 		text-align: center;
+	}
+
+	.speed-test-progress {
+		width: 100%;
+		height: 6px;
+		margin-top: var(--space-2);
+		accent-color: var(--color-accent);
 	}
 
 	@media (max-width: 768px) {

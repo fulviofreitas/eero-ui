@@ -7,6 +7,7 @@
 export async function goto(): Promise<void> {}
 export function afterNavigate(): void {}
 export function beforeNavigate(): void {}
+export function onNavigate(): void {}
 export function invalidate(): Promise<void> {
 	return Promise.resolve();
 }

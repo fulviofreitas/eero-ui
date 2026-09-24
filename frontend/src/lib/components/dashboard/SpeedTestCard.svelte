@@ -11,10 +11,14 @@
 	interface Props {
 		network: NetworkDetail;
 		loading: boolean;
+		/** Whole seconds elapsed since the run started (see stores/networks.ts's speedTestFor). */
+		elapsedSeconds?: number;
+		/** Set once a run fails or times out. */
+		error?: string | null;
 		onRunTest: () => void;
 	}
 
-	let { network, loading, onRunTest }: Props = $props();
+	let { network, loading, elapsedSeconds = 0, error = null, onRunTest }: Props = $props();
 
 	function getDownloadSpeed(speedTest: SpeedTestResult | null): string {
 		if (!speedTest) return '—';
@@ -48,7 +52,20 @@
 				{/if}
 			</button>
 		</div>
-		{#if network.speed_test && (getDownloadSpeed(network.speed_test) !== '—' || getUploadSpeed(network.speed_test) !== '—')}
+		{#if loading}
+			<p class="text-muted text-sm">Running… {elapsedSeconds}s (this can take up to 90 seconds)</p>
+			<progress
+				class="speed-test-progress"
+				max={90}
+				value={Math.min(elapsedSeconds, 90)}
+				aria-label="Speed test progress"
+				aria-valuenow={Math.min(elapsedSeconds, 90)}
+				aria-valuemin={0}
+				aria-valuemax={90}
+			></progress>
+		{:else if error}
+			<p class="text-danger text-sm" role="alert">{error}</p>
+		{:else if network.speed_test && (getDownloadSpeed(network.speed_test) !== '—' || getUploadSpeed(network.speed_test) !== '—')}
 			<div class="speed-results">
 				<div class="speed-item download">
 					<div class="speed-icon">↓</div>
@@ -193,6 +210,13 @@
 		text-align: center;
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--color-border);
+	}
+
+	.speed-test-progress {
+		width: 100%;
+		height: 6px;
+		margin-top: var(--space-2);
+		accent-color: var(--color-accent);
 	}
 
 	@media (max-width: 900px) {

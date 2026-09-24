@@ -17,9 +17,18 @@
 	};
 </script>
 
-<div class="toast-container" aria-live="polite">
+<div class="toast-container">
 	{#each $toasts as toast (toast.id)}
-		<div class="toast {toast.type}" role="alert" transition:fly={{ x: 100, duration: 200 }}>
+		<div
+			class="toast {toast.type}"
+			role={toast.type === 'error' ? 'alert' : 'status'}
+			aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+			transition:fly={{ x: 100, duration: 200 }}
+			onmouseenter={() => uiStore.pauseToast(toast.id)}
+			onmouseleave={() => uiStore.resumeToast(toast.id)}
+			onfocusin={() => uiStore.pauseToast(toast.id)}
+			onfocusout={() => uiStore.resumeToast(toast.id)}
+		>
 			<span class="toast-icon">
 				<Icon name={TOAST_ICONS[toast.type] ?? 'help-circle'} size={16} />
 			</span>

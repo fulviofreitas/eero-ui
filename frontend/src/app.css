@@ -718,3 +718,49 @@ code {
 		scroll-behavior: auto !important;
 	}
 }
+
+/* ============================================
+   View Transitions (route changes - WP9 § 6.2 Tier 3)
+   ============================================
+   Only engaged when the layout's onNavigate handler calls document.startViewTransition, which
+   it only does when lib/motion.ts's shouldUseViewTransition() is true - i.e. never under
+   prefers-reduced-motion. The reduced-motion override below is defence in depth in case a
+   browser ever fires these pseudo-elements outside that guard. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 150ms;
+	animation-timing-function: ease;
+}
+
+::view-transition-old(root) {
+	animation-name: eero-view-transition-fade-out;
+}
+
+::view-transition-new(root) {
+	animation-name: eero-view-transition-fade-in;
+}
+
+@keyframes eero-view-transition-fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes eero-view-transition-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation: none !important;
+	}
+}

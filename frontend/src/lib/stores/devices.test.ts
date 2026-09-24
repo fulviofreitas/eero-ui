@@ -333,6 +333,88 @@ describe('devicesStore', () => {
 		});
 	});
 
+	describe('blockMany / unblockMany (WP9 § 6.2 Tier 3 - bulk block/unblock)', () => {
+		it('blockMany aggregates per-device outcomes, keeping the 422 (no MAC) path per-row', async () => {
+			server.use(
+				http.get('/api/devices', () =>
+					HttpResponse.json([
+						makeDevice('dev-1'),
+						makeDevice('dev-2', { mac: null }),
+						makeDevice('dev-3')
+					])
+				),
+				http.post('/api/devices/:deviceId/block', ({ params }) => {
+					if (params.deviceId === 'dev-2') {
+						return HttpResponse.json(
+							{ detail: 'Device has no known MAC address.' },
+							{ status: 422 }
+						);
+					}
+					return HttpResponse.json({ success: true, device_id: params.deviceId, action: 'block' });
+				})
+			);
+			await devicesStore.fetch();
+
+			const result = await devicesStore.blockMany(['dev-1', 'dev-2', 'dev-3']);
+
+			expect(result.ok.sort()).toEqual(['dev-1', 'dev-3']);
+			expect(result.failed).toEqual([{ id: 'dev-2', message: 'Device has no known MAC address.' }]);
+
+			const state = get(devicesStore);
+			expect(state.devices.find((d) => d.id === 'dev-1')?.blocked).toBe(true);
+			expect(state.devices.find((d) => d.id === 'dev-2')?.blocked).toBe(false);
+			expect(state.devices.find((d) => d.id === 'dev-3')?.blocked).toBe(true);
+		});
+
+		it('blockMany never throws, even when every device fails', async () => {
+			server.use(
+				http.get('/api/devices', () =>
+					HttpResponse.json([makeDevice('dev-1'), makeDevice('dev-2')])
+				),
+				http.post('/api/devices/:deviceId/block', () =>
+					HttpResponse.json({ detail: 'boom' }, { status: 500 })
+				)
+			);
+			await devicesStore.fetch();
+
+			const result = await devicesStore.blockMany(['dev-1', 'dev-2']);
+
+			expect(result.ok).toEqual([]);
+			expect(result.failed).toHaveLength(2);
+		});
+
+		it('unblockMany rolls back a per-device failure while keeping the others unblocked', async () => {
+			server.use(
+				http.get('/api/devices', () =>
+					HttpResponse.json([
+						makeDevice('dev-1', { blocked: true }),
+						makeDevice('dev-2', { blocked: true })
+					])
+				),
+				http.post('/api/devices/:deviceId/unblock', ({ params }) => {
+					if (params.deviceId === 'dev-2') {
+						return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+					}
+					return HttpResponse.json({
+						success: true,
+						device_id: params.deviceId,
+						action: 'unblock'
+					});
+				})
+			);
+			await devicesStore.fetch();
+
+			const result = await devicesStore.unblockMany(['dev-1', 'dev-2']);
+
+			expect(result.ok).toEqual(['dev-1']);
+			expect(result.failed).toEqual([{ id: 'dev-2', message: 'boom' }]);
+
+			const state = get(devicesStore);
+			expect(state.devices.find((d) => d.id === 'dev-1')?.blocked).toBe(false);
+			expect(state.devices.find((d) => d.id === 'dev-2')?.blocked).toBe(true);
+		});
+	});
+
 	describe('writes never retry on a network error (fetch spy)', () => {
 		it('calls fetch exactly once for unblockDevice even when the request throws', async () => {
 			server.use(http.get('/api/devices', () => HttpResponse.json([makeDevice('dev-1')])));

@@ -8,7 +8,10 @@
   which are all orthogonal to how the table itself renders.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import {
 		devicesStore,
 		deviceFilters,
@@ -18,7 +21,13 @@
 		selectionMode,
 		selectedDevices,
 		toggleSelectionMode,
-		clearSelection
+		clearSelection,
+		hasDeviceFilterParams,
+		deviceFiltersToSearchParams,
+		deviceFiltersFromSearchParams,
+		deviceFiltersFromStorage,
+		defaultDeviceFilters,
+		DEVICE_FILTERS_STORAGE_KEY
 	} from '$stores';
 	import type { DeviceSummary } from '$api/types';
 	import { api } from '$api/client';
@@ -56,15 +65,59 @@
 	);
 
 	function clearFilters() {
-		deviceFilters.set({
-			search: '',
-			status: 'all',
-			connectionType: 'all',
-			frequency: 'all',
-			sortBy: 'name',
-			sortOrder: 'asc'
-		});
+		deviceFilters.set({ ...defaultDeviceFilters });
 	}
+
+	// --- URL-encoded, debounced, persisted filters (WP9 § 6.2 Tier 3) -----------------------
+	//
+	// Initial state prefers the URL (so a shared/bookmarked link wins) and falls back to
+	// localStorage, then the plain defaults. Every subsequent change to `$deviceFilters` -
+	// whichever UI control caused it - is mirrored back to both, debounced by 250ms so a fast
+	// typist in the search box doesn't spam `goto()`/localStorage on every keystroke.
+
+	let filtersInitialized = false;
+	let syncTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function loadInitialFilters(): typeof $deviceFilters {
+		const url = get(page).url;
+		if (hasDeviceFilterParams(url.searchParams)) {
+			return deviceFiltersFromSearchParams(url.searchParams);
+		}
+		if (typeof localStorage !== 'undefined') {
+			return deviceFiltersFromStorage(localStorage.getItem(DEVICE_FILTERS_STORAGE_KEY));
+		}
+		return { ...defaultDeviceFilters };
+	}
+
+	$effect(() => {
+		const filters = $deviceFilters;
+		if (!filtersInitialized) return; // skip the initial store value - nothing to sync yet
+
+		clearTimeout(syncTimer);
+		syncTimer = setTimeout(() => {
+			// String concatenation, not `new URL(...)` - the eslint svelte/prefer-svelte-reactivity
+			// rule flags mutable URL instances in components, and there's nothing reactive to gain
+			// here anyway (this is a one-shot target string for `goto`).
+			const params = deviceFiltersToSearchParams(filters);
+			const search = params.toString();
+			const pathname = get(page).url.pathname;
+			goto(search ? `${pathname}?${search}` : pathname, {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			});
+
+			if (typeof localStorage !== 'undefined') {
+				try {
+					localStorage.setItem(DEVICE_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+				} catch {
+					// Storage can be unavailable (private mode quota, etc.) - filters just won't persist.
+				}
+			}
+		}, 250);
+	});
+
+	onDestroy(() => clearTimeout(syncTimer));
 
 	async function loadProfiles() {
 		if (profiles.length > 0) return;
@@ -112,6 +165,79 @@
 		}
 	}
 
+	let bulkActionRunning = $state(false);
+
+	function deviceLabel(id: string): string {
+		const device = $filteredDevices.find((d) => d.id === id);
+		if (!device) return id;
+		return device.display_name || device.nickname || device.hostname || device.mac || id;
+	}
+
+	function summarizeBulkResult(
+		verb: string,
+		result: { ok: string[]; failed: { id: string; message: string }[] }
+	): void {
+		if (result.failed.length === 0) {
+			uiStore.success(`${verb} ${result.ok.length} device(s).`);
+			return;
+		}
+		const names = result.failed.map((f) => deviceLabel(f.id)).join(', ');
+		uiStore.warning(`${verb} ${result.ok.length}, failed ${result.failed.length}: ${names}`, 8000);
+	}
+
+	/**
+	 * Bulk block (WP9 § 6.2 Tier 3). Pessimistic and unverified, same as the single-device path
+	 * (plan § 5 / devicesStore.blockDevice) - runs sequentially so each row's own busy/rollback
+	 * behaviour still applies, and confirms once up front rather than once per device.
+	 */
+	function handleBulkBlock() {
+		if (selectedCount === 0) return;
+		const ids = Array.from($selectedDevices);
+
+		uiStore.confirm({
+			title: 'Block Devices',
+			message: `Block ${ids.length} selected device(s)? Each will be disconnected from the network.`,
+			details: [
+				'Blocking is not verified end-to-end by the eero SDK - the change is not rolled back ' +
+					'automatically here, so confirm the devices show as blocked afterwards.'
+			],
+			confirmText: `Block ${ids.length} Device(s)`,
+			danger: true,
+			onConfirm: async () => {
+				bulkActionRunning = true;
+				try {
+					const result = await devicesStore.blockMany(ids);
+					summarizeBulkResult('Blocked', result);
+					clearSelection();
+				} finally {
+					bulkActionRunning = false;
+				}
+			}
+		});
+	}
+
+	/** Bulk unblock. Verified (plan § 5) - still confirmed once, since it affects several devices at once. */
+	function handleBulkUnblock() {
+		if (selectedCount === 0) return;
+		const ids = Array.from($selectedDevices);
+
+		uiStore.confirm({
+			title: 'Unblock Devices',
+			message: `Unblock ${ids.length} selected device(s)?`,
+			confirmText: `Unblock ${ids.length} Device(s)`,
+			onConfirm: async () => {
+				bulkActionRunning = true;
+				try {
+					const result = await devicesStore.unblockMany(ids);
+					summarizeBulkResult('Unblocked', result);
+					clearSelection();
+				} finally {
+					bulkActionRunning = false;
+				}
+			}
+		});
+	}
+
 	// Prefetch profiles as soon as there's a selection to assign, so the Dropdown's item list is
 	// ready (not empty) by the time the user opens it - Dropdown itself has no "on open" hook.
 	$effect(() => {
@@ -121,6 +247,8 @@
 	});
 
 	onMount(() => {
+		deviceFilters.set(loadInitialFilters());
+		filtersInitialized = true;
 		devicesStore.fetch();
 	});
 
@@ -345,6 +473,28 @@
 						<Icon name="folder" size={14} /> Assign to Profile ({selectedCount})
 					{/snippet}
 				</Dropdown>
+
+				<button
+					class="btn btn-danger btn-sm"
+					onclick={handleBulkBlock}
+					disabled={bulkActionRunning}
+				>
+					<Icon name="x" size={14} /> Block selected
+				</button>
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={handleBulkUnblock}
+					disabled={bulkActionRunning}
+				>
+					<Icon name="check" size={14} /> Unblock selected
+				</button>
+			{/if}
+
+			<!-- Reset filters -->
+			{#if hasActiveFilters}
+				<button class="btn btn-secondary btn-sm" onclick={clearFilters}>
+					<Icon name="x" size={14} /> Reset filters
+				</button>
 			{/if}
 
 			<!-- Export -->
