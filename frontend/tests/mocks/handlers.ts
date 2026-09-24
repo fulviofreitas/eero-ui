@@ -200,6 +200,17 @@ export const handlers = [
 		});
 	}),
 
+	http.get('/api/networks/:networkId/entitlements', () => {
+		return HttpResponse.json({
+			features: [],
+			upsell_features: [],
+			is_premium: false,
+			premium_status: { active: false, eero_plus: null, premium_dns: null },
+			capabilities: [],
+			experimental_writes: false
+		});
+	}),
+
 	// ============================================
 	// Device endpoints
 	// ============================================

@@ -350,7 +350,17 @@ export const api = {
 				method: 'PUT',
 				body,
 				retries: 0
-			})
+			}),
+
+		/**
+		 * Per-network entitlements, premium status and the
+		 * `EERO_DASHBOARD_EXPERIMENTAL_WRITES` flag - one call gates every
+		 * premium and unverified-write control in the UI (plan § 7 WP6).
+		 */
+		getEntitlements: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkEntitlements>(
+				`/networks/${networkId}/entitlements`
+			)
 	},
 
 	// Devices

@@ -59,6 +59,7 @@ describe('api client handler coverage', () => {
 				api.networks.setDns('network-123', {
 					ipv4: { mode: 'automatic', servers: [] }
 				}),
+			() => api.networks.getEntitlements('network-123'),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -94,6 +95,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(32);
+		expect(countLeafMethods(api)).toBe(33);
 	});
 });

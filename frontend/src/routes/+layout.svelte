@@ -14,6 +14,7 @@
 		networksStore,
 		selectedNetwork,
 		devicesStore,
+		entitlementsStore,
 		userEmail,
 		userName,
 		userRole
@@ -55,6 +56,19 @@
 	$effect(() => {
 		if (initialized && $isAuthenticated) {
 			networksStore.fetch();
+		}
+	});
+
+	// Fetch entitlements once per selected network (plan § 7 WP6) - this is
+	// the single call that gates every premium card and unverified/
+	// settings-class write control, so it must fire on the initial
+	// auto-selected network too, not only on an explicit switch.
+	$effect(() => {
+		const networkId = $selectedNetwork?.id;
+		if (networkId) {
+			entitlementsStore.fetch(networkId);
+		} else {
+			entitlementsStore.clear();
 		}
 	});
 
@@ -100,6 +114,7 @@
 
 	async function handleLogout() {
 		networksStore.clear();
+		entitlementsStore.clear();
 		await authStore.logout();
 		goto('/login');
 	}

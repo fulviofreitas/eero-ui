@@ -259,6 +259,31 @@ export interface SpeedTestStartResponse {
 }
 
 // ============================================
+// Entitlements
+//
+// One call per network gates every premium-only card (insights, data usage)
+// and every WP7/WP8 unverified/settings-class write control behind the
+// `EERO_DASHBOARD_EXPERIMENTAL_WRITES` operator flag. `features`,
+// `upsell_features` and `capabilities` element shape is undocumented upstream
+// (eero-api v8.0.3) - treat elements defensively (see entitlements.ts).
+// ============================================
+
+export interface PremiumStatus {
+	active: boolean | null;
+	eero_plus: unknown;
+	premium_dns: boolean | null;
+}
+
+export interface NetworkEntitlements {
+	features: unknown[];
+	upsell_features: unknown[];
+	is_premium: boolean | null;
+	premium_status: PremiumStatus | null;
+	capabilities: unknown[];
+	experimental_writes: boolean;
+}
+
+// ============================================
 // Devices
 // ============================================
 
