@@ -5,7 +5,7 @@
   Inspired by comprehensive Grafana dashboard for eero mesh networks.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$api/client';
 	import type { NetworkDetail, EeroSummary, ProfileSummary, DeviceSummary } from '$api/types';
 	import { devicesStore, deviceCounts, uiStore, selectedNetworkId, networksStore } from '$stores';
@@ -125,20 +125,37 @@
 	// history (plan decision 4). Routed through `networksStore.runSpeedTest`,
 	// the same helper the network detail page uses, rather than duplicating
 	// the poll loop here.
+	/** Cancelled on unmount (REVIEWER finding, Medium) so an in-flight poll loop stops immediately rather than leaking past navigation. */
+	let speedTestController: AbortController | null = null;
+
+	onDestroy(() => {
+		speedTestController?.abort();
+	});
+
 	async function runSpeedTest() {
 		if (!network) return;
+
+		speedTestController?.abort();
+		const controller = new AbortController();
+		speedTestController = controller;
 
 		speedTestLoading = true;
 		uiStore.info('Starting speed test... this can take up to 90 seconds.');
 
 		try {
-			const result = await networksStore.runSpeedTest(network.id);
+			const result = await networksStore.runSpeedTest(network.id, { signal: controller.signal });
 			network = { ...network, speed_test: result };
 			uiStore.success('Speed test completed!');
-		} catch (_error) {
-			uiStore.error('Speed test failed. Please try again.');
+		} catch (error) {
+			const isAbort = error instanceof Error && error.name === 'AbortError';
+			const isSuperseded = error instanceof Error && error.message.includes('superseded');
+			if (!isAbort && !isSuperseded) {
+				uiStore.error('Speed test failed. Please try again.');
+			}
 		} finally {
-			speedTestLoading = false;
+			if (speedTestController === controller) {
+				speedTestLoading = false;
+			}
 		}
 	}
 

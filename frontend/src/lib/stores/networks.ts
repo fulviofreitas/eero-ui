@@ -29,9 +29,14 @@ interface NetworksState {
  * `GET /networks/{id}/speedtests?limit=1` every 5s for up to 90s, comparing
  * the polled result's timestamp against the time the test was started so a
  * stale (pre-test) history entry is never mistaken for the new result.
+ *
+ * Keyed by network id (REVIEWER finding, High): a dashboard and a network
+ * detail page can both be mounted and can both trigger a speed test for
+ * different networks, and a second test on the *same* network (e.g. a
+ * double-click) must not have its poll loop clobber the newer run's state.
  */
 interface SpeedTestState {
-	networkId: string | null;
+	networkId: string;
 	running: boolean;
 	/** Whole seconds elapsed since the test was started - drives "running… Ns". */
 	elapsedSeconds: number;
@@ -41,6 +46,44 @@ interface SpeedTestState {
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 90000;
+
+function defaultSpeedTestState(networkId: string): SpeedTestState {
+	return { networkId, running: false, elapsedSeconds: 0, result: null, error: null };
+}
+
+/** `DOMException('AbortError')` isn't constructible in every test environment; a plain tagged Error is enough. */
+function speedTestAbortedError(): Error {
+	const error = new Error('Speed test cancelled.');
+	error.name = 'AbortError';
+	return error;
+}
+
+function speedTestSupersededError(): Error {
+	return new Error('Speed test superseded by a newer run for this network.');
+}
+
+/**
+ * `setTimeout` wrapped so cancellation via `AbortSignal` stops the wait
+ * immediately (REVIEWER finding, Medium) rather than waiting out the full
+ * 5s poll interval before the loop notices it was cancelled.
+ */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (signal?.aborted) {
+			reject(speedTestAbortedError());
+			return;
+		}
+		const timer = setTimeout(() => {
+			signal?.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		function onAbort() {
+			clearTimeout(timer);
+			reject(speedTestAbortedError());
+		}
+		signal?.addEventListener('abort', onAbort, { once: true });
+	});
+}
 
 // ============================================
 // Store
@@ -63,14 +106,6 @@ const initialState: NetworksState = {
 	error: null
 };
 
-const initialSpeedTestState: SpeedTestState = {
-	networkId: null,
-	running: false,
-	elapsedSeconds: 0,
-	result: null,
-	error: null
-};
-
 /** Parses a speed-test result timestamp; treats anything unparseable as "not newer". */
 function resultTime(result: SpeedTestResult | null): number {
 	if (!result?.timestamp) return -Infinity;
@@ -80,7 +115,19 @@ function resultTime(result: SpeedTestResult | null): number {
 
 function createNetworksStore() {
 	const { subscribe, set, update } = writable<NetworksState>(initialState);
-	const speedTestStore = writable<SpeedTestState>(initialSpeedTestState);
+	/** Per-network speed-test state (REVIEWER finding, High - keyed reentrancy). */
+	const speedTestStates = writable<Map<string, SpeedTestState>>(new Map());
+	/** The one run per network whose writes are allowed to land - a newer `runSpeedTest` call for the same network replaces it. */
+	const currentSpeedTestRuns = new Map<string, symbol>();
+
+	function patchSpeedTestState(networkId: string, patch: Partial<SpeedTestState>): void {
+		speedTestStates.update((map) => {
+			const next = new Map(map);
+			const existing = next.get(networkId) ?? defaultSpeedTestState(networkId);
+			next.set(networkId, { ...existing, ...patch });
+			return next;
+		});
+	}
 
 	return {
 		subscribe,
@@ -198,47 +245,98 @@ function createNetworksStore() {
 		 * Verified write (plan § 5) - the POST itself is safe to fire, but its
 		 * result is not in the response (decision 4), so this polls
 		 * `GET /networks/{id}/speedtests?limit=1` every 5s for up to 90s,
-		 * accepting only a result timestamped after the test was started.
-		 * `speedTestStore` exposes `running`/`elapsedSeconds` so the UI can
-		 * show progress; stops cleanly on success, timeout, or a thrown error
-		 * from the initiating POST.
+		 * accepting only a result timestamped at/after the server's
+		 * `started_at` (REVIEWER finding, High - never the browser's
+		 * `Date.now()`, which is skewed by clock drift and by however long the
+		 * POST round trip took).
+		 *
+		 * Reentrancy (REVIEWER finding, High): state is keyed by `networkId`.
+		 * Calling this again for the same network before the first call
+		 * settles supersedes it - the older run's poll loop stops writing to
+		 * the store (checked before every write) and its promise rejects
+		 * rather than resolving with a stale result.
+		 *
+		 * Cancellation (REVIEWER finding, Medium): pass `signal` to stop
+		 * polling immediately - including cutting short the 5s wait between
+		 * polls - rather than waiting out the current tick.
 		 */
-		async runSpeedTest(networkId: string): Promise<SpeedTestResult> {
-			speedTestStore.set({
-				networkId,
+		async runSpeedTest(
+			networkId: string,
+			options: { signal?: AbortSignal } = {}
+		): Promise<SpeedTestResult> {
+			const { signal } = options;
+			const token = Symbol('speedtest-run');
+			currentSpeedTestRuns.set(networkId, token);
+			const isCurrent = () => currentSpeedTestRuns.get(networkId) === token;
+
+			if (signal?.aborted) {
+				throw speedTestAbortedError();
+			}
+
+			patchSpeedTestState(networkId, {
 				running: true,
 				elapsedSeconds: 0,
 				result: null,
 				error: null
 			});
 
-			const startedAt = Date.now();
-
+			let startedAtMs: number;
 			try {
-				await api.networks.speedTest(networkId);
+				const start = await api.networks.speedTest(networkId);
+				startedAtMs = Date.parse(start.started_at);
+				if (Number.isNaN(startedAtMs)) {
+					// Defensive only - the backend contract guarantees `started_at`.
+					startedAtMs = Date.now();
+				}
 			} catch (error) {
-				const message = error instanceof Error ? error.message : 'Failed to start speed test';
-				speedTestStore.set({
-					networkId,
-					running: false,
-					elapsedSeconds: 0,
-					result: null,
-					error: message
-				});
+				if (isCurrent()) {
+					const message = error instanceof Error ? error.message : 'Failed to start speed test';
+					patchSpeedTestState(networkId, {
+						running: false,
+						elapsedSeconds: 0,
+						result: null,
+						error: message
+					});
+				}
 				throw error;
 			}
 
 			while (true) {
-				const elapsedMs = Date.now() - startedAt;
-				speedTestStore.update((s) => ({ ...s, elapsedSeconds: Math.floor(elapsedMs / 1000) }));
+				if (signal?.aborted) {
+					if (isCurrent()) {
+						patchSpeedTestState(networkId, { running: false });
+					}
+					throw speedTestAbortedError();
+				}
+				if (!isCurrent()) {
+					throw speedTestSupersededError();
+				}
+
+				const elapsedMs = Date.now() - startedAtMs;
+				patchSpeedTestState(networkId, {
+					elapsedSeconds: Math.max(0, Math.floor(elapsedMs / 1000))
+				});
 
 				if (elapsedMs >= POLL_TIMEOUT_MS) {
 					const message = 'Speed test timed out waiting for a result.';
-					speedTestStore.update((s) => ({ ...s, running: false, error: message }));
+					if (isCurrent()) {
+						patchSpeedTestState(networkId, { running: false, error: message });
+					}
 					throw new Error(message);
 				}
 
-				await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+				try {
+					await delay(POLL_INTERVAL_MS, signal);
+				} catch (error) {
+					if (isCurrent()) {
+						patchSpeedTestState(networkId, { running: false });
+					}
+					throw error;
+				}
+
+				if (!isCurrent()) {
+					throw speedTestSupersededError();
+				}
 
 				let history: SpeedTestResult[];
 				try {
@@ -249,12 +347,15 @@ function createNetworksStore() {
 					continue;
 				}
 
+				if (!isCurrent()) {
+					throw speedTestSupersededError();
+				}
+
 				const latest = history[0] ?? null;
-				if (latest && resultTime(latest) >= startedAt) {
-					speedTestStore.set({
-						networkId,
+				if (latest && resultTime(latest) >= startedAtMs) {
+					patchSpeedTestState(networkId, {
 						running: false,
-						elapsedSeconds: Math.floor((Date.now() - startedAt) / 1000),
+						elapsedSeconds: Math.floor((Date.now() - startedAtMs) / 1000),
 						result: latest,
 						error: null
 					});
@@ -271,18 +372,24 @@ function createNetworksStore() {
 				localStorage.removeItem(STORAGE_KEY);
 			}
 			set(initialState);
-			speedTestStore.set(initialSpeedTestState);
+			speedTestStates.set(new Map());
+			currentSpeedTestRuns.clear();
 		},
 
-		/** Internal: exposed for the derived `speedTestState` export below. */
-		_speedTestStore: speedTestStore
+		/** Internal: exposed for the `speedTestFor` export below. */
+		_speedTestStates: speedTestStates
 	};
 }
 
 export const networksStore = createNetworksStore();
 
-// Derived: speed-test progress/result for the network under test
-export const speedTestState = derived(networksStore._speedTestStore, ($speedTest) => $speedTest);
+/** Speed-test progress/result for one network - keyed, since more than one network's test can be tracked at once. */
+export function speedTestFor(networkId: string) {
+	return derived(
+		networksStore._speedTestStates,
+		($map) => $map.get(networkId) ?? defaultSpeedTestState(networkId)
+	);
+}
 
 // Derived: currently selected network
 export const selectedNetwork = derived(

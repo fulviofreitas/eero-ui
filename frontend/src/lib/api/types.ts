@@ -245,9 +245,17 @@ export interface SpeedTestResult {
 	timestamp: string | null;
 }
 
-/** Response body for `POST /networks/{id}/speedtest` - starts, does not wait. */
+/**
+ * Response body for `POST /networks/{id}/speedtest` - starts, does not wait.
+ *
+ * `started_at` is the server's clock, not the browser's, and MUST be used as
+ * the comparison baseline when polling `speedtests` for a fresh result -
+ * comparing against `Date.now()` in the browser is skewed by clock drift and
+ * by however long the POST itself took to round-trip.
+ */
 export interface SpeedTestStartResponse {
 	status: 'started';
+	started_at: string;
 }
 
 // ============================================
@@ -519,7 +527,12 @@ export interface ProfileRenameRequest {
  * the SDK exception mapping in plan § 3.4. Present only for the exception
  * classes that carry a machine-readable type; a plain 500/503/etc has none.
  */
-export type ApiErrorType = 'premium_required' | 'feature_unavailable' | 'experimental_disabled';
+export type ApiErrorType =
+	| 'premium_required'
+	| 'feature_unavailable'
+	| 'experimental_disabled'
+	/** 409 from `POST /networks/{id}/speedtest` - a test is already running on this network. */
+	| 'speedtest_in_progress';
 
 export interface ApiError {
 	detail: string;
@@ -547,9 +560,11 @@ export interface HealthStatus {
 	eero_client_version: string;
 	/**
 	 * Whether `EERO_DASHBOARD_EXPERIMENTAL_WRITES` is enabled on this
-	 * deployment (decision 6a) - gates the unverified / settings-class write
-	 * surfaces in the UI. Replaces `exporter_version`, which no longer exists
-	 * now that the embedded exporter process is gone (§ 2.4).
+	 * deployment (decision 6a). Replaces `exporter_version`, which no longer
+	 * exists now that the embedded exporter process is gone (§ 2.4).
+	 *
+	 * Not yet consumed by the UI - gating the unverified / settings-class
+	 * write surfaces on this flag lands in WP7/WP8, not here.
 	 */
 	experimental_writes: boolean;
 }

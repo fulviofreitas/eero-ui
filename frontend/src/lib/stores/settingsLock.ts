@@ -15,24 +15,10 @@
  * living inside just one of the two stores.
  */
 
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 
 /** Network ids currently applying a settings-class write. */
 const applyingNetworkIds = writable<Set<string>>(new Set());
-
-/**
- * True while any settings-class write is in flight for `networkId`.
- */
-export function isApplyingSettings(networkId: string): boolean {
-	let applying = false;
-	applyingNetworkIds.subscribe((ids) => {
-		applying = ids.has(networkId);
-	})();
-	return applying;
-}
-
-/** Derived store for reactive use in components: `$applyingSettingsFor(networkId)`. */
-export const applyingSettingsIds = derived(applyingNetworkIds, ($ids) => $ids);
 
 /**
  * Run `fn` under the per-network settings lock, throwing if a settings-class
@@ -64,4 +50,15 @@ export async function withSettingsLock<T>(networkId: string, fn: () => Promise<T
 			return next;
 		});
 	}
+}
+
+/**
+ * Test-only: clears every held lock. `withSettingsLock` has no public
+ * "release" - a lock is only ever released by the `finally` inside the
+ * function that acquired it - so a test that asserts on lock contention
+ * needs a way to reset state between cases without waiting out a real
+ * in-flight write.
+ */
+export function resetSettingsLock(): void {
+	applyingNetworkIds.set(new Set());
 }

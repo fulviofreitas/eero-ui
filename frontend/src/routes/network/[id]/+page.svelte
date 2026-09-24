@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { NetworkDetail } from '$api/types';
-	import { uiStore, networksStore, speedTestState } from '$stores';
+	import { uiStore, networksStore, speedTestFor } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '$lib/components/network/DnsSettingsCard.svelte';
@@ -19,12 +19,19 @@
 	let showRenameModal = false;
 	let renameValue = '';
 	let renaming = false;
+	/** Cancelled on unmount (REVIEWER finding, Medium) so an in-flight poll loop stops immediately rather than leaking past navigation. */
+	let speedTestController: AbortController | null = null;
 
 	$: networkId = $page.params.id;
+	$: speedTestProgress = speedTestFor(networkId ?? '');
 
 	onMount(() => {
 		console.log('Network page mounted, ID:', networkId);
 		fetchNetwork();
+	});
+
+	onDestroy(() => {
+		speedTestController?.abort();
 	});
 
 	async function fetchNetwork(refresh = false) {
@@ -54,22 +61,36 @@
 	async function handleSpeedTest() {
 		if (!networkId) return;
 
+		// Cancel any run this page previously started before beginning a new one.
+		speedTestController?.abort();
+		const controller = new AbortController();
+		speedTestController = controller;
+
 		speedTestLoading = true;
 		uiStore.info('Running speed test… this can take up to 90 seconds.');
 
 		try {
 			// Verified write (plan § 5), but the result is not in the POST
 			// response on eero-api v8 - the store starts the test, then polls
-			// speed-test history until a newer result appears (decision 4).
-			const result = await networksStore.runSpeedTest(networkId);
+			// speed-test history until a result at/after the server's
+			// `started_at` appears (decision 4).
+			const result = await networksStore.runSpeedTest(networkId, { signal: controller.signal });
 			uiStore.success('Speed test completed!');
 			if (network) {
 				network = { ...network, speed_test: result };
 			}
 		} catch (err) {
-			uiStore.error(err instanceof Error ? err.message : 'Speed test failed');
+			// A deliberate cancel (unmount, or superseded by a newer run for
+			// this network) is not a user-facing failure.
+			const isAbort = err instanceof Error && err.name === 'AbortError';
+			const isSuperseded = err instanceof Error && err.message.includes('superseded');
+			if (!isAbort && !isSuperseded) {
+				uiStore.error(err instanceof Error ? err.message : 'Speed test failed');
+			}
 		} finally {
-			speedTestLoading = false;
+			if (speedTestController === controller) {
+				speedTestLoading = false;
+			}
 		}
 	}
 
@@ -501,7 +522,7 @@
 
 				{#if speedTestLoading}
 					<p class="text-muted text-sm">
-						Running… {$speedTestState.elapsedSeconds}s (this can take up to 90 seconds)
+						Running… {$speedTestProgress.elapsedSeconds}s (this can take up to 90 seconds)
 					</p>
 				{:else if network.speed_test && (network.speed_test.download_mbps || network.speed_test.upload_mbps)}
 					<div class="speed-results">

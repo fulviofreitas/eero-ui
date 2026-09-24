@@ -132,8 +132,12 @@ export const handlers = [
 	}),
 
 	// Starts a speed test - result is fetched separately via `speedtests` (decision 4).
+	// `started_at` is the server's clock; the store MUST use it, not the browser's.
 	http.post('/api/networks/:networkId/speedtest', () => {
-		return HttpResponse.json({ status: 'started' }, { status: 202 });
+		return HttpResponse.json(
+			{ status: 'started', started_at: new Date().toISOString() },
+			{ status: 202 }
+		);
 	}),
 
 	http.get('/api/networks/:networkId/speedtests', () => {
