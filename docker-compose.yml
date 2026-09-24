@@ -17,8 +17,6 @@ services:
       # Metrics collection configuration
       EERO_DASHBOARD_COLLECTION_INTERVAL: "${EERO_DASHBOARD_COLLECTION_INTERVAL:-60}"
       EERO_DASHBOARD_METRICS_RETENTION: "${EERO_DASHBOARD_METRICS_RETENTION:-1y}"
-      # Optional: Expose /metrics endpoint for external Prometheus scraping
-      EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED: "${EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED:-false}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -27,5 +25,38 @@ services:
       retries: 3
       start_period: 10s
 
+  # ------------------------------------------------------------------
+  # OPTIONAL — eero-prometheus-exporter (fully decoupled from eero-ui)
+  # ------------------------------------------------------------------
+  # eero-ui does NOT read from this container in any way: not as a Python
+  # dependency, not as a scrape target, not as a data source. eero-ui 6.0+
+  # collects and stores its own metrics (see the embedded VictoriaMetrics
+  # instance above, written to by eero-ui's own collector).
+  #
+  # Uncomment this service only if you want the exporter's full 90+ metric
+  # set for your OWN external Prometheus to scrape. It needs its own eero
+  # credential file (a separate login from eero-ui's) and its own volume;
+  # it does not share eero-ui's /data/session.
+  #
+  # eero-exporter:
+  #   image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0
+  #   container_name: eero-exporter
+  #   ports:
+  #     - "10052:10052"
+  #   volumes:
+  #     - eero-exporter-session:/data/session
+  #   environment:
+  #     EERO_EXPORTER_SESSION_FILE: "/data/session/exporter-session.json"
+  #     EERO_EXPORTER_HOST: "0.0.0.0"
+  #     EERO_EXPORTER_PORT: "10052"
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:10052/ready"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
+
 volumes:
   eero-data:
+  # eero-exporter-session:

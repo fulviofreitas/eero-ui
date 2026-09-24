@@ -32,11 +32,8 @@ class Settings(BaseModel):
     # VictoriaMetrics (embedded time-series database)
     victoria_metrics_url: str = "http://127.0.0.1:8428"
 
-    # Exporter session path (shared with eero-prometheus-exporter)
-    exporter_session_path: str = "/data/session/exporter-session.json"
-
-    # Optional: expose /metrics externally for Prometheus scraping
-    metrics_endpoint_enabled: bool = False
+    # Metrics collector
+    collection_interval: int = 60  # seconds
 
     class Config:
         """Pydantic config."""
@@ -88,15 +85,9 @@ def get_settings() -> Settings:
         victoria_metrics_url=os.environ.get(
             "EERO_DASHBOARD_VICTORIA_METRICS_URL", "http://127.0.0.1:8428"
         ),
-        # Exporter session path (shared with eero-prometheus-exporter)
-        exporter_session_path=os.environ.get(
-            "EERO_EXPORTER_SESSION_PATH", "/data/session/exporter-session.json"
+        collection_interval=max(
+            10, int(os.environ.get("EERO_DASHBOARD_COLLECTION_INTERVAL", "60"))
         ),
-        # Optional: expose /metrics externally
-        metrics_endpoint_enabled=os.environ.get(
-            "EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED", "false"
-        ).lower()
-        == "true",
     )
 
 

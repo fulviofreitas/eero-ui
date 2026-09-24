@@ -2,10 +2,10 @@
 # ============================================
 # Container Start Script
 # ============================================
-# Orchestrates all 3 processes inside the container:
-# 1. eero-prometheus-exporter (port 9118, internal)
-# 2. VictoriaMetrics (port 8428, internal)
-# 3. FastAPI (port 8000, exposed)
+# Orchestrates the 2 processes inside the container:
+# 1. VictoriaMetrics (port 8428, loopback-only, storage only — nothing scrapes it)
+# 2. FastAPI (port 8000, exposed) — writes metrics into VictoriaMetrics itself
+#    via its own collector and reads them back for the dashboard charts.
 # ============================================
 
 set -e
@@ -13,79 +13,74 @@ set -e
 # Configuration from environment (with defaults)
 COLLECTION_INTERVAL=${EERO_DASHBOARD_COLLECTION_INTERVAL:-60}
 METRICS_RETENTION=${EERO_DASHBOARD_METRICS_RETENTION:-1y}
-SESSION_PATH=${EERO_EXPORTER_SESSION_PATH:-/data/session/exporter-session.json}
 
 echo "============================================"
 echo "  eero-ui with Embedded Metrics"
 echo "============================================"
 echo "  Collection interval: ${COLLECTION_INTERVAL}s"
 echo "  Metrics retention: ${METRICS_RETENTION}"
-echo "  Exporter session: ${SESSION_PATH}"
 echo "============================================"
 
-# Ensure session directory exists
-mkdir -p "$(dirname "$SESSION_PATH")"
+# Export so the Python collector (FastAPI lifespan) can read it too.
+export EERO_DASHBOARD_COLLECTION_INTERVAL="${COLLECTION_INTERVAL}"
 
-# Generate prometheus.yml for VictoriaMetrics scrape config
-cat > /app/prometheus.yml <<EOF
-global:
-  scrape_interval: ${COLLECTION_INTERVAL}s
-
-scrape_configs:
-  - job_name: 'eero'
-    static_configs:
-      - targets: ['127.0.0.1:9118']
-    scrape_interval: ${COLLECTION_INTERVAL}s
-    scrape_timeout: 30s
-EOF
-
-# Cleanup function for graceful shutdown
+# Cleanup function for graceful shutdown.
+#
+# NOTE on PID bookkeeping: this trap is never actually invoked in normal
+# operation, because `exec` below replaces this shell's process image with
+# uvicorn, which drops any trap installed in this script. It only runs if the
+# script exits before reaching the `exec` (e.g. VictoriaMetrics fails to
+# start). The original script's `VM_PID=$!` after `cmd | sed &` was dead
+# bookkeeping twice over: `$!` captures the PID of the last command in a
+# pipeline (`sed`, not `victoria-metrics`), and the trap never fires anyway
+# once `exec` runs. Rather than drop the bookkeeping outright, this fixes the
+# PID capture with process substitution so `$!` is `victoria-metrics` itself,
+# keeping the `sed` log prefix without putting it in the pipeline.
 cleanup() {
     echo ""
     echo "Shutting down services..."
-    if [ -n "$EXPORTER_PID" ] && kill -0 "$EXPORTER_PID" 2>/dev/null; then
-        kill "$EXPORTER_PID" 2>/dev/null || true
-    fi
-    if [ -n "$VM_PID" ] && kill -0 "$VM_PID" 2>/dev/null; then
+    if [ -n "${VM_PID:-}" ] && kill -0 "$VM_PID" 2>/dev/null; then
         kill "$VM_PID" 2>/dev/null || true
     fi
     exit 0
 }
 trap cleanup SIGTERM SIGINT
 
-# Start eero-prometheus-exporter in background
-# It will wait for session file to appear before collecting metrics
-echo "Starting eero-prometheus-exporter on port 9118..."
-eero-exporter serve \
-    --host 127.0.0.1 \
-    --port 9118 \
-    --interval "${COLLECTION_INTERVAL}" \
-    --session-file "${SESSION_PATH}" \
-    2>&1 | sed 's/^/[exporter] /' &
-EXPORTER_PID=$!
-
-# Start VictoriaMetrics in background
-echo "Starting VictoriaMetrics on port 8428..."
+# Start VictoriaMetrics in background.
+# Storage only: no -promscrape.config, nothing is scraped. eero-ui's own
+# collector (running inside FastAPI) pushes samples via the import API, and
+# routes/metrics.py reads them back. Loopback-bound; never published.
+echo "Starting VictoriaMetrics on 127.0.0.1:8428..."
 victoria-metrics \
     -storageDataPath=/data/victoria-metrics \
     -retentionPeriod="${METRICS_RETENTION}" \
     -httpListenAddr=127.0.0.1:8428 \
-    -promscrape.config=/app/prometheus.yml \
     -search.latencyOffset=0s \
     -loggerLevel=WARN \
-    2>&1 | sed 's/^/[victoria] /' &
+    > >(sed 's/^/[victoria] /') 2>&1 &
 VM_PID=$!
 
-# Wait for VictoriaMetrics to be ready (exporter may not be ready until user logs in)
-echo "Waiting for VictoriaMetrics..."
-until curl -s http://127.0.0.1:8428/health > /dev/null 2>&1; do
+# Wait for VictoriaMetrics to be ready, but don't block startup forever if it
+# is slow or unhealthy. Bounded at 30s in 1s steps; a timeout is logged as a
+# warning, not a fatal error — FastAPI still starts, and routes/metrics.py
+# will simply surface read/write errors at request time instead of the whole
+# container hanging on boot.
+echo "Waiting for VictoriaMetrics (up to 30s)..."
+READY=0
+for _ in $(seq 1 30); do
+    if curl -s http://127.0.0.1:8428/health > /dev/null 2>&1; then
+        READY=1
+        break
+    fi
     sleep 1
 done
-echo "VictoriaMetrics ready!"
+if [ "$READY" = "1" ]; then
+    echo "VictoriaMetrics ready!"
+else
+    echo "WARNING: VictoriaMetrics did not become ready within 30s; continuing anyway." >&2
+fi
 
 # Start FastAPI (foreground)
-# When user logs in, FastAPI writes session to shared location
-# and eero-prometheus-exporter automatically starts collecting
 echo "Starting FastAPI on port 8000..."
 cd /app/backend
 exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000

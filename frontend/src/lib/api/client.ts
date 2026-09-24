@@ -221,7 +221,6 @@ export const api = {
 			status: string;
 			version: string;
 			eero_client_version: string;
-			exporter_version?: string;
 		}>('/health'),
 
 	// Auth

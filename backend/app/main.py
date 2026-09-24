@@ -1,12 +1,12 @@
 """Eero Dashboard Backend - FastAPI Application."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
-import httpx
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,8 +14,10 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .config import settings
-from .deps import shutdown_client
+from .deps import get_eero_client, shutdown_client
 from .routes import auth, devices, eeros, metrics, networks, profiles
+from .services.collector import MetricsCollector
+from .services.victoria import victoria_client
 
 
 def get_eero_client_version() -> str:
@@ -26,14 +28,6 @@ def get_eero_client_version() -> str:
         return "unknown"
 
 
-def get_exporter_version() -> str:
-    """Get the installed eero-prometheus-exporter version."""
-    try:
-        return pkg_version("eero-prometheus-exporter")
-    except Exception:
-        return None
-
-
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -42,41 +36,33 @@ logging.basicConfig(
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _sync_session_to_exporter_on_startup() -> None:
-    """Sync existing session to exporter on startup.
-
-    This ensures the exporter can collect metrics even after container restarts
-    when the session was restored from persistent storage.
-    """
-    try:
-        main_session_path = Path(settings.cookie_file)
-        exporter_session_path = Path(
-            settings.exporter_session_path
-            if hasattr(settings, "exporter_session_path")
-            else "/data/session/exporter-session.json"
-        )
-
-        if main_session_path.exists():
-            session_content = main_session_path.read_text()
-            if session_content.strip():  # Only sync if not empty
-                exporter_session_path.parent.mkdir(parents=True, exist_ok=True)
-                exporter_session_path.write_text(session_content)
-                _LOGGER.info("Session synced to exporter on startup")
-        else:
-            _LOGGER.info("No existing session found, exporter will wait for login")
-    except Exception as e:
-        _LOGGER.warning(f"Failed to sync session on startup: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+    """Application lifespan manager.
+
+    Starts the metrics collector task (see ``services/collector.py``,
+    phase-6.0-revamp.md § 2.2) after the app is up, and tears it down
+    before the shared EeroClient and VictoriaMetrics client are closed.
+    """
     _LOGGER.info("Starting Eero Dashboard Backend")
-    # Sync session to exporter on startup (for container restarts)
-    await _sync_session_to_exporter_on_startup()
+    collector = MetricsCollector(
+        get_eero_client,
+        victoria_client,
+        interval_seconds=settings.collection_interval,
+    )
+    app.state.metrics_collector = collector
+    collector_task = asyncio.create_task(collector.run_forever())
+
     yield
+
     _LOGGER.info("Shutting down Eero Dashboard Backend")
+    collector_task.cancel()
+    try:
+        await collector_task
+    except asyncio.CancelledError:
+        pass
     await shutdown_client()
+    await victoria_client.aclose()
 
 
 # Create FastAPI application
@@ -134,37 +120,7 @@ async def health_check():
         "version": "1.0.0",
         "eero_client_version": get_eero_client_version(),
     }
-    exporter_version = get_exporter_version()
-    if exporter_version:
-        response["exporter_version"] = exporter_version
     return response
-
-
-# Optional: External /metrics endpoint for Prometheus scraping
-# Enabled with EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED=true
-if settings.metrics_endpoint_enabled:
-
-    @app.get("/metrics", include_in_schema=True, tags=["Monitoring"])
-    async def prometheus_metrics_endpoint():
-        """Prometheus metrics endpoint.
-
-        Proxies 90+ metrics from embedded eero-prometheus-exporter.
-        Enable with: EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED=true
-        """
-        async with httpx.AsyncClient() as client:
-            try:
-                # Proxy from internal eero-prometheus-exporter
-                response = await client.get(
-                    "http://127.0.0.1:9118/metrics", timeout=30.0
-                )
-                return Response(
-                    content=response.content,
-                    media_type="text/plain; version=0.0.4; charset=utf-8",
-                )
-            except httpx.RequestError:
-                raise HTTPException(
-                    status_code=503, detail="Metrics exporter unavailable"
-                )
 
 
 # Serve static frontend (production)
@@ -183,7 +139,17 @@ if frontend_dist.exists():
     # SPA fallback: serve index.html for all non-API routes
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        """Serve the SPA for all non-API routes."""
+        """Serve the SPA for all non-API routes.
+
+        `/metrics` has no replacement endpoint (see phase-6.0-revamp.md § 2.4)
+        and any `/api/*` path that no router claimed is a genuine 404 --
+        neither should ever fall through to index.html.
+        """
+        if full_path == "metrics" or full_path.startswith("metrics/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
         # Resolve the requested file path
         file_path = (frontend_dist / full_path).resolve()
 
