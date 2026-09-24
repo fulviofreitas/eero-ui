@@ -5,17 +5,49 @@ import re
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from eero.exceptions import EeroValidationException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from ..deps import require_auth
 from ..services.victoria import victoria_client
 
-router = APIRouter()
+try:
+    # Available from eero-api >= 8.0.1 (eero.api.links.validate_identifier).
+    # TODO(WP1): drop the local fallback below once this branch upgrades
+    # past eero-api 7.x (see phase-6.0-revamp.md § 2.5, § 1.6).
+    from eero.api.links import validate_identifier as _sdk_validate_identifier
+except ImportError:
+    _sdk_validate_identifier = None
+
+router = APIRouter(dependencies=[Depends(require_auth)])
 _LOGGER = logging.getLogger(__name__)
 
-# Network IDs from the eero API are alphanumeric with hyphens/underscores.
-# Restrict to that character class before interpolating into PromQL so a
-# crafted network_id can't break out of the label selector.
-_SAFE_NETWORK_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+# Identifiers (network_id, device_id, mac, serial, ...) from the eero API,
+# validated with the same rule as eero.api.links.validate_identifier before
+# they are interpolated into a PromQL label selector, so a crafted value
+# can't break out of the selector.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+
+def _validate_identifier(value: str, field_name: str) -> str:
+    """Validate an identifier before it reaches a PromQL label selector.
+
+    Raises HTTPException(400) if the identifier is malformed.
+    """
+    if _sdk_validate_identifier is not None:
+        try:
+            return _sdk_validate_identifier(value)
+        except EeroValidationException:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid {field_name}",
+            )
+    if not value or ".." in value or not _IDENTIFIER_RE.match(value):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {field_name}",
+        )
+    return value
 
 
 def _network_label_selector(network_id: str | None) -> str:
@@ -26,90 +58,32 @@ def _network_label_selector(network_id: str | None) -> str:
     """
     if not network_id:
         return ""
-    if not _SAFE_NETWORK_ID.match(network_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid network_id",
-        )
-    return f'{{network_id="{network_id}"}}'
+    validated = _validate_identifier(network_id, "network_id")
+    return f'{{network_id="{validated}"}}'
 
 
 @router.get("/health")
-async def metrics_health() -> dict[str, Any]:
+async def metrics_health(request: Request) -> dict[str, Any]:
     """Check health of metrics infrastructure.
 
     Returns:
-        Health status of VictoriaMetrics.
+        Health status of VictoriaMetrics, plus the collector's own
+        self-observability data (last successful write, cumulative error
+        counts by reason) so a stalled collector is visible here even if
+        every metric series still looks fine.
     """
     vm_healthy = await victoria_client.health()
+    collector = getattr(request.app.state, "metrics_collector", None)
+    last_successful_write = victoria_client.last_successful_write
+    collector_errors_total = collector.error_counts if collector is not None else {}
     return {
         "victoria_metrics": "healthy" if vm_healthy else "unavailable",
         "status": "healthy" if vm_healthy else "degraded",
+        "last_successful_write": (
+            last_successful_write.isoformat() if last_successful_write else None
+        ),
+        "collector_errors_total": collector_errors_total,
     }
-
-
-@router.get("/query")
-async def query_metrics(
-    query: str = Query(..., description="PromQL query"),
-    time: str | None = Query(None, description="Evaluation time (RFC3339 or Unix)"),
-) -> dict[str, Any]:
-    """Execute an instant PromQL query.
-
-    Args:
-        query: The PromQL query string.
-        time: Optional evaluation timestamp.
-
-    Returns:
-        Query result from VictoriaMetrics.
-    """
-    try:
-        return await victoria_client.query(query, time)
-    except httpx.HTTPStatusError as e:
-        _LOGGER.warning(f"VictoriaMetrics query error: {e}")
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Query failed: {e.response.text}",
-        )
-    except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Metrics service unavailable",
-        )
-
-
-@router.get("/query_range")
-async def query_range(
-    query: str = Query(..., description="PromQL query"),
-    start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
-    end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
-    step: str = Query("1m", description="Query resolution step (e.g., 1m, 5m, 1h)"),
-) -> dict[str, Any]:
-    """Execute a range PromQL query for historical data.
-
-    Args:
-        query: The PromQL query string.
-        start: Start time for the range.
-        end: End time for the range.
-        step: Query resolution step.
-
-    Returns:
-        Query result from VictoriaMetrics.
-    """
-    try:
-        return await victoria_client.query_range(query, start, end, step)
-    except httpx.HTTPStatusError as e:
-        _LOGGER.warning(f"VictoriaMetrics range query error: {e}")
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Query failed: {e.response.text}",
-        )
-    except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Metrics service unavailable",
-        )
 
 
 @router.get("/speedtest/history")
@@ -178,16 +152,17 @@ async def get_device_signal_history(
     Returns:
         Signal strength (dBm) and connection score history.
     """
+    validated_device_id = _validate_identifier(device_id, "device_id")
     try:
         # eero-prometheus-exporter uses device_id label (MAC without colons)
         signal_strength = await victoria_client.query_range(
-            f'eero_device_signal_strength_dbm{{device_id="{device_id}"}}',
+            f'eero_device_signal_strength_dbm{{device_id="{validated_device_id}"}}',
             start,
             end,
             step,
         )
         connection_score = await victoria_client.query_range(
-            f'eero_device_connection_score_bars{{device_id="{device_id}"}}',
+            f'eero_device_connection_score_bars{{device_id="{validated_device_id}"}}',
             start,
             end,
             step,
@@ -196,81 +171,6 @@ async def get_device_signal_history(
             "signal_strength": signal_strength,
             "connection_score": connection_score,
         }
-    except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Metrics service unavailable",
-        )
-
-
-# Keep backwards compatibility with old endpoint
-@router.get("/devices/{mac}/bandwidth")
-async def get_device_bandwidth(
-    mac: str,
-    start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
-    end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
-    step: str = Query("1m", description="Query resolution step"),
-) -> dict[str, Any]:
-    """Get device signal history (backwards compatible endpoint).
-
-    Note: Bandwidth metrics are not available from eero-prometheus-exporter.
-    This endpoint returns signal strength data instead.
-
-    Args:
-        mac: The device ID (MAC address without colons, lowercase).
-        start: Start time for the range.
-        end: End time for the range.
-        step: Query resolution step.
-
-    Returns:
-        Signal strength data (labeled as rx/tx for backwards compatibility).
-    """
-    try:
-        # Use device_id label format
-        signal = await victoria_client.query_range(
-            f'eero_device_signal_strength_dbm{{device_id="{mac}"}}',
-            start,
-            end,
-            step,
-        )
-        # Return signal as both rx and tx for chart compatibility
-        return {"rx": signal, "tx": signal}
-    except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Metrics service unavailable",
-        )
-
-
-@router.get("/eeros/{serial}/quality")
-async def get_eero_mesh_quality(
-    serial: str,
-    start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
-    end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
-    step: str = Query("5m", description="Query resolution step"),
-) -> dict[str, Any]:
-    """Get eero mesh quality history.
-
-    Returns mesh quality metrics over time for a specific eero.
-
-    Args:
-        serial: The eero serial number.
-        start: Start time for the range.
-        end: End time for the range.
-        step: Query resolution step.
-
-    Returns:
-        Mesh quality history (0-5 bars).
-    """
-    try:
-        # eero-prometheus-exporter uses eero_eero_mesh_quality_bars metric
-        # with eero_id label containing the serial number
-        quality = await victoria_client.query_range(
-            f'eero_eero_mesh_quality_bars{{eero_id="{serial}"}}', start, end, step
-        )
-        return {"mesh_quality": quality}
     except httpx.RequestError as e:
         _LOGGER.error(f"VictoriaMetrics connection error: {e}")
         raise HTTPException(
