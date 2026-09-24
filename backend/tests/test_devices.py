@@ -28,10 +28,30 @@ def make_device(dev_id="device-1", mac="aa:bb:cc:dd:ee:ff", network_id="network-
 
 
 class TestBlockDevice:
-    """Tests for POST /api/devices/{device_id}/block."""
+    """Tests for POST /api/devices/{device_id}/block.
+
+    Unverified write (phase-6.0-revamp.md § 5): gated behind
+    ``require_experimental_writes`` (decision 6a). Every test below opts
+    into ``experimental_writes_enabled`` except the one asserting the
+    default-disabled 403.
+    """
+
+    async def test_disabled_by_default_returns_403_experimental_disabled(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_device = AsyncMock(
+            return_value=make_raw_response(make_device())
+        )
+        authenticated_client.block_device = AsyncMock()
+
+        response = await auth_client.post("/api/devices/device-1/block")
+
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.block_device.assert_not_called()
 
     async def test_block_resolves_mac_and_calls_sdk(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """Block resolves the device's MAC, then calls block_device with it."""
         authenticated_client.get_device = AsyncMock(
@@ -55,7 +75,7 @@ class TestBlockDevice:
         )
 
     async def test_block_device_without_mac_returns_422(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """A device with no known MAC is rejected before any block call."""
         device_without_mac = make_device()
@@ -71,7 +91,9 @@ class TestBlockDevice:
         assert response.json()["detail"] == "Device has no known MAC address."
         authenticated_client.block_device.assert_not_called()
 
-    async def test_block_device_not_found(self, auth_client, authenticated_client):
+    async def test_block_device_not_found(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
         """EeroNotFoundException while resolving the MAC maps to 404."""
         authenticated_client.get_device = AsyncMock(
             side_effect=EeroNotFoundException("device", "device-1")

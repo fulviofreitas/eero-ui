@@ -3,10 +3,10 @@
 import logging
 
 from eero import EeroClient
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from ..deps import get_network_id, require_auth
+from ..deps import get_network_id, require_auth, require_experimental_writes
 from ..transformers import (
     check_success,
     extract_data,
@@ -15,6 +15,7 @@ from ..transformers import (
     is_valid_device_type,
     normalize_device,
 )
+from .auth import limiter
 from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
 router = APIRouter()
@@ -322,13 +323,22 @@ async def _resolve_device_mac(
     return mac
 
 
-@router.post("/{device_id}/block", response_model=DeviceAction)
+@router.post(
+    "/{device_id}/block",
+    response_model=DeviceAction,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def block_device(
     device_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
-    """Block a device from the network."""
+    """Block a device from the network.
+
+    Unverified write (phase-6.0-revamp.md § 5): gated behind
+    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` (decision 6a). ``unblock_device``
+    is not gated - it is in the SDK's verified-write allowlist.
+    """
     mac = await _resolve_device_mac(client, device_id, network_id)
     raw_result = await client.block_device(mac, network_id=network_id)
     success = check_success(raw_result)
@@ -415,9 +425,11 @@ class DeviceTypeRequest(BaseModel):
 
 
 @router.put("/{device_id}/type", response_model=DeviceAction)
+@limiter.shared_limit("10/minute", scope="device_type")
 async def set_device_type_route(
+    request: Request,
     device_id: str,
-    request: DeviceTypeRequest,
+    body: DeviceTypeRequest,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
@@ -427,9 +439,10 @@ async def set_device_type_route(
     persists and reads back correctly. eero-api ships no device-type
     catalogue, so ``device_type`` is validated against a conservative
     ``^[a-z0-9_]{1,40}$`` allowlist rather than a fixed enum; never expose
-    ``set_device_labels`` (verified no-op).
+    ``set_device_labels`` (verified no-op). Rate limited to 10/minute
+    (security review, 2026-09-24).
     """
-    device_type = request.device_type.strip()
+    device_type = body.device_type.strip()
     if not is_valid_device_type(device_type):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

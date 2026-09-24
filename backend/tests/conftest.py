@@ -145,6 +145,21 @@ async def auth_client(authenticated_client):
 
 
 @pytest.fixture
+def experimental_writes_enabled(monkeypatch):
+    """Enable ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` for one test.
+
+    ``require_experimental_writes`` (``app/deps.py``) reads the shared
+    ``app.config.settings`` singleton, so tests exercising a WP7-gated
+    write monkeypatch that attribute directly rather than re-parsing the
+    environment.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "experimental_writes", True)
+    yield
+
+
+@pytest.fixture
 def eero_exceptions():
     """Factory functions building one instance of each v8 exception class.
 

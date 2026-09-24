@@ -9,7 +9,6 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
 from app import deps
 from app.config import settings
@@ -105,14 +104,12 @@ class TestClientConstruction:
 class TestRequireExperimentalWrites:
     """Tests for the decision-6a experimental-writes gate."""
 
-    async def test_disabled_by_default_raises_403(self):
-        """Disabled (the default) raises 403 with the documented detail."""
+    async def test_disabled_by_default_raises_experimental_write_disabled(self):
+        """Disabled (the default) raises the dedicated exception, mapped to
+        403 experimental_disabled by the handler in main.py."""
         with patch.object(settings, "experimental_writes", False):
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(deps.ExperimentalWriteDisabledError):
                 await deps.require_experimental_writes()
-
-        assert exc_info.value.status_code == 403
-        assert "EERO_DASHBOARD_EXPERIMENTAL_WRITES=true" in exc_info.value.detail
 
     async def test_enabled_allows_through(self):
         """Enabled raises nothing."""

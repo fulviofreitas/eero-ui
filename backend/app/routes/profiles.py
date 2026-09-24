@@ -1,13 +1,21 @@
 """Profile routes for the Eero Dashboard."""
 
 import logging
+import re
+from typing import Any
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from ..deps import get_network_id, require_auth
-from ..transformers import check_success, extract_data, extract_list, normalize_profile
+from ..deps import get_network_id, require_auth, require_experimental_writes
+from ..transformers import (
+    check_success,
+    extract_data,
+    extract_id_from_url,
+    extract_list,
+    normalize_profile,
+)
 from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
 router = APIRouter()
@@ -169,7 +177,11 @@ async def get_profile(
     )
 
 
-@router.post("/{profile_id}/pause", response_model=ProfileAction)
+@router.post(
+    "/{profile_id}/pause",
+    response_model=ProfileAction,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def pause_profile(
     profile_id: str,
     client: EeroClient = Depends(require_auth),
@@ -192,7 +204,11 @@ async def pause_profile(
     )
 
 
-@router.post("/{profile_id}/unpause", response_model=ProfileAction)
+@router.post(
+    "/{profile_id}/unpause",
+    response_model=ProfileAction,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def unpause_profile(
     profile_id: str,
     client: EeroClient = Depends(require_auth),
@@ -215,7 +231,12 @@ async def unpause_profile(
     )
 
 
-@router.post("", response_model=ProfileSummary, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ProfileSummary,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def create_profile(
     body: ProfileCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -259,7 +280,11 @@ async def create_profile(
     )
 
 
-@router.patch("/{profile_id}", response_model=ProfileSummary)
+@router.patch(
+    "/{profile_id}",
+    response_model=ProfileSummary,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def rename_profile(
     profile_id: str,
     body: ProfileRenameRequest,
@@ -322,7 +347,11 @@ class AssignDevicesResponse(BaseModel):
     message: str | None = None
 
 
-@router.post("/{profile_id}/assign-devices", response_model=AssignDevicesResponse)
+@router.post(
+    "/{profile_id}/assign-devices",
+    response_model=AssignDevicesResponse,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def assign_devices_to_profile(
     profile_id: str,
     body: AssignDevicesRequest,
@@ -400,7 +429,11 @@ async def assign_devices_to_profile(
     )
 
 
-@router.delete("/{profile_id}", response_model=ProfileAction)
+@router.delete(
+    "/{profile_id}",
+    response_model=ProfileAction,
+    dependencies=[Depends(require_experimental_writes)],
+)
 async def delete_profile(
     profile_id: str,
     client: EeroClient = Depends(require_auth),
@@ -442,3 +475,391 @@ async def get_profile_insights_route(
         insight_type=insight_type,
     )
     return normalize_insights(raw)
+
+
+# ---------------------------------------------------------------------------
+# Profile schedules (phase-6.0-revamp.md WP7, family 1). Unverified,
+# non-settings writes (§ 5); none allowlisted (sdk-surface-map-v8.0.3.md
+# WP7). ``eero.api.schedule.ScheduleAPI.update_schedule``/``delete_schedule``
+# take the pause's own URL or cached envelope, not a bare id, so every
+# write route here reads the collection first and resolves the path
+# parameter to the matching entry before calling the SDK.
+# ---------------------------------------------------------------------------
+
+#: Full lowercase weekday names, matching eero.api.schedule.ALL_DAYS - the
+#: SDK forwards ``days`` unchanged, and this is what it (and the API)
+#: expects, not "mon".."sun" abbreviations.
+SCHEDULE_DAYS = frozenset(
+    {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+)
+
+_TIME_RE = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+
+_SCHEDULE_NAME_MAX_LEN = 64
+
+
+def _validate_schedule_days(days: list[str]) -> None:
+    if not days:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="days must not be empty.",
+        )
+    if not set(days) <= SCHEDULE_DAYS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"days must be a subset of {sorted(SCHEDULE_DAYS)}.",
+        )
+
+
+def _validate_schedule_time(value: str, field_name: str) -> None:
+    if not _TIME_RE.fullmatch(value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be HH:MM (24-hour).",
+        )
+
+
+def _validate_schedule_name(name: str) -> None:
+    if not name or len(name) > _SCHEDULE_NAME_MAX_LEN:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"name must be 1-{_SCHEDULE_NAME_MAX_LEN} characters.",
+        )
+
+
+class ScheduleSummary(BaseModel):
+    """A profile's scheduled pause."""
+
+    id: str | None = None
+    name: str | None = None
+    days: list[str] = []
+    start: str | None = None
+    end: str | None = None
+    enabled: bool = True
+
+    class Config:
+        extra = "ignore"
+
+
+def _normalize_schedule(raw: dict) -> ScheduleSummary:
+    return ScheduleSummary(
+        id=extract_id_from_url(raw.get("url")),
+        name=raw.get("name"),
+        days=raw.get("days") or [],
+        start=raw.get("start"),
+        end=raw.get("end"),
+        enabled=bool(raw.get("enabled", True)),
+    )
+
+
+async def _get_raw_schedules(
+    client: EeroClient, profile_id: str, network_id: str
+) -> list[dict]:
+    raw = await client.get_schedules(profile_id, network_id=network_id)
+    return [s for s in extract_list(raw) if isinstance(s, dict)]
+
+
+async def _find_raw_schedule(
+    client: EeroClient, profile_id: str, network_id: str, schedule_id: str
+) -> dict:
+    """Resolve a schedule_id path parameter to its raw entry (carrying the
+    ``url`` the SDK's update/delete calls need), by reading the collection.
+
+    Raises:
+        HTTPException: 404 if no schedule with that id exists.
+    """
+    schedules = await _get_raw_schedules(client, profile_id, network_id)
+    for entry in schedules:
+        if extract_id_from_url(entry.get("url")) == schedule_id:
+            return entry
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found."
+    )
+
+
+@router.get("/{profile_id}/schedules", response_model=list[ScheduleSummary])
+async def list_profile_schedules(
+    profile_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> list[ScheduleSummary]:
+    """Get a profile's scheduled pauses. Verified read."""
+    raw_schedules = await _get_raw_schedules(client, profile_id, network_id)
+    return [_normalize_schedule(s) for s in raw_schedules]
+
+
+class ScheduleCreateRequest(BaseModel):
+    """Request body for POST /{profile_id}/schedules."""
+
+    name: str
+    days: list[str]
+    start: str
+    end: str
+    enabled: bool = True
+
+    class Config:
+        extra = "ignore"
+
+
+@router.post(
+    "/{profile_id}/schedules",
+    response_model=ScheduleSummary,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def create_profile_schedule(
+    profile_id: str,
+    body: ScheduleCreateRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ScheduleSummary:
+    """Create a scheduled pause for a profile.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7). Never retried on
+    failure.
+    """
+    name = body.name.strip()
+    _validate_schedule_name(name)
+    _validate_schedule_days(body.days)
+    _validate_schedule_time(body.start, "start")
+    _validate_schedule_time(body.end, "end")
+
+    raw_result = await client.create_schedule(
+        profile_id,
+        name=name,
+        days=body.days,
+        start=body.start,
+        end=body.end,
+        enabled=body.enabled,
+        network_id=network_id,
+    )
+    return _normalize_schedule(extract_data(raw_result))
+
+
+class ScheduleUpdateRequest(BaseModel):
+    """Request body for PUT /{profile_id}/schedules/{schedule_id}.
+
+    Every field is optional - only supplied fields are forwarded, matching
+    ``update_schedule``'s own contract.
+    """
+
+    name: str | None = None
+    days: list[str] | None = None
+    start: str | None = None
+    end: str | None = None
+    enabled: bool | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+@router.put(
+    "/{profile_id}/schedules/{schedule_id}",
+    response_model=ScheduleSummary,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def update_profile_schedule(
+    profile_id: str,
+    schedule_id: str,
+    body: ScheduleUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ScheduleSummary:
+    """Update a profile's scheduled pause.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); read-first to
+    resolve ``schedule_id`` to the pause's own URL, skipping the write
+    entirely when nothing in the request differs from the stored value.
+    Never retried on failure.
+    """
+    name = body.name.strip() if body.name is not None else None
+    if name is not None:
+        _validate_schedule_name(name)
+    if body.days is not None:
+        _validate_schedule_days(body.days)
+    if body.start is not None:
+        _validate_schedule_time(body.start, "start")
+    if body.end is not None:
+        _validate_schedule_time(body.end, "end")
+
+    current = await _find_raw_schedule(client, profile_id, network_id, schedule_id)
+
+    changed = (
+        (name is not None and name != current.get("name"))
+        or (body.days is not None and body.days != (current.get("days") or []))
+        or (body.start is not None and body.start != current.get("start"))
+        or (body.end is not None and body.end != current.get("end"))
+        or (
+            body.enabled is not None
+            and body.enabled != bool(current.get("enabled", True))
+        )
+    )
+    if not changed:
+        return _normalize_schedule(current)
+
+    raw_result = await client.update_schedule(
+        current,
+        name=name,
+        days=body.days,
+        start=body.start,
+        end=body.end,
+        enabled=body.enabled,
+    )
+    return _normalize_schedule(extract_data(raw_result))
+
+
+@router.delete(
+    "/{profile_id}/schedules/{schedule_id}",
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def delete_profile_schedule(
+    profile_id: str,
+    schedule_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> dict:
+    """Delete one of a profile's scheduled pauses.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); read-first to
+    resolve ``schedule_id`` to the pause's own URL. Never retried on
+    failure.
+    """
+    current = await _find_raw_schedule(client, profile_id, network_id, schedule_id)
+    raw_result = await client.delete_schedule(current)
+    return {"success": check_success(raw_result), "schedule_id": schedule_id}
+
+
+@router.delete(
+    "/{profile_id}/schedules",
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def clear_profile_schedules(
+    profile_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> dict:
+    """Delete every scheduled pause on a profile.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); one read plus one
+    DELETE per existing pause (``clear_profile_schedule``'s own contract -
+    it is never retried on a partial failure).
+    """
+    results = await client.clear_profile_schedule(profile_id, network_id=network_id)
+    return {
+        "success": all(check_success(r) for r in results) if results else True,
+        "deleted_count": len(results),
+    }
+
+
+class BedtimeCreateRequest(BaseModel):
+    """Request body for POST /{profile_id}/bedtime."""
+
+    start_time: str
+    end_time: str
+    days: list[str] | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+@router.post(
+    "/{profile_id}/bedtime",
+    response_model=ScheduleSummary,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def create_profile_bedtime(
+    profile_id: str,
+    body: BedtimeCreateRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> ScheduleSummary:
+    """Create a single bedtime scheduled pause for a profile (built on
+    ``create_schedule``, per the SDK's own ``enable_bedtime``).
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7). Never retried on
+    failure.
+    """
+    _validate_schedule_time(body.start_time, "start_time")
+    _validate_schedule_time(body.end_time, "end_time")
+    if body.days is not None:
+        _validate_schedule_days(body.days)
+
+    raw_result = await client.enable_bedtime(
+        profile_id,
+        body.start_time,
+        body.end_time,
+        body.days,
+        network_id=network_id,
+    )
+    return _normalize_schedule(extract_data(raw_result))
+
+
+# ---------------------------------------------------------------------------
+# Profile blocked applications (phase-6.0-revamp.md WP7, family 10).
+# Premium (Plus/Secure) - 402 surfaces via the global handler. Write is
+# unverified, non-settings (§ 5); none allowlisted.
+# ---------------------------------------------------------------------------
+
+
+class BlockedApplicationsResponse(BaseModel):
+    """A profile's blocked-application policy."""
+
+    applications: list[Any] = []
+
+    class Config:
+        extra = "ignore"
+
+
+@router.get(
+    "/{profile_id}/blocked-applications", response_model=BlockedApplicationsResponse
+)
+async def get_profile_blocked_applications(
+    profile_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> BlockedApplicationsResponse:
+    """Get a profile's blocked-application policy. Premium-gated."""
+    raw = await client.get_dns_policy_applications(profile_id, network_id=network_id)
+    data = extract_data(raw)
+    applications = data.get("applications")
+    return BlockedApplicationsResponse(
+        applications=applications if isinstance(applications, list) else []
+    )
+
+
+class SetBlockedApplicationsRequest(BaseModel):
+    """Request body for PUT /{profile_id}/blocked-applications."""
+
+    applications: list[str]
+
+    class Config:
+        extra = "ignore"
+
+
+@router.put(
+    "/{profile_id}/blocked-applications",
+    response_model=BlockedApplicationsResponse,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def set_profile_blocked_applications_route(
+    profile_id: str,
+    body: SetBlockedApplicationsRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> BlockedApplicationsResponse:
+    """Set a profile's blocked-application policy.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); premium-gated.
+    Never retried on failure.
+    """
+    raw_result = await client.set_profile_blocked_applications(
+        profile_id, body.applications, network_id=network_id
+    )
+    data = extract_data(raw_result)
+    applications = data.get("applications")
+    return BlockedApplicationsResponse(
+        applications=(
+            applications if isinstance(applications, list) else body.applications
+        )
+    )

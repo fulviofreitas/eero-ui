@@ -46,14 +46,18 @@ class TestMembers:
 
     async def test_returns_members(self, auth_client, authenticated_client):
         authenticated_client.get_members = AsyncMock(
-            return_value=make_raw_response({"members": [{"user_name": "alice"}]})
+            return_value=make_raw_response(
+                {"members": [{"user_name": "alice", "role": "OWNER"}]}
+            )
         )
 
         response = await auth_client.get("/api/networks/net-1/members")
 
         assert response.status_code == 200
+        # Allowlisted (security review, 2026-09-24): no raw email/phone
+        # field, even though the raw entry didn't carry one here.
         assert response.json() == {
-            "members": [{"user_name": "alice"}],
+            "members": [{"name": "alice", "role": "OWNER", "status": None}],
             "partial": False,
         }
 
@@ -73,14 +77,39 @@ class TestInvites:
 
     async def test_returns_invites(self, auth_client, authenticated_client):
         authenticated_client.get_invites = AsyncMock(
-            return_value=make_raw_response({"invites": [{"invite_id": "inv-1"}]})
+            return_value=make_raw_response(
+                {
+                    "invites": [
+                        {
+                            "invite_id": "inv-1",
+                            "invite_url": "https://eero.com/join/secret-token",
+                            "invite_role": "admin",
+                            "url": "/2.2/networks/net-1/invites/inv-1",
+                        }
+                    ]
+                }
+            )
         )
 
         response = await auth_client.get("/api/networks/net-1/invites")
 
         assert response.status_code == 200
-        assert response.json() == {
-            "invites": [{"invite_id": "inv-1"}],
+        body = response.json()
+        # Security review, 2026-09-24: invite_url (a join credential) and
+        # the raw invite_id key must never reach the client - only a
+        # derived, non-secret `id` field does.
+        assert "invite_url" not in body["invites"][0]
+        assert "invite_id" not in body["invites"][0]
+        assert body == {
+            "invites": [
+                {
+                    "id": "inv-1",
+                    "role": "admin",
+                    "status": None,
+                    "created": None,
+                    "expires": None,
+                }
+            ],
             "partial": False,
         }
 

@@ -43,7 +43,14 @@ class TestNetworkSecurity:
         assert data["wpa3_per_band"] == {"band_5_ghz": "WPA3"}
         assert data["fast_transition"] == {"enabled": True}
         assert data["sqm"] is False
-        assert data["thread"] == {"enabled": False}
+        # Allowlisted (security review, 2026-09-24): Thread key/dataset/PSKc
+        # are never forwarded, even though the raw fixture didn't carry one.
+        assert data["thread"] == {
+            "enabled": False,
+            "name": None,
+            "channel": None,
+            "pan_id": None,
+        }
         assert data["updates"] == {"available": False}
 
     async def test_each_source_fails_soft(self, auth_client, authenticated_client):

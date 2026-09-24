@@ -75,20 +75,28 @@ async def require_auth(
     return client
 
 
-async def require_experimental_writes() -> None:
-    """Dependency gating unverified / settings-class writes (decision 6a).
+class ExperimentalWriteDisabledError(Exception):
+    """Raised by ``require_experimental_writes`` when the gate is closed.
 
-    Raises HTTPException 403 unless ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
-    is set. Not yet wired onto any route in WP1 - WP7/WP8 decide per route.
+    A dedicated exception (rather than raising ``HTTPException`` directly)
+    so ``main.py`` can register one handler that puts
+    ``type: "experimental_disabled"`` at the top level of the JSON body -
+    the shape every other typed-error response in this API uses (see
+    ``EeroPremiumRequiredException``'s handler) - rather than nesting it
+    under FastAPI's default ``{"detail": ...}`` wrapper.
+    """
+
+
+async def require_experimental_writes() -> None:
+    """Dependency gating unverified / settings-class writes (decision 6a,
+    WP7): every route classed **Unverified, non-settings** or
+    **settings-class** in phase-6.0-revamp.md § 5 depends on this.
+
+    Raises ``ExperimentalWriteDisabledError`` (mapped to 403 by the handler
+    in ``main.py``) unless ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` is set.
     """
     if not settings.experimental_writes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "This write is disabled. Set "
-                "EERO_DASHBOARD_EXPERIMENTAL_WRITES=true to enable it."
-            ),
-        )
+        raise ExperimentalWriteDisabledError()
 
 
 async def get_network_id(

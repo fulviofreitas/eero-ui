@@ -5,12 +5,19 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eero import EeroClient
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ValidationError
 
 from .._coercion import coerce_bool, coerce_int, coerce_numeric
-from ..deps import get_network_id, require_auth
-from ..transformers import check_success, extract_data, extract_list, normalize_eero
+from ..deps import get_network_id, require_auth, require_experimental_writes
+from ..transformers import (
+    check_success,
+    extract_data,
+    extract_list,
+    normalize_eero,
+    strip_sensitive_keys,
+)
+from .auth import limiter
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -486,7 +493,9 @@ class EeroLedBrightnessAction(EeroAction):
 
 
 @router.put("/{eero_id}/led/brightness", response_model=EeroLedBrightnessAction)
+@limiter.shared_limit("10/minute", scope="led_brightness")
 async def set_eero_led_brightness(
+    request: Request,
     eero_id: str,
     brightness: int = Query(..., ge=0, le=100, description="LED brightness (0-100)"),
     client: EeroClient = Depends(require_auth),
@@ -496,7 +505,7 @@ async def set_eero_led_brightness(
 
     Verified write (sdk-surface-map-v8.0.3.md WP6 allowlist); ``brightness``
     is validated to 0-100 by the query parameter's own bounds before any
-    SDK call.
+    SDK call. Rate limited to 10/minute (security review, 2026-09-24).
     """
     raw_result = await client.set_led_brightness(
         eero_id, brightness=brightness, network_id=network_id
@@ -533,4 +542,140 @@ async def get_eero_connections(
 ) -> EeroConnectionsResponse:
     """Get an eero's client connections. Verified read."""
     raw = await client.get_connections(eero_id, network_id=network_id)
-    return EeroConnectionsResponse(connections=extract_list(raw, "connections"))
+    connections = strip_sensitive_keys(extract_list(raw, "connections"))
+    return EeroConnectionsResponse(connections=connections)
+
+
+# ---------------------------------------------------------------------------
+# Node / port actions (phase-6.0-revamp.md WP7, family 6). Unverified,
+# non-settings writes (§ 5): gated behind require_experimental_writes.
+# Mirrors the SDK's own ``_NODE_ACTIONS``/``_PORT_ACTIONS`` frozensets
+# (eero.api.eeros) so an invalid action 422s before any network round trip;
+# ``test_node_port_actions.py`` asserts these mirror the SDK's own sets.
+# ---------------------------------------------------------------------------
+
+NODE_ACTIONS = frozenset({"POWER_CYCLE_ALL_PORTS", "POWER_CYCLE_ALL_PORTS_AND_REBOOT"})
+
+PORT_ACTIONS = frozenset(
+    {
+        "ENABLE_DATA",
+        "DISABLE_DATA",
+        "ENABLE_POE",
+        "DISABLE_POE",
+        "ENABLE_PORT",
+        "DISABLE_PORT",
+        "RESTART_POWER",
+        "ENABLE_PORT_SECURITY",
+        "DISABLE_PORT_SECURITY",
+    }
+)
+
+# node_action's reboot variant (§ 5, § 7 WP7 spec): the response must carry
+# reboots_node: true so the frontend can show reboot-class UX for this one
+# action without hardcoding it a second time.
+_NODE_ACTION_REBOOTS = {"POWER_CYCLE_ALL_PORTS_AND_REBOOT"}
+
+
+class NodeActionRequest(BaseModel):
+    """Request body for POST /{eero_id}/node-action."""
+
+    action: str
+
+    class Config:
+        extra = "ignore"
+
+
+class NodeActionResponse(BaseModel):
+    """Response for a node-action write."""
+
+    success: bool
+    eero_id: str
+    action: str
+    reboots_node: bool = False
+
+
+@router.post(
+    "/{eero_id}/node-action",
+    response_model=NodeActionResponse,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def node_action_route(
+    eero_id: str,
+    body: NodeActionRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> NodeActionResponse:
+    """Power-cycle an eero's ports, optionally rebooting the node.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7): both actions
+    power-cycle the eero's ports, dropping wired clients while they
+    renegotiate; ``POWER_CYCLE_ALL_PORTS_AND_REBOOT`` additionally reboots
+    the eero itself. Never retried on failure.
+    """
+    if body.action not in NODE_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"action must be one of {sorted(NODE_ACTIONS)}.",
+        )
+    raw_result = await client.node_action(eero_id, body.action, network_id=network_id)
+    success = check_success(raw_result)
+    return NodeActionResponse(
+        success=success,
+        eero_id=eero_id,
+        action=body.action,
+        reboots_node=body.action in _NODE_ACTION_REBOOTS,
+    )
+
+
+class PortActionRequest(BaseModel):
+    """Request body for POST /{eero_id}/ports/{port_number}/action."""
+
+    action: str
+
+    class Config:
+        extra = "ignore"
+
+
+class PortActionResponse(BaseModel):
+    """Response for a port-action write."""
+
+    success: bool
+    eero_id: str
+    port_number: str
+    action: str
+
+
+@router.post(
+    "/{eero_id}/ports/{port_number}/action",
+    response_model=PortActionResponse,
+    dependencies=[Depends(require_experimental_writes)],
+)
+async def port_action_route(
+    eero_id: str,
+    port_number: str,
+    body: PortActionRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> PortActionResponse:
+    """Run a port-level action (enable/disable data, PoE, the port itself,
+    port security, or a power restart) on one of an eero's ports.
+
+    Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); several actions
+    are inherently disruptive to whatever is connected to that port. Never
+    retried on failure.
+    """
+    if body.action not in PORT_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"action must be one of {sorted(PORT_ACTIONS)}.",
+        )
+    raw_result = await client.port_action(
+        eero_id, port_number, body.action, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return PortActionResponse(
+        success=success,
+        eero_id=eero_id,
+        port_number=port_number,
+        action=body.action,
+    )

@@ -9,7 +9,7 @@ This module provides extraction and normalization functions.
 import ipaddress
 import re
 import unicodedata
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ._coercion import coerce_bool, coerce_int, coerce_numeric
@@ -18,13 +18,98 @@ from ._coercion import coerce_bool, coerce_int, coerce_numeric
 # alongside ``is_unsafe_short_text`` since they are reused across
 # ``routes/networks.py``, ``routes/devices.py``, ``routes/profiles.py`` and
 # ``routes/eeros.py`` for query/body validation before any SDK call.
-_MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
-_DEVICE_TYPE_RE = re.compile(r"^[a-z0-9_]{1,40}$")
+_MAC_RE = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
+_DEVICE_TYPE_RE = re.compile(r"[a-z0-9_]{1,40}")
+
+# Identifier guard (security review, 2026-09-24): shared by every route that
+# interpolates a caller-supplied id into a URL path or PromQL selector.
+# Originally local to routes/metrics.py; moved here so routes/networks.py,
+# routes/profiles.py, routes/eeros.py and routes/devices.py share one
+# implementation. fullmatch (not match + "$") is deliberate: "$" in a Python
+# regex matches just before a trailing "\n" as well as at the true end of
+# string, so re.match(..., "$") would accept "abc\n" (delivered as
+# "abc%0A"). eero-api 8.0.3's own eero.api.links._validate_identifier has
+# the same "$" weakness, so the SDK's own validator is a second, redundant
+# layer, not the primary defense.
+_IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
+
+try:
+    from eero.api.links import validate_identifier as _sdk_validate_identifier
+except ImportError:  # pragma: no cover - defensive only; present since 8.0.1
+    _sdk_validate_identifier = None
+
+
+class InvalidIdentifierError(ValueError):
+    """Raised by ``validate_path_id`` when a caller-supplied id is malformed.
+
+    Routes catch this and re-raise as ``HTTPException(400)`` - kept as a
+    plain ``ValueError`` subclass (rather than raising ``HTTPException``
+    directly from this module) so ``transformers.py`` stays framework-free.
+    """
+
+
+def validate_path_id(value: str) -> str:
+    """Validate a bare identifier before it is placed in a URL path or a
+    PromQL label selector.
+
+    Args:
+        value: The caller-supplied identifier.
+
+    Returns:
+        ``value`` unchanged, once validated.
+
+    Raises:
+        InvalidIdentifierError: If ``value`` is empty, contains ``..``, or
+            does not match the allowed identifier grammar.
+    """
+    if not value or ".." in value or not _IDENTIFIER_RE.fullmatch(value):
+        raise InvalidIdentifierError(value)
+    if _sdk_validate_identifier is not None:
+        try:
+            _sdk_validate_identifier(value)
+        except Exception as exc:  # eero.exceptions.EeroValidationException
+            raise InvalidIdentifierError(value) from exc
+    return value
+
+
+# Recursively stripped from every passthrough (undocumented-shape) API
+# response before it reaches the client (security review, 2026-09-24):
+# credential-shaped keys the eero cloud API is not contractually forbidden
+# from including in one of these payloads.
+_SENSITIVE_KEY_RE = re.compile(r"(password|psk|secret|token|invite_url)", re.IGNORECASE)
+
+
+def strip_sensitive_keys(value: Any) -> Any:
+    """Recursively remove credential-shaped keys from a raw API payload.
+
+    Applied to every "pass the raw dict/list through unchanged" response in
+    this backend - undocumented shapes from eero-api v8.0.3 may carry a
+    password, PSK, secret, token or join-credential URL that must never
+    reach the frontend. Matching is case-insensitive and substring-based
+    (``re.search``), so ``guest_password``, ``ssid_psk`` and
+    ``invite_url`` are all caught.
+
+    Args:
+        value: A raw dict, list, or scalar from an API response.
+
+    Returns:
+        A deep copy of ``value`` with any dict key matching the sensitive
+        pattern removed. Non-dict/list values are returned unchanged.
+    """
+    if isinstance(value, dict):
+        return {
+            k: strip_sensitive_keys(v)
+            for k, v in value.items()
+            if not _SENSITIVE_KEY_RE.search(str(k))
+        }
+    if isinstance(value, list):
+        return [strip_sensitive_keys(item) for item in value]
+    return value
 
 
 def is_valid_mac(value: str) -> bool:
     """Check whether ``value`` is a lowercase colon-separated MAC address."""
-    return bool(_MAC_RE.match(value))
+    return bool(_MAC_RE.fullmatch(value))
 
 
 def is_valid_device_type(value: str) -> bool:
@@ -35,7 +120,7 @@ def is_valid_device_type(value: str) -> bool:
     lowercase snake_case token up to 40 characters rather than a fixed
     enum built from unverified sources.
     """
-    return bool(_DEVICE_TYPE_RE.match(value))
+    return bool(_DEVICE_TYPE_RE.fullmatch(value))
 
 
 def is_valid_iso8601(value: str) -> bool:
@@ -47,6 +132,29 @@ def is_valid_iso8601(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    """Treat a naive datetime as UTC so naive/aware comparisons never raise.
+
+    ``datetime.fromisoformat`` returns a naive ``datetime`` for an input
+    with no offset (e.g. ``"2026-09-24T00:00:00"``, as opposed to one
+    ending in ``Z`` or ``+00:00``). Comparing that directly against an
+    aware datetime raises ``TypeError`` (security review, 2026-09-24) -
+    surfacing as an unhandled 500 on a route that compares two
+    caller-supplied timestamps. Assume UTC for a naive value, matching this
+    codebase's convention everywhere else (``datetime.now(UTC)``).
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def parse_iso8601(value: str) -> datetime:
+    """Parse an ISO-8601 timestamp to an aware ``datetime`` (UTC if naive).
+
+    Callers must validate with ``is_valid_iso8601`` first; this raises
+    ``ValueError`` on a malformed value like ``datetime.fromisoformat``.
+    """
+    return _as_aware_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
 
 
 def has_control_or_format_chars(value: str) -> bool:

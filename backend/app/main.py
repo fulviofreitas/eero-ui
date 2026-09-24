@@ -28,8 +28,13 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .config import settings
-from .deps import clear_client_session, get_eero_client, shutdown_client
-from .routes import auth, devices, eeros, metrics, networks, profiles
+from .deps import (
+    ExperimentalWriteDisabledError,
+    clear_client_session,
+    get_eero_client,
+    shutdown_client,
+)
+from .routes import account, auth, devices, eeros, metrics, networks, profiles
 from .services.collector import MetricsCollector
 from .services.victoria import victoria_client
 
@@ -202,6 +207,24 @@ async def eero_premium_required_exception_handler(
     )
 
 
+@app.exception_handler(ExperimentalWriteDisabledError)
+async def experimental_write_disabled_exception_handler(
+    request: Request, exc: ExperimentalWriteDisabledError
+) -> JSONResponse:
+    """The write is gated behind ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
+    (phase-6.0-revamp.md § 5, decision 6a; WP7)."""
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail": (
+                "This write is disabled. Set "
+                "EERO_DASHBOARD_EXPERIMENTAL_WRITES=true to enable it."
+            ),
+            "type": "experimental_disabled",
+        },
+    )
+
+
 @app.exception_handler(EeroFeatureUnavailableException)
 async def eero_feature_unavailable_exception_handler(
     request: Request, exc: EeroFeatureUnavailableException
@@ -318,6 +341,7 @@ app.include_router(devices.router, prefix="/api/devices", tags=["Devices"])
 app.include_router(eeros.router, prefix="/api/eeros", tags=["Eeros"])
 app.include_router(profiles.router, prefix="/api/profiles", tags=["Profiles"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
+app.include_router(account.router, prefix="/api/account", tags=["Account"])
 
 
 # Health check
