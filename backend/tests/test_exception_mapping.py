@@ -8,9 +8,26 @@ not just the handler functions in isolation. Asserts status, ``detail``,
 an INFO-level log record.
 """
 
+import logging
 from unittest.mock import AsyncMock
 
+import pytest
+
 from app import deps
+
+# Reused verbatim from test_security.py's TestExceptionSanitization so the
+# two suites can never drift apart on what counts as a "leak" (phase-6.0-
+# revamp.md § 8.1: "forbidden-pattern check reusing test_security.py's
+# patterns").
+FORBIDDEN_PATTERNS = [
+    "Exception",
+    "Error:",
+    "Traceback",
+    'File "',
+    "line ",
+    "python",
+    ".py",
+]
 
 
 class TestExceptionMapping:
@@ -216,3 +233,68 @@ class TestExceptionMapping:
         for record in caplog.records:
             if record.levelno < logging.DEBUG + 1 and record.levelno >= logging.INFO:
                 assert "test_error" not in record.getMessage()
+
+
+class TestEnvelopeAppearsOnlyAtDebug:
+    """§ 3.4's ``EeroAPIException`` row: 'log error_code + status_code;
+    never envelope above DEBUG'. That is a two-sided claim -- the envelope
+    must be absent above DEBUG (covered above) *and*, since the handler
+    does log it, present at DEBUG. A test that only checks absence would
+    also pass if the log line were deleted entirely, silently losing the
+    diagnostic value the plan asks for.
+    """
+
+    async def test_envelope_is_logged_at_debug_for_api_exception(
+        self, auth_client, authenticated_client, eero_exceptions, caplog
+    ):
+        """With DEBUG enabled, the envelope text does appear in the log."""
+        caplog.set_level(logging.DEBUG)
+        authenticated_client.get_network = AsyncMock(
+            side_effect=eero_exceptions["api"]()
+        )
+
+        response = await auth_client.get("/api/networks/net-1")
+
+        assert response.status_code == 502
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        assert any(
+            "test_error" in r.getMessage() for r in debug_records
+        ), "the envelope must be logged at DEBUG when it is logged at all"
+
+
+class TestNoForbiddenPatternLeaksAcrossEveryMapping:
+    """Reuses test_security.py's forbidden-pattern list across every § 3.4
+    row, driven through the real route, not a synthetic handler call."""
+
+    @pytest.mark.parametrize(
+        "exception_key",
+        [
+            "authentication",
+            "not_found",
+            "access_denied",
+            "premium_required",
+            "feature_unavailable",
+            "client_blocked",
+            "rate_limit",
+            "validation",
+            "network",
+            "timeout",
+            "api",
+        ],
+    )
+    async def test_response_body_has_no_forbidden_pattern(
+        self, auth_client, authenticated_client, eero_exceptions, exception_key
+    ):
+        """Every mapped exception's HTTP response body is free of the
+        internal-detail patterns test_security.py already forbids."""
+        authenticated_client.get_network = AsyncMock(
+            side_effect=eero_exceptions[exception_key]()
+        )
+        authenticated_client.clear_session_token = AsyncMock()
+
+        response = await auth_client.get("/api/networks/net-1")
+
+        for pattern in FORBIDDEN_PATTERNS:
+            assert (
+                pattern.lower() not in response.text.lower()
+            ), f"{exception_key} response leaked forbidden pattern {pattern!r}"

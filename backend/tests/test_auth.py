@@ -136,6 +136,29 @@ class TestLogin:
 
         assert response.status_code == 401
 
+    async def test_login_401_is_never_mapped_as_an_expired_session(
+        self, async_client, mock_eero_client
+    ):
+        """login's own except-clause handles EeroAuthenticationException
+        locally (phase-6.0-revamp.md § 3.4): the response must not carry
+        the ``reason: "expired"`` shape the global 401 handler produces,
+        and no token-clearing call happens, since there was never a live
+        session here to clear."""
+        mock_eero_client.login = AsyncMock(
+            side_effect=EeroAuthenticationException("Invalid identifier")
+        )
+        mock_eero_client.clear_session_token = AsyncMock()
+
+        response = await async_client.post(
+            "/api/auth/login", json={"identifier": "invalid"}
+        )
+
+        assert response.status_code == 401
+        body = response.json()
+        assert "reason" not in body
+        assert body["detail"] == "Authentication failed. Please check your credentials."
+        mock_eero_client.clear_session_token.assert_not_called()
+
     async def test_login_network_error(self, async_client, mock_eero_client):
         """Network error returns 503."""
         mock_eero_client.login = AsyncMock(
@@ -191,6 +214,25 @@ class TestVerify:
         response = await async_client.post("/api/auth/verify", json={"code": "invalid"})
 
         assert response.status_code == 401
+
+    async def test_verify_401_is_never_mapped_as_an_expired_session(
+        self, async_client, mock_eero_client
+    ):
+        """Same guarantee as login: verify's local except-clause must not
+        produce the global handler's ``reason: "expired"`` shape, and must
+        not clear a token (phase-6.0-revamp.md § 3.4)."""
+        mock_eero_client.verify = AsyncMock(
+            side_effect=EeroAuthenticationException("Invalid code")
+        )
+        mock_eero_client.clear_session_token = AsyncMock()
+
+        response = await async_client.post("/api/auth/verify", json={"code": "invalid"})
+
+        assert response.status_code == 401
+        body = response.json()
+        assert "reason" not in body
+        assert body["detail"] == "Invalid verification code. Please try again."
+        mock_eero_client.clear_session_token.assert_not_called()
 
 
 class TestLogout:

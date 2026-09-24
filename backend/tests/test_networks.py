@@ -3,6 +3,7 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from eero.exceptions import EeroException
 
 
@@ -236,6 +237,28 @@ class TestRunSpeedTest:
     frontend polls ``GET .../speedtests`` separately.
     """
 
+    @pytest.fixture(autouse=True)
+    def _reset_speedtest_process_global_state(self):
+        """``_last_speed_test_started`` (the per-network in-flight guard)
+        and the shared slowapi ``Limiter`` are module-level, process-global
+        state with no dependency-injection seam -- see the coordinator's
+        test-suite audit, 2026-09-24. Every test in this class posts to
+        network_id "net-1", so without a reset, a POST in one test starts
+        the 90s window (or consumes the 2/minute budget) and the next test
+        in this class gets an unexpected 409/429 instead of exercising the
+        path it actually means to test. Reset before *and* after each test
+        so this class never leaks state into, or inherits it from, tests
+        outside the class either.
+        """
+        from app.routes.auth import limiter
+        from app.routes.networks import _last_speed_test_started
+
+        _last_speed_test_started.clear()
+        limiter.reset()
+        yield
+        _last_speed_test_started.clear()
+        limiter.reset()
+
     async def test_speed_test_returns_202_started_immediately(
         self, auth_client, authenticated_client
     ):
@@ -307,3 +330,32 @@ class TestGetSpeedTestHistory:
         )
 
         assert response.status_code == 422
+
+    async def test_limit_51_is_rejected(self, auth_client, authenticated_client):
+        """One past the upper bound (50) is rejected with 422."""
+        response = await auth_client.get(
+            "/api/networks/net-1/speedtests", params={"limit": 51}
+        )
+
+        assert response.status_code == 422
+
+    async def test_limit_0_is_rejected(self, auth_client, authenticated_client):
+        """Zero is below the lower bound (1) and is rejected with 422."""
+        response = await auth_client.get(
+            "/api/networks/net-1/speedtests", params={"limit": 0}
+        )
+
+        assert response.status_code == 422
+
+    async def test_default_limit_is_ten(self, auth_client, authenticated_client):
+        """With no limit param at all, the SDK is called with limit=10."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response([])
+        )
+
+        response = await auth_client.get("/api/networks/net-1/speedtests")
+
+        assert response.status_code == 200
+        authenticated_client.get_speed_tests.assert_called_once_with(
+            network_id="net-1", limit=10
+        )

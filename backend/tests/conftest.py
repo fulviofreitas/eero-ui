@@ -12,6 +12,7 @@ As of phase-6.0-revamp.md § 8.1, the mock is built with
 call time instead of silently returning a non-awaitable mock.
 """
 
+import copy
 from unittest.mock import AsyncMock, create_autospec
 
 import pytest
@@ -40,8 +41,28 @@ def make_raw_response(data, code: int = 200):
     return {"meta": {"code": code}, "data": data}
 
 
+@pytest.fixture(scope="session")
+def _eero_client_autospec_template() -> EeroClient:
+    """The expensive part of ``create_autospec(EeroClient, instance=True)``,
+    built exactly once per test run.
+
+    ``create_autospec`` eagerly walks every method on ``EeroClient`` and
+    derives a signature-checked child mock for each one; profiling the
+    suite (backend test-performance investigation, 2026-09-24) showed this
+    costs ~0.3-0.4s *per call*, and it was being called once per test via
+    the function-scoped ``mock_eero_client`` fixture -- roughly 250 async
+    tests' worth, i.e. most of the suite's runtime. ``copy.deepcopy()`` of
+    an already-built template is ~2.5x cheaper and produces a fully
+    independent ``NonCallableMagicMock`` (verified: mutating the clone's
+    attributes, reassigning methods to new ``AsyncMock``s, and the
+    signature-checking/AttributeError-on-unknown-method behaviour are all
+    unaffected by, and do not affect, the template or other clones).
+    """
+    return create_autospec(EeroClient, instance=True)
+
+
 @pytest.fixture
-def mock_eero_client():
+def mock_eero_client(_eero_client_autospec_template):
     """Create an autospec'd mock EeroClient for unit tests.
 
     Mock at the external boundary - the eero-api SDK.
@@ -50,7 +71,7 @@ def mock_eero_client():
 
     As of v2.0.0, all methods return raw JSON responses.
     """
-    client = create_autospec(EeroClient, instance=True)
+    client = copy.deepcopy(_eero_client_autospec_template)
     client.is_authenticated = False
     client.preferred_network_id = None
 

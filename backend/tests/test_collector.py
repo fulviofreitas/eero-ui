@@ -7,10 +7,10 @@ failure, write failure, the tricky-label round trip, and the offline vs.
 absent device rules.
 """
 
+import copy
 from unittest.mock import AsyncMock, create_autospec
 
 import pytest
-from eero import EeroClient
 from eero.exceptions import (
     EeroAPIException,
     EeroAuthenticationException,
@@ -89,13 +89,17 @@ def make_eero(
 
 
 @pytest.fixture
-def autospec_client():
+def autospec_client(_eero_client_autospec_template):
     """A create_autospec(EeroClient, instance=True) mock, authenticated by default.
 
     Using autospec means a renamed or removed SDK method fails the test at
     call time instead of silently returning a non-awaitable MagicMock.
+
+    Cloned from the session-scoped template built once in conftest.py
+    (``_eero_client_autospec_template``) rather than calling
+    ``create_autospec`` again here -- see that fixture's docstring for why.
     """
-    client = create_autospec(EeroClient, instance=True)
+    client = copy.deepcopy(_eero_client_autospec_template)
     client.is_authenticated = True
     client.get_networks = AsyncMock(return_value=make_raw_response([make_network()]))
     client.get_devices = AsyncMock(return_value=make_raw_response([]))
@@ -628,3 +632,151 @@ class TestMetricNamesAreSubsetOfPromQLLiterals:
         assert (
             not missing
         ), f"routes/metrics.py references metrics the collector never emits: {missing}"
+
+
+class TestMetricContractAllowlist:
+    """Explicit, bidirectional drift guard for § 2.3's metric contract.
+
+    An allowlist naming every metric the collector is permitted to emit --
+    the eight "must stay continuous" contract names plus the six "we now
+    own the collector" additions. Bidirectional so a future change in
+    either direction (collector starts emitting an undocumented name, or
+    stops emitting a contracted one) fails a test instead of silently
+    drifting from § 2.3.
+    """
+
+    CONTRACT_METRICS = frozenset(
+        {
+            "eero_up",
+            "eero_network_clients_count",
+            "eero_speed_download_mbps",
+            "eero_speed_upload_mbps",
+            "eero_device_connected",
+            "eero_device_signal_strength_dbm",
+            "eero_device_connection_score_bars",
+            "eero_eero_mesh_quality_bars",
+        }
+    )
+
+    ADDED_METRICS = frozenset(
+        {
+            "eero_network_last_reboot_timestamp_seconds",
+            "eero_eero_last_reboot_timestamp_seconds",
+            "eero_network_dns_mode",
+            "eero_eero_client_count",
+            "eero_collector_cycle_seconds",
+            "eero_collector_errors_total",
+        }
+    )
+
+    ALLOWLIST = CONTRACT_METRICS | ADDED_METRICS
+
+    # Of the eight contract metrics, only these six are actually read back
+    # by a surviving /api/metrics/* route today. The other two are written
+    # for VictoriaMetrics history continuity (§ 2.3) but have no current
+    # route: `eero_up` is a liveness signal checked via
+    # ``victoria_client.health()``, not a named PromQL series, and
+    # `eero_eero_mesh_quality_bars`'s only reader was the dead
+    # `/metrics/eeros/{serial}/quality` route deleted in this revamp
+    # (§ 2.4) for having zero frontend callers. This is intentional, not
+    # drift -- pin it explicitly so a *change* in which contract metrics
+    # are queryable is a deliberate, reviewed diff rather than a silent one.
+    QUERIED_CONTRACT_METRICS = frozenset(
+        {
+            "eero_network_clients_count",
+            "eero_speed_download_mbps",
+            "eero_speed_upload_mbps",
+            "eero_device_connected",
+            "eero_device_signal_strength_dbm",
+            "eero_device_connection_score_bars",
+        }
+    )
+    UNQUERIED_CONTRACT_METRICS = frozenset({"eero_up", "eero_eero_mesh_quality_bars"})
+
+    async def _run_full_cycle(self, autospec_client, fake_victoria):
+        autospec_client.get_devices = AsyncMock(
+            return_value=make_raw_response([make_device(signal=-50, score_bars=3)])
+        )
+        autospec_client.get_eeros = AsyncMock(
+            return_value=make_raw_response(
+                [make_eero(last_reboot="2026-05-01T08:30:00.000Z")]
+            )
+        )
+        autospec_client.get_networks = AsyncMock(
+            return_value=make_raw_response(
+                [make_network(last_reboot="2026-05-01T08:00:00.000Z")]
+            )
+        )
+        autospec_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response(
+                [{"down": {"value": 1.0}, "up": {"value": 1.0}}]
+            )
+        )
+        collector = make_collector(autospec_client, fake_victoria)
+        await collector.run_cycle()
+        return {s.name for s in fake_victoria.written_batches[0]}
+
+    async def test_produced_names_exactly_match_the_allowlist(
+        self, autospec_client, fake_victoria
+    ):
+        """The collector emits exactly the 14 allowlisted names -- no more,
+        no fewer -- on a fully successful cycle."""
+        produced = await self._run_full_cycle(autospec_client, fake_victoria)
+
+        assert produced == self.ALLOWLIST, (
+            f"undocumented names: {produced - self.ALLOWLIST}; "
+            f"missing contracted names: {self.ALLOWLIST - produced}"
+        )
+
+    async def test_every_queried_contract_metric_appears_literally_in_metrics_py(
+        self, autospec_client, fake_victoria
+    ):
+        """Reverse direction: every § 2.3 contract metric that is meant to
+        be queryable today must actually be referenced by name in
+        routes/metrics.py -- that is the whole point of the contract:
+        existing PromQL keeps working across the exporter -> native-
+        collector cutover. Exact equality (not just subset) so the day a
+        route stops querying one of these, or starts querying a metric
+        outside the contract, the test fails in either direction.
+        """
+        import re
+
+        source = metrics_route.__file__
+        with open(source, encoding="utf-8") as f:
+            text = f.read()
+        literals = set(re.findall(r"\beero_[a-z_]+\b", text))
+
+        assert literals == self.QUERIED_CONTRACT_METRICS, (
+            f"missing from metrics.py: {self.QUERIED_CONTRACT_METRICS - literals}; "
+            f"unexpected in metrics.py: {literals - self.QUERIED_CONTRACT_METRICS}"
+        )
+
+    async def test_unqueried_contract_metrics_are_still_produced(
+        self, autospec_client, fake_victoria
+    ):
+        """`eero_up` and `eero_eero_mesh_quality_bars` have no surviving
+        route today (see UNQUERIED_CONTRACT_METRICS's docstring) but must
+        still be written every cycle for VictoriaMetrics history
+        continuity -- this is what would break silently if someone "cleans
+        up" what looks like a dead metric."""
+        produced = await self._run_full_cycle(autospec_client, fake_victoria)
+
+        assert self.UNQUERIED_CONTRACT_METRICS <= produced
+
+    async def test_no_metric_name_used_by_metrics_py_is_outside_the_allowlist(
+        self, autospec_client, fake_victoria
+    ):
+        """Every eero_* literal in routes/metrics.py is either a contract
+        metric or an added one -- never an unlisted third name."""
+        import re
+
+        source = metrics_route.__file__
+        with open(source, encoding="utf-8") as f:
+            text = f.read()
+        literals = set(re.findall(r"\beero_[a-z_]+\b", text))
+
+        undocumented = literals - self.ALLOWLIST
+        assert not undocumented, (
+            "routes/metrics.py references metric names outside § 2.3's "
+            f"contract/addition allowlist: {undocumented}"
+        )

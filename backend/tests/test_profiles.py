@@ -209,6 +209,9 @@ class TestPauseProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "pause"
+        authenticated_client.pause_profile.assert_called_once_with(
+            "profile-1", paused=True, network_id="network-123"
+        )
 
 
 class TestUnpauseProfile:
@@ -225,6 +228,9 @@ class TestUnpauseProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "unpause"
+        authenticated_client.pause_profile.assert_called_once_with(
+            "profile-1", paused=False, network_id="network-123"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -304,12 +310,13 @@ class TestAssignDevicesToProfile:
 
         # The URL list passed must contain all 4 device URLs (merge of old + new)
         call_args = authenticated_client.set_profile_devices.call_args
-        # Positional: (profile_id, device_urls, network_id)
+        # Positional: (profile_id, device_urls); network_id is keyword-only.
         passed_urls: list[str] = call_args.args[1]
         expected_urls = {
             f"/2.2/networks/{network_id}/devices/device-{i}" for i in range(4)
         }
         assert set(passed_urls) == expected_urls
+        assert call_args.kwargs["network_id"] == network_id
 
     async def test_empty_device_ids_returns_200_with_count_zero(
         self, auth_client, authenticated_client

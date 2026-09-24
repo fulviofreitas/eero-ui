@@ -16,6 +16,7 @@ from app.transformers import (
     normalize_eero,
     normalize_network,
     normalize_profile,
+    normalize_speed_test,
     normalize_status,
 )
 
@@ -606,3 +607,56 @@ class TestCheckSuccess:
     def test_failure_with_none(self):
         """Should return False for None."""
         assert check_success(None) is False
+
+
+class TestNormalizeSpeedTest:
+    """Tests for normalize_speed_test: the shape shared by
+    routes/networks.py's speedtest history route and services/collector.py
+    (phase-6.0-revamp.md § 3.3, § 8.1)."""
+
+    def test_full_entry_extracts_all_fields(self):
+        """down/up nested values, latency and date all surface at top level."""
+        raw = {
+            "down": {"value": 250.5},
+            "up": {"value": 20.1},
+            "latency": 12.3,
+            "date": "2026-01-01T00:00:00Z",
+        }
+
+        result = normalize_speed_test(raw)
+
+        assert result == {
+            "down_mbps": 250.5,
+            "up_mbps": 20.1,
+            "latency_ms": 12.3,
+            "date": "2026-01-01T00:00:00Z",
+        }
+
+    def test_missing_down_and_up_yield_none(self):
+        """An entry with neither down nor up still normalizes cleanly."""
+        result = normalize_speed_test({"date": "2026-01-01T00:00:00Z"})
+
+        assert result["down_mbps"] is None
+        assert result["up_mbps"] is None
+        assert result["latency_ms"] is None
+        assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_non_dict_down_or_up_does_not_raise(self):
+        """A malformed (non-dict) down/up value is treated as absent, not
+        as an AttributeError from calling .get() on it."""
+        result = normalize_speed_test({"down": "not-a-dict", "up": None})
+
+        assert result["down_mbps"] is None
+        assert result["up_mbps"] is None
+
+    def test_non_dict_input_does_not_raise(self):
+        """A completely malformed entry (not even a dict) normalizes to
+        all-None rather than raising."""
+        result = normalize_speed_test("not-a-dict")
+
+        assert result == {
+            "down_mbps": None,
+            "up_mbps": None,
+            "latency_ms": None,
+            "date": None,
+        }
