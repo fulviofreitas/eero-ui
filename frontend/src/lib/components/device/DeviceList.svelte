@@ -24,6 +24,7 @@
 	import { uiStore } from '$stores';
 	import DeviceRow from './DeviceRow.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let refreshing = false;
 	let columnSelectorOpen = false;
@@ -218,9 +219,9 @@
 				on:click={toggleSelectionMode}
 			>
 				{#if $selectionMode}
-					✕ Cancel Selection
+					<Icon name="x" size={14} /> Cancel Selection
 				{:else}
-					☑ Select
+					<Icon name="checkbox-on" size={14} /> Select
 				{/if}
 			</button>
 
@@ -235,7 +236,7 @@
 						}}
 						disabled={assigningProfile}
 					>
-						📁 Assign to Profile ({selectedCount})
+						<Icon name="folder" size={14} /> Assign to Profile ({selectedCount})
 					</button>
 					{#if profileSelectorOpen}
 						<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -274,7 +275,7 @@
 					class="btn btn-secondary btn-sm"
 					on:click={() => (columnSelectorOpen = !columnSelectorOpen)}
 				>
-					⚙ Columns
+					<Icon name="settings" size={14} /> Columns
 				</button>
 				{#if columnSelectorOpen}
 					<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -308,7 +309,7 @@
 				{#if refreshing}
 					<span class="loading-spinner"></span>
 				{:else}
-					↻
+					<Icon name="refresh" size={14} />
 				{/if}
 				Refresh
 			</button>
@@ -385,14 +386,14 @@
 					class:active={$deviceFilters.connectionType === 'wireless'}
 					on:click={() => handleConnectionFilter('wireless')}
 				>
-					📶 Wireless ({$deviceCounts.wireless})
+					<Icon name="wifi" size={14} /> Wireless ({$deviceCounts.wireless})
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'wired'}
 					on:click={() => handleConnectionFilter('wired')}
 				>
-					🔌 Wired ({$deviceCounts.wired})
+					<Icon name="ethernet" size={14} /> Wired ({$deviceCounts.wired})
 				</button>
 			</div>
 
@@ -652,7 +653,7 @@
 		border-radius: var(--radius-md);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 		min-width: 200px;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.profile-dropdown-header {
@@ -713,7 +714,7 @@
 		border-radius: var(--radius-md);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 		min-width: 200px;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.column-dropdown-header {
@@ -857,7 +858,7 @@
 		background-color: var(--color-bg-primary);
 		position: sticky;
 		top: 0;
-		z-index: 1;
+		z-index: var(--z-base);
 	}
 
 	.sortable {
@@ -880,7 +881,7 @@
 		position: sticky;
 		right: 0;
 		background-color: var(--color-bg-primary);
-		z-index: 2;
+		z-index: var(--z-dropdown);
 	}
 
 	.loading-container {

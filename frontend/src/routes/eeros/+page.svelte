@@ -10,6 +10,7 @@
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let eeros: EeroSummary[] = [];
 	let loading = true;
@@ -92,7 +93,7 @@
 					on:click={() => (viewMode = 'list')}
 					title="List view"
 				>
-					☰
+					<Icon name="menu" size={14} />
 				</button>
 			</div>
 			<ExportMenu data={eeros} filename="eeros" disabled={loading} />
@@ -100,7 +101,7 @@
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
-					↻
+					<Icon name="refresh" size={14} />
 				{/if}
 				Refresh
 			</button>
@@ -169,7 +170,10 @@
 						{/if}
 						<div class="detail-row">
 							<span class="label">Connection</span>
-							<span class="value">{eero.wired ? '🔌 Wired' : '📶 Wireless'}</span>
+							<span class="value"
+								><Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
+								{eero.wired ? 'Wired' : 'Wireless'}</span
+							>
 						</div>
 					</div>
 				</a>
@@ -211,7 +215,8 @@
 							<td class="mono text-sm">{eero.ip_address || '—'}</td>
 							<td class="text-sm">{eero.connected_clients_count ?? 0}</td>
 							<td class="text-sm">
-								{eero.wired ? '🔌 Wired' : '📶 Wireless'}
+								<Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
+								{eero.wired ? 'Wired' : 'Wireless'}
 								{#if !eero.is_gateway && eero.mesh_quality_bars != null}
 									<span class="mesh-quality mono" title="Mesh: {eero.mesh_quality_bars}/5">
 										{getMeshQualityBars(eero.mesh_quality_bars)}

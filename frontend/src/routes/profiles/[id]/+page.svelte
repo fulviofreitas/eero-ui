@@ -11,6 +11,8 @@
 	import type { ProfileSummary, ProfileDevice } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import { getDeviceTypeIcon } from '$lib/deviceIcons';
 
 	let profile: ProfileSummary | null = null;
 	let loading = true;
@@ -195,7 +197,7 @@
 		<header class="detail-header">
 			<div class="header-info">
 				<div class="header-title">
-					<span class="profile-icon">👤</span>
+					<span class="profile-icon"><Icon name="person" size={20} /></span>
 					<h1>{profile.name || 'Unknown Profile'}</h1>
 				</div>
 				<div class="header-meta">
@@ -210,10 +212,10 @@
 					on:click={() => fetchProfile(true)}
 					disabled={actionLoading}
 				>
-					↻ Refresh
+					<Icon name="refresh" size={14} /> Refresh
 				</button>
 				<button class="btn btn-secondary" on:click={openRenameModal} disabled={actionLoading}>
-					✎ Rename
+					<Icon name="edit" size={14} /> Rename
 				</button>
 				<button class="btn btn-danger" on:click={handleDeleteProfile} disabled={actionLoading}>
 					Delete
@@ -248,7 +250,7 @@
 				</div>
 			{:else}
 				<div class="status-message active">
-					<span class="status-icon">✓</span>
+					<span class="status-icon"><Icon name="check" size={14} /></span>
 					<div>
 						<strong>Internet Access Active</strong>
 						<p class="text-sm text-muted">Devices in this profile have normal internet access.</p>
@@ -301,7 +303,7 @@
 						on:click={() => (viewMode = 'list')}
 						title="List view"
 					>
-						☰
+						<Icon name="menu" size={14} />
 					</button>
 				</div>
 			</div>
@@ -343,7 +345,9 @@
 						>
 							<div class="device-header">
 								<div class="device-info">
-									<span class="device-icon">{device.wireless ? '📱' : '🖥️'}</span>
+									<span class="device-icon"
+										><Icon name={getDeviceTypeIcon(null, device.wireless)} size={20} /></span
+									>
 									<div>
 										<h3>
 											{device.display_name ||
@@ -372,7 +376,10 @@
 								</div>
 								<div class="detail-row">
 									<span class="label">Connection</span>
-									<span class="value">{device.wireless ? '📶 Wireless' : '🔌 Wired'}</span>
+									<span class="value"
+										><Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+										{device.wireless ? 'Wireless' : 'Wired'}</span
+									>
 								</div>
 								{#if device.manufacturer}
 									<div class="detail-row">
@@ -416,7 +423,9 @@
 									on:click={() => device.id && goto(`/devices/${device.id}`)}
 								>
 									<td class="device-name-cell">
-										<span class="device-icon-sm">{device.wireless ? '📱' : '🖥️'}</span>
+										<span class="device-icon-sm"
+											><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
+										>
 										<div>
 											<span class="device-name"
 												>{device.display_name ||
@@ -439,7 +448,10 @@
 											<span class="badge badge-muted">Offline</span>
 										{/if}
 									</td>
-									<td class="text-sm">{device.wireless ? '📶 Wireless' : '🔌 Wired'}</td>
+									<td class="text-sm"
+										><Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+										{device.wireless ? 'Wireless' : 'Wired'}</td
+									>
 									<td on:click|stopPropagation>
 										<button
 											class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
@@ -924,7 +936,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.modal-card {
@@ -960,8 +972,11 @@
 	}
 
 	.modal-input:focus {
-		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.modal-input:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.modal-actions {

@@ -12,136 +12,8 @@
 	import { uiStore, devicesStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
-
-	/**
-	 * Get the appropriate emoji for a device type
-	 */
-	function getDeviceTypeEmoji(deviceType: string | null, wireless: boolean): string {
-		if (!deviceType) {
-			return wireless ? '📱' : '🖥️';
-		}
-
-		const type = deviceType.toLowerCase();
-
-		// Map device types to emojis
-		const emojiMap: Record<string, string> = {
-			// Mobile devices
-			phone: '📱',
-			mobile: '📱',
-			smartphone: '📱',
-			iphone: '📱',
-			android: '📱',
-			// Tablets
-			tablet: '📲',
-			ipad: '📲',
-			// Computers
-			computer: '💻',
-			laptop: '💻',
-			notebook: '💻',
-			macbook: '💻',
-			desktop: '🖥️',
-			pc: '🖥️',
-			mac: '🖥️',
-			imac: '🖥️',
-			workstation: '🖥️',
-			// Entertainment
-			tv: '📺',
-			television: '📺',
-			smart_tv: '📺',
-			streaming: '📺',
-			streaming_device: '📺',
-			media_player: '📺',
-			appletv: '📺',
-			firetv: '📺',
-			roku: '📺',
-			chromecast: '📺',
-			// Gaming
-			gaming: '🎮',
-			gaming_console: '🎮',
-			game_console: '🎮',
-			playstation: '🎮',
-			xbox: '🎮',
-			nintendo: '🎮',
-			switch: '🎮',
-			// Audio
-			speaker: '🔊',
-			smart_speaker: '🔊',
-			homepod: '🔊',
-			echo: '🔊',
-			alexa: '🔊',
-			sonos: '🔊',
-			// Smart home
-			smart_home: '🏠',
-			iot: '🏠',
-			hub: '🏠',
-			thermostat: '🌡️',
-			camera: '📷',
-			security_camera: '📷',
-			doorbell: '🚪',
-			light: '💡',
-			lighting: '💡',
-			plug: '🔌',
-			smart_plug: '🔌',
-			outlet: '🔌',
-			// Appliances
-			air_purifier: '🌬️',
-			purifier: '🌬️',
-			fan: '🌀',
-			vacuum: '🧹',
-			robot_vacuum: '🧹',
-			humidifier: '💨',
-			dehumidifier: '💨',
-			heater: '🔥',
-			air_conditioner: '❄️',
-			washer: '🧺',
-			dryer: '🧺',
-			dishwasher: '🍽️',
-			refrigerator: '🧊',
-			fridge: '🧊',
-			oven: '🍳',
-			microwave: '📻',
-			coffee: '☕',
-			appliance: '🔌',
-			// Wearables
-			wearable: '⌚',
-			watch: '⌚',
-			smartwatch: '⌚',
-			apple_watch: '⌚',
-			fitness: '⌚',
-			// Network
-			router: '📡',
-			access_point: '📡',
-			network: '📡',
-			bridge: '🌉',
-			extender: '📡',
-			// Printers & Office
-			printer: '🖨️',
-			scanner: '🖨️',
-			// Storage
-			nas: '💾',
-			storage: '💾',
-			server: '🗄️',
-			// Other
-			car: '🚗',
-			vehicle: '🚗',
-			unknown: wireless ? '📱' : '🖥️'
-		};
-
-		// Try exact match first
-		if (emojiMap[type]) {
-			return emojiMap[type];
-		}
-
-		// Try partial matches
-		for (const [key, emoji] of Object.entries(emojiMap)) {
-			if (type.includes(key) || key.includes(type)) {
-				return emoji;
-			}
-		}
-
-		// Default based on connection type
-		return wireless ? '📱' : '🖥️';
-	}
+	import Icon from '$components/common/Icon.svelte';
+	import { getDeviceTypeIcon } from '$lib/deviceIcons';
 
 	let device: DeviceDetail | null = null;
 	let loading = true;
@@ -313,7 +185,9 @@
 		<header class="detail-header">
 			<div class="header-info">
 				<div class="header-title">
-					<span class="device-icon">{getDeviceTypeEmoji(device.device_type, device.wireless)}</span>
+					<span class="device-icon"
+						><Icon name={getDeviceTypeIcon(device.device_type, device.wireless)} size={28} /></span
+					>
 					<div>
 						<h1>{displayName}</h1>
 						{#if device.manufacturer}
@@ -333,20 +207,20 @@
 					on:click={() => fetchDevice(true)}
 					disabled={actionLoading}
 				>
-					↻ Refresh
+					<Icon name="refresh" size={14} /> Refresh
 				</button>
 				<button class="btn btn-secondary" on:click={handleRename} disabled={actionLoading}>
-					✏️ Rename
+					<Icon name="edit" size={14} /> Rename
 				</button>
 				{#if device.blocked}
 					<button class="btn btn-primary" on:click={handleUnblock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
-						✓ Unblock
+						<Icon name="check" size={14} /> Unblock
 					</button>
 				{:else}
 					<button class="btn btn-danger" on:click={handleBlock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
-						🚫 Block
+						<Icon name="x" size={14} /> Block
 					</button>
 				{/if}
 			</div>
@@ -355,7 +229,7 @@
 		<!-- Profile Selector (at top) -->
 		<section class="profile-section card">
 			<div class="profile-header">
-				<h2>📁 Profile</h2>
+				<h2><Icon name="folder" size={18} /> Profile</h2>
 				<div class="profile-selector" on:click|stopPropagation>
 					<button
 						class="btn btn-secondary"
@@ -394,7 +268,7 @@
 									>
 										<span>{profile.name}</span>
 										{#if device.profile_id === profile.id}
-											<span class="check">✓</span>
+											<span class="check"><Icon name="check" size={14} /></span>
 										{/if}
 									</button>
 								{/each}
@@ -441,9 +315,9 @@
 						<dd>
 							{#if device.device_type}
 								<span class="device-type-badge">
-									<span class="device-type-emoji"
-										>{getDeviceTypeEmoji(device.device_type, device.wireless)}</span
-									>
+									<span class="device-type-emoji">
+										<Icon name={getDeviceTypeIcon(device.device_type, device.wireless)} size={14} />
+									</span>
 									{device.device_type}
 								</span>
 							{:else}
@@ -495,7 +369,10 @@
 					</div>
 					<div class="info-row">
 						<dt>Type</dt>
-						<dd>{device.wireless ? '📶 Wireless' : '🔌 Wired'}</dd>
+						<dd>
+							<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+							{device.wireless ? 'Wireless' : 'Wired'}
+						</dd>
 					</div>
 					<div class="info-row">
 						<dt>Connected To</dt>
@@ -602,7 +479,8 @@
 								class:status-danger={device.blocked}
 								class:status-success={!device.blocked}
 							>
-								{device.blocked ? '🚫 Blocked' : '✓ Allowed'}
+								<Icon name={device.blocked ? 'x' : 'check'} size={14} />
+								{device.blocked ? 'Blocked' : 'Allowed'}
 							</span>
 						</dd>
 					</div>
@@ -622,7 +500,9 @@
 						<dt>Guest Network</dt>
 						<dd>
 							{#if device.is_guest}
-								<span class="status-indicator status-info">👥 Yes</span>
+								<span class="status-indicator status-info">
+									<Icon name="person" size={14} /> Yes
+								</span>
 							{:else}
 								<span class="status-indicator status-muted">No</span>
 							{/if}
@@ -632,7 +512,9 @@
 						<dt>Private MAC</dt>
 						<dd>
 							{#if device.is_private}
-								<span class="status-indicator status-warning">🔒 Randomized</span>
+								<span class="status-indicator status-warning">
+									<Icon name="lock" size={14} /> Randomized
+								</span>
 							{:else}
 								<span class="status-indicator status-muted">No</span>
 							{/if}

@@ -11,6 +11,7 @@
 	import type { EeroDetail } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let eero: EeroDetail | null = null;
 	let loading = true;
@@ -222,7 +223,7 @@
 			</div>
 			<div class="header-actions">
 				<button class="btn btn-secondary" on:click={() => fetchEero(true)} disabled={actionLoading}>
-					↻ Refresh
+					<Icon name="refresh" size={14} /> Refresh
 				</button>
 			</div>
 		</header>
@@ -241,11 +242,12 @@
 					</div>
 					<div class="info-item">
 						<span class="info-label">Connection</span>
-						<span class="info-value"
-							>{eero.wired ? '🔌 Wired' : '📶 Wireless'}{eero.connection_type
+						<span class="info-value">
+							<Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
+							{eero.wired ? 'Wired' : 'Wireless'}{eero.connection_type
 								? ` (${eero.connection_type})`
-								: ''}</span
-						>
+								: ''}
+						</span>
 					</div>
 					{#if !eero.is_gateway && eero.mesh_quality_bars != null}
 						<div class="info-item">
@@ -260,9 +262,9 @@
 						<span class="info-label">Heartbeat</span>
 						<span class="info-value">
 							{#if eero.heartbeat_ok === true}
-								<span class="text-success">✓ OK</span>
+								<span class="text-success"><Icon name="check" size={14} /> OK</span>
 							{:else if eero.heartbeat_ok === false}
-								<span class="text-danger">✗ Failed</span>
+								<span class="text-danger"><Icon name="x" size={14} /> Failed</span>
 							{:else}
 								—
 							{/if}
@@ -271,7 +273,9 @@
 					{#if eero.update_available}
 						<div class="info-item">
 							<span class="info-label">Update</span>
-							<span class="info-value text-warning">⬆️ Update available</span>
+							<span class="info-value text-warning">
+								<Icon name="arrow-up" size={14} /> Update available
+							</span>
 						</div>
 					{/if}
 				</div>
@@ -287,20 +291,23 @@
 					</div>
 					{#if eero.connected_wireless_clients_count !== null}
 						<div class="info-item">
-							<span class="info-label">📶 Wireless</span>
+							<span class="info-label"><Icon name="wifi" size={14} /> Wireless</span>
 							<span class="info-value">{eero.connected_wireless_clients_count}</span>
 						</div>
 					{/if}
 					{#if eero.connected_wired_clients_count !== null}
 						<div class="info-item">
-							<span class="info-label">🔌 Wired</span>
+							<span class="info-label"><Icon name="ethernet" size={14} /> Wired</span>
 							<span class="info-value">{eero.connected_wired_clients_count}</span>
 						</div>
 					{/if}
 					{#if eero.provides_wifi !== null}
 						<div class="info-item">
 							<span class="info-label">Provides WiFi</span>
-							<span class="info-value">{eero.provides_wifi ? '✓ Yes' : '✗ No'}</span>
+							<span class="info-value">
+								<Icon name={eero.provides_wifi ? 'check' : 'x'} size={14} />
+								{eero.provides_wifi ? 'Yes' : 'No'}
+							</span>
 						</div>
 					{/if}
 					{#if eero.bands && eero.bands.length > 0}
@@ -366,7 +373,8 @@
 					<div class="info-item">
 						<span class="info-label">LED Status</span>
 						<span class="info-value">
-							{eero.led_on ? '💡 On' : '🌑 Off'}
+							<Icon name={eero.led_on ? 'lightbulb' : 'moon'} size={14} />
+							{eero.led_on ? 'On' : 'Off'}
 							{#if eero.led_brightness !== null}
 								<span class="text-muted">({eero.led_brightness}%)</span>
 							{/if}
@@ -476,19 +484,25 @@
 					{#if eero.power_saving_active !== null}
 						<div class="info-item">
 							<span class="info-label">Power Saving</span>
-							<span class="info-value">{eero.power_saving_active ? '✓ Active' : 'Off'}</span>
+							<span class="info-value">
+								{#if eero.power_saving_active}<Icon name="check" size={14} /> Active{:else}Off{/if}
+							</span>
 						</div>
 					{/if}
 					{#if eero.auto_provisioned !== null}
 						<div class="info-item">
 							<span class="info-label">Auto Provisioned</span>
-							<span class="info-value">{eero.auto_provisioned ? '✓ Yes' : 'No'}</span>
+							<span class="info-value">
+								{#if eero.auto_provisioned}<Icon name="check" size={14} /> Yes{:else}No{/if}
+							</span>
 						</div>
 					{/if}
 					{#if eero.retrograde_capable !== null}
 						<div class="info-item">
 							<span class="info-label">Retrograde Capable</span>
-							<span class="info-value">{eero.retrograde_capable ? '✓ Yes' : 'No'}</span>
+							<span class="info-value">
+								{#if eero.retrograde_capable}<Icon name="check" size={14} /> Yes{:else}No{/if}
+							</span>
 						</div>
 					{/if}
 				</div>
@@ -598,17 +612,19 @@
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}
-						{eero.led_on ? '🌑 Turn LED Off' : '💡 Turn LED On'}
+						<Icon name={eero.led_on ? 'moon' : 'lightbulb'} size={14} />
+						{eero.led_on ? 'Turn LED Off' : 'Turn LED On'}
 					</button>
 					<button class="btn btn-danger" on:click={handleReboot} disabled={actionLoading}>
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}
-						🔄 Reboot Eero
+						<Icon name="refresh" size={14} /> Reboot Eero
 					</button>
 				</div>
 				<p class="action-warning text-muted text-sm">
-					⚠️ Rebooting will temporarily disconnect all devices connected to this node.
+					<Icon name="alert-triangle" size={14} /> Rebooting will temporarily disconnect all devices connected
+					to this node.
 				</p>
 			</section>
 		</div>
@@ -915,7 +931,7 @@
 	}
 
 	.text-warning {
-		color: var(--color-warning, #f59e0b);
+		color: var(--color-warning);
 	}
 
 	@media (max-width: 768px) {

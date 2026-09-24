@@ -7,6 +7,7 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
 	import type { NodeDetailLevel } from '$lib/stores/topology';
+	import Icon from '$components/common/Icon.svelte';
 
 	export let data: {
 		label: string;
@@ -45,7 +46,7 @@
 
 	<div class="node-content">
 		<div class="node-header">
-			<span class="node-icon">📡</span>
+			<span class="node-icon"><Icon name="eeros" size={16} /></span>
 			<span class="node-label">{data.label}</span>
 		</div>
 
@@ -61,7 +62,8 @@
 
 			<div class="node-metrics">
 				<span class="metric" title="Connected Devices">
-					💻 {data.deviceCount ?? 0}
+					<Icon name="laptop" size={12} />
+					{data.deviceCount ?? 0}
 				</span>
 				{#if detailLevel === 'detailed' && data.meshQuality !== undefined}
 					<span
@@ -72,7 +74,7 @@
 					</span>
 				{/if}
 				<span class="metric connection-type">
-					{data.wired ? '🔌' : '📶'}
+					<Icon name={data.wired ? 'ethernet' : 'wifi'} size={12} />
 				</span>
 			</div>
 		{/if}
@@ -83,16 +85,16 @@
 
 <style>
 	.eero-node {
-		background: var(--color-bg-secondary, #12121a);
-		border: 2px solid var(--color-border, #1e1e2e);
-		border-radius: 10px;
+		background: var(--color-bg-secondary);
+		border: 2px solid var(--color-border);
+		border-radius: var(--radius-lg);
 		padding: 12px 16px;
 		min-width: 140px;
 		font-family: inherit;
 		transition:
-			border-color 0.2s,
-			box-shadow 0.2s,
-			transform 0.15s;
+			border-color var(--transition-normal),
+			box-shadow var(--transition-normal),
+			transform var(--transition-fast);
 	}
 
 	.eero-node.minimal {
@@ -105,16 +107,16 @@
 	}
 
 	.eero-node.selected {
-		border-color: var(--color-accent, #3b82f6);
-		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+		border-color: var(--color-accent);
+		box-shadow: var(--focus-ring);
 	}
 
 	.eero-node.online {
-		border-color: var(--color-success, #22c55e);
+		border-color: var(--color-success);
 	}
 
 	.eero-node.offline {
-		border-color: var(--color-danger, #ef4444);
+		border-color: var(--color-danger);
 		opacity: 0.7;
 	}
 
@@ -132,13 +134,13 @@
 	}
 
 	.node-icon {
-		font-size: 16px;
+		color: var(--color-text-secondary);
 	}
 
 	.node-label {
 		font-weight: 600;
-		color: var(--color-text-primary, #e4e4e7);
-		font-size: 12px;
+		color: var(--color-text-primary);
+		font-size: var(--text-xs);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -155,22 +157,22 @@
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background-color: var(--color-text-muted, #71717a);
+		background-color: var(--color-text-muted);
 		flex-shrink: 0;
 	}
 
 	.status-dot.online {
-		background-color: #22c55e;
-		box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+		background-color: var(--color-success);
+		box-shadow: 0 0 6px var(--color-success);
 	}
 
 	.status-dot.offline {
-		background-color: #ef4444;
+		background-color: var(--color-danger);
 	}
 
 	.model-text {
 		font-size: 10px;
-		color: var(--color-text-muted, #71717a);
+		color: var(--color-text-muted);
 	}
 
 	.node-metrics {
@@ -178,7 +180,7 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 10px;
-		color: var(--color-text-secondary, #a1a1aa);
+		color: var(--color-text-secondary);
 	}
 
 	.metric {
@@ -193,32 +195,32 @@
 	}
 
 	.mesh-quality.excellent {
-		color: #22c55e;
+		color: var(--color-success);
 	}
 	.mesh-quality.good {
-		color: #3b82f6;
+		color: var(--color-accent);
 	}
 	.mesh-quality.fair {
-		color: #f59e0b;
+		color: var(--color-warning);
 	}
 	.mesh-quality.poor {
-		color: #ef4444;
+		color: var(--color-danger);
 	}
 	.mesh-quality.unknown {
-		color: var(--color-text-muted, #71717a);
+		color: var(--color-text-muted);
 	}
 
 	.node-ip {
 		font-size: 9px;
-		font-family: var(--font-mono, monospace);
-		color: var(--color-text-muted, #71717a);
+		font-family: var(--font-mono);
+		color: var(--color-text-muted);
 		text-align: center;
 	}
 
 	:global(.eero-node .handle) {
 		width: 8px;
 		height: 8px;
-		background: var(--color-border, #3f3f46);
-		border: 2px solid var(--color-bg-secondary, #12121a);
+		background: var(--color-border);
+		border: 2px solid var(--color-bg-secondary);
 	}
 </style>

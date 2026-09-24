@@ -6,6 +6,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { exportData, type ExportFormat } from '$lib/utils/export';
+	import Icon from './Icon.svelte';
+	import type { IconName } from '$lib/icons/paths';
 
 	export let data: object[] = [];
 	export let filename = 'export';
@@ -13,10 +15,10 @@
 
 	let open = false;
 
-	const formats: { id: ExportFormat; label: string; icon: string }[] = [
-		{ id: 'csv', label: 'CSV', icon: '📊' },
-		{ id: 'json', label: 'JSON', icon: '{ }' },
-		{ id: 'yaml', label: 'YAML', icon: '📄' }
+	const formats: { id: ExportFormat; label: string; icon: IconName }[] = [
+		{ id: 'csv', label: 'CSV', icon: 'bar-chart' },
+		{ id: 'json', label: 'JSON', icon: 'file-text' },
+		{ id: 'yaml', label: 'YAML', icon: 'file-text' }
 	];
 
 	function handleExport(format: ExportFormat) {
@@ -45,7 +47,7 @@
 		disabled={disabled || data.length === 0}
 		title={data.length === 0 ? 'No data to export' : 'Export data'}
 	>
-		⬇ Export
+		<Icon name="download" size={14} /> Export
 	</button>
 	{#if open}
 		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -55,7 +57,7 @@
 			</div>
 			{#each formats as format}
 				<button class="export-option" on:click={() => handleExport(format.id)}>
-					<span class="export-icon">{format.icon}</span>
+					<span class="export-icon"><Icon name={format.icon} size={14} /></span>
 					<span>{format.label}</span>
 				</button>
 			{/each}
@@ -78,7 +80,7 @@
 		border-radius: var(--radius-md);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 		min-width: 180px;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.export-dropdown-header {

@@ -22,6 +22,9 @@
 	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import IconSprite from '$lib/icons/IconSprite.svelte';
+	import type { IconName } from '$lib/icons/paths';
 	import '../app.css';
 
 	let initialized = false;
@@ -59,23 +62,23 @@
 	}
 
 	// Navigation items (base items)
-	const baseNavItems = [
-		{ path: '/', label: 'Dashboard', icon: '📊' },
-		{ path: '/devices', label: 'Devices', icon: '📱' },
-		{ path: '/eeros', label: 'Eeros', icon: '📡' },
-		{ path: '/profiles', label: 'Profiles', icon: '👥' },
-		{ path: '/topology', label: 'Topology', icon: '🗺️' }
+	const baseNavItems: { path: string; label: string; icon: IconName }[] = [
+		{ path: '/', label: 'Dashboard', icon: 'dashboard' },
+		{ path: '/devices', label: 'Devices', icon: 'devices' },
+		{ path: '/eeros', label: 'Eeros', icon: 'eeros' },
+		{ path: '/profiles', label: 'Profiles', icon: 'profiles' },
+		{ path: '/topology', label: 'Topology', icon: 'topology' }
 	];
 
 	// Dynamic nav items including network link
 	$: navItems = [
 		baseNavItems[0], // Dashboard
 		$selectedNetwork
-			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: '🌐' }
+			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: 'network' as IconName }
 			: null,
 		...baseNavItems.slice(1, 4), // Devices, Eeros, Profiles
-		{ path: '/topology', label: 'Topology', icon: '🗺️' } // Topology at the end
-	].filter(Boolean) as { path: string; label: string; icon: string }[];
+		{ path: '/topology', label: 'Topology', icon: 'topology' as IconName } // Topology at the end
+	].filter(Boolean) as { path: string; label: string; icon: IconName }[];
 
 	// Close sidebar on navigation (mobile only)
 	afterNavigate(() => {
@@ -107,6 +110,8 @@
 	/>
 </svelte:head>
 
+<IconSprite />
+
 {#if !initialized || $isAuthLoading}
 	<!-- Loading state -->
 	<div class="loading-screen">
@@ -123,6 +128,14 @@
 {:else if $page.url.pathname.startsWith('/login')}
 	<!-- Login page - no sidebar -->
 	<main class="login-layout">
+		<button
+			class="theme-toggle-btn login-theme-toggle"
+			on:click={() => uiStore.toggleTheme()}
+			title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+			aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+		>
+			<Icon name={$theme === 'dark' ? 'sun' : 'moon'} size={14} />
+		</button>
 		<slot />
 	</main>
 {:else}
@@ -154,7 +167,7 @@
 						class:active={$page.url.pathname === item.path ||
 							(item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
 					>
-						<span class="nav-icon">{item.icon}</span>
+						<span class="nav-icon"><Icon name={item.icon} size={18} /></span>
 						<span class="nav-label">{item.label}</span>
 					</a>
 				{/each}
@@ -228,52 +241,16 @@
 						<span class="status-dot online"></span>
 						<button class="signout-btn" on:click={handleLogout} title="Sign out"> Sign out </button>
 					</div>
+					<button
+						class="theme-toggle-btn"
+						on:click={() => uiStore.toggleTheme()}
+						title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+						aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+					>
+						<Icon name={$theme === 'dark' ? 'sun' : 'moon'} size={14} />
+					</button>
 					{#if $networksStore.networks.length > 0}
 						<div class="network-row">
-							<button
-								class="theme-toggle-btn"
-								on:click={() => uiStore.toggleTheme()}
-								title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-								aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-							>
-								{#if $theme === 'dark'}
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<circle cx="12" cy="12" r="5"></circle>
-										<line x1="12" y1="1" x2="12" y2="3"></line>
-										<line x1="12" y1="21" x2="12" y2="23"></line>
-										<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-										<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-										<line x1="1" y1="12" x2="3" y2="12"></line>
-										<line x1="21" y1="12" x2="23" y2="12"></line>
-										<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-										<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-									</svg>
-								{:else}
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-									</svg>
-								{/if}
-							</button>
 							<div class="network-bar-inner">
 								<span class="status-indicator" class:online={$selectedNetwork?.status === 'online'}
 								></span>
@@ -349,7 +326,7 @@
 		top: 0;
 		left: 0;
 		bottom: 0;
-		z-index: 50;
+		z-index: var(--z-sidebar);
 		transition: transform var(--transition-normal);
 	}
 
@@ -487,7 +464,7 @@
 		background: linear-gradient(180deg, var(--color-bg-secondary) 0%, transparent 100%);
 		position: sticky;
 		top: 0;
-		z-index: 40;
+		z-index: var(--z-sticky);
 		gap: var(--space-4);
 	}
 
@@ -506,8 +483,8 @@
 	}
 
 	.status-dot.online {
-		background-color: #10b981;
-		box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+		background-color: var(--color-success);
+		box-shadow: 0 0 6px var(--color-success);
 	}
 
 	.account-name {
@@ -559,13 +536,23 @@
 		height: 26px;
 		color: var(--color-text-muted);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			border-color var(--transition-fast),
+			color var(--transition-fast),
+			background-color var(--transition-fast);
 	}
 
 	.theme-toggle-btn:hover {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
 		background: var(--color-info-bg);
+	}
+
+	.login-theme-toggle {
+		position: fixed;
+		top: var(--space-4);
+		right: var(--space-4);
+		z-index: var(--z-sticky);
 	}
 
 	.signout-btn {
@@ -616,8 +603,8 @@
 	}
 
 	.status-indicator.online {
-		background-color: #10b981;
-		box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+		background-color: var(--color-success);
+		box-shadow: 0 0 6px var(--color-success);
 	}
 
 	.network-select {
@@ -637,8 +624,11 @@
 	}
 
 	.network-select:focus {
-		outline: none;
 		color: var(--color-text-primary);
+	}
+
+	.network-select:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.network-select option {
@@ -680,7 +670,7 @@
 		position: fixed;
 		inset: 0;
 		background: rgba(0, 0, 0, 0.5);
-		z-index: 49;
+		z-index: var(--z-overlay);
 	}
 
 	@media (max-width: 768px) {

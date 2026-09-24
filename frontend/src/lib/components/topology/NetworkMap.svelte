@@ -30,17 +30,19 @@
 	import EeroNode from './nodes/EeroNode.svelte';
 	import DeviceNode from './nodes/DeviceNode.svelte';
 	import GatewayNode from './nodes/GatewayNode.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import type { IconName } from '$lib/icons/paths';
 
 	// Props
 	export let readonly: boolean = false;
 	export let onNodeClick: ((nodeId: string) => void) | undefined = undefined;
 
 	// Layout options for dropdown
-	const layoutOptions: { value: LayoutType; label: string; icon: string }[] = [
-		{ value: 'hierarchy', label: 'Hierarchy (Top-Down)', icon: '📊' },
-		{ value: 'horizontal', label: 'Horizontal (Left-Right)', icon: '📐' },
-		{ value: 'radial', label: 'Radial (Circular)', icon: '🎯' },
-		{ value: 'force', label: 'Force-Directed (Organic)', icon: '🌐' }
+	const layoutOptions: { value: LayoutType; label: string; icon: IconName }[] = [
+		{ value: 'hierarchy', label: 'Hierarchy (Top-Down)', icon: 'bar-chart' },
+		{ value: 'horizontal', label: 'Horizontal (Left-Right)', icon: 'ruler' },
+		{ value: 'radial', label: 'Radial (Circular)', icon: 'target' },
+		{ value: 'force', label: 'Force-Directed (Organic)', icon: 'globe' }
 	];
 
 	const detailOptions: { value: NodeDetailLevel; label: string }[] = [
@@ -134,7 +136,8 @@
 				on:change={handleLayoutChange}
 			>
 				{#each layoutOptions as opt}
-					<option value={opt.value}>{opt.icon} {opt.label}</option>
+					<!-- Native <option> cannot render an <Icon>; label text stands alone here. -->
+					<option value={opt.value}>{opt.label}</option>
 				{/each}
 			</select>
 		</div>
@@ -167,7 +170,7 @@
 			{#if $filteredTopology.loading}
 				<span class="loading-spinner small"></span>
 			{:else}
-				↻
+				<Icon name="refresh" label="Refresh topology" />
 			{/if}
 		</button>
 	</div>
@@ -179,13 +182,13 @@
 		</div>
 	{:else if $filteredTopology.error}
 		<div class="error-overlay">
-			<span class="error-icon">⚠️</span>
+			<span class="error-icon"><Icon name="alert-triangle" size={36} /></span>
 			<span>{$filteredTopology.error}</span>
 			<button class="retry-btn" on:click={refresh}>Retry</button>
 		</div>
 	{:else if nodes.length === 0}
 		<div class="empty-overlay">
-			<span class="empty-icon">📡</span>
+			<span class="empty-icon"><Icon name="router" size={36} /></span>
 			<span>No topology data available</span>
 			<button class="retry-btn" on:click={refresh}>Refresh</button>
 		</div>
@@ -211,13 +214,15 @@
 
 			<MiniMap
 				nodeColor={(node) => {
-					if (node.type === 'gateway') return '#3b82f6';
+					if (node.type === 'gateway') return 'var(--color-accent)';
 					if (node.type === 'eero') {
-						return node.data.status === 'online' ? '#22c55e' : '#ef4444';
+						return node.data.status === 'online' ? 'var(--color-success)' : 'var(--color-danger)';
 					}
-					return node.data.status === 'online' ? '#6b7280' : '#3f3f46';
+					return node.data.status === 'online'
+						? 'var(--color-text-secondary)'
+						: 'var(--color-border)';
 				}}
-				maskColor="rgba(0, 0, 0, 0.8)"
+				maskColor="var(--color-overlay)"
 			/>
 		</SvelteFlow>
 	{/if}
@@ -243,7 +248,13 @@
 		<div class="details-panel">
 			<div class="details-header">
 				<h3>{$selectedNode.data.label}</h3>
-				<button class="close-btn" on:click={() => topologyStore.selectNode(null)}>×</button>
+				<button
+					class="close-btn"
+					on:click={() => topologyStore.selectNode(null)}
+					aria-label="Close details"
+				>
+					<Icon name="close" size={16} />
+				</button>
 			</div>
 
 			<div class="details-content">
@@ -331,14 +342,14 @@
 		height: 100%;
 		min-height: 500px;
 		position: relative;
-		background: var(--color-bg-primary, #0a0a0f);
-		border-radius: 8px;
+		background: var(--color-bg-primary);
+		border-radius: var(--radius-lg);
 		overflow: hidden;
 	}
 
-	/* Override Svelte Flow default styles for dark theme */
+	/* Override Svelte Flow default styles to follow the active theme */
 	:global(.svelte-flow) {
-		background: var(--color-bg-primary, #0a0a0f) !important;
+		background: var(--color-bg-primary) !important;
 	}
 
 	:global(.svelte-flow__attribution) {
@@ -346,22 +357,22 @@
 	}
 
 	:global(.svelte-flow__controls) {
-		background: var(--color-bg-secondary, #12121a);
-		border: 1px solid var(--color-border, #27272a);
-		border-radius: 8px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-md);
 	}
 
 	:global(.svelte-flow__controls-button) {
-		background: var(--color-bg-secondary, #12121a);
-		border-bottom: 1px solid var(--color-border, #27272a);
-		fill: var(--color-text-secondary, #a1a1aa);
+		background: var(--color-bg-secondary);
+		border-bottom: 1px solid var(--color-border);
+		fill: var(--color-text-secondary);
 		width: 28px;
 		height: 28px;
 	}
 
 	:global(.svelte-flow__controls-button:hover) {
-		background: var(--color-bg-tertiary, #1e1e2e);
+		background: var(--color-bg-tertiary);
 	}
 
 	:global(.svelte-flow__controls-button:last-child) {
@@ -369,13 +380,15 @@
 	}
 
 	:global(.svelte-flow__minimap) {
-		background: var(--color-bg-secondary, #12121a) !important;
-		border: 1px solid var(--color-border, #27272a);
-		border-radius: 8px;
+		background: var(--color-bg-secondary) !important;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
 	}
 
+	/* Was a fixed 5%-white dot; invisible on a light background. Token-derived so it stays
+	   faintly visible on both themes (see --chart-grid in app.css). */
 	:global(.svelte-flow__background pattern circle) {
-		fill: rgba(255, 255, 255, 0.05);
+		fill: var(--chart-grid);
 	}
 
 	/* Map controls */
@@ -384,16 +397,16 @@
 		top: 12px;
 		left: 12px;
 		right: 12px;
-		z-index: 10;
+		z-index: var(--z-dropdown);
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		flex-wrap: wrap;
-		background: var(--color-bg-secondary, #12121a);
+		background: var(--color-bg-secondary);
 		padding: 8px 14px;
-		border-radius: 8px;
-		border: 1px solid var(--color-border, #27272a);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-md);
 	}
 
 	.control-group {
@@ -403,48 +416,51 @@
 	}
 
 	.control-label {
-		font-size: 11px;
-		color: var(--color-text-muted, #71717a);
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
 		white-space: nowrap;
 	}
 
 	.control-select {
-		background: var(--color-bg-tertiary, #1e1e2e);
-		border: 1px solid var(--color-border, #27272a);
-		border-radius: 4px;
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		padding: 4px 8px;
-		font-size: 11px;
-		color: var(--color-text-secondary, #a1a1aa);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
 		cursor: pointer;
 		min-width: 140px;
 	}
 
 	.control-select:hover {
-		border-color: var(--color-accent, #3b82f6);
+		border-color: var(--color-accent);
 	}
 
 	.control-select:focus {
-		outline: none;
-		border-color: var(--color-accent, #3b82f6);
+		border-color: var(--color-accent);
+	}
+
+	.control-select:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.control-select option {
-		background: var(--color-bg-secondary, #12121a);
-		color: var(--color-text-primary, #e4e4e7);
+		background: var(--color-bg-secondary);
+		color: var(--color-text-primary);
 	}
 
 	.control-divider {
 		width: 1px;
 		height: 20px;
-		background: var(--color-border, #27272a);
+		background: var(--color-border);
 	}
 
 	.control-option {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		font-size: 11px;
-		color: var(--color-text-secondary, #a1a1aa);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
 		cursor: pointer;
 		user-select: none;
 	}
@@ -456,29 +472,31 @@
 	}
 
 	.control-option:hover {
-		color: var(--color-text-primary, #e4e4e7);
+		color: var(--color-text-primary);
 	}
 
 	.refresh-btn {
-		background: var(--color-bg-tertiary, #1e1e2e);
-		border: 1px solid var(--color-border, #27272a);
-		color: var(--color-text-secondary, #a1a1aa);
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
 		width: 28px;
 		height: 28px;
-		border-radius: 6px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 14px;
-		transition: all 0.15s;
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 		margin-left: auto;
 	}
 
 	.refresh-btn:hover:not(:disabled) {
-		background: var(--color-bg-secondary, #12121a);
-		border-color: var(--color-accent, #3b82f6);
-		color: var(--color-accent, #3b82f6);
+		background: var(--color-bg-secondary);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
 	}
 
 	.refresh-btn:disabled {
@@ -491,16 +509,16 @@
 		position: absolute;
 		bottom: 12px;
 		left: 60px; /* Offset to avoid overlapping with xyflow controls */
-		z-index: 10;
+		z-index: var(--z-dropdown);
 		display: flex;
 		align-items: center;
 		gap: 16px;
-		background: var(--color-bg-secondary, #12121a);
+		background: var(--color-bg-secondary);
 		padding: 8px 14px;
-		border-radius: 8px;
-		border: 1px solid var(--color-border, #27272a);
-		font-size: 11px;
-		color: var(--color-text-secondary, #a1a1aa);
+		border-radius: var(--radius-lg);
+		border: 1px solid var(--color-border);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
 	}
 
 	.legend-item {
@@ -516,25 +534,31 @@
 	}
 
 	.legend-line.wired {
-		background: #22c55e;
+		background: var(--color-success);
 	}
 
 	.legend-line.wireless {
-		background: #3b82f6;
 		background: repeating-linear-gradient(
 			90deg,
-			#3b82f6 0px,
-			#3b82f6 6px,
+			var(--color-accent) 0px,
+			var(--color-accent) 6px,
 			transparent 6px,
 			transparent 9px
 		);
 	}
 
 	.legend-line.mesh {
-		background: linear-gradient(90deg, #22c55e, #3b82f6, #f59e0b);
+		background: linear-gradient(
+			90deg,
+			var(--color-success),
+			var(--color-accent),
+			var(--color-warning)
+		);
 	}
 
-	/* Loading/Error/Empty overlays */
+	/* Loading/Error/Empty overlays. --color-overlay tracks --color-bg-primary per theme, so the
+	   text tokens rendered on top always have the contrast that theme expects (previously a fixed
+	   black scrim paired with light-theme muted text — dark-on-dark). */
 	.loading-overlay,
 	.error-overlay,
 	.empty-overlay {
@@ -545,16 +569,16 @@
 		align-items: center;
 		justify-content: center;
 		gap: 16px;
-		background: rgba(0, 0, 0, 0.85);
-		color: var(--color-text-secondary, #a1a1aa);
-		z-index: 20;
+		background: var(--color-overlay);
+		color: var(--color-text-secondary);
+		z-index: var(--z-sticky);
 	}
 
 	.loading-spinner {
 		width: 32px;
 		height: 32px;
-		border: 3px solid var(--color-border, #27272a);
-		border-top-color: var(--color-accent, #3b82f6);
+		border: 3px solid var(--color-border);
+		border-top-color: var(--color-accent);
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 	}
@@ -571,26 +595,29 @@
 		}
 	}
 
-	.error-icon,
+	.error-icon {
+		color: var(--color-danger);
+	}
+
 	.empty-icon {
-		font-size: 36px;
+		color: var(--color-text-muted);
 	}
 
 	.retry-btn {
 		margin-top: 8px;
 		padding: 8px 20px;
-		background: var(--color-accent, #3b82f6);
-		color: white;
+		background: var(--color-accent);
+		color: #ffffff;
 		border: none;
-		border-radius: 6px;
+		border-radius: var(--radius-md);
 		cursor: pointer;
-		font-size: 13px;
+		font-size: var(--text-sm);
 		font-weight: 500;
-		transition: background 0.15s;
+		transition: background-color var(--transition-fast);
 	}
 
 	.retry-btn:hover {
-		background: var(--color-accent-hover, #2563eb);
+		background: var(--color-accent-hover);
 	}
 
 	/* Details panel */
@@ -601,11 +628,11 @@
 		width: 260px;
 		max-height: calc(100% - 90px);
 		overflow: auto;
-		background: var(--color-bg-secondary, #12121a);
-		border: 1px solid var(--color-border, #27272a);
-		border-radius: 10px;
-		z-index: 15;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		z-index: var(--z-sticky);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.details-header {
@@ -613,14 +640,14 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 14px 16px;
-		border-bottom: 1px solid var(--color-border, #27272a);
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.details-header h3 {
 		margin: 0;
-		font-size: 14px;
+		font-size: var(--text-base);
 		font-weight: 600;
-		color: var(--color-text-primary, #e4e4e7);
+		color: var(--color-text-primary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -629,16 +656,15 @@
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-muted, #71717a);
-		font-size: 20px;
+		color: var(--color-text-muted);
 		cursor: pointer;
 		padding: 0;
 		line-height: 1;
-		transition: color 0.15s;
+		transition: color var(--transition-fast);
 	}
 
 	.close-btn:hover {
-		color: var(--color-text-primary, #e4e4e7);
+		color: var(--color-text-primary);
 	}
 
 	.details-content {
@@ -650,21 +676,21 @@
 		display: grid;
 		grid-template-columns: auto 1fr;
 		gap: 8px 12px;
-		font-size: 12px;
+		font-size: var(--text-xs);
 	}
 
 	.details-content dt {
-		color: var(--color-text-muted, #71717a);
+		color: var(--color-text-muted);
 	}
 
 	.details-content dd {
 		margin: 0;
-		color: var(--color-text-primary, #e4e4e7);
+		color: var(--color-text-primary);
 		text-align: right;
 	}
 
 	.details-content .mono {
-		font-family: var(--font-mono, monospace);
+		font-family: var(--font-mono);
 		font-size: 11px;
 	}
 
@@ -679,18 +705,18 @@
 		font-size: 10px;
 		font-weight: 500;
 		text-transform: uppercase;
-		background: rgba(239, 68, 68, 0.15);
-		color: #ef4444;
+		background: var(--color-danger-bg);
+		color: var(--color-danger);
 	}
 
 	.status-badge.online {
-		background: rgba(34, 197, 94, 0.15);
-		color: #22c55e;
+		background: var(--color-success-bg);
+		color: var(--color-success);
 	}
 
 	.details-actions {
 		padding: 12px 16px;
-		border-top: 1px solid var(--color-border, #27272a);
+		border-top: 1px solid var(--color-border);
 	}
 
 	.btn {
@@ -699,26 +725,26 @@
 		justify-content: center;
 		gap: 6px;
 		padding: 8px 16px;
-		border-radius: 6px;
-		font-size: 13px;
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
 		font-weight: 500;
 		cursor: pointer;
-		transition: all 0.15s;
+		transition: background-color var(--transition-fast);
 		border: none;
 		width: 100%;
 	}
 
 	.btn-sm {
 		padding: 6px 12px;
-		font-size: 12px;
+		font-size: var(--text-xs);
 	}
 
 	.btn-primary {
-		background: var(--color-accent, #3b82f6);
-		color: white;
+		background: var(--color-accent);
+		color: #ffffff;
 	}
 
 	.btn-primary:hover {
-		background: var(--color-accent-hover, #2563eb);
+		background: var(--color-accent-hover);
 	}
 </style>

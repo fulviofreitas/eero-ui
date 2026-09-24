@@ -7,6 +7,7 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
 	import type { NodeDetailLevel } from '$lib/stores/topology';
+	import Icon from '$components/common/Icon.svelte';
 
 	export let data: {
 		label: string;
@@ -31,7 +32,7 @@
 
 	<div class="node-content">
 		<div class="node-header">
-			<span class="node-icon">🌐</span>
+			<span class="node-icon"><Icon name="globe" size={18} /></span>
 			<span class="node-label">{data.label}</span>
 		</div>
 
@@ -47,11 +48,13 @@
 
 			<div class="node-metrics">
 				<span class="metric" title="Connected Devices">
-					💻 {data.deviceCount ?? 0}
+					<Icon name="laptop" size={12} />
+					{data.deviceCount ?? 0}
 				</span>
 				{#if detailLevel === 'detailed'}
 					<span class="metric connection-type">
-						{data.wired ? '🔌 Wired' : '📶 Wireless'}
+						<Icon name={data.wired ? 'ethernet' : 'wifi'} size={12} />
+						{data.wired ? 'Wired' : 'Wireless'}
 					</span>
 				{/if}
 			</div>
@@ -63,17 +66,17 @@
 
 <style>
 	.gateway-node {
-		background: var(--color-bg-secondary, #12121a);
-		border: 2px solid var(--color-accent, #3b82f6);
-		border-radius: 12px;
+		background: var(--color-bg-secondary);
+		border: 2px solid var(--color-accent);
+		border-radius: var(--radius-xl);
 		padding: 14px 18px;
 		min-width: 150px;
 		font-family: inherit;
 		position: relative;
 		transition:
-			border-color 0.2s,
-			box-shadow 0.2s,
-			transform 0.15s;
+			border-color var(--transition-normal),
+			box-shadow var(--transition-normal),
+			transform var(--transition-fast);
 	}
 
 	.gateway-node.minimal {
@@ -86,17 +89,17 @@
 	}
 
 	.gateway-node.selected {
-		border-color: var(--color-accent, #3b82f6);
-		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+		border-color: var(--color-accent);
+		box-shadow: var(--focus-ring);
 	}
 
 	.gateway-node.online {
-		border-color: var(--color-accent, #3b82f6);
-		box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+		border-color: var(--color-accent);
+		box-shadow: var(--shadow-md);
 	}
 
 	.gateway-node.offline {
-		border-color: var(--color-danger, #ef4444);
+		border-color: var(--color-danger);
 		opacity: 0.7;
 	}
 
@@ -104,15 +107,15 @@
 		position: absolute;
 		top: -10px;
 		right: -10px;
-		background: linear-gradient(135deg, var(--color-accent, #3b82f6) 0%, #2563eb 100%);
-		color: white;
+		background: var(--color-accent);
+		color: #ffffff;
 		font-size: 9px;
 		font-weight: 600;
 		padding: 2px 6px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.node-content {
@@ -129,13 +132,13 @@
 	}
 
 	.node-icon {
-		font-size: 18px;
+		color: var(--color-accent);
 	}
 
 	.node-label {
 		font-weight: 600;
-		color: var(--color-text-primary, #e4e4e7);
-		font-size: 13px;
+		color: var(--color-text-primary);
+		font-size: var(--text-sm);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -152,22 +155,22 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background-color: var(--color-text-muted, #71717a);
+		background-color: var(--color-text-muted);
 		flex-shrink: 0;
 	}
 
 	.status-dot.online {
-		background-color: #22c55e;
-		box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+		background-color: var(--color-success);
+		box-shadow: 0 0 8px var(--color-success);
 	}
 
 	.status-dot.offline {
-		background-color: #ef4444;
+		background-color: var(--color-danger);
 	}
 
 	.model-text {
 		font-size: 10px;
-		color: var(--color-text-muted, #71717a);
+		color: var(--color-text-muted);
 	}
 
 	.node-metrics {
@@ -175,7 +178,7 @@
 		align-items: center;
 		gap: 10px;
 		font-size: 10px;
-		color: var(--color-text-secondary, #a1a1aa);
+		color: var(--color-text-secondary);
 	}
 
 	.metric {
@@ -186,15 +189,15 @@
 
 	.node-ip {
 		font-size: 9px;
-		font-family: var(--font-mono, monospace);
-		color: var(--color-text-muted, #71717a);
+		font-family: var(--font-mono);
+		color: var(--color-text-muted);
 		text-align: center;
 	}
 
 	:global(.gateway-node .handle) {
 		width: 10px;
 		height: 10px;
-		background: var(--color-accent, #3b82f6);
-		border: 2px solid var(--color-bg-secondary, #12121a);
+		background: var(--color-accent);
+		border: 2px solid var(--color-bg-secondary);
 	}
 </style>

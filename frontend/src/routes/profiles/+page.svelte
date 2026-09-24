@@ -10,6 +10,7 @@
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let profiles: ProfileSummary[] = [];
 	let loading = true;
@@ -103,7 +104,7 @@
 					on:click={() => (viewMode = 'list')}
 					title="List view"
 				>
-					☰
+					<Icon name="menu" size={14} />
 				</button>
 			</div>
 			<ExportMenu data={profiles} filename="profiles" disabled={loading} />
@@ -111,7 +112,7 @@
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
-					↻
+					<Icon name="refresh" size={14} />
 				{/if}
 				Refresh
 			</button>
@@ -144,7 +145,7 @@
 			{#each profiles as profile, index (getProfileKey(profile, index))}
 				<a href="/profiles/{profile.id}" class="card profile-card" class:paused={profile.paused}>
 					<div class="profile-header">
-						<div class="profile-icon">👤</div>
+						<div class="profile-icon"><Icon name="person" size={20} /></div>
 						<div class="profile-info">
 							<h3>{profile.name || 'Unknown Profile'}</h3>
 							<span class="text-sm text-muted">{profile.device_count ?? 0} devices</span>
@@ -182,7 +183,7 @@
 							on:click={() => profile.id && window.location.assign(`/profiles/${profile.id}`)}
 						>
 							<td class="profile-name-cell">
-								<span class="profile-icon-sm">👤</span>
+								<span class="profile-icon-sm"><Icon name="person" size={14} /></span>
 								<span class="profile-name">{profile.name || 'Unknown Profile'}</span>
 							</td>
 							<td class="text-sm">{profile.device_count ?? 0}</td>
@@ -190,7 +191,7 @@
 								{#if profile.paused}
 									<span class="badge badge-warning">⏸ Paused</span>
 								{:else}
-									<span class="badge badge-success">✓ Active</span>
+									<span class="badge badge-success"><Icon name="check" size={12} /> Active</span>
 								{/if}
 							</td>
 						</tr>
@@ -472,7 +473,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.modal-card {
@@ -508,8 +509,11 @@
 	}
 
 	.modal-input:focus {
-		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.modal-input:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.modal-actions {

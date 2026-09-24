@@ -14,6 +14,7 @@
 		toggleDeviceSelection
 	} from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	export let device: DeviceSummary;
 
@@ -53,14 +54,21 @@
 		uiStore.confirm({
 			title: 'Block Device',
 			message: `Are you sure you want to block "${displayName}"? This device will be disconnected from the network.`,
+			details: [
+				'Blocking a device is not verified end-to-end by the eero SDK - the change is not ' +
+					'rolled back automatically here, so confirm the device shows as blocked afterwards.'
+			],
 			confirmText: 'Block Device',
 			danger: true,
 			onConfirm: async () => {
+				loading = true;
 				try {
 					await devicesStore.blockDevice(device.id!);
 					uiStore.success(`${displayName} has been blocked.`);
 				} catch (error) {
 					uiStore.error(error instanceof Error ? error.message : 'Failed to block device');
+				} finally {
+					loading = false;
 				}
 			}
 		});
@@ -177,7 +185,8 @@
 	{#if isVisible('connection')}
 		<td class="text-sm">
 			{#if device.connected}
-				{device.wireless ? '📶 Wireless' : '🔌 Wired'}
+				<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+				{device.wireless ? 'Wireless' : 'Wired'}
 			{:else}
 				<span class="text-muted">—</span>
 			{/if}
@@ -253,20 +262,22 @@
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
-					⋮
+					<Icon name="more-vertical" />
 				{/if}
 			</button>
 
 			{#if actionMenuOpen}
 				<div class="action-menu" on:mouseleave={closeActionMenu} role="menu" tabindex="-1">
-					<button class="action-item" on:click={handleRename} role="menuitem"> ✏️ Rename </button>
+					<button class="action-item" on:click={handleRename} role="menuitem">
+						<Icon name="edit" size={14} /> Rename
+					</button>
 					{#if device.blocked}
 						<button class="action-item" on:click={handleUnblock} role="menuitem">
-							✓ Unblock
+							<Icon name="check" size={14} /> Unblock
 						</button>
 					{:else}
 						<button class="action-item danger" on:click={handleBlock} role="menuitem">
-							🚫 Block
+							<Icon name="x" size={14} /> Block
 						</button>
 					{/if}
 				</div>
@@ -368,7 +379,7 @@
 		position: sticky;
 		right: 0;
 		background-color: var(--color-bg-secondary);
-		z-index: 1;
+		z-index: var(--z-base);
 	}
 
 	.device-row:hover .actions-cell {
@@ -396,7 +407,7 @@
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-lg);
 		min-width: 140px;
-		z-index: 10;
+		z-index: var(--z-dropdown);
 		overflow: hidden;
 	}
 
