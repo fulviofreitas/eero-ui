@@ -7,7 +7,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
+	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
 	import { getSpeedtestHistory } from '$lib/api/metrics';
+	import { seriesColor, withAlpha } from '$lib/charts/defaults';
 
 	interface Props {
 		networkId: string;
@@ -15,25 +17,33 @@
 
 	let { networkId }: Props = $props();
 
-	let timeRange: '24h' | '7d' | '30d' = $state('24h');
+	type SpeedtestTimeRange = '24h' | '7d' | '30d';
+
+	let timeRange: SpeedtestTimeRange = $state('24h');
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let downloadData: Array<{ x: number; y: number }> = $state([]);
 	let uploadData: Array<{ x: number; y: number }> = $state([]);
 
+	const timeRangeOptions: { value: SpeedtestTimeRange; label: string }[] = [
+		{ value: '24h', label: '24h' },
+		{ value: '7d', label: '7d' },
+		{ value: '30d', label: '30d' }
+	];
+
 	const datasets = $derived([
 		{
 			label: 'Download',
 			data: downloadData,
-			borderColor: 'rgb(75, 192, 192)',
-			backgroundColor: 'rgba(75, 192, 192, 0.1)',
+			borderColor: seriesColor(0),
+			backgroundColor: withAlpha(seriesColor(0), 0.1),
 			fill: true
 		},
 		{
 			label: 'Upload',
 			data: uploadData,
-			borderColor: 'rgb(255, 99, 132)',
-			backgroundColor: 'rgba(255, 99, 132, 0.1)',
+			borderColor: seriesColor(3),
+			backgroundColor: withAlpha(seriesColor(3), 0.1),
 			fill: true
 		}
 	]);
@@ -103,11 +113,12 @@
 <div class="speedtest-chart">
 	<div class="chart-header">
 		<h3>Speedtest History</h3>
-		<div class="time-range-selector">
-			<button class:active={timeRange === '24h'} onclick={() => setTimeRange('24h')}> 24h </button>
-			<button class:active={timeRange === '7d'} onclick={() => setTimeRange('7d')}> 7d </button>
-			<button class:active={timeRange === '30d'} onclick={() => setTimeRange('30d')}> 30d </button>
-		</div>
+		<TimeRangeSelector
+			options={timeRangeOptions}
+			value={timeRange}
+			onChange={setTimeRange}
+			label="Speedtest history time range"
+		/>
 	</div>
 
 	<TimeSeriesChart title="" {datasets} yAxisLabel="Mbps" {loading} {error} />
@@ -132,33 +143,5 @@
 		margin: 0;
 		font-size: 1rem;
 		font-weight: 600;
-	}
-
-	.time-range-selector {
-		display: flex;
-		gap: var(--space-1);
-	}
-
-	.time-range-selector button {
-		padding: var(--space-1) var(--space-3);
-		border: 1px solid var(--color-border);
-		background: var(--color-bg-primary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		transition: all var(--transition-fast);
-	}
-
-	.time-range-selector button:hover {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-primary);
-	}
-
-	.time-range-selector button.active {
-		background: var(--color-accent);
-		color: white;
-		border-color: var(--color-accent);
 	}
 </style>

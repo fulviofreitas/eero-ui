@@ -1,39 +1,18 @@
 <!--
   TimeSeriesChart Component
-  
+
   Base chart component for time-series data visualization using Chart.js.
-  Used as the foundation for SpeedtestChart and BandwidthChart.
+  Used as the foundation for SpeedtestChart, ClientCountChart and BandwidthChart.
+
+  Registration and theme-aware options come from `$lib/charts/defaults.ts` — see that module
+  for why (single register call, canvas cannot parse `var()`, one palette).
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import {
-		Chart as ChartJS,
-		CategoryScale,
-		LinearScale,
-		PointElement,
-		LineElement,
-		LineController,
-		Title,
-		Tooltip,
-		Legend,
-		TimeScale,
-		Filler
-	} from 'chart.js';
-	import 'chartjs-adapter-date-fns';
+	import { Chart as ChartJS } from 'chart.js';
+	import { registerCharts, lineChartOptions, onThemeChange } from '$lib/charts/defaults';
 
-	// Register Chart.js components (LineController is required for type: 'line')
-	ChartJS.register(
-		CategoryScale,
-		LinearScale,
-		PointElement,
-		LineElement,
-		LineController,
-		Title,
-		Tooltip,
-		Legend,
-		TimeScale,
-		Filler
-	);
+	registerCharts();
 
 	interface DataPoint {
 		x: number;
@@ -98,55 +77,7 @@
 			data: {
 				datasets: cloneDatasets()
 			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				interaction: {
-					mode: 'index',
-					intersect: false
-				},
-				plugins: {
-					legend: {
-						position: 'top'
-					},
-					title: {
-						display: !!title,
-						text: title
-					},
-					tooltip: {
-						callbacks: {
-							label: (context) => {
-								const value = context.parsed.y;
-								if (value === null || value === undefined) return '';
-								return `${context.dataset.label}: ${value.toFixed(2)} ${yAxisLabel}`;
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						type: 'time',
-						time: {
-							tooltipFormat: 'PPpp',
-							displayFormats: {
-								hour: 'HH:mm',
-								day: 'MMM d'
-							}
-						},
-						title: {
-							display: true,
-							text: 'Time'
-						}
-					},
-					y: {
-						beginAtZero: true,
-						title: {
-							display: !!yAxisLabel,
-							text: yAxisLabel
-						}
-					}
-				}
-			}
+			options: lineChartOptions({ title, yAxisLabel })
 		});
 	}
 
@@ -154,6 +85,7 @@
 		if (!chart) return;
 
 		chart.data.datasets = cloneDatasets();
+		chart.options = lineChartOptions({ title, yAxisLabel });
 		chart.update('none');
 	}
 
@@ -182,7 +114,10 @@
 		}
 	});
 
+	const unsubscribeTheme = onThemeChange(() => updateChart());
+
 	onDestroy(() => {
+		unsubscribeTheme();
 		if (chart) {
 			chart.destroy();
 			chart = null;

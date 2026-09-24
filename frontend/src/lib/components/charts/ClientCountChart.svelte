@@ -7,35 +7,45 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
+	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
 	import { getClientCountHistory } from '$lib/api/metrics';
+	import { seriesColor, withAlpha } from '$lib/charts/defaults';
 
-	let timeRange: '6h' | '24h' | '7d' = $state('24h');
+	type ClientCountTimeRange = '6h' | '24h' | '7d';
+
+	let timeRange: ClientCountTimeRange = $state('24h');
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let totalData: Array<{ x: number; y: number }> = $state([]);
 	let wirelessData: Array<{ x: number; y: number }> = $state([]);
 	let wiredData: Array<{ x: number; y: number }> = $state([]);
 
+	const timeRangeOptions: { value: ClientCountTimeRange; label: string }[] = [
+		{ value: '6h', label: '6h' },
+		{ value: '24h', label: '24h' },
+		{ value: '7d', label: '7d' }
+	];
+
 	const datasets = $derived([
 		{
 			label: 'Total',
 			data: totalData,
-			borderColor: 'rgb(99, 102, 241)',
-			backgroundColor: 'rgba(99, 102, 241, 0.1)',
+			borderColor: seriesColor(4),
+			backgroundColor: withAlpha(seriesColor(4), 0.1),
 			fill: false
 		},
 		{
 			label: 'Wireless',
 			data: wirelessData,
-			borderColor: 'rgb(59, 130, 246)',
-			backgroundColor: 'rgba(59, 130, 246, 0.1)',
+			borderColor: seriesColor(0),
+			backgroundColor: withAlpha(seriesColor(0), 0.1),
 			fill: true
 		},
 		{
 			label: 'Wired',
 			data: wiredData,
-			borderColor: 'rgb(251, 146, 60)',
-			backgroundColor: 'rgba(251, 146, 60, 0.1)',
+			borderColor: seriesColor(2),
+			backgroundColor: withAlpha(seriesColor(2), 0.1),
 			fill: true
 		}
 	]);
@@ -100,11 +110,12 @@
 <div class="client-count-chart">
 	<div class="chart-header">
 		<h3>Connected Clients</h3>
-		<div class="time-range-selector">
-			<button class:active={timeRange === '6h'} onclick={() => setTimeRange('6h')}> 6h </button>
-			<button class:active={timeRange === '24h'} onclick={() => setTimeRange('24h')}> 24h </button>
-			<button class:active={timeRange === '7d'} onclick={() => setTimeRange('7d')}> 7d </button>
-		</div>
+		<TimeRangeSelector
+			options={timeRangeOptions}
+			value={timeRange}
+			onChange={setTimeRange}
+			label="Connected clients time range"
+		/>
 	</div>
 
 	<TimeSeriesChart title="" {datasets} yAxisLabel="Devices" {loading} {error} />
@@ -129,33 +140,5 @@
 		margin: 0;
 		font-size: 1rem;
 		font-weight: 600;
-	}
-
-	.time-range-selector {
-		display: flex;
-		gap: var(--space-1);
-	}
-
-	.time-range-selector button {
-		padding: var(--space-1) var(--space-3);
-		border: 1px solid var(--color-border);
-		background: var(--color-bg-primary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		transition: all var(--transition-fast);
-	}
-
-	.time-range-selector button:hover {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-primary);
-	}
-
-	.time-range-selector button.active {
-		background: var(--color-accent);
-		color: white;
-		border-color: var(--color-accent);
 	}
 </style>

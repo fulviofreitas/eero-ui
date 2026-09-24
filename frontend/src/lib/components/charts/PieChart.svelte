@@ -1,22 +1,26 @@
 <!--
   PieChart Component
-  
+
   Displays data as a donut/pie chart using Chart.js.
   Used for distribution visualizations like connection types, WiFi bands, etc.
+
+  Registration and theme-aware options come from `$lib/charts/defaults.ts`. Previously this
+  component passed `var(--color-bg-secondary)` straight into the canvas border colour
+  (PieChart.svelte:66 pre-refactor) — canvas cannot parse CSS custom properties, so the border
+  silently rendered as nothing. `doughnutChartOptions()`/`readThemeColors()` resolve the token
+  to an actual colour via `getComputedStyle` before it reaches Chart.js.
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { Chart as ChartJS } from 'chart.js';
 	import {
-		Chart as ChartJS,
-		ArcElement,
-		DoughnutController,
-		Title,
-		Tooltip,
-		Legend
-	} from 'chart.js';
+		registerCharts,
+		doughnutChartOptions,
+		readThemeColors,
+		onThemeChange
+	} from '$lib/charts/defaults';
 
-	// Register Chart.js components
-	ChartJS.register(ArcElement, DoughnutController, Title, Tooltip, Legend);
+	registerCharts();
 
 	interface DataItem {
 		label: string;
@@ -55,6 +59,8 @@
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
 
+		const colors = readThemeColors();
+
 		chart = new ChartJS(ctx, {
 			type: 'doughnut',
 			data: {
@@ -63,29 +69,16 @@
 					{
 						data: data.map((d) => d.value),
 						backgroundColor: data.map((d) => d.color),
-						borderColor: 'var(--color-bg-secondary)',
+						borderColor: colors.surface,
 						borderWidth: 2,
 						hoverOffset: 4
 					}
 				]
 			},
 			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				cutout: cutout,
+				...doughnutChartOptions({ cutout, showLegend, colors }),
 				plugins: {
-					legend: {
-						display: showLegend,
-						position: 'bottom',
-						labels: {
-							padding: 12,
-							usePointStyle: true,
-							pointStyle: 'circle'
-						}
-					},
-					title: {
-						display: false
-					},
+					...doughnutChartOptions({ cutout, showLegend, colors }).plugins,
 					tooltip: {
 						callbacks: {
 							label: (context) => {
@@ -103,9 +96,11 @@
 	function updateChart() {
 		if (!chart) return;
 
+		const colors = readThemeColors();
 		chart.data.labels = data.map((d) => d.label);
 		chart.data.datasets[0].data = data.map((d) => d.value);
 		chart.data.datasets[0].backgroundColor = data.map((d) => d.color);
+		chart.data.datasets[0].borderColor = colors.surface;
 		chart.update('none');
 	}
 
@@ -131,7 +126,10 @@
 		}
 	});
 
+	const unsubscribeTheme = onThemeChange(() => updateChart());
+
 	onDestroy(() => {
+		unsubscribeTheme();
 		if (chart) {
 			chart.destroy();
 			chart = null;
