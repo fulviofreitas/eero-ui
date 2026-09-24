@@ -38,11 +38,16 @@ services:
   # credential file (a separate login from eero-ui's) and its own volume;
   # it does not share eero-ui's /data/session.
   #
+  # SECURITY: the exporter's /metrics endpoint has NO authentication and
+  # exposes device names, MAC addresses and network topology. Keep it
+  # loopback-bound (as below) or place it behind your own Prometheus
+  # network/firewall — never publish it on a public or LAN-wide interface.
+  #
   # eero-exporter:
   #   image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0
   #   container_name: eero-exporter
   #   ports:
-  #     - "10052:10052"
+  #     - "127.0.0.1:10052:10052"
   #   volumes:
   #     - eero-exporter-session:/data/session
   #   environment:

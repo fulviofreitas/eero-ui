@@ -28,6 +28,25 @@ def get_eero_client_version() -> str:
         return "unknown"
 
 
+def _remove_legacy_exporter_session_file() -> None:
+    """Remove the legacy exporter session file, if any, on startup.
+
+    Volumes upgraded from eero-ui 5.x may still carry
+    ``exporter-session.json`` -- a full copy of the eero session token that
+    the now-deleted exporter-sync code used to write next to the main
+    cookie file. Nothing deletes it any more, so clean it up once here.
+    This is a one-shot best-effort cleanup, not a security boundary: it
+    never logs the file's path or contents.
+    """
+    legacy_path = Path(settings.cookie_file).parent / "exporter-session.json"
+    try:
+        if legacy_path.exists():
+            legacy_path.unlink()
+            _LOGGER.info("Removed legacy exporter session file")
+    except OSError as e:
+        _LOGGER.warning(f"Failed to remove legacy exporter session file: {e}")
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -45,6 +64,7 @@ async def lifespan(app: FastAPI):
     before the shared EeroClient and VictoriaMetrics client are closed.
     """
     _LOGGER.info("Starting Eero Dashboard Backend")
+    _remove_legacy_exporter_session_file()
     collector = MetricsCollector(
         get_eero_client,
         victoria_client,

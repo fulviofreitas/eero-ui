@@ -92,6 +92,7 @@ class TestIdentifierValidation:
         "\n",
         "..",
         "a/b",
+        "abc\n",  # trailing newline after a valid-looking prefix (regex "$" bug)
     ]
 
     @pytest.mark.parametrize("bad_value", MALICIOUS_VALUES)
@@ -161,6 +162,27 @@ class TestIdentifierValidation:
 
             assert response.status_code == 200
             mocked_query_range.assert_called()
+
+    async def test_network_id_with_raw_percent_0a_rejected_before_query(
+        self, auth_client, authenticated_client
+    ):
+        """A raw "%0A"-encoded trailing newline in the query string is
+        rejected with 400, not just the equivalent Python "\\n" literal.
+
+        This exercises the URL-decoding path directly rather than relying
+        on httpx to percent-encode a "\\n" passed via ``params``.
+        """
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(),
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/speedtest/history"
+                "?start=0&end=100&step=1m&network_id=abc%0A"
+            )
+
+            assert response.status_code == 400
+            mocked_query_range.assert_not_called()
 
 
 class TestNoIndexHtmlLeak:

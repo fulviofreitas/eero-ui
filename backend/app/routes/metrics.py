@@ -26,7 +26,15 @@ _LOGGER = logging.getLogger(__name__)
 # validated with the same rule as eero.api.links.validate_identifier before
 # they are interpolated into a PromQL label selector, so a crafted value
 # can't break out of the selector.
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+#
+# fullmatch (not match + "$") is deliberate: "$" in a Python regex matches
+# just before a trailing "\n" as well as at the true end of string, so
+# re.match(..., "$") would accept "abc\n" (delivered as "abc%0A"). eero-api
+# 8.0.3's own eero.api.links._validate_identifier has the same "$" weakness
+# (links.py:47,65), so the SDK call is not trusted alone -- this local check
+# runs first and is the actual gate; the SDK call after it is a second,
+# redundant layer, not the primary defense.
+_IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
 
 
 def _validate_identifier(value: str, field_name: str) -> str:
@@ -34,6 +42,11 @@ def _validate_identifier(value: str, field_name: str) -> str:
 
     Raises HTTPException(400) if the identifier is malformed.
     """
+    if not value or ".." in value or not _IDENTIFIER_RE.fullmatch(value):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {field_name}",
+        )
     if _sdk_validate_identifier is not None:
         try:
             return _sdk_validate_identifier(value)
@@ -42,11 +55,6 @@ def _validate_identifier(value: str, field_name: str) -> str:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid {field_name}",
             )
-    if not value or ".." in value or not _IDENTIFIER_RE.match(value):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid {field_name}",
-        )
     return value
 
 
