@@ -6,8 +6,6 @@ POST /api/networks/{network_id}/updates/apply
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-import pytest
-
 from app.routes.networks import _last_update_applied
 
 
@@ -15,14 +13,9 @@ def make_raw_response(data, code: int = 200):
     return {"meta": {"code": code}, "data": data}
 
 
-@pytest.fixture(autouse=True)
-def _reset_update_apply_cooldown():
-    """``_last_update_applied`` is a module-level singleton shared across
-    the whole test session (security review, 2026-09-24, S6) - reset it so
-    tests here don't leak state into each other, or into tests elsewhere."""
-    _last_update_applied.clear()
-    yield
-    _last_update_applied.clear()
+# ``_last_update_applied`` is a module-level singleton reset before/after
+# every test session-wide by conftest.py's ``_reset_networks_module_state``
+# autouse fixture -- no file-local reset needed here.
 
 
 class TestApplyNetworkUpdate:

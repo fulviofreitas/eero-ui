@@ -7,7 +7,6 @@ failure, write failure, the tricky-label round trip, and the offline vs.
 absent device rules.
 """
 
-import copy
 from unittest.mock import AsyncMock, create_autospec
 
 import pytest
@@ -89,17 +88,19 @@ def make_eero(
 
 
 @pytest.fixture
-def autospec_client(_eero_client_autospec_template):
+def autospec_client(_clone_eero_client):
     """A create_autospec(EeroClient, instance=True) mock, authenticated by default.
 
     Using autospec means a renamed or removed SDK method fails the test at
     call time instead of silently returning a non-awaitable MagicMock.
 
-    Cloned from the session-scoped template built once in conftest.py
-    (``_eero_client_autospec_template``) rather than calling
-    ``create_autospec`` again here -- see that fixture's docstring for why.
+    Built via ``_clone_eero_client`` (conftest.py), a lazy per-attribute
+    clone of the session-scoped template -- eagerly deepcopy-ing the whole
+    ~200-method template here cost ~0.13s per test regardless of the
+    handful of methods this fixture actually sets (backend
+    test-performance investigation, 2026-09-24).
     """
-    client = copy.deepcopy(_eero_client_autospec_template)
+    client = _clone_eero_client()
     client.is_authenticated = True
     client.get_networks = AsyncMock(return_value=make_raw_response([make_network()]))
     client.get_devices = AsyncMock(return_value=make_raw_response([]))

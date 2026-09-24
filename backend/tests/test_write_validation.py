@@ -18,25 +18,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import get_settings
-from app.routes.auth import limiter
-from app.routes.networks import _last_speed_test_started
 
-
-@pytest.fixture(autouse=True)
-def _reset_rate_limiter_and_inflight_guard():
-    """Reset shared, process-global state before each test in this file.
-
-    Both ``limiter`` (slowapi, in-memory storage) and
-    ``_last_speed_test_started`` (the in-flight guard dict) are module-level
-    singletons shared across the whole test session, so a test elsewhere
-    that calls a rate-limited or speed-test route would otherwise leak
-    state into these tests (and vice versa).
-    """
-    limiter.reset()
-    _last_speed_test_started.clear()
-    yield
-    limiter.reset()
-    _last_speed_test_started.clear()
+# ``limiter`` (slowapi) and ``_last_speed_test_started`` are module-level,
+# process-global singletons; conftest.py's ``_reset_rate_limiter``/
+# ``_reset_networks_module_state`` autouse fixtures reset both before and
+# after every test in the whole session, so no file-local reset is needed
+# here.
 
 
 def make_raw_response(data, code: int = 200):
@@ -136,6 +123,9 @@ class TestSpeedTestInFlightGuard:
         response = await auth_client.post(f"/api/networks/{network_id}/speedtest")
 
         assert response.status_code == 202
+        # The point of this test is that the SDK is actually reached once
+        # the window has elapsed, not merely that the response isn't a 409.
+        authenticated_client.run_speed_test.assert_called_once()
 
 
 class TestNetworkRenameValidation:

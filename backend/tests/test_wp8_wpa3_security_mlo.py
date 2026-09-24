@@ -128,13 +128,21 @@ class TestUpdateSecurity:
     async def test_exactly_one_field_required_rejects_zero(
         self, auth_client, authenticated_client, experimental_writes_enabled
     ):
+        authenticated_client.set_upnp = AsyncMock()
+        authenticated_client.set_wpa3 = AsyncMock()
+
         response = await auth_client.put("/api/networks/network-123/security", json={})
 
         assert response.status_code == 422
+        authenticated_client.set_upnp.assert_not_called()
+        authenticated_client.set_wpa3.assert_not_called()
 
     async def test_exactly_one_field_required_rejects_two(
         self, auth_client, authenticated_client, experimental_writes_enabled
     ):
+        authenticated_client.set_upnp = AsyncMock()
+        authenticated_client.set_wpa3 = AsyncMock()
+
         response = await auth_client.put(
             "/api/networks/network-123/security",
             json={"upnp": True, "wpa3": True},

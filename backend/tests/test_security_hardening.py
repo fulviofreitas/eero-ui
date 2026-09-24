@@ -53,6 +53,7 @@ class TestFailSoftPropagatesAuth:
         response = await auth_client.get("/api/networks/net-1/entitlements")
 
         assert response.status_code == 401
+        authenticated_client.get_entitlement_features.assert_called_once()
 
     async def test_backup_internet_propagates_authentication_exception(
         self, auth_client, authenticated_client
@@ -64,6 +65,7 @@ class TestFailSoftPropagatesAuth:
         response = await auth_client.get("/api/networks/net-1/backup-internet")
 
         assert response.status_code == 401
+        authenticated_client.get_backup_internet.assert_called_once()
 
     async def test_security_settings_propagates_authentication_exception(
         self, auth_client, authenticated_client
@@ -75,6 +77,7 @@ class TestFailSoftPropagatesAuth:
         response = await auth_client.get("/api/networks/net-1/security")
 
         assert response.status_code == 401
+        authenticated_client.get_security_settings.assert_called_once()
 
     async def test_notifications_propagates_authentication_exception(
         self, auth_client, authenticated_client
@@ -86,6 +89,7 @@ class TestFailSoftPropagatesAuth:
         response = await auth_client.get("/api/networks/net-1/notifications")
 
         assert response.status_code == 401
+        authenticated_client.get_notification_settings.assert_called_once()
 
     async def test_non_auth_eero_exception_still_fails_soft(
         self, auth_client, authenticated_client
@@ -250,6 +254,13 @@ class TestDataUsageWindowCaps:
         )
 
         assert response.status_code == 200
+        authenticated_client.get_data_usage.assert_called_once_with(
+            network_id="net-1",
+            start="2026-01-01T00:00:00",
+            end="2026-01-02T00:00:00Z",
+            cadence="daily",
+            timezone=None,
+        )
 
     async def test_invalid_timezone_rejected(self, auth_client, authenticated_client):
         response = await auth_client.get(
@@ -280,6 +291,13 @@ class TestDataUsageWindowCaps:
         )
 
         assert response.status_code == 200
+        authenticated_client.get_data_usage.assert_called_once_with(
+            network_id="net-1",
+            start="2026-01-01T00:00:00Z",
+            end="2026-01-02T00:00:00Z",
+            cadence="daily",
+            timezone="America/New_York",
+        )
 
 
 class TestChannelUtilizationValidation:

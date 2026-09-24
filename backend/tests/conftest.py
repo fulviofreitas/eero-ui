@@ -62,6 +62,38 @@ def _reset_rate_limiter():
     limiter.reset()
 
 
+@pytest.fixture(autouse=True)
+def _reset_networks_module_state():
+    """Reset the other two module-level, process-global dicts on
+    ``app.routes.networks`` before and after every test.
+
+    ``_last_speed_test_started`` (the per-network speed-test in-flight
+    guard) and ``_last_update_applied`` (the per-network firmware-update
+    cooldown) have no dependency-injection seam, exactly like ``limiter``
+    above, so a write in one test's speedtest/update-apply route call
+    persists and can leak into any later test keyed on the same
+    network_id. Before this fixture, the reset was duplicated ad hoc in
+    three different files (``test_networks.py``'s
+    ``TestRunSpeedTest``, ``test_write_validation.py``,
+    ``test_wp8_updates_apply.py``) with a real gap:
+    ``test_security_hardening.py``'s
+    ``TestSpeedTestGuardClearedOnFailure::test_failed_kickoff_does_not_block_a_retry``
+    calls the speedtest route to a 202 success and never cleared the
+    guard afterwards (TEST-SME audit, 2026-09-24). It happened not to
+    break anything only because no later test file reused network_id
+    "net-1" for a speed test within the same run -- exactly the kind of
+    ordering-dependent fragility an autouse, session-wide reset removes
+    for good.
+    """
+    from app.routes.networks import _last_speed_test_started, _last_update_applied
+
+    _last_speed_test_started.clear()
+    _last_update_applied.clear()
+    yield
+    _last_speed_test_started.clear()
+    _last_update_applied.clear()
+
+
 @pytest.fixture(scope="session")
 def _eero_client_autospec_template() -> EeroClient:
     """The expensive part of ``create_autospec(EeroClient, instance=True)``,
@@ -70,16 +102,96 @@ def _eero_client_autospec_template() -> EeroClient:
     ``create_autospec`` eagerly walks every method on ``EeroClient`` and
     derives a signature-checked child mock for each one; profiling the
     suite (backend test-performance investigation, 2026-09-24) showed this
-    costs ~0.3-0.4s *per call*, and it was being called once per test via
-    the function-scoped ``mock_eero_client`` fixture -- roughly 250 async
-    tests' worth, i.e. most of the suite's runtime. ``copy.deepcopy()`` of
-    an already-built template is ~2.5x cheaper and produces a fully
-    independent ``NonCallableMagicMock`` (verified: mutating the clone's
-    attributes, reassigning methods to new ``AsyncMock``s, and the
-    signature-checking/AttributeError-on-unknown-method behaviour are all
-    unaffected by, and do not affect, the template or other clones).
+    costs ~0.3-0.4s *per call*. It is built once, session-scoped, and every
+    test clones from it lazily -- see ``_LazyEeroClientClone`` below.
     """
     return create_autospec(EeroClient, instance=True)
+
+
+def _cheap_clone_mock_child(child):
+    """Deep-copy a single autospec'd child mock (one method/attribute)
+    without dragging the rest of the ~200-member tree along with it.
+
+    ``create_autospec`` builds every method as a child mock that keeps a
+    back-reference to its parent (``_mock_parent``/``_mock_new_parent``)
+    so call records can bubble up to the top-level mock's ``mock_calls``.
+    That back-reference is exactly why ``copy.deepcopy()`` of a *single*
+    child mock is just as slow as deepcopy of the whole template (both
+    measured at ~0.13s in the backend test-performance investigation,
+    2026-09-24): deepcopy follows the reference and walks everything else
+    reachable from the parent anyway. Nothing in this suite asserts on a
+    top-level ``mock_calls`` aggregate (grepped, none found), so the
+    back-reference is severed on the *template's* child for the duration
+    of the copy and restored immediately after. The resulting clone is
+    fully independent, keeps its per-method signature checking, and is
+    ~180x cheaper to produce than the same copy with the parent link
+    intact.
+    """
+    parent = getattr(child, "_mock_parent", None)
+    new_parent = getattr(child, "_mock_new_parent", None)
+    child._mock_parent = None
+    child._mock_new_parent = None
+    try:
+        return copy.deepcopy(child)
+    finally:
+        child._mock_parent = parent
+        child._mock_new_parent = new_parent
+
+
+class _LazyEeroClientClone:
+    """A per-test clone of the session-scoped autospec template that only
+    pays the deepcopy cost for attributes a given test actually touches.
+
+    Eagerly deep-copying the full autospec tree costs ~0.13s regardless of
+    how many of its ~200 methods a test exercises, and essentially every
+    test in the suite paid that cost once via ``mock_eero_client`` --
+    together the dominant share of the ~95s full-suite runtime (profiled
+    2026-09-24). Most tests touch a handful of methods. This wrapper
+    defers cloning to first access (via ``_cheap_clone_mock_child``),
+    caches the result, and is otherwise indistinguishable from the eager
+    deepcopy it replaces: unknown attributes still raise ``AttributeError``
+    (autospec is preserved, see ``test_fixtures.py``), each cloned method
+    keeps its own signature checking, and clones are fully independent of
+    the template and of each other. Assigning a plain attribute (e.g.
+    ``client.get_eeros = AsyncMock(...)``) simply overrides the cache
+    entry, exactly as it would on a real deepcopy.
+    """
+
+    def __init__(self, template) -> None:
+        object.__setattr__(self, "_template", template)
+        object.__setattr__(self, "_overrides", {})
+
+    def __getattr__(self, name):
+        overrides = object.__getattribute__(self, "_overrides")
+        if name in overrides:
+            return overrides[name]
+        template = object.__getattribute__(self, "_template")
+        attr = getattr(template, name)  # AttributeError propagates as-is
+        clone = _cheap_clone_mock_child(attr)
+        overrides[name] = clone
+        return clone
+
+    def __setattr__(self, name, value) -> None:
+        object.__getattribute__(self, "_overrides")[name] = value
+
+
+@pytest.fixture
+def _clone_eero_client(_eero_client_autospec_template):
+    """Factory fixture: produce a fresh ``_LazyEeroClientClone`` of the
+    session-scoped autospec template.
+
+    Exposed (rather than kept private to ``mock_eero_client``) so other
+    test modules that need a differently-shaped default client -- e.g.
+    ``test_collector.py``'s ``autospec_client``, which is authenticated by
+    default and pre-wires a handful of collector-specific methods -- reuse
+    the same cheap lazy-clone strategy instead of eagerly deepcopy-ing the
+    whole template themselves.
+    """
+
+    def _make() -> _LazyEeroClientClone:
+        return _LazyEeroClientClone(_eero_client_autospec_template)
+
+    return _make
 
 
 @pytest.fixture
@@ -92,7 +204,7 @@ def mock_eero_client(_eero_client_autospec_template):
 
     As of v2.0.0, all methods return raw JSON responses.
     """
-    client = copy.deepcopy(_eero_client_autospec_template)
+    client = _LazyEeroClientClone(_eero_client_autospec_template)
     client.is_authenticated = False
     client.preferred_network_id = None
 

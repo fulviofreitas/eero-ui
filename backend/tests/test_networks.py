@@ -3,7 +3,6 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from eero.exceptions import EeroException
 
 
@@ -260,27 +259,10 @@ class TestRunSpeedTest:
     frontend polls ``GET .../speedtests`` separately.
     """
 
-    @pytest.fixture(autouse=True)
-    def _reset_speedtest_process_global_state(self):
-        """``_last_speed_test_started`` (the per-network in-flight guard)
-        and the shared slowapi ``Limiter`` are module-level, process-global
-        state with no dependency-injection seam -- see the coordinator's
-        test-suite audit, 2026-09-24. Every test in this class posts to
-        network_id "net-1", so without a reset, a POST in one test starts
-        the 90s window (or consumes the 2/minute budget) and the next test
-        in this class gets an unexpected 409/429 instead of exercising the
-        path it actually means to test. Reset before *and* after each test
-        so this class never leaks state into, or inherits it from, tests
-        outside the class either.
-        """
-        from app.routes.auth import limiter
-        from app.routes.networks import _last_speed_test_started
-
-        _last_speed_test_started.clear()
-        limiter.reset()
-        yield
-        _last_speed_test_started.clear()
-        limiter.reset()
+    # ``_last_speed_test_started`` and the shared slowapi ``Limiter`` are
+    # reset before/after every test session-wide by conftest.py's
+    # ``_reset_rate_limiter``/``_reset_networks_module_state`` autouse
+    # fixtures -- no per-class reset needed here.
 
     async def test_speed_test_returns_202_started_immediately(
         self, auth_client, authenticated_client
