@@ -2,10 +2,11 @@
 
 import ipaddress
 import logging
+from datetime import UTC, datetime
 from typing import Literal
 
 from eero import EeroClient
-from eero.exceptions import EeroAPIException, EeroException, EeroValidationException
+from eero.exceptions import EeroException
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -19,6 +20,7 @@ from ..transformers import (
     normalize_dns,
     normalize_eero,
     normalize_network,
+    normalize_speed_test,
 )
 
 router = APIRouter()
@@ -107,12 +109,34 @@ class NetworkDetail(NetworkSummary):
 
 
 class SpeedTestResult(BaseModel):
-    """Speed test result."""
+    """Speed test result.
+
+    Single normalised shape shared by the synchronous ``POST .../speedtest``
+    response and the ``GET .../speedtests`` history list.
+    """
 
     download_mbps: float | None = None
     upload_mbps: float | None = None
     latency_ms: float | None = None
     timestamp: str | None = None
+
+
+def _speed_test_result_model(raw: dict) -> SpeedTestResult:
+    """Build a SpeedTestResult from one raw get_speed_tests entry."""
+    normalized = normalize_speed_test(raw)
+    return SpeedTestResult(
+        download_mbps=normalized["down_mbps"],
+        upload_mbps=normalized["up_mbps"],
+        latency_ms=normalized["latency_ms"],
+        timestamp=normalized["date"],
+    )
+
+
+class SpeedTestStartedResponse(BaseModel):
+    """Response body for the fire-and-forget speed-test kickoff."""
+
+    status: str = "started"
+    started_at: str
 
 
 class NetworkRenameRequest(BaseModel):
@@ -130,30 +154,23 @@ async def list_networks(
     refresh: bool = Query(False, description="Force cache refresh"),
 ) -> list[NetworkSummary]:
     """Get list of all networks."""
-    try:
-        raw_response = await client.get_networks(refresh_cache=refresh)
-        networks = extract_list(raw_response, "networks")
+    raw_response = await client.get_networks(refresh_cache=refresh)
+    networks = extract_list(raw_response, "networks")
 
-        result = []
-        for raw_net in networks:
-            net = normalize_network(raw_net)
-            result.append(
-                NetworkSummary(
-                    id=net.get("id") or "",
-                    name=net.get("name") or "",
-                    status=net.get("status") or "unknown",
-                    guest_network_enabled=net.get("guest_network_enabled", False),
-                    public_ip=net.get("public_ip"),
-                    isp_name=net.get("isp_name"),
-                )
+    result = []
+    for raw_net in networks:
+        net = normalize_network(raw_net)
+        result.append(
+            NetworkSummary(
+                id=net.get("id") or "",
+                name=net.get("name") or "",
+                status=net.get("status") or "unknown",
+                guest_network_enabled=net.get("guest_network_enabled", False),
+                public_ip=net.get("public_ip"),
+                isp_name=net.get("isp_name"),
             )
-        return result
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get networks: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve networks. Please try again.",
         )
+    return result
 
 
 @router.get("/{network_id}", response_model=NetworkDetail)
@@ -163,94 +180,85 @@ async def get_network(
     refresh: bool = Query(False, description="Force cache refresh"),
 ) -> NetworkDetail:
     """Get detailed information about a specific network."""
-    try:
-        raw_network = await client.get_network(network_id, refresh_cache=refresh)
-        network = normalize_network(extract_data(raw_network))
+    raw_network = await client.get_network(network_id, refresh_cache=refresh)
+    network = normalize_network(extract_data(raw_network))
 
-        # Get device and eero counts (only count connected devices)
-        # Use normalized devices to match dashboard count
-        raw_devices = await client.get_devices(network_id)
-        raw_eeros = await client.get_eeros(network_id)
-        raw_device_list = extract_list(raw_devices, "devices")
-        eeros = extract_list(raw_eeros, "eeros")
+    # Get device and eero counts (only count connected devices)
+    # Use normalized devices to match dashboard count
+    raw_devices = await client.get_devices(network_id)
+    raw_eeros = await client.get_eeros(network_id)
+    raw_device_list = extract_list(raw_devices, "devices")
+    eeros = extract_list(raw_eeros, "eeros")
 
-        # Normalize devices and count connected ones
-        normalized_devices = [normalize_device(d) for d in raw_device_list]
-        connected_device_count = len(
-            [d for d in normalized_devices if d.get("connected")]
-        )
+    # Normalize devices and count connected ones
+    normalized_devices = [normalize_device(d) for d in raw_device_list]
+    connected_device_count = len([d for d in normalized_devices if d.get("connected")])
 
-        # Find gateway eero location
-        normalized_eeros = [normalize_eero(e) for e in eeros]
-        gateway_eero = next((e for e in normalized_eeros if e.get("is_gateway")), None)
-        gateway_location = gateway_eero.get("location") if gateway_eero else None
+    # Find gateway eero location
+    normalized_eeros = [normalize_eero(e) for e in eeros]
+    gateway_eero = next((e for e in normalized_eeros if e.get("is_gateway")), None)
+    gateway_location = gateway_eero.get("location") if gateway_eero else None
 
-        # Format created_at if available
-        created_at_str = network.get("created_at")
-        if created_at_str and hasattr(created_at_str, "isoformat"):
-            created_at_str = created_at_str.isoformat()
+    # Format created_at if available
+    created_at_str = network.get("created_at")
+    if created_at_str and hasattr(created_at_str, "isoformat"):
+        created_at_str = created_at_str.isoformat()
 
-        return NetworkDetail(
-            id=network.get("id") or network_id,
-            name=network.get("name") or "",
-            status=network.get("status") or "unknown",
-            guest_network_enabled=network.get("guest_network_enabled", False),
-            public_ip=network.get("public_ip"),
-            isp_name=network.get("isp_name"),
-            device_count=connected_device_count,
-            eero_count=len(eeros),
-            speed_test=network.get("speed_test"),
-            health=network.get("health"),
-            settings=network.get("settings"),
-            # Additional info
-            owner=network.get("owner"),
-            display_name=network.get("display_name"),
-            network_customer_type=network.get("network_customer_type"),
-            premium_status=network.get("premium_status"),
-            created_at=created_at_str,
-            # Connection
-            gateway=network.get("gateway") or gateway_location,
-            wan_type=network.get("wan_type"),
-            gateway_ip=network.get("gateway_ip"),
-            connection_mode=network.get("connection_mode"),
-            # Features
-            backup_internet_enabled=network.get("backup_internet_enabled", False),
-            power_saving=network.get("power_saving", False),
-            sqm=network.get("sqm", False),
-            upnp=network.get("upnp", False),
-            thread=network.get("thread", False),
-            band_steering=network.get("band_steering", False),
-            wpa3=network.get("wpa3", False),
-            ipv6_upstream=network.get("ipv6_upstream", False),
-            # DNS
-            dns=network.get("dns"),
-            premium_dns=network.get("premium_dns"),
-            # Geo IP
-            geo_ip=network.get("geo_ip"),
-            # Updates
-            updates=network.get("updates"),
-            # DHCP - normalize to frontend-expected format
-            dhcp=normalize_dhcp(network.get("dhcp")),
-            # DDNS
-            ddns=network.get("ddns"),
-            # HomeKit
-            homekit=network.get("homekit"),
-            # IP Settings
-            ip_settings=network.get("ip_settings"),
-            # Premium
-            premium_details=network.get("premium_details"),
-            # Integrations
-            amazon_account_linked=network.get("amazon_account_linked", False),
-            alexa_skill=network.get("alexa_skill", False),
-            # Timestamps
-            last_reboot=network.get("last_reboot"),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Network not found: {network_id}",
-        )
+    return NetworkDetail(
+        id=network.get("id") or network_id,
+        name=network.get("name") or "",
+        status=network.get("status") or "unknown",
+        guest_network_enabled=network.get("guest_network_enabled", False),
+        public_ip=network.get("public_ip"),
+        isp_name=network.get("isp_name"),
+        device_count=connected_device_count,
+        eero_count=len(eeros),
+        speed_test=network.get("speed_test"),
+        health=network.get("health"),
+        settings=network.get("settings"),
+        # Additional info
+        owner=network.get("owner"),
+        display_name=network.get("display_name"),
+        network_customer_type=network.get("network_customer_type"),
+        premium_status=network.get("premium_status"),
+        created_at=created_at_str,
+        # Connection
+        gateway=network.get("gateway") or gateway_location,
+        wan_type=network.get("wan_type"),
+        gateway_ip=network.get("gateway_ip"),
+        connection_mode=network.get("connection_mode"),
+        # Features
+        backup_internet_enabled=network.get("backup_internet_enabled", False),
+        power_saving=network.get("power_saving", False),
+        sqm=network.get("sqm", False),
+        upnp=network.get("upnp", False),
+        thread=network.get("thread", False),
+        band_steering=network.get("band_steering", False),
+        wpa3=network.get("wpa3", False),
+        ipv6_upstream=network.get("ipv6_upstream", False),
+        # DNS
+        dns=network.get("dns"),
+        premium_dns=network.get("premium_dns"),
+        # Geo IP
+        geo_ip=network.get("geo_ip"),
+        # Updates
+        updates=network.get("updates"),
+        # DHCP - normalize to frontend-expected format
+        dhcp=normalize_dhcp(network.get("dhcp")),
+        # DDNS
+        ddns=network.get("ddns"),
+        # HomeKit
+        homekit=network.get("homekit"),
+        # IP Settings
+        ip_settings=network.get("ip_settings"),
+        # Premium
+        premium_details=network.get("premium_details"),
+        # Integrations
+        amazon_account_linked=network.get("amazon_account_linked", False),
+        alexa_skill=network.get("alexa_skill", False),
+        # Timestamps
+        last_reboot=network.get("last_reboot"),
+    )
 
 
 @router.post("/{network_id}/set-preferred")
@@ -259,34 +267,50 @@ async def set_preferred_network(
     client: EeroClient = Depends(require_auth),
 ) -> dict:
     """Set the preferred network for subsequent operations."""
-    client.set_preferred_network(network_id)
+    try:
+        client.set_preferred_network(network_id)
+    except EeroException as e:
+        _LOGGER.error(f"Failed to set preferred network {network_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to set preferred network. Please try again.",
+        )
     return {"success": True, "preferred_network_id": network_id}
 
 
-@router.post("/{network_id}/speedtest", response_model=SpeedTestResult)
+@router.post(
+    "/{network_id}/speedtest",
+    response_model=SpeedTestStartedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def run_speed_test(
     network_id: str,
     client: EeroClient = Depends(require_auth),
-) -> SpeedTestResult:
-    """Run a speed test on the network.
+) -> SpeedTestStartedResponse:
+    """Kick off a speed test on the network. Fire-and-forget (§ 9, decision 4).
 
-    Note: This can take 30-60 seconds to complete.
+    The eero cloud API accepts this write with ``data: null`` (v8; see
+    phase-6.0-revamp.md § 3.3) and completes the test out of band, on its
+    own schedule. This route only starts it and returns immediately with
+    202 - it does not block waiting for a result. The frontend reads the
+    completed result from ``GET .../speedtests`` (polling that endpoint
+    with ``limit=1`` and comparing ``timestamp`` against ``started_at``).
     """
-    try:
-        raw_result = await client.run_speed_test(network_id)
-        result = extract_data(raw_result)
-        return SpeedTestResult(
-            download_mbps=result.get("down", {}).get("value"),
-            upload_mbps=result.get("up", {}).get("value"),
-            latency_ms=result.get("latency"),
-            timestamp=result.get("date"),
-        )
-    except EeroAPIException as e:
-        _LOGGER.error(f"Speed test failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Speed test failed. Please try again later.",
-        )
+    started_at = datetime.now(UTC).isoformat()
+    await client.run_speed_test(network_id=network_id)
+    return SpeedTestStartedResponse(status="started", started_at=started_at)
+
+
+@router.get("/{network_id}/speedtests", response_model=list[SpeedTestResult])
+async def get_speed_test_history(
+    network_id: str,
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of results"),
+    client: EeroClient = Depends(require_auth),
+) -> list[SpeedTestResult]:
+    """Get past speed test results for a network, most recent first."""
+    raw_response = await client.get_speed_tests(network_id=network_id, limit=limit)
+    results = extract_list(raw_response, "speedtest")
+    return [_speed_test_result_model(r) for r in results if isinstance(r, dict)]
 
 
 @router.put("/{network_id}/guest-network")
@@ -297,23 +321,16 @@ async def toggle_guest_network(
     client: EeroClient = Depends(require_auth),
 ) -> dict:
     """Enable or disable the guest network."""
-    try:
-        raw_result = await client.set_guest_network(
-            enabled=enabled,
-            name=name,
-            network_id=network_id,
-        )
-        success = check_success(raw_result)
-        return {
-            "success": success,
-            "guest_network_enabled": enabled,
-        }
-    except EeroException as e:
-        _LOGGER.error(f"Failed to toggle guest network: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update guest network settings. Please try again.",
-        )
+    raw_result = await client.set_guest_network(
+        enabled=enabled,
+        name=name,
+        network_id=network_id,
+    )
+    success = check_success(raw_result)
+    return {
+        "success": success,
+        "guest_network_enabled": enabled,
+    }
 
 
 class DnsFamilyState(BaseModel):
@@ -434,16 +451,9 @@ async def get_dns(
     client: EeroClient = Depends(require_auth),
 ) -> DnsSettings:
     """Get DNS configuration for a network."""
-    try:
-        raw_response = await client.get_dns_settings(network_id)
-        raw_network = extract_data(raw_response)
-        return DnsSettings(**normalize_dns(raw_network))
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get DNS settings for network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve DNS settings. Please try again.",
-        )
+    raw_response = await client.get_dns_settings(network_id)
+    raw_network = extract_data(raw_response)
+    return DnsSettings(**normalize_dns(raw_network))
 
 
 @router.put("/{network_id}/dns", response_model=DnsUpdateResponse)
@@ -480,14 +490,7 @@ async def update_dns(
 
     # 2. Read current state - required for the no-op guard and to resolve a
     # mode-only "custom" re-enable (empty servers) to concrete addresses.
-    try:
-        raw_response = await client.get_dns_settings(network_id)
-    except EeroException as e:
-        _LOGGER.error(f"Failed to read DNS settings for network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to read current DNS settings. Please try again.",
-        )
+    raw_response = await client.get_dns_settings(network_id)
     current_dns = normalize_dns(extract_data(raw_response))
 
     custom_writes: dict[str, list[str]] = {}
@@ -536,45 +539,29 @@ async def update_dns(
         network_id,
     )
 
-    try:
-        # Dispatch the narrowest SDK call(s) that express the change. Each
-        # write is a separate reboot risk, so families sharing the same
-        # target action (both -> custom, or both -> automatic) are combined
-        # into a single PUT; otherwise each changed family gets its own
-        # targeted call, leaving the untouched family alone.
-        if "ipv4" in custom_writes and "ipv6" in custom_writes:
-            combined = custom_writes["ipv4"] + custom_writes["ipv6"]
-            await client.set_custom_dns(combined, network_id=network_id)
-        elif "ipv4" in custom_writes:
-            await client.set_custom_dns_ipv4(
-                custom_writes["ipv4"], network_id=network_id
-            )
-        elif "ipv6" in custom_writes:
-            await client.set_custom_dns_ipv6(
-                custom_writes["ipv6"], network_id=network_id
-            )
+    # Dispatch the narrowest SDK call(s) that express the change. Each
+    # write is a separate reboot risk, so families sharing the same
+    # target action (both -> custom, or both -> automatic) are combined
+    # into a single PUT; otherwise each changed family gets its own
+    # targeted call, leaving the untouched family alone. Any
+    # EeroValidationException/EeroException here is handled identically by
+    # the global handlers registered in main.py (phase-6.0-revamp.md § 3.4),
+    # so there is no route-local re-wrap left to do.
+    if "ipv4" in custom_writes and "ipv6" in custom_writes:
+        combined = custom_writes["ipv4"] + custom_writes["ipv6"]
+        await client.set_custom_dns(combined, network_id=network_id)
+    elif "ipv4" in custom_writes:
+        await client.set_custom_dns_ipv4(custom_writes["ipv4"], network_id=network_id)
+    elif "ipv6" in custom_writes:
+        await client.set_custom_dns_ipv6(custom_writes["ipv6"], network_id=network_id)
 
-        if len(clear_families) == 2:
-            await client.clear_custom_dns(family=None, network_id=network_id)
-        elif len(clear_families) == 1:
-            await client.clear_custom_dns(
-                family=clear_families[0], network_id=network_id
-            )
+    if len(clear_families) == 2:
+        await client.clear_custom_dns(family=None, network_id=network_id)
+    elif len(clear_families) == 1:
+        await client.clear_custom_dns(family=clear_families[0], network_id=network_id)
 
-        if caching_changed:
-            await client.set_dns_caching(body.caching, network_id=network_id)
-    except EeroValidationException as e:
-        _LOGGER.warning(f"DNS validation error for network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"field": e.field, "message": str(e)},
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to update DNS settings for network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update DNS settings. Please try again.",
-        )
+    if caching_changed:
+        await client.set_dns_caching(body.caching, network_id=network_id)
 
     # 3. Re-read so the response reflects what the API actually stored,
     # falling back to a projected view if the follow-up read fails - the
@@ -605,19 +592,43 @@ async def rename_network(
     body: NetworkRenameRequest,
     client: EeroClient = Depends(require_auth),
 ) -> dict:
-    """Rename a network. Routed via /networks/{id}/settings (fixed in eero-api 4.1.2)."""
-    if not body.name.strip():
+    """Rename a network. Routed via /networks/{id}/settings (fixed in eero-api 4.1.2).
+
+    ``set_network_name`` is a settings-class write (phase-6.0-revamp.md § 5,
+    decision 5): assumed to reboot every eero on the network, exactly like a
+    DNS write. This route therefore follows the same read-first, parsed
+    no-op guard pattern as ``update_dns`` and skips the write entirely when
+    the requested name (stripped) already matches the stored name.
+    """
+    new_name = body.name.strip()
+    if not new_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Network name cannot be empty",
         )
-    try:
-        raw_result = await client.set_network_name(body.name.strip(), network_id)
-        success = check_success(raw_result)
-        return {"success": success, "network_id": network_id, "name": body.name.strip()}
-    except EeroException as e:
-        _LOGGER.error(f"Failed to rename network {network_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to rename network. Please try again.",
-        )
+
+    raw_network = await client.get_network(network_id)
+    current_name = (
+        normalize_network(extract_data(raw_network)).get("name") or ""
+    ).strip()
+
+    if new_name == current_name:
+        return {
+            "success": True,
+            "changed": False,
+            "network_id": network_id,
+            "name": new_name,
+        }
+
+    _LOGGER.warning(
+        "Renaming network %s - this is treated as a mesh reboot (decision 5)",
+        network_id,
+    )
+    raw_result = await client.set_network_name(new_name, network_id=network_id)
+    success = check_success(raw_result)
+    return {
+        "success": success,
+        "changed": True,
+        "network_id": network_id,
+        "name": new_name,
+    }
