@@ -1,0 +1,209 @@
+<!--
+  SpeedTestCard
+
+  Dashboard "Speed Test" card + history chart. Extracted from routes/+page.svelte
+  (WP5 decomposition). Behaviour unchanged: same run-test button, same helper formatting.
+-->
+<script lang="ts">
+	import type { NetworkDetail, SpeedTestResult } from '$api/types';
+	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
+
+	interface Props {
+		network: NetworkDetail;
+		loading: boolean;
+		onRunTest: () => void;
+	}
+
+	let { network, loading, onRunTest }: Props = $props();
+
+	function getDownloadSpeed(speedTest: SpeedTestResult | null): string {
+		if (!speedTest) return '—';
+		const value = speedTest.download_mbps;
+		return value ? value.toFixed(1) : '—';
+	}
+
+	function getUploadSpeed(speedTest: SpeedTestResult | null): string {
+		if (!speedTest) return '—';
+		const value = speedTest.upload_mbps;
+		return value ? value.toFixed(1) : '—';
+	}
+
+	function getSpeedTestDate(speedTest: SpeedTestResult | null): string {
+		if (!speedTest) return '';
+		const dateStr = speedTest.timestamp;
+		if (!dateStr) return '';
+		return new Date(dateStr).toLocaleString();
+	}
+</script>
+
+<div class="speedtest-row">
+	<div class="card stat-card speed-card">
+		<div class="stat-header">
+			<span class="stat-label">Speed Test</span>
+			<button class="btn btn-secondary btn-sm" onclick={onRunTest} disabled={loading}>
+				{#if loading}
+					<span class="loading-spinner"></span>
+				{:else}
+					Run Test
+				{/if}
+			</button>
+		</div>
+		{#if network.speed_test && (getDownloadSpeed(network.speed_test) !== '—' || getUploadSpeed(network.speed_test) !== '—')}
+			<div class="speed-results">
+				<div class="speed-item download">
+					<div class="speed-icon">↓</div>
+					<div class="speed-data">
+						<span class="speed-value">
+							{getDownloadSpeed(network.speed_test)}
+							<span class="speed-unit">Mbps</span>
+						</span>
+						<span class="speed-label">Download</span>
+					</div>
+				</div>
+				<div class="speed-item upload">
+					<div class="speed-icon">↑</div>
+					<div class="speed-data">
+						<span class="speed-value">
+							{getUploadSpeed(network.speed_test)}
+							<span class="speed-unit">Mbps</span>
+						</span>
+						<span class="speed-label">Upload</span>
+					</div>
+				</div>
+			</div>
+			{#if getSpeedTestDate(network.speed_test)}
+				<p class="speed-timestamp text-muted text-sm">
+					Last tested: {getSpeedTestDate(network.speed_test)}
+				</p>
+			{/if}
+		{:else}
+			<p class="text-muted text-sm">
+				No speed test data available. Run a test to see your network speed.
+			</p>
+		{/if}
+	</div>
+
+	<div class="speedtest-history">
+		<SpeedtestChart networkId={network.id} />
+	</div>
+</div>
+
+<style>
+	.stat-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.stat-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.stat-label {
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	.speedtest-row {
+		display: grid;
+		grid-template-columns: 1fr 2fr;
+		gap: var(--space-4);
+		margin-bottom: var(--space-8);
+	}
+
+	.speedtest-history {
+		min-width: 0;
+	}
+
+	.speedtest-history :global(.speedtest-chart) {
+		height: 100%;
+	}
+
+	.speed-results {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--space-4);
+		margin-top: var(--space-4);
+	}
+
+	.speed-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background-color: var(--color-bg-primary);
+		border-radius: var(--radius-md);
+	}
+
+	.speed-icon {
+		font-size: 1.5rem;
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-md);
+		background-color: var(--color-bg-tertiary);
+	}
+
+	.speed-item.download .speed-icon {
+		color: var(--color-success);
+	}
+
+	.speed-item.upload .speed-icon {
+		color: var(--color-accent);
+	}
+
+	.speed-data {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.speed-label {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+	}
+
+	.speed-value {
+		font-size: 1.25rem;
+		font-weight: 600;
+		font-family: var(--font-mono);
+	}
+
+	.speed-unit {
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		margin-left: var(--space-1);
+	}
+
+	.speed-item.download .speed-value {
+		color: var(--color-success);
+	}
+
+	.speed-item.upload .speed-value {
+		color: var(--color-accent);
+	}
+
+	.speed-timestamp {
+		margin-top: var(--space-3);
+		text-align: center;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--color-border);
+	}
+
+	@media (max-width: 900px) {
+		.speedtest-row {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.speed-results {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+</style>

@@ -1,7 +1,12 @@
 <!--
   Device Detail Page
-  
+
   Full detailed view of a single device with all available information.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/device/* feature components; this
+  file is now data fetching + layout + composition only. Behaviour unchanged except:
+  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading with
+  stale-while-revalidate (item 4) in place of the previous back-link + full-block spinner.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -11,9 +16,14 @@
 	import type { DeviceDetail, ProfileSummary } from '$api/types';
 	import { uiStore, devicesStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import DetailHeader from '$components/common/DetailHeader.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
 	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import { getDeviceTypeIcon } from '$lib/deviceIcons';
+	import DeviceProfileSelector from '$lib/components/device/DeviceProfileSelector.svelte';
+	import DeviceIdentificationCard from '$lib/components/device/DeviceIdentificationCard.svelte';
+	import DeviceConnectionCard from '$lib/components/device/DeviceConnectionCard.svelte';
+	import DeviceStatusCard from '$lib/components/device/DeviceStatusCard.svelte';
 
 	let device = $state<DeviceDetail | null>(null);
 	let loading = $state(true);
@@ -23,7 +33,6 @@
 	// Profile management
 	let profiles: ProfileSummary[] = $state([]);
 	let loadingProfiles = $state(false);
-	let profileDropdownOpen = $state(false);
 	let changingProfile = $state(false);
 
 	let deviceId = $derived($page.params.id);
@@ -46,6 +55,8 @@
 			return;
 		}
 
+		// Stale-while-revalidate: keep the previous `device` on screen while this
+		// refetch is in flight rather than blanking the page.
 		loading = true;
 		error = null;
 		try {
@@ -76,7 +87,6 @@
 		if (profileId === null) return; // removing profile not yet supported by this endpoint
 
 		changingProfile = true;
-		profileDropdownOpen = false;
 
 		try {
 			await devicesStore.assignToProfile([device.id], profileId, profileName);
@@ -140,40 +150,18 @@
 				.catch((err) => uiStore.error(err.message));
 		}
 	}
-
-	function getSignalBars(bars: number | null): string {
-		if (bars === null) return '━━━━';
-		return '█'.repeat(Math.min(bars, 4)) + '░'.repeat(Math.max(0, 4 - bars));
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '—';
-		return new Date(dateStr).toLocaleString();
-	}
-
-	function closeProfileDropdown(event: MouseEvent) {
-		if (profileDropdownOpen && !(event.target as HTMLElement).closest('.profile-selector')) {
-			profileDropdownOpen = false;
-		}
-	}
 </script>
-
-<svelte:window onclick={closeProfileDropdown} />
 
 <svelte:head>
 	<title>{displayName} | Eero Dashboard</title>
 </svelte:head>
 
 <div class="device-detail-page">
-	<!-- Back navigation -->
-	<nav class="breadcrumb">
-		<a href="/devices" class="back-link">← Back to Devices</a>
-	</nav>
-
-	{#if loading}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading device details...</span>
+	{#if loading && !device}
+		<Skeleton variant="card" height="100px" />
+		<div class="skeleton-grid">
+			<Skeleton variant="card" height="200px" />
+			<Skeleton variant="card" height="200px" />
 		</div>
 	{:else if error}
 		<div class="error-state">
@@ -184,27 +172,18 @@
 			</div>
 		</div>
 	{:else if device}
-		<!-- Header -->
-		<header class="detail-header">
-			<div class="header-info">
-				<div class="header-title">
-					<span class="device-icon"
-						><Icon name={getDeviceTypeIcon(device.device_type, device.wireless)} size={28} /></span
-					>
-					<div>
-						<h1>{displayName}</h1>
-						{#if device.manufacturer}
-							<span class="text-muted">{device.manufacturer}</span>
-						{/if}
-					</div>
-				</div>
-				<div class="header-meta">
-					<StatusBadge status={statusLabel} />
-					<span class="text-muted">•</span>
-					<span class="mono text-muted">{device.mac || '—'}</span>
-				</div>
-			</div>
-			<div class="header-actions">
+		<DetailHeader
+			backHref="/devices"
+			backLabel="Back to devices"
+			title={displayName}
+			subtitle={device.manufacturer ?? undefined}
+		>
+			{#snippet status()}
+				<StatusBadge status={statusLabel} />
+				<span class="text-muted">•</span>
+				<span class="mono text-muted">{device!.mac || '—'}</span>
+			{/snippet}
+			{#snippet actions()}
 				<button
 					class="btn btn-secondary"
 					onclick={() => fetchDevice(true)}
@@ -215,7 +194,7 @@
 				<button class="btn btn-secondary" onclick={handleRename} disabled={actionLoading}>
 					<Icon name="edit" size={14} /> Rename
 				</button>
-				{#if device.blocked}
+				{#if device!.blocked}
 					<button class="btn btn-primary" onclick={handleUnblock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						<Icon name="check" size={14} /> Unblock
@@ -226,341 +205,22 @@
 						<Icon name="x" size={14} /> Block
 					</button>
 				{/if}
-			</div>
-		</header>
+			{/snippet}
+		</DetailHeader>
 
-		<!-- Profile Selector (at top) -->
-		<section class="profile-section card">
-			<div class="profile-header">
-				<h2><Icon name="folder" size={18} /> Profile</h2>
-				<div class="profile-selector" onclick={(e) => e.stopPropagation()}>
-					<button
-						class="btn btn-secondary"
-						onclick={() => (profileDropdownOpen = !profileDropdownOpen)}
-						disabled={changingProfile || loadingProfiles}
-					>
-						{#if changingProfile}
-							<span class="loading-spinner"></span>
-						{/if}
-						{device.profile_name || 'No Profile'}
-						<span class="dropdown-arrow">▼</span>
-					</button>
-					{#if profileDropdownOpen}
-						<div class="profile-dropdown">
-							<div class="profile-dropdown-header">
-								<span class="text-sm text-muted">Select Profile</span>
-							</div>
-							{#if loadingProfiles}
-								<div class="profile-loading">
-									<span class="loading-spinner"></span>
-									Loading...
-								</div>
-							{:else}
-								<button
-									class="profile-option"
-									class:active={!device.profile_id}
-									onclick={() => handleProfileChange(null, 'No Profile')}
-								>
-									<span>No Profile</span>
-								</button>
-								{#each profiles as profile}
-									<button
-										class="profile-option"
-										class:active={device.profile_id === profile.id}
-										onclick={() => handleProfileChange(profile.id, profile.name)}
-									>
-										<span>{profile.name}</span>
-										{#if device.profile_id === profile.id}
-											<span class="check"><Icon name="check" size={14} /></span>
-										{/if}
-									</button>
-								{/each}
-							{/if}
-						</div>
-					{/if}
-				</div>
-			</div>
-			{#if device.profile_id}
-				<p class="profile-link">
-					<a href="/profiles/{device.profile_id}">View profile details →</a>
-				</p>
-			{/if}
-		</section>
+		<DeviceProfileSelector
+			profileName={device.profile_name}
+			profileId={device.profile_id}
+			{profiles}
+			{loadingProfiles}
+			{changingProfile}
+			onSelect={handleProfileChange}
+		/>
 
-		<!-- Info Grid -->
 		<div class="info-grid">
-			<!-- Identification -->
-			<section class="card info-card">
-				<h2>Identification</h2>
-				<dl class="info-list">
-					<div class="info-row">
-						<dt>Display Name</dt>
-						<dd>{device.display_name || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Nickname</dt>
-						<dd>{device.nickname || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Hostname</dt>
-						<dd class="mono">{device.hostname || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Manufacturer</dt>
-						<dd>{device.manufacturer || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Model</dt>
-						<dd>{device.model_name || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Device Type</dt>
-						<dd>
-							{#if device.device_type}
-								<span class="device-type-badge">
-									<span class="device-type-emoji">
-										<Icon name={getDeviceTypeIcon(device.device_type, device.wireless)} size={14} />
-									</span>
-									{device.device_type}
-								</span>
-							{:else}
-								—
-							{/if}
-						</dd>
-					</div>
-				</dl>
-			</section>
-
-			<!-- Network -->
-			<section class="card info-card">
-				<h2>Network</h2>
-				<dl class="info-list">
-					<div class="info-row">
-						<dt>IP Address</dt>
-						<dd class="mono">{device.ip || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>IPv4</dt>
-						<dd class="mono">{device.ipv4 || '—'}</dd>
-					</div>
-					{#if device.ips && device.ips.length > 1}
-						<div class="info-row">
-							<dt>All IPs</dt>
-							<dd class="mono">{device.ips.join(', ')}</dd>
-						</div>
-					{/if}
-					<div class="info-row">
-						<dt>MAC Address</dt>
-						<dd class="mono">{device.mac || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Subnet</dt>
-						<dd>{device.subnet_kind || '—'}</dd>
-					</div>
-				</dl>
-			</section>
-
-			<!-- Connection -->
-			<section class="card info-card">
-				<h2>Connection</h2>
-				<dl class="info-list">
-					<div class="info-row">
-						<dt>Status</dt>
-						<dd>
-							<StatusBadge status={statusLabel} />
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Type</dt>
-						<dd>
-							<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
-							{device.wireless ? 'Wireless' : 'Wired'}
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Connected To</dt>
-						<dd>
-							{#if device.connected_to_eero}
-								{#if device.connected_to_eero_id}
-									<a href="/eeros/{device.connected_to_eero_id}" class="eero-link"
-										>{device.connected_to_eero}</a
-									>
-								{:else}
-									{device.connected_to_eero}
-								{/if}
-								{#if device.connected_to_eero_model}
-									<span class="text-muted">({device.connected_to_eero_model})</span>
-								{/if}
-							{:else}
-								—
-							{/if}
-						</dd>
-					</div>
-					{#if device.wireless}
-						<div class="info-row">
-							<dt>SSID</dt>
-							<dd>{device.ssid || '—'}</dd>
-						</div>
-						<div class="info-row">
-							<dt>Frequency</dt>
-							<dd>
-								{#if device.frequency}
-									<span class="badge badge-neutral">{device.frequency}</span>
-									{#if device.frequency_mhz}
-										<span class="text-muted">({device.frequency_mhz} MHz)</span>
-									{/if}
-								{:else}
-									—
-								{/if}
-							</dd>
-						</div>
-						<div class="info-row">
-							<dt>Channel</dt>
-							<dd>{device.channel || '—'}</dd>
-						</div>
-						<div class="info-row">
-							<dt>Signal Strength</dt>
-							<dd>
-								{#if device.signal_strength}
-									<span class="signal mono">{getSignalBars(device.signal_bars)}</span>
-									<span>{device.signal_strength} dBm</span>
-								{:else}
-									—
-								{/if}
-							</dd>
-						</div>
-					{/if}
-					<div class="info-row">
-						<dt>Auth</dt>
-						<dd>{device.auth || '—'}</dd>
-					</div>
-				</dl>
-			</section>
-
-			<!-- Transfer Rates -->
-			{#if device.rx_bitrate || device.tx_bitrate}
-				<section class="card info-card">
-					<h2>Transfer Rates</h2>
-					<dl class="info-list">
-						{#if device.tx_bitrate}
-							<div class="info-row">
-								<dt>TX Bitrate</dt>
-								<dd class="mono">{device.tx_bitrate}</dd>
-							</div>
-						{/if}
-						{#if device.rx_bitrate}
-							<div class="info-row">
-								<dt>RX Bitrate</dt>
-								<dd class="mono">{device.rx_bitrate}</dd>
-							</div>
-						{/if}
-					</dl>
-				</section>
-			{/if}
-
-			<!-- Status -->
-			<section class="card info-card">
-				<h2>Status</h2>
-				<dl class="info-list">
-					<div class="info-row">
-						<dt>Connected</dt>
-						<dd>
-							<span
-								class="status-indicator"
-								class:status-success={device.connected}
-								class:status-muted={!device.connected}
-							>
-								{device.connected ? '● Connected' : '○ Disconnected'}
-							</span>
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Blocked</dt>
-						<dd>
-							<span
-								class="status-indicator"
-								class:status-danger={device.blocked}
-								class:status-success={!device.blocked}
-							>
-								<Icon name={device.blocked ? 'x' : 'check'} size={14} />
-								{device.blocked ? 'Blocked' : 'Allowed'}
-							</span>
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Paused</dt>
-						<dd>
-							<span
-								class="status-indicator"
-								class:status-warning={device.paused}
-								class:status-success={!device.paused}
-							>
-								{device.paused ? '⏸ Paused' : '▶ Active'}
-							</span>
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Guest Network</dt>
-						<dd>
-							{#if device.is_guest}
-								<span class="status-indicator status-info">
-									<Icon name="person" size={14} /> Yes
-								</span>
-							{:else}
-								<span class="status-indicator status-muted">No</span>
-							{/if}
-						</dd>
-					</div>
-					<div class="info-row">
-						<dt>Private MAC</dt>
-						<dd>
-							{#if device.is_private}
-								<span class="status-indicator status-warning">
-									<Icon name="lock" size={14} /> Randomized
-								</span>
-							{:else}
-								<span class="status-indicator status-muted">No</span>
-							{/if}
-						</dd>
-					</div>
-				</dl>
-			</section>
-
-			<!-- Timestamps -->
-			<section class="card info-card">
-				<h2>Activity</h2>
-				<dl class="info-list">
-					<div class="info-row">
-						<dt>Last Active</dt>
-						<dd>{formatDate(device.last_active)}</dd>
-					</div>
-					<div class="info-row">
-						<dt>First Seen</dt>
-						<dd>{formatDate(device.first_active)}</dd>
-					</div>
-				</dl>
-			</section>
-
-			<!-- Technical -->
-			<section class="card info-card wide-card">
-				<h2>Technical</h2>
-				<dl class="info-list technical-list">
-					<div class="info-row">
-						<dt>Device ID</dt>
-						<dd class="mono text-sm">{device.id || '—'}</dd>
-					</div>
-					<div class="info-row">
-						<dt>Network ID</dt>
-						<dd class="mono text-sm">{device.network_id || '—'}</dd>
-					</div>
-					{#if device.url}
-						<div class="info-row">
-							<dt>API URL</dt>
-							<dd class="mono text-sm text-muted">{device.url}</dd>
-						</div>
-					{/if}
-				</dl>
-			</section>
+			<DeviceIdentificationCard {device} />
+			<DeviceConnectionCard {device} {statusLabel} />
+			<DeviceStatusCard {device} />
 		</div>
 
 		<!-- Bandwidth History Chart (only for connected devices with MAC address) -->
@@ -577,20 +237,13 @@
 		max-width: 1200px;
 	}
 
-	.breadcrumb {
-		margin-bottom: var(--space-4);
+	.skeleton-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+		gap: var(--space-4);
+		margin-top: var(--space-4);
 	}
 
-	.back-link {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-	}
-
-	.back-link:hover {
-		color: var(--color-accent);
-	}
-
-	.loading-state,
 	.error-state {
 		display: flex;
 		flex-direction: column;
@@ -601,49 +254,9 @@
 		color: var(--color-text-secondary);
 	}
 
-	.loading-state {
-		flex-direction: row;
-	}
-
 	.error-actions {
 		display: flex;
 		gap: var(--space-3);
-	}
-
-	.detail-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		margin-bottom: var(--space-6);
-		padding-bottom: var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.header-title {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		margin-bottom: var(--space-2);
-	}
-
-	.device-icon {
-		font-size: 2.5rem;
-	}
-
-	.header-title h1 {
-		margin: 0;
-		font-size: 1.5rem;
-	}
-
-	.header-meta {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.header-actions {
-		display: flex;
-		gap: var(--space-2);
 	}
 
 	.info-grid {
@@ -652,234 +265,11 @@
 		gap: var(--space-4);
 	}
 
-	.wide-card {
-		grid-column: 1 / -1;
-	}
-
-	.technical-list {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: var(--space-2) var(--space-6);
-	}
-
-	.technical-list .info-row {
-		border-bottom: none;
-	}
-
-	.info-card h2 {
-		font-size: 0.875rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		margin-bottom: var(--space-4);
-		padding-bottom: var(--space-2);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.info-list {
-		margin: 0;
-	}
-
-	.info-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		padding: var(--space-2) 0;
-		gap: var(--space-4);
-	}
-
-	.info-row:not(:last-child) {
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.info-row dt {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-		flex-shrink: 0;
-	}
-
-	.info-row dd {
-		margin: 0;
-		font-weight: 500;
-		text-align: right;
-		word-break: break-word;
-	}
-
-	.signal {
-		color: var(--color-success);
-		letter-spacing: 0.1em;
-		margin-right: var(--space-2);
-	}
-
-	.eero-link {
-		color: var(--color-accent);
-		text-decoration: none;
-		font-weight: 500;
-	}
-
-	.eero-link:hover {
-		text-decoration: underline;
-	}
-
-	.text-warning {
-		color: var(--color-warning);
-	}
-
-	.device-type-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.device-type-emoji {
-		font-size: 1.1rem;
-	}
-
-	/* Profile Section */
-	.profile-section {
-		margin-bottom: var(--space-6);
-		padding: var(--space-4);
-	}
-
-	.profile-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-4);
-	}
-
-	.profile-header h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-	}
-
-	.profile-selector {
-		position: relative;
-	}
-
-	.dropdown-arrow {
-		font-size: 0.625rem;
-		margin-left: var(--space-2);
-		opacity: 0.6;
-	}
-
-	.profile-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: var(--space-2);
-		min-width: 200px;
-		background-color: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 100;
-		overflow: hidden;
-	}
-
-	.profile-dropdown-header {
-		padding: var(--space-2) var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.profile-loading {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-3);
-		color: var(--color-text-secondary);
-	}
-
-	.profile-option {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		background: none;
-		border: none;
-		text-align: left;
-		cursor: pointer;
-		transition: background-color var(--transition-fast);
-	}
-
-	.profile-option:hover {
-		background-color: var(--color-bg-tertiary);
-	}
-
-	.profile-option.active {
-		background-color: var(--color-bg-tertiary);
-		color: var(--color-accent);
-	}
-
-	.profile-option .check {
-		color: var(--color-success);
-	}
-
-	.profile-link {
-		margin-top: var(--space-3);
-		margin-bottom: 0;
-		font-size: 0.875rem;
-	}
-
-	/* Status Indicators with Colors */
-	.status-indicator {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		padding: var(--space-1) var(--space-2);
-		border-radius: var(--radius-sm);
-		font-size: 0.875rem;
-		font-weight: 500;
-	}
-
-	.status-success {
-		color: var(--color-success);
-		background-color: rgba(34, 197, 94, 0.1);
-	}
-
-	.status-danger {
-		color: var(--color-danger);
-		background-color: rgba(239, 68, 68, 0.1);
-	}
-
-	.status-warning {
-		color: var(--color-warning);
-		background-color: rgba(245, 158, 11, 0.1);
-	}
-
-	.status-info {
-		color: var(--color-accent);
-		background-color: rgba(59, 130, 246, 0.1);
-	}
-
-	.status-muted {
-		color: var(--color-text-secondary);
-		background-color: var(--color-bg-tertiary);
-	}
-
-	/* Bandwidth Chart Section */
 	.device-charts {
 		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {
-		.detail-header {
-			flex-direction: column;
-			gap: var(--space-4);
-		}
-
-		.header-actions {
-			width: 100%;
-			flex-wrap: wrap;
-		}
-
-		.header-actions .btn {
-			flex: 1;
-			min-width: 100px;
-		}
-
 		.info-grid {
 			grid-template-columns: 1fr;
 		}

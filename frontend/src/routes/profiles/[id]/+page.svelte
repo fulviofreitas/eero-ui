@@ -1,7 +1,12 @@
 <!--
   Profile Detail Page
-  
+
   Detailed view of a profile with associated devices.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/profile/* feature components; this
+  file is now data fetching + layout + composition only. Behaviour unchanged except:
+  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading (item 4) in place
+  of the previous back-link + full-block spinner.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -11,33 +16,21 @@
 	import type { ProfileSummary, ProfileDevice } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
-	import Icon from '$components/common/Icon.svelte';
-	import { getDeviceTypeIcon } from '$lib/deviceIcons';
-	import DataTable, {
-		type DataTableColumn,
-		type SortDirection
-	} from '$components/common/DataTable.svelte';
-	import EmptyState from '$components/common/EmptyState.svelte';
+	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import ProfileStatusCard from '$lib/components/profile/ProfileStatusCard.svelte';
+	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
+	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
+	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
 
 	let profile = $state<ProfileSummary | null>(null);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let actionLoading = $state(false);
-	let viewMode: 'blocks' | 'list' = $state('blocks');
 	let showRenameModal = $state(false);
 	let renameValue = $state('');
 	let renaming = $state(false);
-
-	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
-	// in controlled mode so the header reflects that default instead of only the data.
-	let sortBy: string | null = $state('name');
-	let sortDirection: SortDirection = $state('ascending');
-
-	function handleSort(key: string | null, direction: SortDirection) {
-		sortBy = key;
-		sortDirection = direction;
-	}
 
 	function goToDevice(device: ProfileDevice) {
 		if (device.id) goto(`/devices/${device.id}`);
@@ -57,6 +50,8 @@
 			return;
 		}
 
+		// Stale-while-revalidate: keep the previous `profile` on screen while this
+		// refetch is in flight rather than blanking the page.
 		loading = true;
 		error = null;
 		try {
@@ -147,22 +142,18 @@
 		});
 	}
 
-	function getDeviceKey(device: ProfileDevice, index: number): string {
-		return device.id || device.mac || `device-${index}`;
-	}
-
 	function openRenameModal() {
 		renameValue = profile?.name ?? '';
 		showRenameModal = true;
 	}
 
-	async function handleRenameProfile() {
-		const name = renameValue.trim();
-		if (!name || !profileId) return;
+	async function handleRenameProfile(name: string) {
+		const trimmed = name.trim();
+		if (!trimmed || !profileId) return;
 		renaming = true;
 		try {
-			profile = await api.profiles.rename(profileId, name);
-			uiStore.success(`Profile renamed to "${name}"`);
+			profile = await api.profiles.rename(profileId, trimmed);
+			uiStore.success(`Profile renamed to "${trimmed}"`);
 			showRenameModal = false;
 		} catch (err) {
 			uiStore.error(err instanceof Error ? err.message : 'Failed to rename profile');
@@ -191,70 +182,14 @@
 	}
 </script>
 
-{#snippet deviceNameCell(device: ProfileDevice)}
-	<div class="device-name-cell">
-		<span class="device-icon-sm"
-			><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
-		>
-		<div>
-			<span class="device-name">
-				{device.display_name || device.nickname || device.hostname || 'Unknown'}
-			</span>
-			{#if device.manufacturer}
-				<span class="text-xs text-muted">{device.manufacturer}</span>
-			{/if}
-		</div>
-	</div>
-{/snippet}
-
-{#snippet deviceIpCell(device: ProfileDevice)}
-	<span class="mono text-sm">{device.ip || '—'}</span>
-{/snippet}
-
-{#snippet deviceStatusCell(device: ProfileDevice)}
-	{#if device.paused}
-		<span class="badge badge-warning">Paused</span>
-	{:else if device.connected}
-		<span class="badge badge-success">Online</span>
-	{:else}
-		<span class="badge badge-muted">Offline</span>
-	{/if}
-{/snippet}
-
-{#snippet deviceConnectionCell(device: ProfileDevice)}
-	<span class="text-sm">
-		<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
-		{device.wireless ? 'Wireless' : 'Wired'}
-	</span>
-{/snippet}
-
-{#snippet deviceActionsCell(device: ProfileDevice)}
-	<button
-		class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
-		onclick={(e) => {
-			e.stopPropagation();
-			handlePauseDevice(device);
-		}}
-	>
-		{device.paused ? 'Resume' : 'Pause'}
-	</button>
-{/snippet}
-
 <svelte:head>
 	<title>{profile?.name || 'Profile'} | Eero Dashboard</title>
 </svelte:head>
 
 <div class="profile-detail-page">
-	<!-- Back navigation -->
-	<nav class="breadcrumb">
-		<a href="/profiles" class="back-link">← Back to Profiles</a>
-	</nav>
-
-	{#if loading}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading profile...</span>
-		</div>
+	{#if loading && !profile}
+		<Skeleton variant="card" height="100px" />
+		<Skeleton variant="table-rows" rows={4} columns={5} />
 	{:else if error}
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
@@ -264,20 +199,17 @@
 			</div>
 		</div>
 	{:else if profile}
-		<!-- Header -->
-		<header class="detail-header">
-			<div class="header-info">
-				<div class="header-title">
-					<span class="profile-icon"><Icon name="person" size={20} /></span>
-					<h1>{profile.name || 'Unknown Profile'}</h1>
-				</div>
-				<div class="header-meta">
-					<StatusBadge status={profile.paused ? 'paused' : 'online'} />
-					<span class="text-muted">•</span>
-					<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
-				</div>
-			</div>
-			<div class="header-actions">
+		<DetailHeader
+			backHref="/profiles"
+			backLabel="Back to profiles"
+			title={profile.name || 'Unknown Profile'}
+		>
+			{#snippet status()}
+				<StatusBadge status={profile!.paused ? 'paused' : 'online'} />
+				<span class="text-muted">•</span>
+				<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
+			{/snippet}
+			{#snippet actions()}
 				<button
 					class="btn btn-secondary"
 					onclick={() => fetchProfile(true)}
@@ -292,290 +224,42 @@
 					Delete
 				</button>
 				<button
-					class="btn {profile.paused ? 'btn-primary' : 'btn-warning'}"
+					class="btn {profile!.paused ? 'btn-primary' : 'btn-warning'}"
 					onclick={handleTogglePause}
 					disabled={actionLoading}
 				>
 					{#if actionLoading}
 						<span class="loading-spinner"></span>
-					{:else if profile.paused}
+					{:else if profile!.paused}
 						▶ Resume Internet
 					{:else}
 						⏸ Pause Internet
 					{/if}
 				</button>
-			</div>
-		</header>
+			{/snippet}
+		</DetailHeader>
 
-		<!-- Status Card -->
-		<section class="card status-card" class:paused={profile.paused}>
-			{#if profile.paused}
-				<div class="status-message paused">
-					<span class="status-icon">⏸</span>
-					<div>
-						<strong>Internet Access Paused</strong>
-						<p class="text-sm text-muted">
-							All devices in this profile are currently blocked from accessing the internet.
-						</p>
-					</div>
-				</div>
-			{:else}
-				<div class="status-message active">
-					<span class="status-icon"><Icon name="check" size={14} /></span>
-					<div>
-						<strong>Internet Access Active</strong>
-						<p class="text-sm text-muted">Devices in this profile have normal internet access.</p>
-					</div>
-				</div>
-			{/if}
-		</section>
+		<ProfileStatusCard paused={profile.paused} />
 
-		<!-- Technical -->
-		<section class="card info-card technical-card wide-card">
-			<h2>Technical</h2>
-			<dl class="info-list technical-list">
-				<div class="info-row">
-					<dt>Profile ID</dt>
-					<dd class="mono text-sm">{profile.id || '—'}</dd>
-				</div>
-				<div class="info-row">
-					<dt>Network ID</dt>
-					<dd class="mono text-sm">{$selectedNetworkId || '—'}</dd>
-				</div>
-				{#if profile.url}
-					<div class="info-row">
-						<dt>API URL</dt>
-						<dd class="mono text-sm text-muted">{profile.url}</dd>
-					</div>
-				{/if}
-			</dl>
-		</section>
+		<ProfileTechnicalCard {profile} networkId={$selectedNetworkId} />
 
-		<!-- Devices Section -->
-		<section class="devices-section">
-			<div class="section-header">
-				<h2>
-					Devices ({devices.length}{profile.device_count !== devices.length
-						? ` of ${profile.device_count}`
-						: ''})
-				</h2>
-				<div class="view-toggle">
-					<button
-						class="toggle-btn"
-						class:active={viewMode === 'blocks'}
-						onclick={() => (viewMode = 'blocks')}
-						title="Block view"
-					>
-						▦
-					</button>
-					<button
-						class="toggle-btn"
-						class:active={viewMode === 'list'}
-						onclick={() => (viewMode = 'list')}
-						title="List view"
-					>
-						<Icon name="menu" size={14} />
-					</button>
-				</div>
-			</div>
+		<ProfileDevicesSection
+			{devices}
+			deviceCount={profile.device_count}
+			{loading}
+			onPauseDevice={handlePauseDevice}
+			onGoToDevice={goToDevice}
+			onRefresh={() => fetchProfile(true)}
+		/>
 
-			{#if loading && devices.length === 0}
-				<Skeleton variant="table-rows" rows={4} columns={5} />
-			{:else if devices.length === 0}
-				<EmptyState title="No devices found for this profile.">
-					{#snippet action()}
-						{#if (profile?.device_count ?? 0) > 0}
-							<p class="text-sm text-muted">
-								This profile has {profile?.device_count} assigned devices, but they may not be in the
-								current device cache.
-							</p>
-							<button class="btn btn-secondary btn-sm" onclick={() => fetchProfile(true)}>
-								Refresh
-							</button>
-						{:else}
-							<p class="text-sm text-muted">Assign devices to this profile using the Eero app.</p>
-						{/if}
-					{/snippet}
-				</EmptyState>
-			{:else if viewMode === 'blocks'}
-				<!-- Block/Card View -->
-				<div class="devices-grid">
-					{#each devices as device, index (getDeviceKey(device, index))}
-						<a
-							href={device.id ? `/devices/${device.id}` : undefined}
-							class="card device-card"
-							class:paused={device.paused}
-							class:offline={!device.connected}
-							class:clickable={!!device.id}
-						>
-							<div class="device-header">
-								<div class="device-info">
-									<span class="device-icon"
-										><Icon name={getDeviceTypeIcon(null, device.wireless)} size={20} /></span
-									>
-									<div>
-										<h3>
-											{device.display_name ||
-												device.nickname ||
-												device.hostname ||
-												'Unknown Device'}
-										</h3>
-										<span class="text-sm text-muted mono">{device.ip || device.mac || '—'}</span>
-									</div>
-								</div>
-								<div class="device-status">
-									{#if device.paused}
-										<span class="badge badge-warning">Paused</span>
-									{:else if device.connected}
-										<span class="status-dot online"></span>
-									{:else}
-										<span class="status-dot offline"></span>
-									{/if}
-								</div>
-							</div>
-
-							<div class="device-details">
-								<div class="detail-row">
-									<span class="label">Status</span>
-									<span class="value">{device.connected ? 'Online' : 'Offline'}</span>
-								</div>
-								<div class="detail-row">
-									<span class="label">Connection</span>
-									<span class="value"
-										><Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
-										{device.wireless ? 'Wireless' : 'Wired'}</span
-									>
-								</div>
-								{#if device.manufacturer}
-									<div class="detail-row">
-										<span class="label">Manufacturer</span>
-										<span class="value">{device.manufacturer}</span>
-									</div>
-								{/if}
-							</div>
-
-							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-							<div class="device-actions" onclick={(e) => e.stopPropagation()}>
-								<button
-									class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
-									onclick={(e) => {
-										e.preventDefault();
-										handlePauseDevice(device);
-									}}
-								>
-									{device.paused ? '▶ Resume' : '⏸ Pause'}
-								</button>
-							</div>
-						</a>
-					{/each}
-				</div>
-			{:else}
-				<!-- List View -->
-				<div class="card devices-list">
-					<DataTable
-						id="profile-devices"
-						columns={[
-							{
-								key: 'name',
-								header: 'Device',
-								required: true,
-								sortable: true,
-								accessor: (d) => (d.display_name || d.nickname || d.hostname || '').toLowerCase(),
-								render: deviceNameCell
-							},
-							{
-								key: 'ip',
-								header: 'IP Address',
-								sortable: true,
-								accessor: (d) => d.ip ?? '',
-								render: deviceIpCell
-							},
-							{
-								key: 'status',
-								header: 'Status',
-								sortable: true,
-								accessor: (d) => (d.paused ? 'paused' : d.connected ? 'online' : 'offline'),
-								render: deviceStatusCell
-							},
-							{
-								key: 'connection',
-								header: 'Connection',
-								sortable: true,
-								accessor: (d) => (d.wireless ? 'wireless' : 'wired'),
-								render: deviceConnectionCell
-							},
-							{
-								key: 'actions',
-								header: 'Actions',
-								required: true,
-								align: 'right',
-								render: deviceActionsCell
-							}
-						] as DataTableColumn<ProfileDevice>[]}
-						rows={devices}
-						getRowId={(d) => d.id || d.mac || ''}
-						emptyTitle="No devices found for this profile."
-						{sortBy}
-						{sortDirection}
-						onSort={handleSort}
-						onRowClick={goToDevice}
-						rowClass={(d) => {
-							const classes = ['profile-device-row'];
-							if (d.paused) classes.push('paused');
-							if (!d.connected) classes.push('offline');
-							return classes.join(' ');
-						}}
-					/>
-				</div>
-			{/if}
-		</section>
-
-		{#if showRenameModal}
-			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-			<div class="modal-backdrop" onclick={() => (showRenameModal = false)}>
-				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-				<div class="modal-card card" onclick={(e) => e.stopPropagation()}>
-					<h2>Rename Profile</h2>
-					<form
-						onsubmit={(e) => {
-							e.preventDefault();
-							handleRenameProfile();
-						}}
-					>
-						<label class="modal-label" for="rename-profile-input">New name</label>
-						<!-- svelte-ignore a11y_autofocus -->
-						<input
-							id="rename-profile-input"
-							class="modal-input"
-							type="text"
-							bind:value={renameValue}
-							disabled={renaming}
-							autofocus
-						/>
-						<div class="modal-actions">
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick={() => (showRenameModal = false)}
-								disabled={renaming}
-							>
-								Cancel
-							</button>
-							<button
-								type="submit"
-								class="btn btn-primary"
-								disabled={renaming || !renameValue.trim()}
-							>
-								{#if renaming}
-									<span class="loading-spinner"></span>
-								{/if}
-								Save
-							</button>
-						</div>
-					</form>
-				</div>
-			</div>
-		{/if}
+		<ProfileRenameModal
+			open={showRenameModal}
+			value={renameValue}
+			submitting={renaming}
+			onClose={() => (showRenameModal = false)}
+			onSubmit={handleRenameProfile}
+			onValueChange={(v) => (renameValue = v)}
+		/>
 	{/if}
 </div>
 
@@ -584,20 +268,6 @@
 		max-width: 1000px;
 	}
 
-	.breadcrumb {
-		margin-bottom: var(--space-4);
-	}
-
-	.back-link {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-	}
-
-	.back-link:hover {
-		color: var(--color-accent);
-	}
-
-	.loading-state,
 	.error-state {
 		display: flex;
 		flex-direction: column;
@@ -609,347 +279,14 @@
 		text-align: center;
 	}
 
-	.loading-state {
-		flex-direction: row;
-	}
-
 	.error-actions {
 		display: flex;
 		gap: var(--space-3);
 	}
 
-	.detail-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		margin-bottom: var(--space-6);
-		padding-bottom: var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.header-title {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		margin-bottom: var(--space-2);
-	}
-
-	.header-title h1 {
-		margin: 0;
-		font-size: 1.5rem;
-	}
-
-	.profile-icon {
-		font-size: 2rem;
-	}
-
-	.header-meta {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding-left: calc(2rem + var(--space-3));
-	}
-
-	.header-actions {
-		display: flex;
-		gap: var(--space-2);
-	}
-
-	.status-card {
-		margin-bottom: var(--space-6);
-	}
-
-	.status-card.paused {
-		border-color: var(--color-warning);
-		background-color: rgba(245, 180, 50, 0.05);
-	}
-
-	.status-message {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-3);
-	}
-
-	.status-icon {
-		font-size: 1.5rem;
-	}
-
-	.status-message.paused {
-		color: var(--color-warning);
-	}
-
-	.status-message.active {
-		color: var(--color-success);
-	}
-
-	.status-message p {
-		margin: var(--space-1) 0 0 0;
-		color: var(--color-text-secondary);
-	}
-
-	.section-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-4);
-	}
-
-	.section-header h2 {
-		font-size: 1rem;
-		margin: 0;
-	}
-
-	.view-toggle {
-		display: flex;
-		gap: var(--space-1);
-		background: var(--color-bg-tertiary);
-		padding: var(--space-1);
-		border-radius: var(--radius-md);
-	}
-
-	.toggle-btn {
-		padding: var(--space-1) var(--space-2);
-		border: none;
-		background: transparent;
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		font-size: 1rem;
-		color: var(--color-text-secondary);
-		transition: all 0.15s ease;
-	}
-
-	.toggle-btn:hover {
-		color: var(--color-text-primary);
-	}
-
-	.toggle-btn.active {
-		background: var(--color-bg-secondary);
-		color: var(--color-accent);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-	}
-
-	.devices-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		gap: var(--space-4);
-	}
-
-	.device-card {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		text-decoration: none;
-		color: inherit;
-		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease,
-			border-color 0.15s ease;
-	}
-
-	.device-card.clickable {
-		cursor: pointer;
-	}
-
-	.device-card.clickable:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		border-color: var(--color-accent);
-	}
-
-	.device-card.paused {
-		border-color: var(--color-warning);
-		opacity: 0.7;
-	}
-
-	.device-card.offline {
-		opacity: 0.6;
-	}
-
-	.device-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-	}
-
-	.device-info {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.device-icon {
-		font-size: 1.5rem;
-	}
-
-	.device-info h3 {
-		margin: 0;
-		font-size: 0.9375rem;
-	}
-
-	.device-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.detail-row {
-		display: flex;
-		justify-content: space-between;
-		font-size: 0.8125rem;
-	}
-
-	.label {
-		color: var(--color-text-secondary);
-	}
-
-	.value {
-		font-weight: 500;
-	}
-
-	.device-actions {
-		display: flex;
-		gap: var(--space-2);
-		padding-top: var(--space-2);
-		border-top: 1px solid var(--color-border-muted);
-	}
-
-	.device-actions .btn {
-		flex: 1;
-	}
-
 	.btn-warning {
 		background-color: var(--color-warning);
 		color: var(--color-bg-primary);
-	}
-
-	.btn-warning:hover:not(:disabled) {
-		background-color: #e0a820;
-	}
-
-	/* List View Styles */
-	.devices-list {
-		overflow-x: auto;
-	}
-
-	/* `<tr class="profile-device-row paused offline">` is DataTable's own element (rowClass
-	   hook), so it needs :global() — cell content below is rendered via `render` snippets
-	   declared in this file and is scoped normally. */
-	:global(.profile-device-row.paused) {
-		opacity: 0.7;
-	}
-
-	:global(.profile-device-row.offline) {
-		opacity: 0.6;
-	}
-
-	.device-name-cell {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.device-icon-sm {
-		font-size: 1.25rem;
-	}
-
-	.device-name-cell div {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.device-name {
-		font-weight: 500;
-	}
-
-	.btn-xs {
-		padding: var(--space-1) var(--space-2);
-		font-size: 0.75rem;
-	}
-
-	.badge-success {
-		background-color: var(--color-success);
-		color: white;
-	}
-
-	.badge-muted {
-		background-color: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
-	}
-
-	.badge-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	/* Technical Card */
-	.technical-card {
-		margin-bottom: var(--space-6);
-	}
-
-	.wide-card {
-		grid-column: 1 / -1;
-	}
-
-	.technical-list {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: var(--space-2) var(--space-6);
-	}
-
-	.technical-list .info-row {
-		border-bottom: none;
-		padding: var(--space-2) 0;
-	}
-
-	.info-card h2 {
-		font-size: 1rem;
-		margin-bottom: var(--space-4);
-		padding-bottom: var(--space-2);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.info-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.info-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-2) 0;
-	}
-
-	.info-row dt {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-	}
-
-	.info-row dd {
-		font-weight: 500;
-		text-align: right;
-		word-break: break-all;
-	}
-
-	@media (max-width: 768px) {
-		.detail-header {
-			flex-direction: column;
-			gap: var(--space-4);
-		}
-
-		.header-actions {
-			width: 100%;
-			flex-direction: column;
-		}
-
-		.header-actions .btn {
-			width: 100%;
-		}
-
-		.header-meta {
-			padding-left: 0;
-		}
 	}
 
 	.btn-danger {
@@ -959,61 +296,5 @@
 
 	.btn-danger:hover:not(:disabled) {
 		opacity: 0.85;
-	}
-
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-modal);
-	}
-
-	.modal-card {
-		width: 100%;
-		max-width: 400px;
-		padding: var(--space-6);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.modal-card h2 {
-		margin: 0;
-		font-size: 1.125rem;
-	}
-
-	.modal-label {
-		display: block;
-		font-size: 0.875rem;
-		color: var(--color-text-secondary);
-		margin-bottom: var(--space-2);
-	}
-
-	.modal-input {
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		color: var(--color-text-primary);
-		font-size: 0.9375rem;
-		box-sizing: border-box;
-	}
-
-	.modal-input:focus {
-		border-color: var(--color-accent);
-	}
-
-	.modal-input:focus-visible {
-		box-shadow: var(--focus-ring);
-	}
-
-	.modal-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-3);
 	}
 </style>
