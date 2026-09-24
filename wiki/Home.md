@@ -9,6 +9,7 @@ Welcome to the **Eero UI** documentation! This wiki contains detailed guides for
 | [[Installation]] | Docker & manual setup guides |
 | [[Configuration]] | Environment variables & settings |
 | [[Architecture]] | System design & data flow |
+| [[Metrics]] | Built-in metrics, the metric contract, the optional exporter |
 | [[API-Reference]] | REST API endpoints |
 | [[Security]] | Security considerations & best practices |
 | [[Development]] | Local dev setup & testing |
