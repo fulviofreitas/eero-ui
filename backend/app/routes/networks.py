@@ -546,9 +546,13 @@ async def update_dns(
             combined = custom_writes["ipv4"] + custom_writes["ipv6"]
             await client.set_custom_dns(combined, network_id=network_id)
         elif "ipv4" in custom_writes:
-            await client.set_custom_dns_ipv4(custom_writes["ipv4"], network_id=network_id)
+            await client.set_custom_dns_ipv4(
+                custom_writes["ipv4"], network_id=network_id
+            )
         elif "ipv6" in custom_writes:
-            await client.set_custom_dns_ipv6(custom_writes["ipv6"], network_id=network_id)
+            await client.set_custom_dns_ipv6(
+                custom_writes["ipv6"], network_id=network_id
+            )
 
         if len(clear_families) == 2:
             await client.clear_custom_dns(family=None, network_id=network_id)

@@ -248,9 +248,7 @@ class TestUpdateDns:
         self, auth_client, authenticated_client
     ):
         """Switching a family to automatic calls clear_custom_dns with that family."""
-        raw_network = make_network_dns(
-            ipv4_mode="custom", ipv4_servers=["1.1.1.1"]
-        )
+        raw_network = make_network_dns(ipv4_mode="custom", ipv4_servers=["1.1.1.1"])
         authenticated_client.get_dns_settings = AsyncMock(
             return_value=make_raw_response(raw_network)
         )
@@ -297,9 +295,7 @@ class TestUpdateDns:
 
         response = await auth_client.put(
             "/api/networks/net-1/dns",
-            json={
-                "ipv4": {"mode": "custom", "servers": ["2606:4700:4700::1111"]}
-            },
+            json={"ipv4": {"mode": "custom", "servers": ["2606:4700:4700::1111"]}},
         )
 
         assert response.status_code == 400
