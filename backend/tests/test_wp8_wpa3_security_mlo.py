@@ -195,6 +195,27 @@ class TestUpdateSecurity:
             True, network_id="network-123"
         )
 
+    async def test_writes_when_current_value_unparseable(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """Security review, 2026-09-24 (S7): an unparseable current value is
+        unknown, not False - requesting ``upnp=False`` must still write."""
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response({"upnp": "not-a-bool-token"})
+        )
+        authenticated_client.set_upnp = AsyncMock(return_value=make_raw_response({}))
+
+        response = await auth_client.put(
+            "/api/networks/network-123/security", json={"upnp": False}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["changed"] is True
+        authenticated_client.set_upnp.assert_called_once_with(
+            False, network_id="network-123"
+        )
+
 
 class TestUpdateMloMode:
     async def test_disabled_by_default_returns_403(

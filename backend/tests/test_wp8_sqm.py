@@ -90,3 +90,25 @@ class TestUpdateSqm:
 
         assert response.status_code == 422
         authenticated_client.set_sqm.assert_not_called()
+
+    async def test_writes_when_current_value_unparseable(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """Security review, 2026-09-24 (S7): an unparseable ``sqm`` value is
+        unknown, not False - requesting ``enabled=False`` must still write
+        rather than being reported as a no-op."""
+        authenticated_client.get_sqm_settings = AsyncMock(
+            return_value=make_raw_response({"sqm": "not-a-bool-token"})
+        )
+        authenticated_client.set_sqm = AsyncMock(return_value=make_raw_response({}))
+
+        response = await auth_client.put(
+            "/api/networks/network-123/sqm", json={"enabled": False}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["changed"] is True
+        authenticated_client.set_sqm.assert_called_once_with(
+            False, network_id="network-123"
+        )

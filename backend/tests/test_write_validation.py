@@ -139,10 +139,15 @@ class TestSpeedTestInFlightGuard:
 
 
 class TestNetworkRenameValidation:
-    """networks.py:603-608 (approx) - static rejection before the read."""
+    """networks.py:603-608 (approx) - static rejection before the read.
+
+    ``PUT /networks/{id}/name`` is gated behind ``_NETWORK_NAME_GATE``
+    (security review, 2026-09-24, § 11 decision 5) - every test below
+    depends on ``experimental_writes_enabled``.
+    """
 
     async def test_oversized_name_rejected_without_reading_network(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """A name whose UTF-8 encoding exceeds 32 bytes is rejected with a
         static 422, before get_network is ever called."""
@@ -158,7 +163,9 @@ class TestNetworkRenameValidation:
         authenticated_client.get_network.assert_not_called()
         authenticated_client.set_network_name.assert_not_called()
 
-    async def test_control_character_rejected(self, auth_client, authenticated_client):
+    async def test_control_character_rejected(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
         """A name containing a control character (Cc) is rejected."""
         authenticated_client.get_network = AsyncMock()
         authenticated_client.set_network_name = AsyncMock()
@@ -171,7 +178,9 @@ class TestNetworkRenameValidation:
         assert response.json()["detail"] == "Network name is invalid."
         authenticated_client.get_network.assert_not_called()
 
-    async def test_format_character_rejected(self, auth_client, authenticated_client):
+    async def test_format_character_rejected(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
         """A name containing a format character (Cf, e.g. zero-width joiner)
         is rejected."""
         authenticated_client.get_network = AsyncMock()
@@ -185,7 +194,7 @@ class TestNetworkRenameValidation:
         authenticated_client.get_network.assert_not_called()
 
     async def test_valid_short_name_still_works(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """A normal, safe name is unaffected by the new checks."""
         authenticated_client.get_network = AsyncMock(

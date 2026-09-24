@@ -77,6 +77,29 @@ class TestUpdateFastTransition:
         assert response.status_code == 422
         authenticated_client.set_fast_transition.assert_not_called()
 
+    async def test_writes_when_current_value_unparseable(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """Security review, 2026-09-24 (S7): an unparseable current value is
+        unknown, not False - requesting ``enabled=False`` must still write."""
+        authenticated_client.get_fast_transition = AsyncMock(
+            return_value=make_raw_response({"fast_transition": "not-a-bool-token"})
+        )
+        authenticated_client.set_fast_transition = AsyncMock(
+            return_value=make_raw_response({})
+        )
+
+        response = await auth_client.put(
+            "/api/networks/network-123/fast-transition", json={"enabled": False}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["changed"] is True
+        authenticated_client.set_fast_transition.assert_called_once_with(
+            False, network_id="network-123"
+        )
+
 
 class TestUpdatePasspoint:
     async def test_disabled_by_default_returns_403(

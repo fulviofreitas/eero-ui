@@ -831,8 +831,23 @@ async def update_dns(
     return DnsUpdateResponse(success=True, changed=True, dns=DnsSettings(**final_dns))
 
 
-@router.put("/{network_id}/name")
+# ``rename_network`` (``set_network_name``) is an Unverified settings-class
+# write per phase-6.0-revamp.md § 5, decision 5. Security review,
+# 2026-09-24: gated behind its own module-level constant, exactly like the
+# WP8 family below, so it can be lifted independently once live-verified.
+# DNS (``update_dns`` above) stays deliberately UNGATED - its reboot is
+# characterised and live-verified (error-documentation.md, PR #392);
+# see experimental-writes-ledger.md for both decisions.
+_NETWORK_NAME_GATE = require_experimental_writes
+
+
+@router.put(
+    "/{network_id}/name",
+    dependencies=[Depends(_NETWORK_NAME_GATE)],
+)
+@limiter.shared_limit("2/minute", scope="settings_writes")
 async def rename_network(
+    request: Request,
     network_id: str,
     body: NetworkRenameRequest,
     client: EeroClient = Depends(require_auth),
@@ -843,7 +858,9 @@ async def rename_network(
     decision 5): assumed to reboot every eero on the network, exactly like a
     DNS write. This route therefore follows the same read-first, parsed
     no-op guard pattern as ``update_dns`` and skips the write entirely when
-    the requested name (stripped) already matches the stored name.
+    the requested name (stripped) already matches the stored name. Gated
+    behind ``_NETWORK_NAME_GATE`` (security review, 2026-09-24) - DNS above
+    remains ungated per its own live-verified status.
     """
     new_name = body.name.strip()
     if not new_name:
@@ -894,11 +911,11 @@ async def rename_network(
 # `reboot_expected: true` in the response (except network password, which
 # is `false` with `disconnects_clients: true`), and
 # ``@limiter.shared_limit("2/minute", scope="settings_writes")`` unless
-# noted. DNS (``update_dns``) and ``rename_network`` above are NOT
-# retrofitted with the gate this pass - they predate the flag, DNS is
-# already live-verified (error-documentation.md), and gating them now
-# would be a behavioural change to routes this pass does not own; left as
-# an open follow-up per the ledger note ("WP8 should decide").
+# noted. DNS (``update_dns``) above is deliberately NOT gated this pass -
+# it predates the flag and is already live-verified
+# (error-documentation.md). ``rename_network`` above IS now gated behind
+# its own ``_NETWORK_NAME_GATE`` (security review, 2026-09-24, per § 11
+# decision 5) - see experimental-writes-ledger.md for both decisions.
 # ---------------------------------------------------------------------------
 
 _SETTINGS_WRITES_LIMIT = "2/minute"
@@ -955,9 +972,13 @@ async def update_sqm(
     Gated behind ``_SQM_GATE``.
     """
     raw = await client.get_sqm_settings(network_id)
-    current_enabled = bool(coerce_bool(extract_data(raw).get("sqm"), field_name="sqm"))
+    current_enabled = coerce_bool(extract_data(raw).get("sqm"), field_name="sqm")
 
-    if body.enabled == current_enabled:
+    # Security review, 2026-09-24 (S7): an unparseable/absent value is
+    # unknown, not False - forcing it to False made an unknown state
+    # indistinguishable from "already disabled" and could report
+    # `changed: false` for a write that never actually happened.
+    if current_enabled is not None and body.enabled == current_enabled:
         return SqmUpdateResponse(success=True, changed=False, enabled=current_enabled)
 
     _LOGGER.warning(
@@ -1031,6 +1052,78 @@ def _reject_invalid_ip_literal(value: str, field: str) -> None:
         )
 
 
+def _reject_non_ipv4(value: str, field: str) -> ipaddress.IPv4Address:
+    """Reject a value that does not parse as an IPv4 address (S2: IPv6 is
+    not accepted for a manual DHCP lease range).
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    try:
+        return ipaddress.IPv4Address(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field} must be a valid IPv4 address.",
+        )
+
+
+def _validate_dhcp_custom_range(custom: DhcpCustomLease) -> None:
+    """Validate a manual DHCP lease range (security review, 2026-09-24, S2).
+
+    IPv4 only, RFC1918 private, prefix length /16-/30, ``start_ip <=
+    end_ip``, both endpoints within the subnet's usable host range, and the
+    subnet's own router address (the network's first host) outside
+    ``[start_ip, end_ip]`` - a manual range that includes the router would
+    hand the gateway's own address out to a DHCP client.
+
+    Raises:
+        HTTPException: 422, static detail, on any violation.
+    """
+    start = _reject_non_ipv4(custom.start_ip, "start_ip")
+    end = _reject_non_ipv4(custom.end_ip, "end_ip")
+    _reject_non_ipv4(custom.subnet_ip, "subnet_ip")
+    _reject_non_ipv4(custom.subnet_mask, "subnet_mask")
+
+    try:
+        network = ipaddress.IPv4Network(
+            f"{custom.subnet_ip}/{custom.subnet_mask}", strict=True
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
+        )
+    if not network.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="subnet_ip/subnet_mask must be an RFC1918 private network.",
+        )
+    if not (16 <= network.prefixlen <= 30):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="subnet_ip/subnet_mask prefix must be between /16 and /30.",
+        )
+    if start > end:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_ip must be less than or equal to end_ip.",
+        )
+    hosts = list(network.hosts())
+    if start not in hosts or end not in hosts:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_ip/end_ip must both fall within the subnet's usable "
+            "host range.",
+        )
+    router = hosts[0]
+    if start <= router <= end:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="start_ip/end_ip range must exclude the subnet's router " "address.",
+        )
+
+
 @router.put(
     "/{network_id}/dhcp",
     response_model=DhcpUpdateResponse,
@@ -1053,8 +1146,7 @@ async def update_dhcp(
             detail="At least one of mode or custom must be provided.",
         )
     if body.custom is not None:
-        for field in ("start_ip", "end_ip", "subnet_ip", "subnet_mask"):
-            _reject_invalid_ip_literal(getattr(body.custom, field), field)
+        _validate_dhcp_custom_range(body.custom)
 
     raw_network = extract_data(await client.get_network(network_id))
     current_dhcp = (
@@ -1074,7 +1166,9 @@ async def update_dhcp(
 
     if not mode_changed and not custom_changed:
         return DhcpUpdateResponse(
-            success=True, changed=False, dhcp=current_dhcp or None
+            success=True,
+            changed=False,
+            dhcp=strip_sensitive_keys(current_dhcp) or None,
         )
 
     _LOGGER.warning(
@@ -1091,13 +1185,22 @@ async def update_dhcp(
     updated_dhcp = (
         raw_network.get("dhcp") if isinstance(raw_network.get("dhcp"), dict) else None
     )
-    return DhcpUpdateResponse(success=success, changed=True, dhcp=updated_dhcp)
+    return DhcpUpdateResponse(
+        success=success, changed=True, dhcp=strip_sensitive_keys(updated_dhcp)
+    )
 
 
 class ConnectionModeRequest(BaseModel):
-    """Request body for PUT /{network_id}/connection-mode."""
+    """Request body for PUT /{network_id}/connection-mode.
+
+    ``acknowledge_disables_routing`` (security review, 2026-09-24, S4) must
+    be ``true`` when ``mode`` is ``BRIDGE`` - bridge mode disables the
+    network's own DHCP/NAT, handing that off to whatever is upstream, and
+    the caller must explicitly acknowledge that before this route writes.
+    """
 
     mode: Literal["BRIDGE", "NAT"]
+    acknowledge_disables_routing: bool = False
 
 
 class ConnectionModeResponse(BaseModel):
@@ -1107,6 +1210,7 @@ class ConnectionModeResponse(BaseModel):
     changed: bool
     reboot_expected: bool = True
     mode: str | None = None
+    disables_dhcp_nat: bool = False
 
 
 @router.put(
@@ -1123,13 +1227,31 @@ async def update_connection_mode(
 ) -> ConnectionModeResponse:
     """Set the network's WAN connection mode (BRIDGE or NAT).
 
-    Settings-class write. Gated behind ``_CONNECTION_MODE_GATE``.
+    Settings-class write. Gated behind ``_CONNECTION_MODE_GATE``. Switching
+    to ``BRIDGE`` disables the network's own DHCP/NAT (security review,
+    2026-09-24, S4), so it requires ``acknowledge_disables_routing: true``
+    in the body (422 otherwise) and always reports
+    ``disables_dhcp_nat: true`` in the response for that mode.
     """
+    if body.mode == "BRIDGE" and not body.acknowledge_disables_routing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "acknowledge_disables_routing must be true when switching to "
+                "BRIDGE mode."
+            ),
+        )
+
     raw_network = extract_data(await client.get_network(network_id))
     current_mode = raw_network.get("connection_mode")
 
     if body.mode == current_mode:
-        return ConnectionModeResponse(success=True, changed=False, mode=current_mode)
+        return ConnectionModeResponse(
+            success=True,
+            changed=False,
+            mode=current_mode,
+            disables_dhcp_nat=current_mode == "BRIDGE",
+        )
 
     _LOGGER.warning(
         "Applying connection-mode change for network %s - settings-class write, "
@@ -1140,8 +1262,12 @@ async def update_connection_mode(
     success = check_success(raw_result)
 
     raw_network = extract_data(await client.get_network(network_id))
+    new_mode = raw_network.get("connection_mode")
     return ConnectionModeResponse(
-        success=success, changed=True, mode=raw_network.get("connection_mode")
+        success=success,
+        changed=True,
+        mode=new_mode,
+        disables_dhcp_nat=new_mode == "BRIDGE",
     )
 
 
@@ -1361,9 +1487,12 @@ async def update_security(
         "upnp": raw_network.get("upnp"),
         "ipv6": raw_network.get("ipv6_upstream"),
     }
-    current_value = bool(coerce_bool(current_map[field], field_name=field))
+    current_value = coerce_bool(current_map[field], field_name=field)
 
-    if value == current_value:
+    # Security review, 2026-09-24 (S7): an unknown current value must not
+    # be coerced to False - that made "unparseable" indistinguishable from
+    # "already off" and could skip a write while reporting `changed: false`.
+    if current_value is not None and value == current_value:
         return SecurityUpdateResponse(
             success=True, changed=False, field=field, value=current_value
         )
@@ -1477,11 +1606,14 @@ async def update_fast_transition(
     ``_FAST_TRANSITION_GATE``.
     """
     raw = extract_data(await client.get_fast_transition(network_id))
-    current_enabled = bool(
-        coerce_bool(raw.get("fast_transition"), field_name="fast_transition")
+    current_enabled = coerce_bool(
+        raw.get("fast_transition"), field_name="fast_transition"
     )
 
-    if body.enabled == current_enabled:
+    # Security review, 2026-09-24 (S7): unknown != False - always write
+    # when the current value cannot be parsed, instead of reporting a
+    # false `changed: false`.
+    if current_enabled is not None and body.enabled == current_enabled:
         return FastTransitionResponse(
             success=True, changed=False, enabled=current_enabled
         )
@@ -1918,6 +2050,16 @@ async def delete_power_saving_schedule(
 
 _SUBNET_TYPE_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
 
+# Security review, 2026-09-24 (S5): shares the network-password grammar
+# (8-63 printable ASCII) - a subnet's own password is the same class of
+# credential.
+_SUBNET_PASSWORD_RE = re.compile(r"[\x20-\x7e]{8,63}")
+
+# Security review, 2026-09-24 (S1): the "main" subnet is the network's own
+# LAN - it must never be disabled, opened, or cut off from the WAN, and it
+# can never be deleted (that would strand every already-connected client).
+_MAIN_SUBNET_TYPE = "main"
+
 
 class SubnetConfigRequest(BaseModel):
     """Request body for PUT /{network_id}/subnets.
@@ -1968,13 +2110,35 @@ async def update_subnet_config(
 
     Settings-class by decision 5. ``set_config`` forwards its mapping to
     the API unchanged with no validation of its own; this route's strict
-    model is the validation layer. Gated behind ``_SUBNETS_GATE``.
+    model is the validation layer. Gated behind ``_SUBNETS_GATE``. The
+    "main" subnet cannot be disabled, opened, or cut off from the WAN
+    (security review, 2026-09-24, S1).
     """
-    if body.name is not None and is_unsafe_short_text(body.name.strip(), max_bytes=64):
+    if body.name is not None:
+        stripped_name = body.name.strip()
+        if not stripped_name or is_unsafe_short_text(stripped_name, max_bytes=64):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="name must be 1-64 bytes, no control characters.",
+            )
+    if body.password is not None and not _SUBNET_PASSWORD_RE.fullmatch(body.password):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="name must be 1-64 bytes, no control characters.",
+            detail="password must be 8-63 printable ASCII characters.",
         )
+    if body.subnet_type == _MAIN_SUBNET_TYPE:
+        for field, forbidden in (
+            ("enabled", False),
+            ("open_network", True),
+            ("wan_access", False),
+        ):
+            value = getattr(body, field)
+            if value is forbidden:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{field} cannot be set to {forbidden} for the main "
+                    "subnet.",
+                )
 
     raw = extract_data(await client.get_subnets_config(network_id))
     subnets = raw.get("subnets") if isinstance(raw.get("subnets"), list) else []
@@ -2026,11 +2190,21 @@ async def delete_subnet_route(
 ) -> SubnetConfigResponse:
     """Delete a subnet's configuration. Settings-class by decision 5.
 
-    Gated behind ``_SUBNETS_GATE``.
+    Gated behind ``_SUBNETS_GATE``. The "main" subnet cannot be deleted
+    (security review, 2026-09-24, S1) - that would strand every client
+    already connected to the network's own LAN.
     """
     if not _SUBNET_TYPE_RE.fullmatch(subnet_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subnet_type."
+        )
+    if subnet_type == _MAIN_SUBNET_TYPE:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "type": "subnet_protected",
+                "detail": "The main subnet cannot be deleted.",
+            },
         )
 
     _LOGGER.warning(
@@ -2067,10 +2241,17 @@ class MultiStaticIpNatPortForwarding(BaseModel):
 
 
 class MultiStaticIpRequest(BaseModel):
-    """Request body for PUT /{network_id}/multistaticip."""
+    """Request body for PUT /{network_id}/multistaticip.
+
+    ``type`` (security review, 2026-09-24, S9): ``"P"`` is the only value
+    the SDK's own test fixtures/docstrings carry
+    (eero-api tests/api/test_wan.py; wiki/API-Reference.md) - no other
+    value is documented anywhere in the SDK. Documented gap, not a silent
+    skip; widen this allowlist once another value is confirmed live.
+    """
 
     enabled: bool
-    type: str | None = None
+    type: Literal["P"] | None = None
     multistaticip_settings: MultiStaticIpSettings | None = None
     multistaticip_settings_nat_portfwd: MultiStaticIpNatPortForwarding | None = None
 
@@ -2087,23 +2268,51 @@ class MultiStaticIpUpdateResponse(BaseModel):
     config: dict[str, Any] | None = None
 
 
-def _validate_ip_model_fields(model: BaseModel, fields: tuple[str, ...]) -> None:
-    """Reject a nested WAN sub-model carrying a non-IP literal.
+def _validate_multistaticip_settings(model: MultiStaticIpSettings) -> None:
+    """Validate ``multistaticip_settings`` (security review, 2026-09-24, S9).
+
+    Reuses the DHCP custom-range IPv4Network discipline: ``subnet_ip``/
+    ``subnet_mask`` must form a valid IPv4 network, and ``router_ip`` must
+    fall within it.
 
     Raises:
-        HTTPException: 422, static detail naming only the field.
+        HTTPException: 422, static detail naming the offending field(s).
     """
-    for field in fields:
-        value = getattr(model, field, None)
-        if value is None:
-            continue
-        try:
-            ipaddress.ip_address(value)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"{field} must be a valid IP address.",
-            )
+    router_ip = _reject_non_ipv4(model.router_ip, "router_ip")
+    _reject_non_ipv4(model.subnet_ip, "subnet_ip")
+    _reject_non_ipv4(model.subnet_mask, "subnet_mask")
+    try:
+        network = ipaddress.IPv4Network(
+            f"{model.subnet_ip}/{model.subnet_mask}", strict=True
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
+        )
+    if router_ip not in network:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="router_ip must fall within subnet_ip/subnet_mask.",
+        )
+
+
+def _validate_multistaticip_nat_portfwd(
+    model: MultiStaticIpNatPortForwarding,
+) -> None:
+    """Validate ``multistaticip_settings_nat_portfwd`` (S9): IPv4 only,
+    ``subnet_ip_start <= subnet_ip_end``.
+
+    Raises:
+        HTTPException: 422, static detail naming the offending field(s).
+    """
+    start = _reject_non_ipv4(model.subnet_ip_start, "subnet_ip_start")
+    end = _reject_non_ipv4(model.subnet_ip_end, "subnet_ip_end")
+    if start > end:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="subnet_ip_start must be less than or equal to subnet_ip_end.",
+        )
 
 
 @router.put(
@@ -2127,14 +2336,9 @@ async def update_multistaticip(
     behind ``_WAN_GATE``.
     """
     if body.multistaticip_settings is not None:
-        _validate_ip_model_fields(
-            body.multistaticip_settings, ("router_ip", "subnet_ip", "subnet_mask")
-        )
+        _validate_multistaticip_settings(body.multistaticip_settings)
     if body.multistaticip_settings_nat_portfwd is not None:
-        _validate_ip_model_fields(
-            body.multistaticip_settings_nat_portfwd,
-            ("subnet_ip_start", "subnet_ip_end"),
-        )
+        _validate_multistaticip_nat_portfwd(body.multistaticip_settings_nat_portfwd)
 
     try:
         current = extract_data(await client.get_multistaticip(network_id))
@@ -2143,7 +2347,9 @@ async def update_multistaticip(
 
     payload = body.model_dump(exclude_none=True)
     if current is not None and all(current.get(k) == v for k, v in payload.items()):
-        return MultiStaticIpUpdateResponse(success=True, changed=False, config=current)
+        return MultiStaticIpUpdateResponse(
+            success=True, changed=False, config=strip_sensitive_keys(current)
+        )
 
     _LOGGER.warning(
         "Applying multi-static-IP change for network %s - treated as a mesh reboot",
@@ -2152,7 +2358,9 @@ async def update_multistaticip(
     raw_result = await client.set_multistaticip(payload, network_id=network_id)
     success = check_success(raw_result)
     return MultiStaticIpUpdateResponse(
-        success=success, changed=True, config=extract_data(raw_result)
+        success=success,
+        changed=True,
+        config=strip_sensitive_keys(extract_data(raw_result)),
     )
 
 
@@ -2226,11 +2434,41 @@ async def update_secondary_wan_config(
     raw_result = await client.set_secondary_wan_config(payload, network_id=network_id)
     success = check_success(raw_result)
     return SecondaryWanConfigResponse(
-        success=success, changed=True, config=extract_data(raw_result)
+        success=success,
+        changed=True,
+        config=strip_sensitive_keys(extract_data(raw_result)),
     )
 
 
 # --- Firmware update apply ---------------------------------------------------
+
+# In-process cooldown guard (security review, 2026-09-24, S6): the last
+# time this network's update was successfully applied, so a second POST
+# within the reboot window cannot pile another reboot-class write on top
+# of a rollout still in flight. Process-local and in-memory by design,
+# exactly like ``_last_speed_test_started`` above - a restart simply
+# forgets it.
+_UPDATE_APPLY_COOLDOWN_S = 30 * 60
+_last_update_applied: dict[str, datetime] = {}
+
+
+def _prune_stale_update_apply_entries(now: datetime) -> None:
+    """Drop update-apply cooldown entries older than the window."""
+    stale = [
+        net_id
+        for net_id, started in _last_update_applied.items()
+        if now - started >= timedelta(seconds=_UPDATE_APPLY_COOLDOWN_S)
+    ]
+    for net_id in stale:
+        del _last_update_applied[net_id]
+
+
+# The SDK's own ``get_updates`` docstring/tests fixture only ``available``
+# (eero-api wiki/API-Reference.md; tests/api/test_updates.py) - no
+# in-progress/status field is documented. This checks for one anyway on a
+# best-effort basis in case a live network ever surfaces it; documented
+# gap, not a silent skip.
+_IN_PROGRESS_STATUS_TOKENS = frozenset({"in_progress", "applying", "updating"})
 
 
 class NetworkUpdateApplyResponse(BaseModel):
@@ -2258,10 +2496,42 @@ async def apply_network_update(
     Reboot-class by design (§ 5): ``apply_update`` POSTs the ``updates``
     link and reboots every node. No-op guard: reads ``get_updates`` first
     and returns 409 ``type: "no_update_available"`` when none is pending,
-    rather than issuing the POST. Gated behind ``_UPDATES_GATE``.
+    rather than issuing the POST. Gated behind ``_UPDATES_GATE``. Security
+    review, 2026-09-24 (S6): a successful apply also opens a 30-minute
+    in-process cooldown for this network - a second call inside that
+    window 409s with ``type: "update_in_progress"`` rather than issuing a
+    second reboot-class POST while the first is presumably still rolling
+    out; the ``updates`` envelope is also checked for an in-progress/status
+    field, best-effort, since none is documented in the SDK.
     """
+    now = datetime.now(UTC)
+    _prune_stale_update_apply_entries(now)
+    if network_id in _last_update_applied:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "type": "update_in_progress",
+                "detail": "An update was already applied for this network recently.",
+            },
+        )
+
     raw = extract_data(await client.get_updates(network_id))
     available = bool(coerce_bool(raw.get("available"), field_name="available"))
+
+    raw_status = raw.get("status")
+    already_in_progress = bool(
+        coerce_bool(raw.get("in_progress"), field_name="in_progress")
+    ) or (
+        isinstance(raw_status, str) and raw_status.lower() in _IN_PROGRESS_STATUS_TOKENS
+    )
+    if already_in_progress:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "type": "update_in_progress",
+                "detail": "An update is already in progress for this network.",
+            },
+        )
 
     if not available:
         return JSONResponse(
@@ -2274,6 +2544,8 @@ async def apply_network_update(
     )
     raw_result = await client.apply_update(network_id)
     success = check_success(raw_result)
+    if success:
+        _last_update_applied[network_id] = now
     return NetworkUpdateApplyResponse(success=success, changed=True, scope="all_nodes")
 
 
@@ -2295,6 +2567,18 @@ class NetworkPasswordResponse(BaseModel):
     changed: bool
     reboot_expected: bool = False
     disconnects_clients: bool = True
+    open_network: bool = False
+
+
+class NetworkPasswordClearRequest(BaseModel):
+    """Request body for DELETE /{network_id}/password.
+
+    Security review, 2026-09-24 (S3): clearing the password opens the
+    network - ``confirm_open_network`` must be explicitly ``true`` (422
+    otherwise) so this can never be triggered by an empty-body DELETE.
+    """
+
+    confirm_open_network: bool
 
 
 @router.put(
@@ -2345,12 +2629,22 @@ async def set_network_password_route(
 async def clear_network_password_route(
     request: Request,
     network_id: str,
+    body: NetworkPasswordClearRequest,
     client: EeroClient = Depends(require_auth),
 ) -> NetworkPasswordResponse:
     """Clear the network's Wi-Fi password. See ``set_network_password_route``.
 
-    Gated behind ``_NETWORK_PASSWORD_GATE``.
+    Gated behind ``_NETWORK_PASSWORD_GATE``. Requires
+    ``confirm_open_network: true`` in the body (security review,
+    2026-09-24, S3) since this opens the network, and always reports
+    ``open_network: true``.
     """
+    if not body.confirm_open_network:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="confirm_open_network must be true to open the network.",
+        )
+
     _LOGGER.warning(
         "Clearing network password for network %s - disconnects every client while "
         "it takes effect",
@@ -2358,7 +2652,7 @@ async def clear_network_password_route(
     )
     raw_result = await client.clear_network_password(network_id)
     success = check_success(raw_result)
-    return NetworkPasswordResponse(success=success, changed=True)
+    return NetworkPasswordResponse(success=success, changed=True, open_network=True)
 
 
 # ---------------------------------------------------------------------------

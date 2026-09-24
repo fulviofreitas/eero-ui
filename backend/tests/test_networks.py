@@ -84,9 +84,30 @@ class TestGetNetwork:
 
 
 class TestRenameNetwork:
-    """Tests for PUT /api/networks/{network_id}/name."""
+    """Tests for PUT /api/networks/{network_id}/name.
 
-    async def test_rename_network_success(self, auth_client, authenticated_client):
+    ``set_network_name`` is gated behind ``_NETWORK_NAME_GATE``
+    (security review, 2026-09-24, § 11 decision 5) - every test below
+    depends on ``experimental_writes_enabled`` except the disabled-by-
+    default check.
+    """
+
+    async def test_disabled_by_default_returns_403(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.set_network_name = AsyncMock()
+
+        response = await auth_client.put(
+            "/api/networks/net-1/name", json={"name": "Home"}
+        )
+
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.set_network_name.assert_not_called()
+
+    async def test_rename_network_success(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
         """Renames a network and returns success response."""
         authenticated_client.set_network_name = AsyncMock(
             return_value=make_raw_response({})
@@ -103,7 +124,9 @@ class TestRenameNetwork:
         assert data["name"] == "Home"
         authenticated_client.set_network_name.assert_called_once()
 
-    async def test_rename_network_empty_name(self, auth_client, authenticated_client):
+    async def test_rename_network_empty_name(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
         """Empty name returns 400 without calling SDK."""
         authenticated_client.set_network_name = AsyncMock()
 
@@ -115,7 +138,7 @@ class TestRenameNetwork:
         authenticated_client.set_network_name.assert_not_called()
 
     async def test_rename_network_eero_exception(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """EeroException returns 500."""
         authenticated_client.get_network = AsyncMock(
@@ -132,7 +155,7 @@ class TestRenameNetwork:
         assert response.status_code == 500
 
     async def test_rename_network_noop_when_unchanged(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """Renaming to the currently-stored name is a no-op (§ 5, decision 5):
         settings-class writes reboot the mesh, so an unchanged name must
@@ -153,7 +176,7 @@ class TestRenameNetwork:
         authenticated_client.set_network_name.assert_not_called()
 
     async def test_rename_network_writes_when_changed(
-        self, auth_client, authenticated_client
+        self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         """A genuinely different name triggers the write, keyword network_id=."""
         authenticated_client.get_network = AsyncMock(

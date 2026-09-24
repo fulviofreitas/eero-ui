@@ -110,7 +110,11 @@ class TestClearNetworkPassword:
     ):
         authenticated_client.clear_network_password = AsyncMock()
 
-        response = await auth_client.delete("/api/networks/network-123/password")
+        response = await auth_client.request(
+            "DELETE",
+            "/api/networks/network-123/password",
+            json={"confirm_open_network": True},
+        )
 
         assert response.status_code == 403
         assert response.json()["type"] == "experimental_disabled"
@@ -123,13 +127,34 @@ class TestClearNetworkPassword:
             return_value=make_raw_response({})
         )
 
-        response = await auth_client.delete("/api/networks/network-123/password")
+        response = await auth_client.request(
+            "DELETE",
+            "/api/networks/network-123/password",
+            json={"confirm_open_network": True},
+        )
 
         assert response.status_code == 200
         data = response.json()
         assert data["changed"] is True
         assert data["reboot_expected"] is False
         assert data["disconnects_clients"] is True
+        assert data["open_network"] is True
         authenticated_client.clear_network_password.assert_called_once_with(
             "network-123"
         )
+
+    async def test_without_confirmation_rejected(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """Security review, 2026-09-24 (S3): an empty-body DELETE must not
+        open the network."""
+        authenticated_client.clear_network_password = AsyncMock()
+
+        response = await auth_client.request(
+            "DELETE",
+            "/api/networks/network-123/password",
+            json={"confirm_open_network": False},
+        )
+
+        assert response.status_code == 422
+        authenticated_client.clear_network_password.assert_not_called()
