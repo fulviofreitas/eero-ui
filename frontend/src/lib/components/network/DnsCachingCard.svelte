@@ -30,10 +30,26 @@
 	$: state = $dnsStore;
 	$: settings = state.settings;
 
-	// Seed from settings once loaded, and re-seed whenever the loaded
-	// settings object changes identity (fresh fetch / refresh after apply).
+	// Seed from settings on first load, and re-seed whenever the loaded
+	// settings object changes identity AFTERWARDS - but only while this
+	// form has no pending unsaved edit of its own. `dnsStore.settings` is
+	// shared with DnsSettingsCard, and every write (from either card)
+	// replaces it with a brand-new object, even when the fields THIS card
+	// cares about are unchanged. Reseeding unconditionally on identity
+	// change would silently discard whatever the user was mid-typing here
+	// the moment the sibling card's write resolved. `!seededFor` carves out
+	// the one case where clobbering is correct and required: there is
+	// nothing to protect before the very first load.
+	//
+	// The guard compares against `seededFor.caching` (the baseline we last
+	// synced from) rather than the `dirty` declaration below, on purpose:
+	// `dirty` itself reads `caching`, so referencing it here would create a
+	// `dirty -> caching -> dirty` cycle that Svelte's compiler rejects
+	// (reactive_declaration_cycle). Comparing against the plain `seededFor`
+	// variable is equivalent (both express "has the user changed this since
+	// we last loaded it") without the cyclic dependency.
 	let seededFor: typeof settings = null;
-	$: if (settings && settings !== seededFor) {
+	$: if (settings && settings !== seededFor && (!seededFor || caching === seededFor.caching)) {
 		caching = settings.caching;
 		seededFor = settings;
 	}

@@ -11,10 +11,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import DnsSettingsCard from './DnsSettingsCard.svelte';
+import DnsCachingCard from './DnsCachingCard.svelte';
 import { dnsStore, uiStore, confirmDialog } from '$stores';
 import { server } from '../../../../tests/mocks/server';
 
@@ -219,5 +220,53 @@ describe('DnsSettingsCard', () => {
 		await waitFor(() =>
 			expect(screen.getByText('At most 2 ipv4 DNS servers are supported')).toBeInTheDocument()
 		);
+	});
+
+	describe('sharing dnsStore with DnsCachingCard', () => {
+		it('does not lose an in-progress edit when the sibling caching card writes first', async () => {
+			const serversUtils = await renderLoaded();
+
+			const cachingUtils = render(DnsCachingCard, { props: { networkId: 'network-123' } });
+			await waitFor(() => expect(cachingUtils.getByLabelText('DNS Caching')).toBeInTheDocument());
+
+			// Start an unsaved edit in the servers form.
+			await fireEvent.click(within(serversUtils.container).getByLabelText('Custom DNS'));
+			await fireEvent.input(within(serversUtils.container).getByLabelText('IPv4 Primary'), {
+				target: { value: '1.1.1.1' }
+			});
+
+			// The sibling caching card now saves its own, unrelated change.
+			// This replaces `dnsStore.settings` with a brand-new object -
+			// ipv4/ipv6 are untouched by that write, but the object identity
+			// changes.
+			server.use(
+				http.put('/api/networks/:networkId/dns', () =>
+					HttpResponse.json({
+						success: true,
+						changed: true,
+						dns: { ...automaticSettings, caching: false }
+					})
+				)
+			);
+			await fireEvent.click(cachingUtils.getByLabelText('DNS Caching'));
+			const cachingSaveButton = within(cachingUtils.container).getByRole('button', {
+				name: /save/i
+			});
+			await waitFor(() => expect(cachingSaveButton).not.toBeDisabled());
+			await fireEvent.click(cachingSaveButton);
+			await get(confirmDialog)!.onConfirm();
+
+			await waitFor(() => expect(get(dnsStore).settings?.caching).toBe(false));
+
+			// The servers form's in-progress, unsaved edit must survive.
+			expect(within(serversUtils.container).getByLabelText('Custom DNS')).toBeChecked();
+			expect(
+				(within(serversUtils.container).getByLabelText('IPv4 Primary') as HTMLInputElement).value
+			).toBe('1.1.1.1');
+			const serversSaveButton = within(serversUtils.container).getByRole('button', {
+				name: /save/i
+			});
+			await waitFor(() => expect(serversSaveButton).not.toBeDisabled());
+		});
 	});
 });

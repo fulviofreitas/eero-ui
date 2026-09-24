@@ -158,13 +158,25 @@ describe('DnsCachingCard', () => {
 			const cachingUtils = render(DnsCachingCard, { props: { networkId: 'network-123' } });
 			await waitFor(() => expect(cachingUtils.getByLabelText('DNS Caching')).toBeInTheDocument());
 
+			// Both cards mount into document.body, so the render-result queries are
+			// not scoped to their own card. Narrow to the container explicitly.
+			const cachingSaveButton = within(cachingUtils.container).getByRole('button', {
+				name: /save/i
+			});
+
+			// Make the caching form dirty too (untouched, its own Save would
+			// already be disabled by `!dirty`, which would make this test pass
+			// trivially and prove nothing about the shared lock). With a real
+			// pending change, disabled must come from the shared `applying`
+			// flag alone.
+			await fireEvent.click(cachingUtils.getByLabelText('DNS Caching'));
+			await waitFor(() => expect(cachingSaveButton).not.toBeDisabled());
+
 			await fireEvent.click(serversUtils.getByLabelText('Custom DNS'));
 			await fireEvent.input(serversUtils.getByLabelText('IPv4 Primary'), {
 				target: { value: '1.1.1.1' }
 			});
 
-			// Both cards mount into document.body, so the render-result queries are
-			// not scoped to their own card. Narrow to the container explicitly.
 			const serversSaveButton = within(serversUtils.container).getByRole('button', {
 				name: /save/i
 			});
@@ -175,18 +187,20 @@ describe('DnsCachingCard', () => {
 			const confirmPromise = dialog!.onConfirm();
 
 			// Mid-flight: the servers write is applying, so the caching card's
-			// own Save button must be disabled even though its toggle hasn't
-			// changed the dirty state.
+			// own Save button must be disabled even though ITS toggle is dirty
+			// on its own terms. `dnsStore.applying` flips synchronously (the
+			// store sets it before the first `await` inside `updateDns`), but
+			// Svelte flushes the resulting DOM update asynchronously - assert
+			// through `waitFor` rather than immediately after the raw store
+			// read, or this is racy under load.
 			await waitFor(() => expect(get(dnsStore).applying).toBe(true));
-			const cachingSaveButton = within(cachingUtils.container).getByRole('button', {
-				name: /save/i
-			});
-			expect(cachingSaveButton).toBeDisabled();
+			await waitFor(() => expect(cachingSaveButton).toBeDisabled());
 
 			resolvePut!();
 			await confirmPromise;
 
 			await waitFor(() => expect(get(dnsStore).applying).toBe(false));
+			await waitFor(() => expect(cachingSaveButton).not.toBeDisabled());
 		});
 	});
 });
