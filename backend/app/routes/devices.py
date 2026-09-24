@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
-from ..transformers import check_success, extract_data, extract_list, normalize_device
+from ..transformers import (
+    check_success,
+    extract_data,
+    extract_list,
+    has_control_or_format_chars,
+    normalize_device,
+)
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -372,6 +378,13 @@ async def set_device_nickname(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Nickname must be 64 characters or fewer.",
+        )
+    if has_control_or_format_chars(nickname):
+        # Static detail (security review, 2026-09-24): never echoes the
+        # offending character or its position back to the caller.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Nickname is invalid.",
         )
 
     raw_result = await client.set_device_nickname(

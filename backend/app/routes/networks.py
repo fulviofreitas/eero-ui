@@ -2,12 +2,13 @@
 
 import ipaddress
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from eero import EeroClient
 from eero.exceptions import EeroException
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..deps import require_auth
@@ -15,6 +16,7 @@ from ..transformers import (
     check_success,
     extract_data,
     extract_list,
+    is_unsafe_short_text,
     normalize_device,
     normalize_dhcp,
     normalize_dns,
@@ -22,9 +24,18 @@ from ..transformers import (
     normalize_network,
     normalize_speed_test,
 )
+from .auth import limiter
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
+
+# In-flight speed-test guard (security review finding, 2026-09-24): the last
+# time a speed test was started per network, so a second POST within the
+# same run does not pile another test on top of one still completing.
+# Process-local and in-memory by design - a restart simply forgets it,
+# which is fine for a soft anti-pile-up guard, not a correctness boundary.
+_SPEEDTEST_IN_PROGRESS_WINDOW_S = 90
+_last_speed_test_started: dict[str, datetime] = {}
 
 
 class NetworkSummary(BaseModel):
@@ -146,6 +157,27 @@ class NetworkRenameRequest(BaseModel):
 
     class Config:
         extra = "ignore"
+
+
+# Matches the eero mobile app's own network-name cap (security review
+# finding, 2026-09-24) - kept alongside the no-op guard so an oversized or
+# control-character name is rejected before the read-first round trip.
+_NETWORK_NAME_MAX_BYTES = 32
+
+
+def _reject_unsafe_name(name: str) -> None:
+    """Reject a network name that is oversized or carries control/formatting
+    characters, before any network round trip.
+
+    Raises:
+        HTTPException: 422 with a static detail - never echoes the offending
+            value or its specific defect back to the caller.
+    """
+    if is_unsafe_short_text(name, max_bytes=_NETWORK_NAME_MAX_BYTES):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Network name is invalid.",
+        )
 
 
 @router.get("", response_model=list[NetworkSummary])
@@ -283,10 +315,12 @@ async def set_preferred_network(
     response_model=SpeedTestStartedResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limiter.shared_limit("2/minute", scope="speedtest")
 async def run_speed_test(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
-) -> SpeedTestStartedResponse:
+) -> SpeedTestStartedResponse | JSONResponse:
     """Kick off a speed test on the network. Fire-and-forget (§ 9, decision 4).
 
     The eero cloud API accepts this write with ``data: null`` (v8; see
@@ -295,9 +329,31 @@ async def run_speed_test(
     202 - it does not block waiting for a result. The frontend reads the
     completed result from ``GET .../speedtests`` (polling that endpoint
     with ``limit=1`` and comparing ``timestamp`` against ``started_at``).
+
+    Rate limited to 2/minute per IP, plus a per-network in-flight guard
+    (security review, 2026-09-24): a second call for the same network
+    within 90 seconds of the last one is rejected with 409 rather than
+    piling another speed test on top of one still running.
     """
-    started_at = datetime.now(UTC).isoformat()
+    now = datetime.now(UTC)
+    last_started = _last_speed_test_started.get(network_id)
+    if last_started is not None and now - last_started < timedelta(
+        seconds=_SPEEDTEST_IN_PROGRESS_WINDOW_S
+    ):
+        # Returned directly as a JSONResponse (bypassing response_model) so
+        # the body is exactly {"detail", "type"} at the top level, matching
+        # the shape of every other typed-error response in this API.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": "A speed test was started less than 90 seconds ago.",
+                "type": "speedtest_in_progress",
+            },
+        )
+
+    started_at = now.isoformat()
     await client.run_speed_test(network_id=network_id)
+    _last_speed_test_started[network_id] = now
     return SpeedTestStartedResponse(status="started", started_at=started_at)
 
 
@@ -606,6 +662,7 @@ async def rename_network(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Network name cannot be empty",
         )
+    _reject_unsafe_name(new_name)
 
     raw_network = await client.get_network(network_id)
     current_name = (

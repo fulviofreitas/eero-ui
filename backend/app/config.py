@@ -100,8 +100,11 @@ def get_settings() -> Settings:
             "EERO_DASHBOARD_SDK_LEGACY_COOKIE", "false"
         ).lower()
         == "true",
-        sdk_get_retries=max(
-            0, int(os.environ.get("EERO_DASHBOARD_SDK_GET_RETRIES", "1"))
+        # Clamped 0-3 (security review, 2026-09-24): an unbounded retry
+        # count from the environment could amplify load against the eero
+        # cloud API on every GET failure.
+        sdk_get_retries=min(
+            3, max(0, int(os.environ.get("EERO_DASHBOARD_SDK_GET_RETRIES", "1")))
         ),
         experimental_writes=os.environ.get(
             "EERO_DASHBOARD_EXPERIMENTAL_WRITES", "false"

@@ -7,9 +7,46 @@ This module provides extraction and normalization functions.
 """
 
 import ipaddress
+import unicodedata
 from typing import Any
 
 from ._coercion import coerce_bool, coerce_int, coerce_numeric
+
+
+def has_control_or_format_chars(value: str) -> bool:
+    """Check whether ``value`` contains a Unicode control or format character.
+
+    Shared by ``routes/networks.py`` (network name) and ``routes/devices.py``
+    (device nickname) - security review finding, 2026-09-24. Unicode
+    category ``Cc`` (control, e.g. NUL, CR, LF, ESC) and ``Cf`` (format,
+    e.g. zero-width joiners, bidi overrides, BOM) cover the characters that
+    can corrupt terminal/log output or spoof direction-sensitive UI text
+    without being visually obvious in a text box.
+
+    Args:
+        value: The candidate text.
+
+    Returns:
+        True if any character falls in the ``Cc``/``Cf`` categories.
+    """
+    return any(unicodedata.category(ch) in ("Cc", "Cf") for ch in value)
+
+
+def is_unsafe_short_text(value: str, *, max_bytes: int) -> bool:
+    """Check a short user-supplied text field for control/formatting chars
+    or a byte length over ``max_bytes``.
+
+    Args:
+        value: The candidate text, already stripped of leading/trailing
+            whitespace by the caller.
+        max_bytes: Maximum allowed UTF-8-encoded length.
+
+    Returns:
+        True if the value is unsafe (either check fails).
+    """
+    if has_control_or_format_chars(value):
+        return True
+    return len(value.encode()) > max_bytes
 
 
 def _as_str_list(value: Any) -> list[str] | None:
