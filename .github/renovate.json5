@@ -24,7 +24,7 @@
   // ============================================================================
   // Enable Python package managers for backend/pyproject.toml
   // The pep621 manager handles pyproject.toml with [project] section
-  enabledManagers: ["pep621", "npm", "github-actions"],
+  enabledManagers: ["pep621", "npm", "github-actions", "custom.regex"],
 
   // ============================================================================
   // Commit Message Format (PR title is derived from commit message)
@@ -66,7 +66,7 @@
     {
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       matchUpdateTypes: ["minor", "patch"],
-      excludePackageNames: ["eero-api", "eero-prometheus-exporter"],
+      excludePackageNames: ["eero-api"],
       groupName: "python-minor-patch",
       description: "Python minor/patch updates (auto-merge)",
       automerge: true,
@@ -111,7 +111,7 @@
     // ==========================================================================
     {
       matchUpdateTypes: ["major"],
-      excludePackageNames: ["eero-api", "eero-prometheus-exporter"],
+      excludePackageNames: ["eero-api"],
       description: "Major updates require manual review",
       automerge: false,
       addLabels: ["major-update", "needs-review"],
@@ -148,38 +148,152 @@
     },
 
     // ==========================================================================
-    // 🟢 eero-packages - Internal dependencies (GROUPED to resolve conflicts)
+    // 🟢 eero-api - Internal dependency (kept out of the grouped python
+    // minor/patch rule and the generic major-updates rule above, since it
+    // gets its own review/priority/label treatment here)
     // ==========================================================================
-    // eero-prometheus-exporter depends on eero-api, so they MUST be updated
-    // together to avoid dependency resolution failures.
-    // Updates trigger minor version bump via feat(deps): prefix.
-    // This rule is placed LAST so it takes precedence over all other rules.
+    // eero-ui 6.0 dropped eero-prometheus-exporter as a dependency — the
+    // exporter is now a fully decoupled, optional external container (see
+    // docker-compose.yml). Do not re-add it here.
+    //
+    // This SDK cuts breaking majors often (see error-documentation.md /
+    // eero-api v7.0.0 DNS fix, and the v8 migration). Cap at <9.0.0 so
+    // Renovate never proposes a v9 major unattended; bump the cap by hand
+    // once v9 has been evaluated against phase docs.
     {
-      matchPackageNames: ["eero-api", "eero-prometheus-exporter"],
+      matchPackageNames: ["eero-api"],
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
-      groupName: "eero-packages",
-      description: "🟢 eero packages update (grouped to resolve dependencies)",
+      groupName: "eero-api",
+      description: "🟢 eero-api update",
+      allowedVersions: "<9.0.0",
       automerge: false,
       addLabels: ["eero-packages", "feature", "critical", "needs-review"],
       reviewers: ["fulviofreitas"],
       prPriority: 10,
       commitMessagePrefix: "feat(deps):",
-      commitMessageTopic: "eero packages",
+      commitMessageTopic: "eero-api",
       prBodyNotes: [
-        "## 🟢 eero Packages Update",
+        "## 🟢 eero-api Update",
         "",
-        "This PR updates eero ecosystem packages:",
-        "- `eero-api` - Core API client for eero network communication",
-        "- `eero-prometheus-exporter` - Embedded Prometheus metrics exporter",
+        "This PR updates `eero-api` - the core SDK client for eero network communication.",
         "",
-        "These packages are grouped because `eero-prometheus-exporter` depends on `eero-api`.",
+        "Renovate is capped at `<9.0.0` for this package: `eero-api` cuts breaking majors",
+        "often, so a v9+ proposal needs a deliberate cap bump and a migration review,",
+        "not an unattended PR.",
         "",
         "### Links",
         "- [eero-api on PyPI](https://pypi.org/project/eero-api/)",
-        "- [eero-prometheus-exporter on PyPI](https://pypi.org/project/eero-prometheus-exporter/)",
         "- [eero-api Repository](https://github.com/fulviofreitas/eero-api)",
-        "- [eero-prometheus-exporter Repository](https://github.com/fulviofreitas/eero-prometheus-exporter)",
       ],
+    },
+
+    // ==========================================================================
+    // 🔷 VictoriaMetrics binary (Dockerfile ARG VM_VERSION) - group minor/patch
+    // ==========================================================================
+    // Tracked via the custom.regex manager below (Dockerfile:28). Grouped like
+    // the other minor/patch rules; majors fall through to the generic
+    // major-updates rule above and require manual review.
+    {
+      matchDepNames: ["VictoriaMetrics/VictoriaMetrics"],
+      matchManagers: ["custom.regex"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "victoria-metrics-minor-patch",
+      description: "VictoriaMetrics binary minor/patch updates (auto-merge)",
+      automerge: true,
+      automergeType: "pr",
+      automergeStrategy: "squash",
+      addLabels: ["victoria-metrics"],
+      commitMessagePrefix: "chore(deps-vm):",
+      commitMessageTopic: "VictoriaMetrics binary",
+      prBodyNotes: [
+        "## 🔷 VictoriaMetrics Binary Update",
+        "",
+        "This PR bumps the pinned VictoriaMetrics release downloaded in the",
+        "`vm-downloader` build stage (`Dockerfile:28`, `ARG VM_VERSION`).",
+        "",
+        "Before merging, run the image smoke test to confirm the binary still",
+        "starts, is readable/writable, and serves the import APIs eero-ui's",
+        "collector depends on:",
+        "",
+        "```bash",
+        "./scripts/smoke-test-image.sh --session-file /path/to/seeded-session.json --build",
+        "```",
+        "",
+        "### Links",
+        "- [VictoriaMetrics releases](https://github.com/VictoriaMetrics/VictoriaMetrics/releases)",
+      ],
+    },
+
+    // ==========================================================================
+    // 🔷 eero-prometheus-exporter image tag (docker-compose.yml, commented,
+    // optional/decoupled) - group minor/patch
+    // ==========================================================================
+    // Tracked via the custom.regex manager below (docker-compose.yml, the
+    // commented-out `eero-exporter` service block). This container is NOT a
+    // runtime dependency of eero-ui; the pinned tag only documents a known-
+    // good version for operators who opt in to the standalone exporter.
+    {
+      matchDepNames: ["ghcr.io/fulviofreitas/eero-prometheus-exporter"],
+      matchManagers: ["custom.regex"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "eero-exporter-doc-tag-minor-patch",
+      description: "eero-prometheus-exporter documented image tag minor/patch updates (auto-merge)",
+      automerge: true,
+      automergeType: "pr",
+      automergeStrategy: "squash",
+      addLabels: ["eero-packages"],
+      commitMessagePrefix: "docs(deps):",
+      commitMessageTopic: "eero-prometheus-exporter documented image tag",
+      prBodyNotes: [
+        "## 🔷 eero-prometheus-exporter Documented Tag Update",
+        "",
+        "This PR only bumps the version referenced in the commented-out, optional",
+        "`eero-exporter` service block in `docker-compose.yml`. eero-ui does not",
+        "depend on this container in any way — see the block's own comments.",
+      ],
+    },
+  ],
+
+  // ============================================================================
+  // Custom Managers (regex) — track versions with no native package manager
+  // ============================================================================
+  customManagers: [
+    // ==========================================================================
+    // 🔷 VictoriaMetrics binary pinned in the Docker build (Dockerfile:28)
+    // ==========================================================================
+    // Tags on https://github.com/VictoriaMetrics/VictoriaMetrics/releases are
+    // v-prefixed (e.g. "v1.96.0"), matching the ARG default and the download
+    // URL built from it two lines below (victoria-metrics-linux-<arch>-${VM_VERSION}.tar.gz).
+    // extractVersionTemplate keeps the "v" so currentValue and the extracted
+    // release version compare like-for-like.
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^Dockerfile$/"],
+      matchStrings: [
+        "ARG VM_VERSION=(?<currentValue>v?\\d+\\.\\d+\\.\\d+)",
+      ],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "VictoriaMetrics/VictoriaMetrics",
+      extractVersionTemplate: "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
+    },
+
+    // ==========================================================================
+    // 🔷 eero-prometheus-exporter image tag documented in docker-compose.yml
+    // ==========================================================================
+    // The service is fully commented out (optional, decoupled — see the block's
+    // own comments a few lines above). A regex manager matches raw file text
+    // regardless of YAML comment syntax, so this is safe to track even though
+    // the line starts with "#". Uses the "docker" datasource against GHCR so
+    // Renovate resolves real tags for ghcr.io/fulviofreitas/eero-prometheus-exporter.
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^docker-compose\\.ya?ml$/"],
+      matchStrings: [
+        "#\\s*image:\\s*ghcr\\.io/fulviofreitas/eero-prometheus-exporter:(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+      ],
+      datasourceTemplate: "docker",
+      depNameTemplate: "ghcr.io/fulviofreitas/eero-prometheus-exporter",
+      packageNameTemplate: "ghcr.io/fulviofreitas/eero-prometheus-exporter",
     },
   ],
 
