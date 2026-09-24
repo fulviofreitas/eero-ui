@@ -461,12 +461,16 @@ export const handlers = [
 		});
 	}),
 
+	// EeroLedBrightnessAction extends EeroAction with a read-back `led_brightness`
+	// (backend/app/routes/eeros.py:482-519) - the write re-reads the value from
+	// the SDK after setting it, rather than trusting the caller's request.
 	http.put('/api/eeros/:eeroId/led/brightness', ({ params }) => {
 		return HttpResponse.json({
 			success: true,
 			eero_id: params.eeroId,
 			action: 'led_brightness',
-			message: null
+			message: 'LED brightness set to 80%.',
+			led_brightness: 80
 		});
 	}),
 

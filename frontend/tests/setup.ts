@@ -44,3 +44,39 @@ Object.defineProperty(window, 'CustomEvent', {
 	writable: true,
 	value: MockCustomEvent
 });
+
+// jsdom has no Web Animations API. Svelte 5's `fade`/`scale` transitions
+// (ConfirmDialog, Toast) call `element.animate()` directly - both to play the
+// transition AND, on an outro, to know when it's safe to remove the element -
+// rather than falling back to a CSS-only path. Without this polyfill, mounting
+// throws `TypeError: element.animate is not a function`; with a polyfill that
+// never fires 'finish' (e.g. a bare stub), outro transitions hang forever
+// instead, since Svelte awaits that event before detaching the element - so
+// this fires 'finish' on a real EventTarget, on the next microtask, exactly
+// once.
+if (!Element.prototype.animate) {
+	Element.prototype.animate = function () {
+		const target = new EventTarget();
+		const finished = Promise.resolve().then(() => {
+			target.dispatchEvent(new Event('finish'));
+		});
+		return Object.assign(target, {
+			finished,
+			effect: null,
+			currentTime: 0,
+			playbackRate: 1,
+			playState: 'finished',
+			cancel: () => {},
+			finish: () => {},
+			pause: () => {},
+			play: () => {},
+			reverse: () => {},
+			updatePlaybackRate: () => {},
+			commitStyles: () => {},
+			persist: () => {},
+			oncancel: null,
+			onfinish: null,
+			onremove: null
+		}) as unknown as Animation;
+	};
+}

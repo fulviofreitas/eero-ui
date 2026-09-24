@@ -114,6 +114,107 @@ describe('api client', () => {
 			}
 		});
 
+		it('passes an experimental_disabled type through unchanged (403, decision 6a)', async () => {
+			// No route wires `require_experimental_writes` yet (WP7/WP8 decide
+			// per route - backend/app/deps.py:78-91), but `parseError`'s
+			// generic `type: data.type` passthrough already covers whatever
+			// type string a future route sends. This locks that contract so a
+			// later route doesn't need a corresponding client.ts change.
+			server.use(
+				http.get('/api/networks', () =>
+					HttpResponse.json(
+						{
+							detail:
+								'This write is disabled. Set EERO_DASHBOARD_EXPERIMENTAL_WRITES=true to enable it.',
+							type: 'experimental_disabled'
+						},
+						{ status: 403 }
+					)
+				)
+			);
+
+			try {
+				await api.networks.list();
+				expect.unreachable('expected api.networks.list() to reject');
+			} catch (error) {
+				const apiError = error as ApiClientError;
+				expect(apiError.status).toBe(403);
+				expect(apiError.type).toBe('experimental_disabled');
+			}
+		});
+
+		it('never surfaces error_code on a feature_unavailable 409 (server-log-only field)', async () => {
+			server.use(
+				http.get('/api/networks', () =>
+					HttpResponse.json(
+						{
+							detail: 'This feature is not available on this network right now.',
+							type: 'feature_unavailable',
+							error_code: 'INTERNAL_ONLY_CODE_123'
+						},
+						{ status: 409 }
+					)
+				)
+			);
+
+			try {
+				await api.networks.list();
+				expect.unreachable('expected api.networks.list() to reject');
+			} catch (error) {
+				const apiError = error as ApiClientError;
+				expect(apiError.type).toBe('feature_unavailable');
+				expect(JSON.stringify(apiError)).not.toContain('INTERNAL_ONLY_CODE_123');
+				expect('error_code' in apiError).toBe(false);
+			}
+		});
+
+		it("joins FastAPI's own request-validation array shape into one message and keeps the field", async () => {
+			server.use(
+				http.get('/api/networks', () =>
+					HttpResponse.json(
+						{
+							detail: [{ loc: ['body', 'ipv4', 'servers'], msg: 'field required', type: 'missing' }]
+						},
+						{ status: 422 }
+					)
+				)
+			);
+
+			try {
+				await api.networks.list();
+				expect.unreachable('expected api.networks.list() to reject');
+			} catch (error) {
+				const apiError = error as ApiClientError;
+				expect(apiError.status).toBe(422);
+				expect(apiError.field).toBe('servers');
+				expect(apiError.detail).toBe('field required');
+			}
+		});
+
+		it('joins multiple FastAPI validation errors into one semicolon-separated message', async () => {
+			server.use(
+				http.get('/api/networks', () =>
+					HttpResponse.json(
+						{
+							detail: [
+								{ loc: ['body', 'name'], msg: 'field required', type: 'missing' },
+								{ loc: ['body', 'age'], msg: 'value is not a valid integer', type: 'int_parsing' }
+							]
+						},
+						{ status: 422 }
+					)
+				)
+			);
+
+			try {
+				await api.networks.list();
+				expect.unreachable('expected api.networks.list() to reject');
+			} catch (error) {
+				const apiError = error as ApiClientError;
+				expect(apiError.detail).toBe('field required; value is not a valid integer');
+			}
+		});
+
 		it('parses the DNS route {field, message} shape and keeps the field name', async () => {
 			server.use(
 				http.put('/api/networks/:networkId/dns', () =>
@@ -181,6 +282,134 @@ describe('api client', () => {
 			);
 
 			await expect(api.profiles.delete('profile-1')).rejects.toThrow();
+			expect(calls).toBe(1);
+		});
+
+		// Exhaustive per plan § 8.2 ("no retry on writes ... for every write
+		// method in client.ts") - the three tests above cover the shape of the
+		// assertion for POST/PUT/DELETE individually; this table covers every
+		// remaining write method by name so a newly-added write starts
+		// uncovered rather than silently inheriting a false sense of coverage.
+		const writeMethods: Array<{
+			name: string;
+			verb: 'post' | 'put' | 'patch' | 'delete';
+			path: string;
+			call: () => Promise<unknown>;
+		}> = [
+			{
+				name: 'auth.login',
+				verb: 'post',
+				path: '/api/auth/login',
+				call: () => api.auth.login('x')
+			},
+			{
+				name: 'auth.verify',
+				verb: 'post',
+				path: '/api/auth/verify',
+				call: () => api.auth.verify('123456')
+			},
+			{
+				name: 'auth.logout',
+				verb: 'post',
+				path: '/api/auth/logout',
+				call: () => api.auth.logout()
+			},
+			{
+				name: 'networks.speedTest',
+				verb: 'post',
+				path: '/api/networks/:networkId/speedtest',
+				call: () => api.networks.speedTest('network-123')
+			},
+			{
+				name: 'networks.toggleGuestNetwork',
+				verb: 'put',
+				path: '/api/networks/:networkId/guest-network',
+				call: () => api.networks.toggleGuestNetwork('network-123', true)
+			},
+			{
+				name: 'networks.setDns',
+				verb: 'put',
+				path: '/api/networks/:networkId/dns',
+				call: () => api.networks.setDns('network-123', { ipv4: { mode: 'automatic', servers: [] } })
+			},
+			{
+				name: 'devices.block',
+				verb: 'post',
+				path: '/api/devices/:deviceId/block',
+				call: () => api.devices.block('dev-1')
+			},
+			{
+				name: 'devices.unblock',
+				verb: 'post',
+				path: '/api/devices/:deviceId/unblock',
+				call: () => api.devices.unblock('dev-1')
+			},
+			{
+				name: 'devices.setNickname',
+				verb: 'put',
+				path: '/api/devices/:deviceId/nickname',
+				call: () => api.devices.setNickname('dev-1', 'New Name')
+			},
+			{
+				name: 'eeros.reboot',
+				verb: 'post',
+				path: '/api/eeros/:eeroId/reboot',
+				call: () => api.eeros.reboot('eero-1')
+			},
+			{
+				name: 'eeros.setLed',
+				verb: 'post',
+				path: '/api/eeros/:eeroId/led',
+				call: () => api.eeros.setLed('eero-1', true)
+			},
+			{
+				name: 'eeros.setLedBrightness',
+				verb: 'put',
+				path: '/api/eeros/:eeroId/led/brightness',
+				call: () => api.eeros.setLedBrightness('eero-1', 80)
+			},
+			{
+				name: 'profiles.pause',
+				verb: 'post',
+				path: '/api/profiles/:profileId/pause',
+				call: () => api.profiles.pause('profile-1')
+			},
+			{
+				name: 'profiles.unpause',
+				verb: 'post',
+				path: '/api/profiles/:profileId/unpause',
+				call: () => api.profiles.unpause('profile-1')
+			},
+			{
+				name: 'profiles.create',
+				verb: 'post',
+				path: '/api/profiles',
+				call: () => api.profiles.create('New Profile')
+			},
+			{
+				name: 'profiles.rename',
+				verb: 'patch',
+				path: '/api/profiles/:profileId',
+				call: () => api.profiles.rename('profile-1', 'Renamed')
+			},
+			{
+				name: 'profiles.assignDevices',
+				verb: 'post',
+				path: '/api/profiles/:profileId/assign-devices',
+				call: () => api.profiles.assignDevices('profile-1', ['dev-1'])
+			}
+		];
+
+		it.each(writeMethods)('does not retry $name on a 5xx', async ({ verb, path, call }) => {
+			let calls = 0;
+			server.use(
+				http[verb](path, () => {
+					calls++;
+					return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+				})
+			);
+
+			await expect(call()).rejects.toThrow();
 			expect(calls).toBe(1);
 		});
 
