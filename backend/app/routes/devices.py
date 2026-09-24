@@ -471,6 +471,70 @@ async def set_device_type_route(
     )
 
 
+class SecondaryWanAccessRequest(BaseModel):
+    """Request body for PUT /{device_id}/secondary-wan-access."""
+
+    deny: bool
+
+
+class SecondaryWanAccessResponse(BaseModel):
+    """Response for a per-device secondary-WAN-access write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    deny: bool
+
+
+# WP8 (phase-6.0-revamp.md § 5, § 7; sdk-surface-map-v8.0.3.md WP8): its own
+# module-level gate constant, distinct from every other settings-class
+# route's, so it can be lifted independently after live verification.
+_SECONDARY_WAN_ACCESS_GATE = require_experimental_writes
+
+
+@router.put(
+    "/{device_id}/secondary-wan-access",
+    response_model=SecondaryWanAccessResponse,
+    dependencies=[Depends(_SECONDARY_WAN_ACCESS_GATE)],
+)
+@limiter.shared_limit("2/minute", scope="settings_writes")
+async def update_secondary_wan_access(
+    request: Request,
+    device_id: str,
+    body: SecondaryWanAccessRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> SecondaryWanAccessResponse:
+    """Deny or allow a single device's secondary-WAN access.
+
+    Settings-class by its own SDK docstring
+    (``set_device_secondary_wan_access``, sdk-surface-map-v8.0.3.md WP8).
+    Best-effort no-op guard: reads the device's raw envelope for a
+    ``secondary_wan_deny_access`` key, which is not documented as
+    guaranteed present - if absent, the write always proceeds (documented
+    gap, not a silent skip). Gated behind ``_SECONDARY_WAN_ACCESS_GATE``.
+    """
+    mac = await _resolve_device_mac(client, device_id, network_id)
+
+    raw_device = extract_data(await client.get_device(device_id, network_id))
+    current = raw_device.get("secondary_wan_deny_access")
+
+    if current is not None and bool(current) == body.deny:
+        return SecondaryWanAccessResponse(success=True, changed=False, deny=body.deny)
+
+    _LOGGER.warning(
+        "Setting secondary-WAN access for device %s on network %s - settings-class "
+        "write, treated as a mesh reboot",
+        device_id,
+        network_id,
+    )
+    raw_result = await client.set_device_secondary_wan_access(
+        mac, deny=body.deny, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return SecondaryWanAccessResponse(success=success, changed=True, deny=body.deny)
+
+
 @router.get("/{device_id}/insights", response_model=InsightsResponse)
 async def get_device_insights_route(
     device_id: str,

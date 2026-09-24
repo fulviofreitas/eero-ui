@@ -24,6 +24,7 @@ from .._coercion import coerce_bool
 from ..config import settings
 from ..deps import require_auth, require_experimental_writes, validate_request_path_ids
 from ..transformers import (
+    InvalidIdentifierError,
     check_success,
     extract_data,
     extract_id_from_url,
@@ -39,6 +40,7 @@ from ..transformers import (
     normalize_speed_test,
     parse_iso8601,
     strip_sensitive_keys,
+    validate_path_id,
 )
 from .auth import limiter
 
@@ -876,6 +878,1487 @@ async def rename_network(
         "network_id": network_id,
         "name": new_name,
     }
+
+
+# ---------------------------------------------------------------------------
+# WP8 - Settings-class writes (phase-6.0-revamp.md § 5, § 7 WP8;
+# sdk-surface-map-v8.0.3.md WP8 table; experimental-writes-ledger.md WP8
+# rows). Every route below depends on ``require_experimental_writes`` via
+# its OWN module-level gate constant rather than the shared name, so an
+# operator can lift a single family's gate independently after a live
+# verification (see the docstring on ``require_experimental_writes`` in
+# ``deps.py``) without also exposing every other settings-class write -
+# flip one constant's assignment, no route body changes needed. All follow
+# the DNS pattern from § 5: read-first, parsed-value no-op guard that
+# returns without writing, exactly one write per request, a static
+# `reboot_expected: true` in the response (except network password, which
+# is `false` with `disconnects_clients: true`), and
+# ``@limiter.shared_limit("2/minute", scope="settings_writes")`` unless
+# noted. DNS (``update_dns``) and ``rename_network`` above are NOT
+# retrofitted with the gate this pass - they predate the flag, DNS is
+# already live-verified (error-documentation.md), and gating them now
+# would be a behavioural change to routes this pass does not own; left as
+# an open follow-up per the ledger note ("WP8 should decide").
+# ---------------------------------------------------------------------------
+
+_SETTINGS_WRITES_LIMIT = "2/minute"
+
+_SQM_GATE = require_experimental_writes
+_DHCP_GATE = require_experimental_writes
+_CONNECTION_MODE_GATE = require_experimental_writes
+_NAT_PORT_RANDOMIZATION_GATE = require_experimental_writes
+_WPA3_PER_BAND_GATE = require_experimental_writes
+_SECURITY_GATE = require_experimental_writes
+_MLO_GATE = require_experimental_writes
+_FAST_TRANSITION_GATE = require_experimental_writes
+_PASSPOINT_GATE = require_experimental_writes
+_PROXIED_NODES_GATE = require_experimental_writes
+_POWER_SAVING_GATE = require_experimental_writes
+_POWER_SAVING_SCHEDULES_GATE = require_experimental_writes
+_SUBNETS_GATE = require_experimental_writes
+_WAN_GATE = require_experimental_writes
+_UPDATES_GATE = require_experimental_writes
+_NETWORK_PASSWORD_GATE = require_experimental_writes
+
+
+class SqmUpdateRequest(BaseModel):
+    """Request body for PUT /{network_id}/sqm."""
+
+    enabled: bool
+
+
+class SqmUpdateResponse(BaseModel):
+    """Response for an SQM write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/sqm",
+    response_model=SqmUpdateResponse,
+    dependencies=[Depends(_SQM_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_sqm(
+    request: Request,
+    network_id: str,
+    body: SqmUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> SqmUpdateResponse:
+    """Enable or disable SQM (Smart Queue Management).
+
+    Settings-class write (sdk-surface-map-v8.0.3.md WP8: ``set_sqm`` PUTs
+    the network's ``settings`` link with no body, just a query param).
+    Gated behind ``_SQM_GATE``.
+    """
+    raw = await client.get_sqm_settings(network_id)
+    current_enabled = bool(coerce_bool(extract_data(raw).get("sqm"), field_name="sqm"))
+
+    if body.enabled == current_enabled:
+        return SqmUpdateResponse(success=True, changed=False, enabled=current_enabled)
+
+    _LOGGER.warning(
+        "Applying SQM change for network %s - settings-class write, treated as a "
+        "mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_sqm(body.enabled, network_id=network_id)
+    success = check_success(raw_result)
+    return SqmUpdateResponse(success=success, changed=True, enabled=body.enabled)
+
+
+# --- DHCP, connection mode, NAT port randomization -------------------------
+# All three PUT the network's ``settings`` link (sdk-surface-map-v8.0.3.md
+# headline finding 1). None has a dedicated getter; reads for the no-op
+# guard come from the network envelope's own pass-through keys
+# (``normalize_network``'s ``dhcp``/``connection_mode`` fields document
+# that ``dhcp`` and ``connection_mode`` are guaranteed pass-through keys;
+# ``nat_port_randomization`` is not documented as guaranteed, so its guard
+# is skipped when the key is absent).
+
+
+class DhcpCustomLease(BaseModel):
+    """Manual DHCP lease-range fields (``eero.api.dhcp`` ``custom``).
+
+    ``custom_v2`` (per-subnet lease ranges) is deliberately not exposed
+    this pass - its nested shape is unfixtured in eero-api v8.0.3
+    (sdk-surface-map-v8.0.3.md WP8); documented gap, not a silent skip.
+    """
+
+    start_ip: str
+    end_ip: str
+    subnet_ip: str
+    subnet_mask: str
+
+    class Config:
+        extra = "forbid"
+
+
+class DhcpUpdateRequest(BaseModel):
+    """Request body for PUT /{network_id}/dhcp."""
+
+    mode: Literal["automatic", "manual"] | None = None
+    custom: DhcpCustomLease | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class DhcpUpdateResponse(BaseModel):
+    """Response for a DHCP write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    dhcp: dict[str, Any] | None = None
+
+
+def _reject_invalid_ip_literal(value: str, field: str) -> None:
+    """Reject a value that does not parse as an IP address.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field} must be a valid IP address.",
+        )
+
+
+@router.put(
+    "/{network_id}/dhcp",
+    response_model=DhcpUpdateResponse,
+    dependencies=[Depends(_DHCP_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_dhcp(
+    request: Request,
+    network_id: str,
+    body: DhcpUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> DhcpUpdateResponse:
+    """Set the network's DHCP mode and/or manual lease range.
+
+    Settings-class write. Gated behind ``_DHCP_GATE``.
+    """
+    if body.mode is None and body.custom is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one of mode or custom must be provided.",
+        )
+    if body.custom is not None:
+        for field in ("start_ip", "end_ip", "subnet_ip", "subnet_mask"):
+            _reject_invalid_ip_literal(getattr(body.custom, field), field)
+
+    raw_network = extract_data(await client.get_network(network_id))
+    current_dhcp = (
+        raw_network.get("dhcp") if isinstance(raw_network.get("dhcp"), dict) else {}
+    )
+    current_custom = (
+        current_dhcp.get("custom")
+        if isinstance(current_dhcp.get("custom"), dict)
+        else {}
+    )
+
+    custom_payload = body.custom.model_dump() if body.custom is not None else None
+    mode_changed = body.mode is not None and body.mode != current_dhcp.get("mode")
+    custom_changed = custom_payload is not None and any(
+        current_custom.get(k) != v for k, v in custom_payload.items()
+    )
+
+    if not mode_changed and not custom_changed:
+        return DhcpUpdateResponse(
+            success=True, changed=False, dhcp=current_dhcp or None
+        )
+
+    _LOGGER.warning(
+        "Applying DHCP change for network %s - settings-class write, treated as a "
+        "mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_dhcp(
+        network_id, mode=body.mode, custom=custom_payload
+    )
+    success = check_success(raw_result)
+
+    raw_network = extract_data(await client.get_network(network_id))
+    updated_dhcp = (
+        raw_network.get("dhcp") if isinstance(raw_network.get("dhcp"), dict) else None
+    )
+    return DhcpUpdateResponse(success=success, changed=True, dhcp=updated_dhcp)
+
+
+class ConnectionModeRequest(BaseModel):
+    """Request body for PUT /{network_id}/connection-mode."""
+
+    mode: Literal["BRIDGE", "NAT"]
+
+
+class ConnectionModeResponse(BaseModel):
+    """Response for a connection-mode write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    mode: str | None = None
+
+
+@router.put(
+    "/{network_id}/connection-mode",
+    response_model=ConnectionModeResponse,
+    dependencies=[Depends(_CONNECTION_MODE_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_connection_mode(
+    request: Request,
+    network_id: str,
+    body: ConnectionModeRequest,
+    client: EeroClient = Depends(require_auth),
+) -> ConnectionModeResponse:
+    """Set the network's WAN connection mode (BRIDGE or NAT).
+
+    Settings-class write. Gated behind ``_CONNECTION_MODE_GATE``.
+    """
+    raw_network = extract_data(await client.get_network(network_id))
+    current_mode = raw_network.get("connection_mode")
+
+    if body.mode == current_mode:
+        return ConnectionModeResponse(success=True, changed=False, mode=current_mode)
+
+    _LOGGER.warning(
+        "Applying connection-mode change for network %s - settings-class write, "
+        "treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_connection_mode(body.mode, network_id=network_id)
+    success = check_success(raw_result)
+
+    raw_network = extract_data(await client.get_network(network_id))
+    return ConnectionModeResponse(
+        success=success, changed=True, mode=raw_network.get("connection_mode")
+    )
+
+
+class NatPortRandomizationRequest(BaseModel):
+    """Request body for PUT /{network_id}/nat-port-randomization."""
+
+    enabled: bool
+
+
+class NatPortRandomizationResponse(BaseModel):
+    """Response for a NAT-port-randomization write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/nat-port-randomization",
+    response_model=NatPortRandomizationResponse,
+    dependencies=[Depends(_NAT_PORT_RANDOMIZATION_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_nat_port_randomization(
+    request: Request,
+    network_id: str,
+    body: NatPortRandomizationRequest,
+    client: EeroClient = Depends(require_auth),
+) -> NatPortRandomizationResponse:
+    """Enable or disable NAT port randomization.
+
+    Settings-class write. No dedicated getter and no documented
+    pass-through key exist for this field, so the no-op guard is
+    best-effort: if the network envelope carries a ``nat_port_randomization``
+    key it is compared, otherwise the write always proceeds. Gated behind
+    ``_NAT_PORT_RANDOMIZATION_GATE``.
+    """
+    raw_network = extract_data(await client.get_network(network_id))
+    raw_current = raw_network.get("nat_port_randomization")
+    current_enabled = (
+        bool(coerce_bool(raw_current, field_name="nat_port_randomization"))
+        if raw_current is not None
+        else None
+    )
+
+    if current_enabled is not None and body.enabled == current_enabled:
+        return NatPortRandomizationResponse(
+            success=True, changed=False, enabled=current_enabled
+        )
+
+    _LOGGER.warning(
+        "Applying NAT port randomization change for network %s - settings-class "
+        "write, treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_nat_port_randomization(
+        body.enabled, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return NatPortRandomizationResponse(
+        success=success, changed=True, enabled=body.enabled
+    )
+
+
+# --- WPA3 per band, security envelope, MLO ---------------------------------
+
+
+class Wpa3PerBandRequest(BaseModel):
+    """Request body for PUT /{network_id}/wpa3.
+
+    No 6 GHz parameter exists in eero-api v8.0.3
+    (sdk-surface-map-v8.0.3.md WP8).
+    """
+
+    band_2_4_ghz: Literal["WPA2", "WPA2_WPA3", "WPA3"] | None = None
+    band_5_ghz: Literal["WPA2", "WPA2_WPA3", "WPA3"] | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class Wpa3PerBandResponse(BaseModel):
+    """Response for a per-band WPA3 write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    band_2_4_ghz: str | None = None
+    band_5_ghz: str | None = None
+
+
+@router.put(
+    "/{network_id}/wpa3",
+    response_model=Wpa3PerBandResponse,
+    dependencies=[Depends(_WPA3_PER_BAND_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_wpa3_per_band(
+    request: Request,
+    network_id: str,
+    body: Wpa3PerBandRequest,
+    client: EeroClient = Depends(require_auth),
+) -> Wpa3PerBandResponse:
+    """Set the per-band WPA3 mode.
+
+    Settings-class by decision 5, though ``set_wpa3_per_band`` itself PUTs
+    the dedicated ``wpa3_per_band`` link, not the network ``settings`` link
+    (sdk-surface-map-v8.0.3.md headline finding 1). Gated behind
+    ``_WPA3_PER_BAND_GATE``.
+    """
+    if body.band_2_4_ghz is None and body.band_5_ghz is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one of band_2_4_ghz or band_5_ghz must be provided.",
+        )
+
+    raw = extract_data(await client.get_wpa3_per_band(network_id))
+    current_2_4 = raw.get("band_2_4_ghz")
+    current_5 = raw.get("band_5_ghz")
+
+    changed_2_4 = body.band_2_4_ghz is not None and body.band_2_4_ghz != current_2_4
+    changed_5 = body.band_5_ghz is not None and body.band_5_ghz != current_5
+
+    if not changed_2_4 and not changed_5:
+        return Wpa3PerBandResponse(
+            success=True, changed=False, band_2_4_ghz=current_2_4, band_5_ghz=current_5
+        )
+
+    _LOGGER.warning(
+        "Applying per-band WPA3 change for network %s - treated as a mesh reboot "
+        "(decision 5)",
+        network_id,
+    )
+    raw_result = await client.set_wpa3_per_band(
+        network_id, band_2_4_ghz=body.band_2_4_ghz, band_5_ghz=body.band_5_ghz
+    )
+    success = check_success(raw_result)
+
+    raw = extract_data(await client.get_wpa3_per_band(network_id))
+    return Wpa3PerBandResponse(
+        success=success,
+        changed=True,
+        band_2_4_ghz=raw.get("band_2_4_ghz"),
+        band_5_ghz=raw.get("band_5_ghz"),
+    )
+
+
+class SecurityUpdateRequest(BaseModel):
+    """Request body for PUT /{network_id}/security.
+
+    Exactly one field must be provided per request - never two settings
+    writes in one Save.
+    """
+
+    wpa3: bool | None = None
+    band_steering: bool | None = None
+    upnp: bool | None = None
+    ipv6: bool | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class SecurityUpdateResponse(BaseModel):
+    """Response for a single-field envelope security write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    field: str
+    value: bool
+
+
+@router.put(
+    "/{network_id}/security",
+    response_model=SecurityUpdateResponse,
+    dependencies=[Depends(_SECURITY_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_security(
+    request: Request,
+    network_id: str,
+    body: SecurityUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> SecurityUpdateResponse:
+    """Toggle exactly one envelope-level security setting.
+
+    Settings-class write (``set_wpa3``/``set_band_steering``/``set_upnp``/
+    ``set_ipv6`` each PUT the network ``settings`` link). ``configure_security``
+    accepts all four fields in one call, but this route accepts exactly one
+    per request (422 otherwise) and maps to the single-field SDK method, to
+    keep "never two settings writes in one Save" unambiguous at the API
+    boundary. Gated behind ``_SECURITY_GATE``.
+    """
+    provided = {
+        name: value
+        for name, value in (
+            ("wpa3", body.wpa3),
+            ("band_steering", body.band_steering),
+            ("upnp", body.upnp),
+            ("ipv6", body.ipv6),
+        )
+        if value is not None
+    }
+    if len(provided) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Exactly one of wpa3, band_steering, upnp, ipv6 must be provided.",
+        )
+    field, value = next(iter(provided.items()))
+
+    raw_network = extract_data(await client.get_network(network_id))
+    current_map = {
+        "wpa3": raw_network.get("wpa3"),
+        "band_steering": raw_network.get("band_steering"),
+        "upnp": raw_network.get("upnp"),
+        "ipv6": raw_network.get("ipv6_upstream"),
+    }
+    current_value = bool(coerce_bool(current_map[field], field_name=field))
+
+    if value == current_value:
+        return SecurityUpdateResponse(
+            success=True, changed=False, field=field, value=current_value
+        )
+
+    _LOGGER.warning(
+        "Applying security setting %s for network %s - settings-class write, "
+        "treated as a mesh reboot",
+        field,
+        network_id,
+    )
+    setter = {
+        "wpa3": client.set_wpa3,
+        "band_steering": client.set_band_steering,
+        "upnp": client.set_upnp,
+        "ipv6": client.set_ipv6,
+    }[field]
+    raw_result = await setter(value, network_id=network_id)
+    success = check_success(raw_result)
+    return SecurityUpdateResponse(
+        success=success, changed=True, field=field, value=value
+    )
+
+
+class MloUpdateRequest(BaseModel):
+    """Request body for PUT /{network_id}/mlo."""
+
+    mode: Literal["disabled", "single", "multi"]
+
+
+class MloUpdateResponse(BaseModel):
+    """Response for an MLO-mode write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    mode: str | None = None
+
+
+@router.put(
+    "/{network_id}/mlo",
+    response_model=MloUpdateResponse,
+    dependencies=[Depends(_MLO_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_mlo_mode(
+    request: Request,
+    network_id: str,
+    body: MloUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> MloUpdateResponse:
+    """Set the network's MLO (Multi-Link Operation) mode.
+
+    Settings-class by its own SDK docstring (``set_mlo_mode`` PUTs the
+    dedicated ``mlo_mode`` link, not the network ``settings`` link). No
+    dedicated getter and no documented pass-through key exist in
+    eero-api v8.0.3, so the no-op guard reads the network envelope's
+    ``mlo_mode`` field on a best-effort basis: if the key is absent the
+    guard is skipped and the write always proceeds - a documented gap, not
+    a silent skip. Gated behind ``_MLO_GATE``.
+    """
+    raw_network = extract_data(await client.get_network(network_id))
+    current_mode = raw_network.get("mlo_mode")
+
+    if current_mode is not None and body.mode == current_mode:
+        return MloUpdateResponse(success=True, changed=False, mode=current_mode)
+
+    _LOGGER.warning(
+        "Applying MLO mode change for network %s - treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_mlo_mode(body.mode, network_id=network_id)
+    success = check_success(raw_result)
+    return MloUpdateResponse(success=success, changed=True, mode=body.mode)
+
+
+# --- Fast transition, Passpoint, proxied nodes ------------------------------
+
+
+class FastTransitionRequest(BaseModel):
+    """Request body for PUT /{network_id}/fast-transition."""
+
+    enabled: bool
+
+
+class FastTransitionResponse(BaseModel):
+    """Response for a fast-transition write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/fast-transition",
+    response_model=FastTransitionResponse,
+    dependencies=[Depends(_FAST_TRANSITION_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_fast_transition(
+    request: Request,
+    network_id: str,
+    body: FastTransitionRequest,
+    client: EeroClient = Depends(require_auth),
+) -> FastTransitionResponse:
+    """Enable or disable 802.11r fast transition.
+
+    Carries the reboot warning from day one per decision 5, even though
+    ``get_fast_transition``/``set_fast_transition`` are their own dedicated
+    sub-resource rather than the network ``settings`` link. Gated behind
+    ``_FAST_TRANSITION_GATE``.
+    """
+    raw = extract_data(await client.get_fast_transition(network_id))
+    current_enabled = bool(
+        coerce_bool(raw.get("fast_transition"), field_name="fast_transition")
+    )
+
+    if body.enabled == current_enabled:
+        return FastTransitionResponse(
+            success=True, changed=False, enabled=current_enabled
+        )
+
+    _LOGGER.warning(
+        "Applying fast-transition change for network %s - treated as a mesh reboot "
+        "(decision 5)",
+        network_id,
+    )
+    raw_result = await client.set_fast_transition(body.enabled, network_id=network_id)
+    success = check_success(raw_result)
+    return FastTransitionResponse(success=success, changed=True, enabled=body.enabled)
+
+
+class PasspointRequest(BaseModel):
+    """Request body for PUT /{network_id}/passpoint."""
+
+    enabled: bool
+
+
+class PasspointResponse(BaseModel):
+    """Response for a Passpoint write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/passpoint",
+    response_model=PasspointResponse,
+    dependencies=[Depends(_PASSPOINT_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_passpoint(
+    request: Request,
+    network_id: str,
+    body: PasspointRequest,
+    client: EeroClient = Depends(require_auth),
+) -> PasspointResponse:
+    """Enable or disable Passpoint.
+
+    No dedicated getter exists in eero-api v8.0.3 for this family
+    (sdk-surface-map-v8.0.3.md WP8). The no-op guard reads the network
+    envelope's ``passpoint`` field on a best-effort basis: if absent, the
+    guard is skipped and the write always proceeds - a documented gap, not
+    a silent skip. Gated behind ``_PASSPOINT_GATE``.
+    """
+    raw_network = extract_data(await client.get_network(network_id))
+    raw_current = raw_network.get("passpoint")
+    current_enabled = (
+        bool(coerce_bool(raw_current, field_name="passpoint"))
+        if raw_current is not None
+        else None
+    )
+
+    if current_enabled is not None and body.enabled == current_enabled:
+        return PasspointResponse(success=True, changed=False, enabled=current_enabled)
+
+    _LOGGER.warning(
+        "Applying Passpoint change for network %s - treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_passpoint_enabled(body.enabled, network_id=network_id)
+    success = check_success(raw_result)
+    return PasspointResponse(success=success, changed=True, enabled=body.enabled)
+
+
+class ProxiedNodesRequest(BaseModel):
+    """Request body for PUT /{network_id}/proxied-nodes."""
+
+    enabled: bool
+
+
+class ProxiedNodesResponse(BaseModel):
+    """Response for a proxied-nodes write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/proxied-nodes",
+    response_model=ProxiedNodesResponse,
+    dependencies=[Depends(_PROXIED_NODES_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_proxied_nodes(
+    request: Request,
+    network_id: str,
+    body: ProxiedNodesRequest,
+    client: EeroClient = Depends(require_auth),
+) -> ProxiedNodesResponse:
+    """Enable or disable proxied nodes.
+
+    No dedicated getter exists. The network envelope's own ``proxied_nodes``
+    key is a *list* of eeros (an unrelated field), not this boolean
+    setting, so no reliable no-op guard exists in eero-api v8.0.3 - the
+    write always proceeds every call. Documented gap, not a silent skip.
+    Gated behind ``_PROXIED_NODES_GATE``.
+    """
+    _LOGGER.warning(
+        "Applying proxied-nodes change for network %s - treated as a mesh reboot "
+        "(no no-op guard available - see sdk-surface-map-v8.0.3.md WP8)",
+        network_id,
+    )
+    raw_result = await client.set_proxied_nodes(body.enabled, network_id=network_id)
+    success = check_success(raw_result)
+    return ProxiedNodesResponse(success=success, changed=True, enabled=body.enabled)
+
+
+# --- Power saving + schedules ------------------------------------------------
+
+
+class PowerSavingRequest(BaseModel):
+    """Request body for PUT /{network_id}/power-saving."""
+
+    enable: bool | None = None
+    schedule_enabled: bool | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class PowerSavingResponse(BaseModel):
+    """Response for a power-saving write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    enable: bool | None = None
+    schedule_enabled: bool | None = None
+
+
+@router.put(
+    "/{network_id}/power-saving",
+    response_model=PowerSavingResponse,
+    dependencies=[Depends(_POWER_SAVING_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_power_saving(
+    request: Request,
+    network_id: str,
+    body: PowerSavingRequest,
+    client: EeroClient = Depends(require_auth),
+) -> PowerSavingResponse:
+    """Set power-saving enable/schedule flags.
+
+    No dedicated getter; the current values are read from the network
+    envelope's ``power_saving`` field, which the SDK docstring itself
+    suggests as the read side of this family's read-compare-skip
+    discipline. Gated behind ``_POWER_SAVING_GATE``.
+    """
+    if body.enable is None and body.schedule_enabled is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one of enable or schedule_enabled must be provided.",
+        )
+
+    raw_network = extract_data(await client.get_network(network_id))
+    current = raw_network.get("power_saving")
+    current = current if isinstance(current, dict) else {}
+    current_enable = current.get("enable")
+    current_schedule_enabled = current.get("power_saving_schedule_enabled")
+
+    enable_changed = body.enable is not None and body.enable != current_enable
+    schedule_changed = (
+        body.schedule_enabled is not None
+        and body.schedule_enabled != current_schedule_enabled
+    )
+
+    if not enable_changed and not schedule_changed:
+        return PowerSavingResponse(
+            success=True,
+            changed=False,
+            enable=current_enable,
+            schedule_enabled=current_schedule_enabled,
+        )
+
+    _LOGGER.warning(
+        "Applying power-saving change for network %s - treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_power_saving(
+        network_id,
+        enable=body.enable,
+        power_saving_schedule_enabled=body.schedule_enabled,
+    )
+    success = check_success(raw_result)
+    return PowerSavingResponse(
+        success=success,
+        changed=True,
+        enable=body.enable if body.enable is not None else current_enable,
+        schedule_enabled=(
+            body.schedule_enabled
+            if body.schedule_enabled is not None
+            else current_schedule_enabled
+        ),
+    )
+
+
+# Power-saving schedules are NOT settings-class (own sub-resource, no
+# documented reboot behaviour, per the coordinator's spec for this family):
+# gated behind ``require_experimental_writes`` at the shared 10/minute
+# ``experimental_writes`` scope, exactly like every other WP7 unverified
+# write, rather than at ``_POWER_SAVING_SCHEDULES_GATE``'s own settings
+# scope/rate.
+
+_POWER_SAVING_SCHEDULE_DAYS = frozenset(
+    {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+)
+_SCHEDULE_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
+def _validate_schedule_days_field(days: list[str]) -> None:
+    """Reject a malformed ``days`` list before any SDK call.
+
+    Raises:
+        HTTPException: 422, static detail.
+    """
+    if not days or len(days) > 7:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="days must be a non-empty list of at most 7 day names.",
+        )
+    if any(d.lower() not in _POWER_SAVING_SCHEDULE_DAYS for d in days):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="days must be one of mon/tue/wed/thu/fri/sat/sun.",
+        )
+
+
+def _validate_schedule_time_field(value: str, field: str) -> None:
+    """Reject a malformed HH:MM time before any SDK call.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    if not isinstance(value, str) or not _SCHEDULE_TIME_RE.match(value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field} must be HH:MM (24-hour).",
+        )
+
+
+class PowerSavingScheduleCreateRequest(BaseModel):
+    """Request body for POST /{network_id}/power-saving/schedules."""
+
+    name: str
+    days: list[str]
+    start_time: str
+    end_time: str
+    enabled: bool = True
+
+    class Config:
+        extra = "ignore"
+
+
+class PowerSavingScheduleUpdateRequest(BaseModel):
+    """Request body for PUT /{network_id}/power-saving/schedules/{schedule_id}."""
+
+    name: str | None = None
+    days: list[str] | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    enabled: bool | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+class PowerSavingSchedulesResponse(BaseModel):
+    """Response for listing power-saving schedules."""
+
+    schedules: list[dict[str, Any]] = []
+
+
+class PowerSavingScheduleActionResponse(BaseModel):
+    """Response for a power-saving schedule write."""
+
+    success: bool
+    schedule: dict[str, Any] | None = None
+
+
+@router.get(
+    "/{network_id}/power-saving/schedules", response_model=PowerSavingSchedulesResponse
+)
+async def list_power_saving_schedules(
+    network_id: str, client: EeroClient = Depends(require_auth)
+) -> PowerSavingSchedulesResponse:
+    """List power-saving schedules for a network. Verified read, not gated."""
+    raw = await client.get_power_saving_schedules(network_id)
+    data = extract_data(raw)
+    schedules = (
+        data.get("schedules")
+        if isinstance(data.get("schedules"), list)
+        else extract_list(raw)
+    )
+    return PowerSavingSchedulesResponse(
+        schedules=[strip_sensitive_keys(s) for s in schedules]
+    )
+
+
+@router.post(
+    "/{network_id}/power-saving/schedules",
+    response_model=PowerSavingScheduleActionResponse,
+    dependencies=[Depends(_POWER_SAVING_SCHEDULES_GATE)],
+)
+@limiter.shared_limit("10/minute", scope="experimental_writes")
+async def create_power_saving_schedule(
+    request: Request,
+    network_id: str,
+    body: PowerSavingScheduleCreateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> PowerSavingScheduleActionResponse:
+    """Create a power-saving schedule. Unverified, non-settings write."""
+    name = body.name.strip()
+    if not name or is_unsafe_short_text(name, max_bytes=64):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="name must be 1-64 bytes, no control characters.",
+        )
+    _validate_schedule_days_field(body.days)
+    _validate_schedule_time_field(body.start_time, "start_time")
+    _validate_schedule_time_field(body.end_time, "end_time")
+
+    raw_result = await client.create_power_saving_schedule(
+        network_id,
+        name=name,
+        days=body.days,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        enabled=body.enabled,
+    )
+    success = check_success(raw_result)
+    return PowerSavingScheduleActionResponse(
+        success=success, schedule=strip_sensitive_keys(extract_data(raw_result)) or None
+    )
+
+
+@router.put(
+    "/{network_id}/power-saving/schedules/{schedule_id}",
+    response_model=PowerSavingScheduleActionResponse,
+    dependencies=[Depends(_POWER_SAVING_SCHEDULES_GATE)],
+)
+@limiter.shared_limit("10/minute", scope="experimental_writes")
+async def update_power_saving_schedule(
+    request: Request,
+    network_id: str,
+    schedule_id: str,
+    body: PowerSavingScheduleUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+) -> PowerSavingScheduleActionResponse:
+    """Update a power-saving schedule. Unverified, non-settings write."""
+    try:
+        validate_path_id(schedule_id)
+    except InvalidIdentifierError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid schedule_id."
+        )
+
+    if (
+        body.name is None
+        and body.days is None
+        and body.start_time is None
+        and body.end_time is None
+        and body.enabled is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one field must be provided.",
+        )
+    name = None
+    if body.name is not None:
+        name = body.name.strip()
+        if not name or is_unsafe_short_text(name, max_bytes=64):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="name must be 1-64 bytes, no control characters.",
+            )
+    if body.days is not None:
+        _validate_schedule_days_field(body.days)
+    if body.start_time is not None:
+        _validate_schedule_time_field(body.start_time, "start_time")
+    if body.end_time is not None:
+        _validate_schedule_time_field(body.end_time, "end_time")
+
+    raw_result = await client.update_power_saving_schedule(
+        schedule_id,
+        network_id=network_id,
+        name=name,
+        days=body.days,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        enabled=body.enabled,
+    )
+    success = check_success(raw_result)
+    return PowerSavingScheduleActionResponse(
+        success=success, schedule=strip_sensitive_keys(extract_data(raw_result)) or None
+    )
+
+
+@router.delete(
+    "/{network_id}/power-saving/schedules/{schedule_id}",
+    response_model=PowerSavingScheduleActionResponse,
+    dependencies=[Depends(_POWER_SAVING_SCHEDULES_GATE)],
+)
+@limiter.shared_limit("10/minute", scope="experimental_writes")
+async def delete_power_saving_schedule(
+    request: Request,
+    network_id: str,
+    schedule_id: str,
+    client: EeroClient = Depends(require_auth),
+) -> PowerSavingScheduleActionResponse:
+    """Delete a power-saving schedule. Unverified, non-settings write."""
+    try:
+        validate_path_id(schedule_id)
+    except InvalidIdentifierError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid schedule_id."
+        )
+
+    raw_result = await client.delete_power_saving_schedule(
+        schedule_id, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return PowerSavingScheduleActionResponse(success=success, schedule=None)
+
+
+# --- Subnets -----------------------------------------------------------------
+
+_SUBNET_TYPE_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
+
+
+class SubnetConfigRequest(BaseModel):
+    """Request body for PUT /{network_id}/subnets.
+
+    Field names match ``eero.api.subnets`` module docstring's declared
+    ``SubnetConfig`` fields exactly; ``extra="forbid"`` so an unrecognised
+    field is rejected client-side rather than silently dropped by the API.
+    ``password`` is never echoed back in the response.
+    """
+
+    subnet_type: str
+    subnet_id: str | None = None
+    subnet_kind: str | None = None
+    dedicated_subnet: bool | None = None
+    enabled: bool | None = None
+    open_network: bool | None = None
+    name: str | None = None
+    password: str | None = None
+    rate_limit_pct: int | None = None
+    wan_access: bool | None = None
+
+    class Config:
+        extra = "forbid"
+
+
+class SubnetConfigResponse(BaseModel):
+    """Response for a subnet-configuration write. Never carries a password."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    subnet: dict[str, Any] | None = None
+
+
+@router.put(
+    "/{network_id}/subnets",
+    response_model=SubnetConfigResponse,
+    dependencies=[Depends(_SUBNETS_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_subnet_config(
+    request: Request,
+    network_id: str,
+    body: SubnetConfigRequest,
+    client: EeroClient = Depends(require_auth),
+) -> SubnetConfigResponse:
+    """Create or edit a subnet configuration.
+
+    Settings-class by decision 5. ``set_config`` forwards its mapping to
+    the API unchanged with no validation of its own; this route's strict
+    model is the validation layer. Gated behind ``_SUBNETS_GATE``.
+    """
+    if body.name is not None and is_unsafe_short_text(body.name.strip(), max_bytes=64):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="name must be 1-64 bytes, no control characters.",
+        )
+
+    raw = extract_data(await client.get_subnets_config(network_id))
+    subnets = raw.get("subnets") if isinstance(raw.get("subnets"), list) else []
+    current = next(
+        (
+            s
+            for s in subnets
+            if isinstance(s, dict) and s.get("subnet_type") == body.subnet_type
+        ),
+        None,
+    )
+
+    payload = body.model_dump(exclude_none=True)
+    unchanged = (
+        current is not None
+        and "password" not in payload
+        and all(current.get(k) == v for k, v in payload.items())
+    )
+    if unchanged:
+        return SubnetConfigResponse(
+            success=True, changed=False, subnet=strip_sensitive_keys(current)
+        )
+
+    _LOGGER.warning(
+        "Applying subnet configuration change for network %s - treated as a mesh "
+        "reboot",
+        network_id,
+    )
+    raw_result = await client.set_subnets_config(payload, network_id=network_id)
+    success = check_success(raw_result)
+    return SubnetConfigResponse(
+        success=success,
+        changed=True,
+        subnet=strip_sensitive_keys(extract_data(raw_result)),
+    )
+
+
+@router.delete(
+    "/{network_id}/subnets/{subnet_type}",
+    response_model=SubnetConfigResponse,
+    dependencies=[Depends(_SUBNETS_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def delete_subnet_route(
+    request: Request,
+    network_id: str,
+    subnet_type: str,
+    client: EeroClient = Depends(require_auth),
+) -> SubnetConfigResponse:
+    """Delete a subnet's configuration. Settings-class by decision 5.
+
+    Gated behind ``_SUBNETS_GATE``.
+    """
+    if not _SUBNET_TYPE_RE.fullmatch(subnet_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subnet_type."
+        )
+
+    _LOGGER.warning(
+        "Deleting subnet configuration for network %s - treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.delete_subnet(subnet_type, network_id=network_id)
+    success = check_success(raw_result)
+    return SubnetConfigResponse(success=success, changed=True, subnet=None)
+
+
+# --- WAN: multi-static-IP and secondary WAN ---------------------------------
+
+
+class MultiStaticIpSettings(BaseModel):
+    """``multistaticip_settings`` fields (``eero.api.wan`` module docstring)."""
+
+    router_ip: str
+    subnet_ip: str
+    subnet_mask: str
+
+    class Config:
+        extra = "forbid"
+
+
+class MultiStaticIpNatPortForwarding(BaseModel):
+    """``multistaticip_settings_nat_portfwd`` fields."""
+
+    subnet_ip_start: str
+    subnet_ip_end: str
+
+    class Config:
+        extra = "forbid"
+
+
+class MultiStaticIpRequest(BaseModel):
+    """Request body for PUT /{network_id}/multistaticip."""
+
+    enabled: bool
+    type: str | None = None
+    multistaticip_settings: MultiStaticIpSettings | None = None
+    multistaticip_settings_nat_portfwd: MultiStaticIpNatPortForwarding | None = None
+
+    class Config:
+        extra = "forbid"
+
+
+class MultiStaticIpUpdateResponse(BaseModel):
+    """Response for a multi-static-IP write, with a read-back."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    config: dict[str, Any] | None = None
+
+
+def _validate_ip_model_fields(model: BaseModel, fields: tuple[str, ...]) -> None:
+    """Reject a nested WAN sub-model carrying a non-IP literal.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    for field in fields:
+        value = getattr(model, field, None)
+        if value is None:
+            continue
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"{field} must be a valid IP address.",
+            )
+
+
+@router.put(
+    "/{network_id}/multistaticip",
+    response_model=MultiStaticIpUpdateResponse,
+    dependencies=[Depends(_WAN_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_multistaticip(
+    request: Request,
+    network_id: str,
+    body: MultiStaticIpRequest,
+    client: EeroClient = Depends(require_auth),
+) -> MultiStaticIpUpdateResponse:
+    """Set the network's multi-static-IP configuration.
+
+    Settings-class by decision 5 (WAN family). Only served on API 2.3; a
+    network without the feature 404s with ``error.network.multistaticip_not_found``
+    (mapped by the global handler), treated here as "no current config" so
+    the write always proceeds rather than the route itself erroring. Gated
+    behind ``_WAN_GATE``.
+    """
+    if body.multistaticip_settings is not None:
+        _validate_ip_model_fields(
+            body.multistaticip_settings, ("router_ip", "subnet_ip", "subnet_mask")
+        )
+    if body.multistaticip_settings_nat_portfwd is not None:
+        _validate_ip_model_fields(
+            body.multistaticip_settings_nat_portfwd,
+            ("subnet_ip_start", "subnet_ip_end"),
+        )
+
+    try:
+        current = extract_data(await client.get_multistaticip(network_id))
+    except EeroNotFoundException:
+        current = None
+
+    payload = body.model_dump(exclude_none=True)
+    if current is not None and all(current.get(k) == v for k, v in payload.items()):
+        return MultiStaticIpUpdateResponse(success=True, changed=False, config=current)
+
+    _LOGGER.warning(
+        "Applying multi-static-IP change for network %s - treated as a mesh reboot",
+        network_id,
+    )
+    raw_result = await client.set_multistaticip(payload, network_id=network_id)
+    success = check_success(raw_result)
+    return MultiStaticIpUpdateResponse(
+        success=success, changed=True, config=extract_data(raw_result)
+    )
+
+
+class SecondaryWanDeviceEntry(BaseModel):
+    """One device entry in a bulk secondary-WAN-access write."""
+
+    mac: str
+    secondary_wan_deny_access: bool
+
+    class Config:
+        extra = "forbid"
+
+
+class SecondaryWanConfigRequest(BaseModel):
+    """Request body for PUT /{network_id}/secondary-wan."""
+
+    devices: list[SecondaryWanDeviceEntry]
+
+    class Config:
+        extra = "forbid"
+
+
+class SecondaryWanConfigResponse(BaseModel):
+    """Response for a bulk secondary-WAN-access write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    config: dict[str, Any] | None = None
+
+
+@router.put(
+    "/{network_id}/secondary-wan",
+    response_model=SecondaryWanConfigResponse,
+    dependencies=[Depends(_WAN_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_secondary_wan_config(
+    request: Request,
+    network_id: str,
+    body: SecondaryWanConfigRequest,
+    client: EeroClient = Depends(require_auth),
+) -> SecondaryWanConfigResponse:
+    """Set per-device secondary-WAN access in bulk.
+
+    Settings-class by its own SDK docstring. No dedicated getter exists for
+    this bulk form, so there is no no-op guard here - the write always
+    proceeds. Documented gap, not a silent skip; per-device state can be
+    read back via each device's own raw envelope
+    (``secondary_wan_deny_access``), which this route does not do. Gated
+    behind ``_WAN_GATE``.
+    """
+    if not body.devices or len(body.devices) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="devices must be a non-empty list of at most 100 entries.",
+        )
+    for entry in body.devices:
+        if not is_valid_mac(entry.mac):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Each device entry must carry a valid MAC address.",
+            )
+
+    _LOGGER.warning(
+        "Applying secondary-WAN configuration change for network %s - treated as a "
+        "mesh reboot",
+        network_id,
+    )
+    payload = {"devices": [d.model_dump() for d in body.devices]}
+    raw_result = await client.set_secondary_wan_config(payload, network_id=network_id)
+    success = check_success(raw_result)
+    return SecondaryWanConfigResponse(
+        success=success, changed=True, config=extract_data(raw_result)
+    )
+
+
+# --- Firmware update apply ---------------------------------------------------
+
+
+class NetworkUpdateApplyResponse(BaseModel):
+    """Response for applying a pending firmware update."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = True
+    scope: str = "all_nodes"
+
+
+@router.post(
+    "/{network_id}/updates/apply",
+    response_model=NetworkUpdateApplyResponse,
+    dependencies=[Depends(_UPDATES_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def apply_network_update(
+    request: Request,
+    network_id: str,
+    client: EeroClient = Depends(require_auth),
+) -> NetworkUpdateApplyResponse:
+    """Apply a pending firmware update to every node on the network.
+
+    Reboot-class by design (§ 5): ``apply_update`` POSTs the ``updates``
+    link and reboots every node. No-op guard: reads ``get_updates`` first
+    and returns 409 ``type: "no_update_available"`` when none is pending,
+    rather than issuing the POST. Gated behind ``_UPDATES_GATE``.
+    """
+    raw = extract_data(await client.get_updates(network_id))
+    available = bool(coerce_bool(raw.get("available"), field_name="available"))
+
+    if not available:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"type": "no_update_available", "detail": "No update is pending."},
+        )
+
+    _LOGGER.warning(
+        "Applying pending update for network %s - reboots every node", network_id
+    )
+    raw_result = await client.apply_update(network_id)
+    success = check_success(raw_result)
+    return NetworkUpdateApplyResponse(success=success, changed=True, scope="all_nodes")
+
+
+# --- Network Wi-Fi password ---------------------------------------------------
+
+_NETWORK_PASSWORD_RE = re.compile(r"[\x20-\x7e]{8,63}")
+
+
+class NetworkPasswordRequest(BaseModel):
+    """Request body for PUT /{network_id}/password. Never logged."""
+
+    password: str
+
+
+class NetworkPasswordResponse(BaseModel):
+    """Response for a network-password write. Never carries the password."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = False
+    disconnects_clients: bool = True
+
+
+@router.put(
+    "/{network_id}/password",
+    response_model=NetworkPasswordResponse,
+    dependencies=[Depends(_NETWORK_PASSWORD_GATE)],
+)
+@limiter.shared_limit("2/minute", scope="network_password")
+async def set_network_password_route(
+    request: Request,
+    network_id: str,
+    body: NetworkPasswordRequest,
+    client: EeroClient = Depends(require_auth),
+) -> NetworkPasswordResponse:
+    """Set the network's Wi-Fi password.
+
+    Not in § 5's settings-class table (it PUTs the network's own
+    ``password`` link, not ``settings``), but the SDK's own docstring says
+    it disconnects every client while it takes effect and has not been
+    confirmed live - treated with the same danger-dialog contract as a
+    settings-class write per the WP7/WP8 boundary note in the ledger. No
+    no-op guard is possible: the API never returns a password to compare
+    against. ``password`` is never logged and never echoed back. Gated
+    behind ``_NETWORK_PASSWORD_GATE``.
+    """
+    if not _NETWORK_PASSWORD_RE.fullmatch(body.password):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password must be 8-63 printable ASCII characters.",
+        )
+
+    _LOGGER.warning(
+        "Setting network password for network %s - disconnects every client while "
+        "it takes effect",
+        network_id,
+    )
+    raw_result = await client.set_network_password(body.password, network_id=network_id)
+    success = check_success(raw_result)
+    return NetworkPasswordResponse(success=success, changed=True)
+
+
+@router.delete(
+    "/{network_id}/password",
+    response_model=NetworkPasswordResponse,
+    dependencies=[Depends(_NETWORK_PASSWORD_GATE)],
+)
+@limiter.shared_limit("2/minute", scope="network_password")
+async def clear_network_password_route(
+    request: Request,
+    network_id: str,
+    client: EeroClient = Depends(require_auth),
+) -> NetworkPasswordResponse:
+    """Clear the network's Wi-Fi password. See ``set_network_password_route``.
+
+    Gated behind ``_NETWORK_PASSWORD_GATE``.
+    """
+    _LOGGER.warning(
+        "Clearing network password for network %s - disconnects every client while "
+        "it takes effect",
+        network_id,
+    )
+    raw_result = await client.clear_network_password(network_id)
+    success = check_success(raw_result)
+    return NetworkPasswordResponse(success=success, changed=True)
 
 
 # ---------------------------------------------------------------------------
