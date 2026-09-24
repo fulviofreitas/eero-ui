@@ -3,7 +3,6 @@
 import logging
 
 from eero import EeroClient
-from eero.exceptions import EeroException
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -137,104 +136,99 @@ async def list_devices(
     ),
 ) -> list[DeviceSummary]:
     """Get list of all devices on the network."""
-    try:
-        raw_response = await client.get_devices(network_id, refresh_cache=refresh)
-        raw_devices = extract_list(raw_response, "devices")
+    raw_response = await client.get_devices(network_id, refresh_cache=refresh)
+    raw_devices = extract_list(raw_response, "devices")
 
-        # Parse device_ids filter if provided
-        device_id_filter = None
-        if device_ids:
-            device_id_filter = set(device_ids.split(","))
-            _LOGGER.debug(f"Filtering by {len(device_id_filter)} device IDs")
+    # Parse device_ids filter if provided
+    device_id_filter = None
+    if device_ids:
+        device_id_filter = set(device_ids.split(","))
+        _LOGGER.debug(f"Filtering by {len(device_id_filter)} device IDs")
 
-        result = []
-        matched_ids = set()
-        skipped_devices = []
+    result = []
+    matched_ids = set()
+    skipped_devices = []
 
-        for raw_dev in raw_devices:
-            try:
-                device = normalize_device(raw_dev)
+    # This per-device loop is a real fallback (phase-6.0-revamp.md § 3.4):
+    # one malformed device must not blank the whole list.
+    for raw_dev in raw_devices:
+        try:
+            device = normalize_device(raw_dev)
 
-                # Filter by connected status if requested
-                if connected_only and not device.get("connected"):
+            # Filter by connected status if requested
+            if connected_only and not device.get("connected"):
+                continue
+
+            # Filter by profile ID if requested
+            if profile_id and device.get("profile_id") != profile_id:
+                continue
+
+            # Filter by device IDs if requested
+            if device_id_filter:
+                dev_id = device.get("id")
+                device_mac = device.get("mac")
+                if device_mac:
+                    device_mac = device_mac.replace(":", "").lower()
+
+                if dev_id in device_id_filter:
+                    matched_ids.add(dev_id)
+                elif device_mac and device_mac in device_id_filter:
+                    matched_ids.add(device_mac)
+                else:
                     continue
 
-                # Filter by profile ID if requested
-                if profile_id and device.get("profile_id") != profile_id:
-                    continue
+            # Format last_active
+            last_active = device.get("last_active")
+            if last_active and hasattr(last_active, "isoformat"):
+                last_active = last_active.isoformat()
 
-                # Filter by device IDs if requested
-                if device_id_filter:
-                    dev_id = device.get("id")
-                    device_mac = device.get("mac")
-                    if device_mac:
-                        device_mac = device_mac.replace(":", "").lower()
-
-                    if dev_id in device_id_filter:
-                        matched_ids.add(dev_id)
-                    elif device_mac and device_mac in device_id_filter:
-                        matched_ids.add(device_mac)
-                    else:
-                        continue
-
-                # Format last_active
-                last_active = device.get("last_active")
-                if last_active and hasattr(last_active, "isoformat"):
-                    last_active = last_active.isoformat()
-
-                result.append(
-                    DeviceSummary(
-                        id=device.get("id"),
-                        url=device.get("url"),
-                        mac=device.get("mac"),
-                        ip=device.get("ip"),
-                        nickname=device.get("nickname"),
-                        hostname=device.get("hostname"),
-                        display_name=device.get("display_name"),
-                        manufacturer=device.get("manufacturer"),
-                        model_name=device.get("model_name"),
-                        device_type=device.get("device_type"),
-                        connected=device.get("connected", False),
-                        wireless=device.get("wireless", False),
-                        blocked=device.get("blocked", False),
-                        paused=device.get("paused", False),
-                        is_guest=device.get("is_guest", False),
-                        connection_type=device.get("connection_type"),
-                        signal_strength=device.get("signal_strength"),
-                        frequency=device.get("frequency"),
-                        connected_to_eero=device.get("connected_to_eero"),
-                        last_active=last_active,
-                        profile_id=device.get("profile_id"),
-                        profile_name=device.get("profile_name"),
-                    )
+            result.append(
+                DeviceSummary(
+                    id=device.get("id"),
+                    url=device.get("url"),
+                    mac=device.get("mac"),
+                    ip=device.get("ip"),
+                    nickname=device.get("nickname"),
+                    hostname=device.get("hostname"),
+                    display_name=device.get("display_name"),
+                    manufacturer=device.get("manufacturer"),
+                    model_name=device.get("model_name"),
+                    device_type=device.get("device_type"),
+                    connected=device.get("connected", False),
+                    wireless=device.get("wireless", False),
+                    blocked=device.get("blocked", False),
+                    paused=device.get("paused", False),
+                    is_guest=device.get("is_guest", False),
+                    connection_type=device.get("connection_type"),
+                    signal_strength=device.get("signal_strength"),
+                    frequency=device.get("frequency"),
+                    connected_to_eero=device.get("connected_to_eero"),
+                    last_active=last_active,
+                    profile_id=device.get("profile_id"),
+                    profile_name=device.get("profile_name"),
                 )
-            except Exception as e:
-                _LOGGER.error(
-                    f"CRITICAL: Failed to process device {raw_dev.get('url', 'unknown')}: {e}"
-                )
-                skipped_devices.append(raw_dev.get("url", "unknown"))
-
-        if skipped_devices:
+            )
+        except Exception as e:
             _LOGGER.error(
-                f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors"
+                f"CRITICAL: Failed to process device {raw_dev.get('url', 'unknown')}: {e}"
             )
+            skipped_devices.append(raw_dev.get("url", "unknown"))
 
-        if device_id_filter:
-            _LOGGER.debug(
-                f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs"
-            )
-
-        _LOGGER.info(
-            f"Devices API: eero_api_count={len(raw_devices)}, returned_count={len(result)}"
+    if skipped_devices:
+        _LOGGER.error(
+            f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors"
         )
 
-        return result
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get devices: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve devices. Please try again.",
+    if device_id_filter:
+        _LOGGER.debug(
+            f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs"
         )
+
+    _LOGGER.info(
+        f"Devices API: eero_api_count={len(raw_devices)}, returned_count={len(result)}"
+    )
+
+    return result
 
 
 @router.get("/{device_id}", response_model=DeviceDetail)
@@ -245,65 +239,79 @@ async def get_device(
     refresh: bool = Query(False, description="Force cache refresh"),
 ) -> DeviceDetail:
     """Get full detailed information about a specific device."""
-    try:
-        raw_response = await client.get_device(
-            device_id, network_id, refresh_cache=refresh
-        )
-        device = normalize_device(extract_data(raw_response))
+    raw_response = await client.get_device(device_id, network_id, refresh_cache=refresh)
+    device = normalize_device(extract_data(raw_response))
 
-        # Format timestamps
-        last_active = device.get("last_active")
-        if last_active and hasattr(last_active, "isoformat"):
-            last_active = last_active.isoformat()
-        first_active = device.get("first_active")
-        if first_active and hasattr(first_active, "isoformat"):
-            first_active = first_active.isoformat()
+    # Format timestamps
+    last_active = device.get("last_active")
+    if last_active and hasattr(last_active, "isoformat"):
+        last_active = last_active.isoformat()
+    first_active = device.get("first_active")
+    if first_active and hasattr(first_active, "isoformat"):
+        first_active = first_active.isoformat()
 
-        return DeviceDetail(
-            id=device.get("id"),
-            url=device.get("url"),
-            mac=device.get("mac"),
-            ip=device.get("ip"),
-            ips=device.get("ips") or [],
-            ipv4=device.get("ipv4"),
-            nickname=device.get("nickname"),
-            hostname=device.get("hostname"),
-            display_name=device.get("display_name"),
-            manufacturer=device.get("manufacturer"),
-            model_name=device.get("model_name"),
-            device_type=device.get("device_type"),
-            connected=device.get("connected", False),
-            wireless=device.get("wireless", False),
-            connection_type=device.get("connection_type"),
-            blocked=device.get("blocked", False),
-            paused=device.get("paused", False),
-            is_guest=device.get("is_guest", False),
-            is_private=device.get("is_private", False),
-            signal_strength=device.get("signal_strength"),
-            signal_bars=device.get("signal_bars"),
-            frequency=device.get("frequency"),
-            frequency_mhz=device.get("frequency_mhz"),
-            channel=device.get("channel"),
-            ssid=device.get("ssid"),
-            rx_bitrate=device.get("rx_bitrate"),
-            tx_bitrate=device.get("tx_bitrate"),
-            connected_to_eero=device.get("connected_to_eero"),
-            connected_to_eero_id=device.get("connected_to_eero_id"),
-            connected_to_eero_model=device.get("connected_to_eero_model"),
-            profile_id=device.get("profile_id"),
-            profile_name=device.get("profile_name"),
-            last_active=last_active,
-            first_active=first_active,
-            network_id=network_id,  # Use the network_id from the dependency
-            subnet_kind=device.get("subnet_kind"),
-            auth=device.get("auth"),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get device {device_id}: {e}")
+    return DeviceDetail(
+        id=device.get("id"),
+        url=device.get("url"),
+        mac=device.get("mac"),
+        ip=device.get("ip"),
+        ips=device.get("ips") or [],
+        ipv4=device.get("ipv4"),
+        nickname=device.get("nickname"),
+        hostname=device.get("hostname"),
+        display_name=device.get("display_name"),
+        manufacturer=device.get("manufacturer"),
+        model_name=device.get("model_name"),
+        device_type=device.get("device_type"),
+        connected=device.get("connected", False),
+        wireless=device.get("wireless", False),
+        connection_type=device.get("connection_type"),
+        blocked=device.get("blocked", False),
+        paused=device.get("paused", False),
+        is_guest=device.get("is_guest", False),
+        is_private=device.get("is_private", False),
+        signal_strength=device.get("signal_strength"),
+        signal_bars=device.get("signal_bars"),
+        frequency=device.get("frequency"),
+        frequency_mhz=device.get("frequency_mhz"),
+        channel=device.get("channel"),
+        ssid=device.get("ssid"),
+        rx_bitrate=device.get("rx_bitrate"),
+        tx_bitrate=device.get("tx_bitrate"),
+        connected_to_eero=device.get("connected_to_eero"),
+        connected_to_eero_id=device.get("connected_to_eero_id"),
+        connected_to_eero_model=device.get("connected_to_eero_model"),
+        profile_id=device.get("profile_id"),
+        profile_name=device.get("profile_name"),
+        last_active=last_active,
+        first_active=first_active,
+        network_id=network_id,  # Use the network_id from the dependency
+        subnet_kind=device.get("subnet_kind"),
+        auth=device.get("auth"),
+    )
+
+
+async def _resolve_device_mac(
+    client: EeroClient, device_id: str, network_id: str
+) -> str:
+    """Resolve a device's MAC address server-side (phase-6.0-revamp.md § 3.3).
+
+    v8's ``block_device``/``unblock_device`` post ``mac=`` to the blacklist,
+    not the URL-derived device id, so the caller-supplied ``device_id`` must
+    be resolved to a MAC before either call.
+
+    Raises:
+        HTTPException: 422 if the device has no known MAC address.
+    """
+    raw_response = await client.get_device(device_id, network_id)
+    device = normalize_device(extract_data(raw_response))
+    mac = device.get("mac")
+    if not mac:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Device not found: {device_id}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Device has no known MAC address.",
         )
+    return mac
 
 
 @router.post("/{device_id}/block", response_model=DeviceAction)
@@ -313,25 +321,17 @@ async def block_device(
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
     """Block a device from the network."""
-    try:
-        raw_result = await client.block_device(
-            device_id, blocked=True, network_id=network_id
-        )
-        success = check_success(raw_result)
-        return DeviceAction(
-            success=success,
-            device_id=device_id,
-            action="block",
-            message=(
-                "Device blocked successfully." if success else "Failed to block device."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to block device {device_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to block device. Please try again.",
-        )
+    mac = await _resolve_device_mac(client, device_id, network_id)
+    raw_result = await client.block_device(mac, network_id=network_id)
+    success = check_success(raw_result)
+    return DeviceAction(
+        success=success,
+        device_id=device_id,
+        action="block",
+        message=(
+            "Device blocked successfully." if success else "Failed to block device."
+        ),
+    )
 
 
 @router.post("/{device_id}/unblock", response_model=DeviceAction)
@@ -341,27 +341,17 @@ async def unblock_device(
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
     """Unblock a device from the network."""
-    try:
-        raw_result = await client.block_device(
-            device_id, blocked=False, network_id=network_id
-        )
-        success = check_success(raw_result)
-        return DeviceAction(
-            success=success,
-            device_id=device_id,
-            action="unblock",
-            message=(
-                "Device unblocked successfully."
-                if success
-                else "Failed to unblock device."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to unblock device {device_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to unblock device. Please try again.",
-        )
+    mac = await _resolve_device_mac(client, device_id, network_id)
+    raw_result = await client.unblock_device(mac, network_id=network_id)
+    success = check_success(raw_result)
+    return DeviceAction(
+        success=success,
+        device_id=device_id,
+        action="unblock",
+        message=(
+            "Device unblocked successfully." if success else "Failed to unblock device."
+        ),
+    )
 
 
 @router.put("/{device_id}/nickname", response_model=DeviceAction)
@@ -372,24 +362,27 @@ async def set_device_nickname(
     network_id: str = Depends(get_network_id),
 ) -> DeviceAction:
     """Set a nickname for a device."""
-    try:
-        raw_result = await client.set_device_nickname(
-            device_id, request.nickname, network_id=network_id
-        )
-        success = check_success(raw_result)
-        return DeviceAction(
-            success=success,
-            device_id=device_id,
-            action="nickname",
-            message=(
-                f"Nickname set to '{request.nickname}'."
-                if success
-                else "Failed to set nickname."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to set nickname for device {device_id}: {e}")
+    nickname = request.nickname.strip()
+    if not nickname:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to set device nickname. Please try again.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Nickname cannot be empty.",
         )
+    if len(nickname) > 64:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Nickname must be 64 characters or fewer.",
+        )
+
+    raw_result = await client.set_device_nickname(
+        device_id, nickname, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return DeviceAction(
+        success=success,
+        device_id=device_id,
+        action="nickname",
+        message=(
+            f"Nickname set to '{nickname}'." if success else "Failed to set nickname."
+        ),
+    )

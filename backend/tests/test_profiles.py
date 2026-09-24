@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock
 
-from eero.exceptions import EeroException
+from eero.exceptions import EeroException, EeroNotFoundException
 
 
 def make_raw_response(data, code: int = 200):
@@ -64,9 +64,9 @@ class TestGetProfile:
         assert data["name"] == "Kids"
 
     async def test_get_profile_eero_exception(self, auth_client, authenticated_client):
-        """EeroException returns 404."""
+        """EeroNotFoundException returns 404 (phase-6.0-revamp.md § 3.4)."""
         authenticated_client.get_profile = AsyncMock(
-            side_effect=EeroException("not found")
+            side_effect=EeroNotFoundException("profile", "profile-1")
         )
 
         response = await auth_client.get("/api/profiles/profile-1")
@@ -88,7 +88,11 @@ class TestCreateProfile:
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Kids"
-        authenticated_client.create_profile.assert_called_once()
+        # v8 made network_id keyword-only on create_profile (§ 1.6); a
+        # positional second arg raises TypeError, not an EeroException.
+        authenticated_client.create_profile.assert_called_once_with(
+            "Kids", network_id="network-123"
+        )
 
     async def test_create_profile_empty_name(self, auth_client, authenticated_client):
         """Empty name returns 400 without calling SDK."""
@@ -129,7 +133,9 @@ class TestRenameProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Teens"
-        authenticated_client.rename_profile.assert_called_once()
+        authenticated_client.rename_profile.assert_called_once_with(
+            "profile-1", "Teens", network_id="network-123"
+        )
 
     async def test_rename_profile_empty_name(self, auth_client, authenticated_client):
         """Empty name returns 400 without calling SDK."""
@@ -145,9 +151,9 @@ class TestRenameProfile:
     async def test_rename_profile_eero_exception(
         self, auth_client, authenticated_client
     ):
-        """EeroException returns 404."""
+        """EeroNotFoundException returns 404 (phase-6.0-revamp.md § 3.4)."""
         authenticated_client.rename_profile = AsyncMock(
-            side_effect=EeroException("not found")
+            side_effect=EeroNotFoundException("profile", "profile-1")
         )
 
         response = await auth_client.patch(
@@ -172,7 +178,9 @@ class TestDeleteProfile:
         data = response.json()
         assert data["success"] is True
         assert data["action"] == "delete"
-        authenticated_client.delete_profile.assert_called_once()
+        authenticated_client.delete_profile.assert_called_once_with(
+            "profile-1", network_id="network-123"
+        )
 
     async def test_delete_profile_eero_exception(
         self, auth_client, authenticated_client
