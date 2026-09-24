@@ -521,6 +521,116 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// WP8: settings-class write controls (phase-6.0-revamp.md § 5, § 7 WP8).
+	// Defaults here simulate the gate open and a real change (`changed:
+	// true`) - individual tests override with 403 `experimental_disabled`,
+	// `changed: false`, 409, or 429 variants via `server.use()`.
+	// ============================================
+	http.put('/api/networks/:networkId/sqm', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enabled: body.enabled
+		});
+	}),
+
+	http.put('/api/networks/:networkId/dhcp', async ({ request }) => {
+		const body = (await request.json()) as { mode?: string; custom?: Record<string, unknown> };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			dhcp: { mode: body.mode ?? 'automatic', custom: body.custom ?? null }
+		});
+	}),
+
+	http.put('/api/networks/:networkId/connection-mode', async ({ request }) => {
+		const body = (await request.json()) as { mode: 'BRIDGE' | 'NAT' };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			mode: body.mode,
+			disables_dhcp_nat: body.mode === 'BRIDGE'
+		});
+	}),
+
+	http.put('/api/networks/:networkId/nat-port-randomization', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enabled: body.enabled
+		});
+	}),
+
+	http.put('/api/networks/:networkId/wpa3', async ({ request }) => {
+		const body = (await request.json()) as { band_2_4_ghz?: string; band_5_ghz?: string };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			band_2_4_ghz: body.band_2_4_ghz ?? 'WPA2_WPA3',
+			band_5_ghz: body.band_5_ghz ?? 'WPA2_WPA3'
+		});
+	}),
+
+	http.put('/api/networks/:networkId/security', async ({ request }) => {
+		const body = (await request.json()) as Record<string, boolean>;
+		const [field, value] = Object.entries(body)[0];
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			field,
+			value
+		});
+	}),
+
+	http.put('/api/networks/:networkId/mlo', async ({ request }) => {
+		const body = (await request.json()) as { mode: string };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			mode: body.mode
+		});
+	}),
+
+	http.put('/api/networks/:networkId/fast-transition', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enabled: body.enabled
+		});
+	}),
+
+	http.put('/api/networks/:networkId/passpoint', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enabled: body.enabled
+		});
+	}),
+
+	http.put('/api/networks/:networkId/proxied-nodes', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enabled: body.enabled
+		});
+	}),
+
+	// ============================================
 	// Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
 	// ============================================
 	http.get('/api/networks/:networkId/notifications', () => {

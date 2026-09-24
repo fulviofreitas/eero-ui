@@ -1204,3 +1204,149 @@ export interface BlockedApplicationsResponse {
 export interface SetBlockedApplicationsRequest {
 	applications: string[];
 }
+
+// ============================================
+// WP8: settings-class write controls (phase-6.0-revamp.md § 5, § 7 WP8)
+//
+// Mirrors backend/app/routes/networks.py (SQM/DHCP/connection-mode/NAT
+// randomization/WPA3/security-envelope/MLO/fast-transition/passpoint/
+// proxied-nodes/power-saving/subnets/multistaticip/secondary-wan/updates
+// apply/network password) and backend/app/routes/devices.py
+// (secondary-wan-access). Every one of these is treated as rebooting the
+// whole mesh (`reboot_expected: true`, except network password which is
+// `false` with `disconnects_clients: true`) and is gated behind
+// `EERO_DASHBOARD_EXPERIMENTAL_WRITES`. `changed: false` means the
+// backend's own no-op guard skipped the write entirely - never treat that
+// as an error.
+// ============================================
+
+export interface SqmUpdateRequest {
+	enabled: boolean;
+}
+
+export interface SqmUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enabled: boolean;
+}
+
+export interface DhcpCustomLease {
+	start_ip: string;
+	end_ip: string;
+	subnet_ip: string;
+	subnet_mask: string;
+}
+
+export interface DhcpUpdateRequest {
+	mode?: 'automatic' | 'manual';
+	custom?: DhcpCustomLease;
+}
+
+export interface DhcpUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	dhcp: Record<string, unknown> | null;
+}
+
+export interface ConnectionModeUpdateRequest {
+	mode: 'BRIDGE' | 'NAT';
+	acknowledge_disables_routing?: boolean;
+}
+
+export interface ConnectionModeUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	mode: string | null;
+	disables_dhcp_nat: boolean;
+}
+
+export interface NatPortRandomizationUpdateRequest {
+	enabled: boolean;
+}
+
+export interface NatPortRandomizationUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enabled: boolean;
+}
+
+export type Wpa3BandMode = 'WPA2' | 'WPA2_WPA3' | 'WPA3';
+
+export interface Wpa3PerBandUpdateRequest {
+	band_2_4_ghz?: Wpa3BandMode;
+	band_5_ghz?: Wpa3BandMode;
+}
+
+export interface Wpa3PerBandUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	band_2_4_ghz: string | null;
+	band_5_ghz: string | null;
+}
+
+/** Exactly one field must be provided per request - never two settings writes in one Save. */
+export interface SecurityEnvelopeUpdateRequest {
+	wpa3?: boolean;
+	band_steering?: boolean;
+	upnp?: boolean;
+	ipv6?: boolean;
+}
+
+export type SecurityEnvelopeField = 'wpa3' | 'band_steering' | 'upnp' | 'ipv6';
+
+export interface SecurityEnvelopeUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	field: SecurityEnvelopeField;
+	value: boolean;
+}
+
+export interface MloUpdateRequest {
+	mode: 'disabled' | 'single' | 'multi';
+}
+
+export interface MloUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	mode: string | null;
+}
+
+export interface FastTransitionUpdateRequest {
+	enabled: boolean;
+}
+
+export interface FastTransitionUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enabled: boolean;
+}
+
+export interface PasspointUpdateRequest {
+	enabled: boolean;
+}
+
+export interface PasspointUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enabled: boolean;
+}
+
+export interface ProxiedNodesUpdateRequest {
+	enabled: boolean;
+}
+
+export interface ProxiedNodesUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enabled: boolean;
+}

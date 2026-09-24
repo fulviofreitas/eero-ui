@@ -168,6 +168,16 @@ describe('api client handler coverage', () => {
 				}),
 			() => api.networks.updateReservation('network-123', 'reservation-1', { description: 'x' }),
 			() => api.networks.deleteReservation('network-123', 'reservation-1', true),
+			() => api.networks.setSqm('network-123', true),
+			() => api.networks.setDhcp('network-123', { mode: 'automatic' }),
+			() => api.networks.setConnectionMode('network-123', { mode: 'NAT' }),
+			() => api.networks.setNatPortRandomization('network-123', true),
+			() => api.networks.setWpa3PerBand('network-123', { band_2_4_ghz: 'WPA3' }),
+			() => api.networks.setSecurity('network-123', { band_steering: true }),
+			() => api.networks.setMlo('network-123', 'disabled'),
+			() => api.networks.setFastTransition('network-123', true),
+			() => api.networks.setPasspoint('network-123', true),
+			() => api.networks.setProxiedNodes('network-123', true),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -270,6 +280,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(113);
+		expect(countLeafMethods(api)).toBe(123);
 	});
 });

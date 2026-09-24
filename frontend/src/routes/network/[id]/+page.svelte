@@ -43,6 +43,8 @@
 	import BackupInternetCard from '$lib/components/network/BackupInternetCard.svelte';
 	import ForwardsReservationsCard from '$lib/components/network/ForwardsReservationsCard.svelte';
 	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
+	import NetworkSettingsControls from '$lib/components/network/NetworkSettingsControls.svelte';
+	import WifiSecurityControls from '$lib/components/network/WifiSecurityControls.svelte';
 	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
 	import ContentFilterCard from '$lib/components/network/ContentFilterCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
@@ -325,7 +327,14 @@
 						</PremiumGate>
 					</div>
 					<div class="advanced-full">
-						<SecurityWanCard {networkId} />
+						<SecurityWanCard {networkId}>
+							{#snippet networkControls()}
+								<NetworkSettingsControls {networkId} />
+							{/snippet}
+							{#snippet wifiSecurityControls()}
+								<WifiSecurityControls {networkId} />
+							{/snippet}
+						</SecurityWanCard>
 						<NotificationsCard {networkId} />
 						<ForwardsReservationsCard {networkId} />
 					</div>

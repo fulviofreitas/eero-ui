@@ -1062,6 +1062,100 @@ export const api = {
 			fetchWithHandling<{ success: boolean }>(
 				`/networks/${networkId}/content-filter/block-for-profiles`,
 				{ method: 'DELETE', body, retries: 0 }
+			),
+
+		// ----------------------------------------------------------------
+		// WP8: settings-class write controls (plan § 5, § 7 WP8). Every
+		// one of these is treated as rebooting the whole mesh and is
+		// gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES` server-side (403
+		// `experimental_disabled` when off). Never retried - a retried
+		// mesh-reboot write could double-apply.
+		// ----------------------------------------------------------------
+
+		/** Enable/disable SQM (Smart Queue Management). Settings-class write. */
+		setSqm: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').SqmUpdateResponse>(`/networks/${networkId}/sqm`, {
+				method: 'PUT',
+				body: { enabled },
+				retries: 0
+			}),
+
+		/** Set DHCP mode and/or manual lease range. Settings-class write. */
+		setDhcp: (networkId: string, body: import('./types').DhcpUpdateRequest) =>
+			fetchWithHandling<import('./types').DhcpUpdateResponse>(`/networks/${networkId}/dhcp`, {
+				method: 'PUT',
+				body,
+				retries: 0
+			}),
+
+		/**
+		 * Set the network's WAN connection mode. Settings-class write.
+		 * `acknowledge_disables_routing: true` is required when switching to
+		 * `BRIDGE` (422 otherwise) - it disables the network's own DHCP/NAT.
+		 */
+		setConnectionMode: (networkId: string, body: import('./types').ConnectionModeUpdateRequest) =>
+			fetchWithHandling<import('./types').ConnectionModeUpdateResponse>(
+				`/networks/${networkId}/connection-mode`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Enable/disable NAT port randomization. Settings-class write. */
+		setNatPortRandomization: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').NatPortRandomizationUpdateResponse>(
+				`/networks/${networkId}/nat-port-randomization`,
+				{ method: 'PUT', body: { enabled }, retries: 0 }
+			),
+
+		/** Set the per-band WPA3 mode. Settings-class write. */
+		setWpa3PerBand: (networkId: string, body: import('./types').Wpa3PerBandUpdateRequest) =>
+			fetchWithHandling<import('./types').Wpa3PerBandUpdateResponse>(
+				`/networks/${networkId}/wpa3`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/**
+		 * Toggle exactly one envelope-level security setting (wpa3,
+		 * band_steering, upnp or ipv6). Settings-class write - the backend
+		 *422s if more than one field is provided, so callers must never
+		 * send more than one per call.
+		 */
+		setSecurity: (networkId: string, body: import('./types').SecurityEnvelopeUpdateRequest) =>
+			fetchWithHandling<import('./types').SecurityEnvelopeUpdateResponse>(
+				`/networks/${networkId}/security`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Set the network's MLO (Multi-Link Operation) mode. Settings-class write. */
+		setMlo: (networkId: string, mode: import('./types').MloUpdateRequest['mode']) =>
+			fetchWithHandling<import('./types').MloUpdateResponse>(`/networks/${networkId}/mlo`, {
+				method: 'PUT',
+				body: { mode },
+				retries: 0
+			}),
+
+		/** Enable/disable 802.11r fast transition. Settings-class write. */
+		setFastTransition: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').FastTransitionUpdateResponse>(
+				`/networks/${networkId}/fast-transition`,
+				{ method: 'PUT', body: { enabled }, retries: 0 }
+			),
+
+		/** Enable/disable Passpoint. Settings-class write. */
+		setPasspoint: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').PasspointUpdateResponse>(
+				`/networks/${networkId}/passpoint`,
+				{ method: 'PUT', body: { enabled }, retries: 0 }
+			),
+
+		/**
+		 * Enable/disable proxied nodes. Settings-class write. No no-op
+		 * guard exists server-side for this field - the write always
+		 * proceeds (documented gap, not a silent skip).
+		 */
+		setProxiedNodes: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').ProxiedNodesUpdateResponse>(
+				`/networks/${networkId}/proxied-nodes`,
+				{ method: 'PUT', body: { enabled }, retries: 0 }
 			)
 	},
 

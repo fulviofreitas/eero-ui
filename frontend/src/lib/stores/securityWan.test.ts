@@ -17,11 +17,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { securityWanStore } from './securityWan';
+import { dnsStore } from './dns';
+import { resetSettingsLock } from './settingsLock';
 import { server } from '../../../tests/mocks/server';
 
 describe('securityWanStore', () => {
 	beforeEach(() => {
 		securityWanStore.clear();
+		dnsStore.clear();
+		resetSettingsLock();
 	});
 
 	it('loads security/subnets/multistaticip/advanced together', async () => {
@@ -151,6 +155,183 @@ describe('securityWanStore', () => {
 				'Experimental writes are disabled.'
 			);
 			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	// ==================================================================
+	// WP8: settings-class write controls (phase-6.0-revamp.md § 5, § 7 WP8)
+	// ==================================================================
+
+	describe('updateSqm', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			await securityWanStore.fetch('network-123');
+
+			const result = await securityWanStore.updateSqm('network-123', true);
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+
+		it('does not re-fetch when the backend reports changed:false', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/sqm', () =>
+					HttpResponse.json({
+						success: true,
+						changed: false,
+						reboot_expected: true,
+						enabled: false
+					})
+				)
+			);
+
+			const result = await securityWanStore.updateSqm('network-123', false);
+
+			expect(result.changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/sqm', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(securityWanStore.updateSqm('network-123', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+			expect(get(securityWanStore).applying).toBe(false);
+			expect(get(securityWanStore).error).toBeTruthy();
+		});
+
+		it('surfaces a 429 rate-limit response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/sqm', () =>
+					HttpResponse.json({ detail: 'Rate limit exceeded.' }, { status: 429 })
+				)
+			);
+
+			await expect(securityWanStore.updateSqm('network-123', true)).rejects.toThrow();
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+
+		it('blocks a second settings write for the same network while one is applying', async () => {
+			let resolveFirst: (() => void) | null = null;
+			const gate = new Promise<void>((resolve) => {
+				resolveFirst = resolve;
+			});
+
+			server.use(
+				http.put('/api/networks/:networkId/sqm', async () => {
+					await gate;
+					return HttpResponse.json({
+						success: true,
+						changed: true,
+						reboot_expected: true,
+						enabled: true
+					});
+				})
+			);
+
+			const first = securityWanStore.updateSqm('network-123', true);
+
+			// A DNS write on the SAME network must be rejected while SQM is in flight -
+			// the lock is shared across every settings-class write, not just SQM's own.
+			await expect(dnsStore.updateDns('network-123', { caching: true })).rejects.toThrow(
+				/already being applied/i
+			);
+
+			resolveFirst!();
+			await expect(first).resolves.toMatchObject({ changed: true });
+		});
+	});
+
+	describe('updateDhcp', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateDhcp('network-123', { mode: 'automatic' });
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+		});
+	});
+
+	describe('updateConnectionMode', () => {
+		it('reports disables_dhcp_nat when switching to BRIDGE', async () => {
+			const result = await securityWanStore.updateConnectionMode('network-123', {
+				mode: 'BRIDGE',
+				acknowledge_disables_routing: true
+			});
+
+			expect(result.changed).toBe(true);
+			expect(result.mode).toBe('BRIDGE');
+			expect(result.disables_dhcp_nat).toBe(true);
+		});
+	});
+
+	describe('updateNatPortRandomization', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateNatPortRandomization('network-123', true);
+
+			expect(result.changed).toBe(true);
+		});
+	});
+
+	describe('updateWpa3PerBand', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateWpa3PerBand('network-123', {
+				band_2_4_ghz: 'WPA3'
+			});
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+		});
+	});
+
+	describe('updateSecurityField', () => {
+		it('re-fetches the store and returns the changed field/value', async () => {
+			const result = await securityWanStore.updateSecurityField('network-123', {
+				band_steering: false
+			});
+
+			expect(result.changed).toBe(true);
+			expect(result.field).toBe('band_steering');
+			expect(result.value).toBe(false);
+		});
+	});
+
+	describe('updateMlo', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateMlo('network-123', 'single');
+
+			expect(result.changed).toBe(true);
+			expect(result.mode).toBe('single');
+		});
+	});
+
+	describe('updateFastTransition', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateFastTransition('network-123', true);
+
+			expect(result.changed).toBe(true);
+		});
+	});
+
+	describe('updatePasspoint', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updatePasspoint('network-123', true);
+
+			expect(result.changed).toBe(true);
+		});
+	});
+
+	describe('updateProxiedNodes', () => {
+		it('always proceeds (no no-op guard) and re-fetches on success', async () => {
+			const result = await securityWanStore.updateProxiedNodes('network-123', true);
+
+			expect(result.changed).toBe(true);
 		});
 	});
 });
