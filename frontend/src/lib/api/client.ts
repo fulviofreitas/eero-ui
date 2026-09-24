@@ -4,7 +4,7 @@
  * HTTP client with error handling, request interceptors, and retry logic.
  */
 
-import type { ApiError } from './types';
+import type { ApiError, ApiErrorType } from './types';
 
 // Base URL for API requests (proxied in development)
 const API_BASE = '/api';
@@ -12,22 +12,28 @@ const API_BASE = '/api';
 // Request timeout in milliseconds
 const REQUEST_TIMEOUT = 30000;
 
-// Maximum retries for transient failures
+// Maximum retries for transient failures - GET requests only. Writes always
+// pass `retries: 0` explicitly (plan § 5: "no automatic retry" on any write
+// that is not in the SDK's verified-write allowlist, and retrying a verified
+// write blindly on a timeout is just as unsafe - a POST that succeeded but
+// timed out on the response must never be silently replayed).
 const MAX_RETRIES = 2;
 
 /**
- * Custom error class for API errors
+ * Custom error class for API errors.
  */
 export class ApiClientError extends Error {
 	constructor(
 		public status: number,
 		public detail: string,
-		public type?: string,
+		public type?: ApiErrorType | string,
 		/**
 		 * Field name for validation failures, when the API identified one.
 		 * Lets a form render the error inline against the offending input.
 		 */
-		public field?: string
+		public field?: string,
+		/** Present on a 401; `"expired"` means the stored session died server-side. */
+		public reason?: 'expired'
 	) {
 		super(detail);
 		this.name = 'ApiClientError';
@@ -114,13 +120,38 @@ function buildUrl(path: string, params?: Record<string, string | number | boolea
 }
 
 /**
- * Parse error response from API
+ * Parse error response from API.
+ *
+ * The backend's error body is `{detail, type?, error_code?}` (plan § 3.4).
+ * `type` distinguishes premium-gating (`premium_required`), a
+ * network-right-now gap (`feature_unavailable`), and the experimental-writes
+ * flag being off (`experimental_disabled`) from a plain failure, so the UI
+ * can render each with the right call to action instead of a generic error
+ * toast. `error_code` is logged server-side only and never surfaced here.
  */
 async function parseError(response: Response): Promise<ApiError> {
+	// Distinct, user-actionable copy for the statuses that carry no useful
+	// `detail` body of their own (429) or where a generic message reads
+	// better than whatever the backend sent (402 is always premium-gating).
+	if (response.status === 429) {
+		return { detail: 'eero rate limit hit. Try again shortly.', type: undefined };
+	}
+
 	try {
 		const data = await response.json();
-		const { detail, field } = normalizeDetail(data.detail, `HTTP ${response.status}`);
-		return { detail, type: data.type, field };
+		const fallback =
+			response.status === 402
+				? 'This feature requires an eero Plus/Secure subscription.'
+				: `HTTP ${response.status}`;
+		const { detail, field } = normalizeDetail(data.detail, fallback);
+		const reason = data.reason === 'expired' ? 'expired' : undefined;
+		if (response.status === 402) {
+			return { detail, type: 'premium_required', field, reason };
+		}
+		if (response.status === 409 && data.type === 'feature_unavailable') {
+			return { detail, type: 'feature_unavailable', field, reason };
+		}
+		return { detail, type: data.type, field, reason };
 	} catch {
 		return {
 			detail: `HTTP ${response.status}: ${response.statusText}`
@@ -138,7 +169,12 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 		params,
 		headers = {},
 		timeout = REQUEST_TIMEOUT,
-		retries = MAX_RETRIES
+		// Reads keep the existing 5xx retry; writes default to zero retries
+		// even if a caller forgets to pass `retries: 0` explicitly (plan § 5)
+		// - a POST/PUT/PATCH/DELETE that timed out on the *response* may have
+		// already applied, so blindly replaying it is unsafe regardless of
+		// whether the SDK call it maps to is on the verified-write allowlist.
+		retries = method === 'GET' ? MAX_RETRIES : 0
 	} = config;
 
 	const url = buildUrl(`${API_BASE}${path}`, params);
@@ -170,15 +206,25 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 			// Handle authentication errors
 			if (response.status === 401) {
 				const error = await parseError(response);
-				// Dispatch event for global auth handling
-				window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-				throw new ApiClientError(401, error.detail, error.type, error.field);
+				// Dispatch event for global auth handling; carry `reason` so the
+				// listener (auth store) can distinguish an expired session from
+				// never having logged in, without a second round trip.
+				window.dispatchEvent(
+					new CustomEvent('auth:unauthorized', { detail: { reason: error.reason } })
+				);
+				throw new ApiClientError(401, error.detail, error.type, error.field, error.reason);
 			}
 
 			// Handle other errors
 			if (!response.ok) {
 				const error = await parseError(response);
-				throw new ApiClientError(response.status, error.detail, error.type, error.field);
+				throw new ApiClientError(
+					response.status,
+					error.detail,
+					error.type,
+					error.field,
+					error.reason
+				);
 			}
 
 			// Parse response
@@ -216,12 +262,7 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 
 export const api = {
 	// Health
-	health: () =>
-		fetchWithHandling<{
-			status: string;
-			version: string;
-			eero_client_version: string;
-		}>('/health'),
+	health: () => fetchWithHandling<import('./types').HealthStatus>('/health'),
 
 	// Auth
 	auth: {
@@ -230,18 +271,21 @@ export const api = {
 		login: (identifier: string) =>
 			fetchWithHandling<import('./types').LoginResponse>('/auth/login', {
 				method: 'POST',
-				body: { identifier }
+				body: { identifier },
+				retries: 0
 			}),
 
 		verify: (code: string) =>
 			fetchWithHandling<import('./types').VerifyResponse>('/auth/verify', {
 				method: 'POST',
-				body: { code }
+				body: { code },
+				retries: 0
 			}),
 
 		logout: () =>
 			fetchWithHandling<{ success: boolean }>('/auth/logout', {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			})
 	},
 
@@ -259,25 +303,39 @@ export const api = {
 
 		setPreferred: (networkId: string) =>
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/set-preferred`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
+		/**
+		 * Starts a speed test. Returns as soon as the eero cloud accepts the
+		 * request (202) - the result is not in this response (plan decision
+		 * 4). Poll `speedTestHistory` for the result.
+		 */
 		speedTest: (networkId: string) =>
-			fetchWithHandling<import('./types').SpeedTestResult>(`/networks/${networkId}/speedtest`, {
-				method: 'POST',
-				timeout: 90000 // Speed tests take longer
+			fetchWithHandling<import('./types').SpeedTestStartResponse>(
+				`/networks/${networkId}/speedtest`,
+				{ method: 'POST', retries: 0 }
+			),
+
+		/** Most recent speed-test result(s), newest first. */
+		speedTestHistory: (networkId: string, limit = 1) =>
+			fetchWithHandling<import('./types').SpeedTestResult[]>(`/networks/${networkId}/speedtests`, {
+				params: { limit }
 			}),
 
 		toggleGuestNetwork: (networkId: string, enabled: boolean, name?: string) =>
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/guest-network`, {
 				method: 'PUT',
-				params: { enabled, ...(name && { name }) }
+				params: { enabled, ...(name && { name }) },
+				retries: 0
 			}),
 
 		setName: (networkId: string, name: string) =>
 			fetchWithHandling<import('./types').NetworkRenameResponse>(`/networks/${networkId}/name`, {
 				method: 'PUT',
-				body: { name }
+				body: { name },
+				retries: 0
 			}),
 
 		getDns: (networkId: string) =>
@@ -286,7 +344,8 @@ export const api = {
 		setDns: (networkId: string, body: import('./types').DnsUpdateRequest) =>
 			fetchWithHandling<import('./types').DnsUpdateResponse>(`/networks/${networkId}/dns`, {
 				method: 'PUT',
-				body
+				body,
+				retries: 0
 			})
 	},
 
@@ -314,20 +373,30 @@ export const api = {
 				params: { refresh }
 			}),
 
+		/**
+		 * Unverified (plan § 5): the backend resolves the device's MAC
+		 * server-side before posting to the blacklist, and returns 422 when
+		 * the device has no known MAC to block by.
+		 */
 		block: (deviceId: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/block`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
+		/** Verified (plan § 5) - safe for the optimistic pattern. */
 		unblock: (deviceId: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/unblock`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
+		/** Verified (plan § 5) - safe for the optimistic pattern. */
 		setNickname: (deviceId: string, nickname: string) =>
 			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/nickname`, {
 				method: 'PUT',
-				body: { nickname }
+				body: { nickname },
+				retries: 0
 			})
 	},
 
@@ -345,19 +414,22 @@ export const api = {
 
 		reboot: (eeroId: string) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/reboot`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
 		setLed: (eeroId: string, enabled: boolean) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/led`, {
 				method: 'POST',
-				params: { enabled }
+				params: { enabled },
+				retries: 0
 			}),
 
 		setLedBrightness: (eeroId: string, brightness: number) =>
 			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/led/brightness`, {
 				method: 'PUT',
-				params: { brightness }
+				params: { brightness },
+				retries: 0
 			})
 	},
 
@@ -375,29 +447,34 @@ export const api = {
 
 		pause: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}/pause`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
 		unpause: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}/unpause`, {
-				method: 'POST'
+				method: 'POST',
+				retries: 0
 			}),
 
 		create: (name: string) =>
 			fetchWithHandling<import('./types').ProfileSummary>('/profiles', {
 				method: 'POST',
-				body: { name }
+				body: { name },
+				retries: 0
 			}),
 
 		rename: (profileId: string, name: string) =>
 			fetchWithHandling<import('./types').ProfileSummary>(`/profiles/${profileId}`, {
 				method: 'PATCH',
-				body: { name }
+				body: { name },
+				retries: 0
 			}),
 
 		delete: (profileId: string) =>
 			fetchWithHandling<import('./types').ProfileAction>(`/profiles/${profileId}`, {
-				method: 'DELETE'
+				method: 'DELETE',
+				retries: 0
 			}),
 
 		assignDevices: (profileId: string, deviceIds: string[]) =>
@@ -405,7 +482,8 @@ export const api = {
 				`/profiles/${profileId}/assign-devices`,
 				{
 					method: 'POST',
-					body: { device_ids: deviceIds }
+					body: { device_ids: deviceIds },
+					retries: 0
 				}
 			)
 	}

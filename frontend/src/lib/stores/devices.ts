@@ -5,7 +5,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { api } from '$api/client';
+import { api, ApiClientError } from '$api/client';
 import type { DeviceSummary } from '$api/types';
 
 // ============================================
@@ -212,33 +212,37 @@ function createDevicesStore() {
 		},
 
 		/**
-		 * Block a device (with optimistic update)
+		 * Block a device.
+		 *
+		 * Unverified (plan § 5): `block_device` resolves a MAC server-side and
+		 * posts to the blacklist, but is not on the SDK's verified-write
+		 * allowlist, and can 422 when the device has no known MAC to block
+		 * by. This is therefore PESSIMISTIC - unlike `unblockDevice` and
+		 * `setNickname` below (both Verified), `blocked` is only flipped once
+		 * the API confirms it. The caller is responsible for a ConfirmDialog
+		 * stating the action is not verified end-to-end before calling this.
 		 */
 		async blockDevice(deviceId: string): Promise<boolean> {
-			// Optimistic update
-			update((s) => ({
-				...s,
-				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
-			}));
-
 			try {
 				const result = await api.devices.block(deviceId);
 				if (!result.success) {
 					throw new Error(result.message || 'Failed to block device');
 				}
-				return true;
-			} catch (error) {
-				// Rollback
 				update((s) => ({
 					...s,
-					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: false } : d))
+					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
 				}));
+				return true;
+			} catch (error) {
+				if (error instanceof ApiClientError && error.status === 422) {
+					throw new Error(error.detail || 'Device has no known MAC address.', { cause: error });
+				}
 				throw error;
 			}
 		},
 
 		/**
-		 * Unblock a device (with optimistic update)
+		 * Unblock a device (with optimistic update). Verified (plan § 5).
 		 */
 		async unblockDevice(deviceId: string): Promise<boolean> {
 			// Optimistic update
@@ -304,7 +308,7 @@ function createDevicesStore() {
 		},
 
 		/**
-		 * Set device nickname
+		 * Set device nickname (with optimistic update). Verified (plan § 5).
 		 */
 		async setNickname(deviceId: string, nickname: string): Promise<boolean> {
 			const currentState = get({ subscribe });

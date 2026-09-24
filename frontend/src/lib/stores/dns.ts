@@ -7,6 +7,7 @@
 import { writable } from 'svelte/store';
 import { api } from '$api/client';
 import type { DnsSettings, DnsUpdateRequest, DnsUpdateResponse } from '$api/types';
+import { withSettingsLock } from './settingsLock';
 
 // ============================================
 // Types
@@ -74,7 +75,11 @@ function createDnsStore() {
 			update((s) => ({ ...s, applying: true, error: null }));
 
 			try {
-				const result = await api.networks.setDns(networkId, body);
+				// Shared per-network lock (settingsLock.ts): DNS and network-rename
+				// both PUT the same `settings` link, so they must never race.
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setDns(networkId, body)
+				);
 				update((s) => ({
 					...s,
 					applying: false,

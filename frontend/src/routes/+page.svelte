@@ -8,11 +8,12 @@
 	import { onMount } from 'svelte';
 	import { api } from '$api/client';
 	import type { NetworkDetail, EeroSummary, ProfileSummary, DeviceSummary } from '$api/types';
-	import { devicesStore, deviceCounts, uiStore, selectedNetworkId } from '$stores';
+	import { devicesStore, deviceCounts, uiStore, selectedNetworkId, networksStore } from '$stores';
 	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
 	import PieChart from '$lib/components/charts/PieChart.svelte';
 	import BarGauge from '$lib/components/charts/BarGauge.svelte';
 	import ClientCountChart from '$lib/components/charts/ClientCountChart.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let network: NetworkDetail | null = null;
 	let eeros: EeroSummary[] = [];
@@ -119,18 +120,21 @@
 		offline: eeros.filter((e) => e.status === 'offline' || e.status === 'red').length
 	};
 
+	// NOTE (6.0 revamp, frontend SME): `POST /speedtest` now only starts the
+	// test (202, no result) - the result is fetched separately by polling
+	// history (plan decision 4). Routed through `networksStore.runSpeedTest`,
+	// the same helper the network detail page uses, rather than duplicating
+	// the poll loop here.
 	async function runSpeedTest() {
 		if (!network) return;
 
 		speedTestLoading = true;
-		uiStore.info('Starting speed test... This may take a minute.');
+		uiStore.info('Starting speed test... this can take up to 90 seconds.');
 
 		try {
-			const result = await api.networks.speedTest(network.id);
-			if (result) {
-				network = await api.networks.get(network.id, true);
-				uiStore.success('Speed test completed!');
-			}
+			const result = await networksStore.runSpeedTest(network.id);
+			network = { ...network, speed_test: result };
+			uiStore.success('Speed test completed!');
 		} catch (_error) {
 			uiStore.error('Speed test failed. Please try again.');
 		} finally {
@@ -138,24 +142,26 @@
 		}
 	}
 
-	// Speed test helper functions
+	// Speed test helper functions.
+	// NOTE (6.0 revamp, frontend SME): `SpeedTestResult` is now the single
+	// normalized shape only (backend/§ 8.2 drift fix) - the raw
+	// down/up/date fields these used to fall back to no longer exist on the
+	// type. Narrowed to the normalized fields only; not otherwise touched.
 	function getDownloadSpeed(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '—';
-		// Try raw format first (down.value), then normalized (download_mbps)
-		const value = speedTest.down?.value ?? speedTest.download_mbps;
+		const value = speedTest.download_mbps;
 		return value ? value.toFixed(1) : '—';
 	}
 
 	function getUploadSpeed(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '—';
-		// Try raw format first (up.value), then normalized (upload_mbps)
-		const value = speedTest.up?.value ?? speedTest.upload_mbps;
+		const value = speedTest.upload_mbps;
 		return value ? value.toFixed(1) : '—';
 	}
 
 	function getSpeedTestDate(speedTest: import('$api/types').SpeedTestResult | null): string {
 		if (!speedTest) return '';
-		const dateStr = speedTest.date ?? speedTest.timestamp;
+		const dateStr = speedTest.timestamp;
 		if (!dateStr) return '';
 		return new Date(dateStr).toLocaleString();
 	}
@@ -200,7 +206,7 @@
 				<div class="network-info-grid">
 					{#if network.isp_name}
 						<div class="network-info-item">
-							<span class="info-icon">🌐</span>
+							<span class="info-icon"><Icon name="globe" size={16} /></span>
 							<div class="info-content">
 								<span class="info-label">ISP</span>
 								<span class="info-value">{network.isp_name}</span>
@@ -209,7 +215,7 @@
 					{/if}
 					{#if network.public_ip}
 						<div class="network-info-item">
-							<span class="info-icon">📡</span>
+							<span class="info-icon"><Icon name="router" size={16} /></span>
 							<div class="info-content">
 								<span class="info-label">Public IP</span>
 								<span class="info-value mono">{network.public_ip}</span>
@@ -248,11 +254,11 @@
 				</div>
 				<div class="stat-breakdown">
 					<div class="breakdown-item">
-						<span>📶 Wireless</span>
+						<span><Icon name="wifi" size={14} /> Wireless</span>
 						<span class="mono">{$deviceCounts.wireless}</span>
 					</div>
 					<div class="breakdown-item">
-						<span>🔌 Wired</span>
+						<span><Icon name="ethernet" size={14} /> Wired</span>
 						<span class="mono">{$deviceCounts.wired}</span>
 					</div>
 				</div>
@@ -571,7 +577,7 @@
 		border-radius: 50%;
 		background: var(--color-danger);
 		position: relative;
-		z-index: 1;
+		z-index: var(--z-base);
 	}
 
 	.network-status-indicator.online .status-core {
@@ -742,7 +748,7 @@
 	}
 
 	.status-dot.warning {
-		background-color: var(--color-warning, #f59e0b);
+		background-color: var(--color-warning);
 	}
 
 	.badge-sm {
@@ -751,7 +757,7 @@
 	}
 
 	.text-warning {
-		color: var(--color-warning, #f59e0b);
+		color: var(--color-warning);
 	}
 
 	/* Clickable card styles */
@@ -759,14 +765,17 @@
 		text-decoration: none;
 		color: inherit;
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			border-color var(--transition-fast),
+			transform var(--transition-fast),
+			box-shadow var(--transition-fast);
 		position: relative;
 	}
 
 	.clickable-card:hover {
 		border-color: var(--color-accent);
 		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		box-shadow: var(--shadow-md);
 	}
 
 	.card-hint {

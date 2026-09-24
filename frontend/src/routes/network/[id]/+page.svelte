@@ -4,11 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { NetworkDetail } from '$api/types';
-	import { uiStore } from '$stores';
+	import { uiStore, networksStore, speedTestState } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '$lib/components/network/DnsSettingsCard.svelte';
 	import DnsCachingCard from '$lib/components/network/DnsCachingCard.svelte';
+	import Icon from '$components/common/Icon.svelte';
 
 	let network: NetworkDetail | null = null;
 	let loading = true;
@@ -54,13 +55,17 @@
 		if (!networkId) return;
 
 		speedTestLoading = true;
-		uiStore.info('Running speed test... This may take up to 60 seconds.');
+		uiStore.info('Running speed test… this can take up to 90 seconds.');
 
 		try {
-			await api.networks.speedTest(networkId);
+			// Verified write (plan § 5), but the result is not in the POST
+			// response on eero-api v8 - the store starts the test, then polls
+			// speed-test history until a newer result appears (decision 4).
+			const result = await networksStore.runSpeedTest(networkId);
 			uiStore.success('Speed test completed!');
-			// Refresh network to get updated speed test data
-			await fetchNetwork(true);
+			if (network) {
+				network = { ...network, speed_test: result };
+			}
 		} catch (err) {
 			uiStore.error(err instanceof Error ? err.message : 'Speed test failed');
 		} finally {
@@ -90,22 +95,45 @@
 		showRenameModal = true;
 	}
 
-	async function handleRenameNetwork() {
+	function handleRenameNetwork() {
 		const name = renameValue.trim();
 		if (!name || !networkId) return;
-		renaming = true;
-		try {
-			const result = await api.networks.setName(networkId, name);
-			if (network) {
-				network = { ...network, name: result.name };
+		showRenameModal = false;
+
+		// Settings-class write (plan § 5, decision 5): a network rename is
+		// treated as a mesh reboot. Pessimistic, behind a danger confirm
+		// naming both the reboot and the operator's own disconnection, same
+		// pattern as the DNS settings card.
+		uiStore.confirm({
+			title: 'Rename Network?',
+			message: 'Renaming your network reboots every eero to apply the new name.',
+			details: [
+				'Every eero on this network will restart, and all connected devices will lose ' +
+					'internet access for a minute or two.',
+				'If you are connected to this network right now, you will lose your own ' +
+					'connection while it restarts.'
+			],
+			confirmText: 'Rename & Restart Network',
+			danger: true,
+			onConfirm: async () => {
+				renaming = true;
+				try {
+					const result = await networksStore.renameNetwork(networkId!, name);
+					if (!result.changed) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					if (network) {
+						network = { ...network, name: result.name };
+					}
+					uiStore.success(`Network renamed to "${result.name}"`);
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to rename network');
+				} finally {
+					renaming = false;
+				}
 			}
-			uiStore.success(`Network renamed to "${result.name}"`);
-			showRenameModal = false;
-		} catch (err) {
-			uiStore.error(err instanceof Error ? err.message : 'Failed to rename network');
-		} finally {
-			renaming = false;
-		}
+		});
 	}
 
 	function formatSpeed(mbps: number | null): string {
@@ -303,7 +331,7 @@
 		<header class="detail-header">
 			<div class="header-info">
 				<div class="header-title">
-					<span class="network-icon">🌐</span>
+					<span class="network-icon"><Icon name="globe" size={20} /></span>
 					<div>
 						<h1>{network.name}</h1>
 						{#if network.isp_name}
@@ -321,10 +349,10 @@
 			</div>
 			<div class="header-actions">
 				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)} disabled={loading}>
-					↻ Refresh
+					<Icon name="refresh" size={14} /> Refresh
 				</button>
 				<button class="btn btn-secondary" on:click={openRenameNetworkModal} disabled={loading}>
-					✎ Rename
+					<Icon name="edit" size={14} /> Rename
 				</button>
 			</div>
 		</header>
@@ -416,12 +444,12 @@
 				<h2>Connected Hardware</h2>
 				<div class="hardware-stats">
 					<a href="/devices" class="hardware-stat clickable">
-						<span class="stat-icon">📱</span>
+						<span class="stat-icon"><Icon name="devices" size={20} /></span>
 						<span class="stat-number">{network.device_count}</span>
 						<span class="stat-label">Devices</span>
 					</a>
 					<a href="/eeros" class="hardware-stat clickable">
-						<span class="stat-icon">📡</span>
+						<span class="stat-icon"><Icon name="eeros" size={20} /></span>
 						<span class="stat-number">{network.eero_count}</span>
 						<span class="stat-label">Eero Nodes</span>
 					</a>
@@ -433,7 +461,9 @@
 				<h2>Guest Network</h2>
 				<div class="guest-network-section">
 					<div class="guest-status">
-						<span class="guest-icon">{network.guest_network_enabled ? '✅' : '❌'}</span>
+						<span class="guest-icon">
+							<Icon name={network.guest_network_enabled ? 'check' : 'x'} size={16} />
+						</span>
 						<span class="guest-label">
 							{network.guest_network_enabled ? 'Enabled' : 'Disabled'}
 						</span>
@@ -469,15 +499,17 @@
 					</button>
 				</div>
 
-				{#if network.speed_test && (network.speed_test.download_mbps || network.speed_test.upload_mbps || network.speed_test.down?.value || network.speed_test.up?.value)}
+				{#if speedTestLoading}
+					<p class="text-muted text-sm">
+						Running… {$speedTestState.elapsedSeconds}s (this can take up to 90 seconds)
+					</p>
+				{:else if network.speed_test && (network.speed_test.download_mbps || network.speed_test.upload_mbps)}
 					<div class="speed-results">
 						<div class="speed-item download">
 							<div class="speed-icon">↓</div>
 							<div class="speed-data">
 								<span class="speed-value">
-									{formatSpeed(
-										network.speed_test.down?.value ?? network.speed_test.download_mbps ?? null
-									)}
+									{formatSpeed(network.speed_test.download_mbps)}
 								</span>
 								<span class="speed-label">Download</span>
 							</div>
@@ -486,19 +518,15 @@
 							<div class="speed-icon">↑</div>
 							<div class="speed-data">
 								<span class="speed-value">
-									{formatSpeed(
-										network.speed_test.up?.value ?? network.speed_test.upload_mbps ?? null
-									)}
+									{formatSpeed(network.speed_test.upload_mbps)}
 								</span>
 								<span class="speed-label">Upload</span>
 							</div>
 						</div>
 					</div>
-					{#if network.speed_test.date || network.speed_test.timestamp}
+					{#if network.speed_test.timestamp}
 						<p class="text-muted text-sm speed-timestamp">
-							Last tested: {formatDate(
-								network.speed_test.date ?? network.speed_test.timestamp ?? null
-							)}
+							Last tested: {formatDate(network.speed_test.timestamp)}
 						</p>
 					{/if}
 				{:else}
@@ -615,7 +643,7 @@
 							>
 						</div>
 						<div class="location-time">
-							<span class="time-icon">🕐</span>
+							<span class="time-icon"><Icon name="clock" size={14} /></span>
 							<span class="local-time">{getLocalTime(network.geo_ip.timezone)}</span>
 						</div>
 						<div class="location-details">
@@ -1006,7 +1034,9 @@
 		border-radius: var(--radius-md);
 		text-decoration: none;
 		color: inherit;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			transform var(--transition-fast);
 	}
 
 	.hardware-stat.clickable:hover {
@@ -1169,7 +1199,9 @@
 		background-color: var(--color-bg-primary);
 		border-radius: var(--radius-lg);
 		border: 1px solid var(--color-border-muted);
-		transition: all var(--transition-fast);
+		transition:
+			border-color var(--transition-fast),
+			transform var(--transition-fast);
 	}
 
 	.health-tile:hover {
@@ -1201,18 +1233,18 @@
 	}
 
 	.status-ring.good {
-		background: rgba(16, 185, 129, 0.15);
+		background: var(--color-success-bg);
 		color: var(--color-success);
 	}
 
 	.status-ring.bad {
-		background: rgba(239, 68, 68, 0.15);
+		background: var(--color-danger-bg);
 		color: var(--color-danger);
 	}
 
 	.status-ring.warning {
-		background: rgba(245, 158, 11, 0.15);
-		color: var(--color-warning, #f59e0b);
+		background: var(--color-warning-bg);
+		color: var(--color-warning);
 	}
 
 	.status-ring.neutral {
@@ -1248,7 +1280,7 @@
 	}
 
 	.health-tile-status.warning {
-		color: var(--color-warning, #f59e0b);
+		color: var(--color-warning);
 	}
 
 	.health-tile-status.neutral {
@@ -1319,7 +1351,7 @@
 	}
 
 	.detail-dot.warning {
-		background: var(--color-warning, #f59e0b);
+		background: var(--color-warning);
 	}
 
 	.detail-dot.neutral {
@@ -1335,7 +1367,7 @@
 	}
 
 	.detail-value.warning {
-		color: var(--color-warning, #f59e0b);
+		color: var(--color-warning);
 	}
 
 	.detail-value.neutral {
@@ -1366,11 +1398,11 @@
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md);
 		background: var(--color-bg-tertiary);
-		transition: all 0.15s ease;
+		transition: background var(--transition-normal);
 	}
 
 	.feature-item.enabled {
-		background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+		background: var(--color-success-bg);
 	}
 
 	.feature-icon {
@@ -1459,25 +1491,21 @@
 		font-size: 0.875rem;
 		font-weight: 600;
 		text-transform: capitalize;
-		color: #fbbf24;
-		background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(251, 191, 36, 0.05) 100%);
-		border: 1px solid rgba(251, 191, 36, 0.3);
+		color: var(--color-premium);
+		background: var(--color-premium-bg);
+		border: 1px solid var(--color-premium);
 		border-radius: var(--radius-lg);
 	}
 
 	.premium-card {
-		background: linear-gradient(
-			135deg,
-			var(--color-bg-secondary) 0%,
-			rgba(251, 191, 36, 0.02) 100%
-		);
+		background: var(--color-bg-secondary);
 	}
 
 	/* Badge info variant */
 	.badge-info {
-		background: rgba(59, 130, 246, 0.1);
-		color: #3b82f6;
-		border: 1px solid rgba(59, 130, 246, 0.2);
+		background: var(--color-info-bg);
+		color: var(--color-info);
+		border: 1px solid var(--color-info);
 	}
 
 	/* Speedtest Chart Section */
@@ -1529,11 +1557,11 @@
 	.modal-backdrop {
 		position: fixed;
 		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
+		background-color: var(--color-overlay);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.modal-card {
@@ -1569,8 +1597,11 @@
 	}
 
 	.modal-input:focus {
-		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.modal-input:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.modal-actions {

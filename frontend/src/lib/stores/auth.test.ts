@@ -2,19 +2,18 @@
  * Tests for the authentication store.
  *
  * Tests cover:
- * - Auth status checking
+ * - Auth status checking, including the `reason: 'expired'` surface added in
+ *   the 6.0 revamp (plan § 4.1)
  * - Login flow initiation
  * - Verification handling
  * - Logout functionality
  * - Error handling
- *
- * Note: Some tests are skipped due to MSW configuration issues in jsdom.
- * TODO: Fix MSW setup to properly intercept fetch requests.
+ * - 401 -> expired -> login banner, dispatched via `auth:unauthorized`
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { authStore, isAuthenticated, authError, isLoginPending } from './auth';
+import { authStore, isAuthenticated, authError, isLoginPending, authReason } from './auth';
 import { server } from '../../../tests/mocks/server';
 import { http, HttpResponse } from 'msw';
 
@@ -26,11 +25,12 @@ describe('authStore', () => {
 	});
 
 	describe('checkStatus', () => {
-		it.skip('sets authenticated to true when server returns authenticated', async () => {
+		it('sets authenticated to true when server returns authenticated', async () => {
 			server.use(
 				http.get('/api/auth/status', () => {
 					return HttpResponse.json({
 						authenticated: true,
+						reason: null,
 						preferred_network_id: 'net-123',
 						user_email: 'user@test.com',
 						user_name: 'Test User',
@@ -48,7 +48,7 @@ describe('authStore', () => {
 			expect(get(isAuthenticated)).toBe(true);
 			expect(get(authStore).userEmail).toBe('user@test.com');
 			expect(get(authStore).userName).toBe('Test User');
-			expect(get(authStore).preferredNetworkId).toBe('net-123');
+			expect(get(authReason)).toBeNull();
 		});
 
 		it('sets authenticated to false when server returns unauthenticated', async () => {
@@ -56,6 +56,7 @@ describe('authStore', () => {
 				http.get('/api/auth/status', () => {
 					return HttpResponse.json({
 						authenticated: false,
+						reason: 'none',
 						preferred_network_id: null
 					});
 				})
@@ -65,6 +66,25 @@ describe('authStore', () => {
 
 			expect(result).toBe(false);
 			expect(get(isAuthenticated)).toBe(false);
+			expect(get(authReason)).toBe('none');
+		});
+
+		it('surfaces reason: "expired" when the stored session died server-side', async () => {
+			server.use(
+				http.get('/api/auth/status', () => {
+					return HttpResponse.json({
+						authenticated: false,
+						reason: 'expired',
+						preferred_network_id: null
+					});
+				})
+			);
+
+			const result = await authStore.checkStatus();
+
+			expect(result).toBe(false);
+			expect(get(isAuthenticated)).toBe(false);
+			expect(get(authReason)).toBe('expired');
 		});
 
 		it('sets error on network failure', async () => {
@@ -83,7 +103,7 @@ describe('authStore', () => {
 	});
 
 	describe('login', () => {
-		it.skip('sets loginPending on successful login request', async () => {
+		it('sets loginPending on successful login request', async () => {
 			const result = await authStore.login('user@test.com');
 
 			expect(result).toBe(true);
@@ -121,7 +141,7 @@ describe('authStore', () => {
 			await authStore.login('user@test.com');
 		});
 
-		it.skip('sets authenticated on successful verification', async () => {
+		it('sets authenticated on successful verification', async () => {
 			server.use(
 				http.post('/api/auth/verify', () => {
 					return HttpResponse.json({
@@ -133,6 +153,7 @@ describe('authStore', () => {
 				http.get('/api/auth/status', () => {
 					return HttpResponse.json({
 						authenticated: true,
+						reason: null,
 						preferred_network_id: 'net-123',
 						user_email: 'user@test.com',
 						user_name: 'Test User',
@@ -149,6 +170,7 @@ describe('authStore', () => {
 			expect(result).toBe(true);
 			expect(get(isAuthenticated)).toBe(true);
 			expect(get(isLoginPending)).toBe(false);
+			expect(get(authReason)).toBeNull();
 		});
 
 		it('sets error on invalid verification code', async () => {
@@ -167,12 +189,13 @@ describe('authStore', () => {
 	});
 
 	describe('logout', () => {
-		it.skip('resets store to initial state', async () => {
+		it('resets store to initial state', async () => {
 			// First authenticate
 			server.use(
 				http.get('/api/auth/status', () => {
 					return HttpResponse.json({
 						authenticated: true,
+						reason: null,
 						preferred_network_id: 'net-123',
 						user_email: 'user@test.com'
 					});
@@ -186,7 +209,6 @@ describe('authStore', () => {
 
 			expect(get(isAuthenticated)).toBe(false);
 			expect(get(authStore).userEmail).toBeNull();
-			expect(get(authStore).preferredNetworkId).toBeNull();
 			expect(get(authStore).loading).toBe(false);
 		});
 
@@ -217,7 +239,7 @@ describe('authStore', () => {
 	});
 
 	describe('cancelLogin', () => {
-		it.skip('resets loginPending and clears error', async () => {
+		it('resets loginPending and clears error', async () => {
 			// First initiate login
 			await authStore.login('user@test.com');
 			expect(get(isLoginPending)).toBe(true);
@@ -227,6 +249,44 @@ describe('authStore', () => {
 
 			expect(get(isLoginPending)).toBe(false);
 			expect(get(authError)).toBeNull();
+		});
+	});
+
+	describe('auth:unauthorized event (401 -> expired -> login banner)', () => {
+		it('sets reason to "expired" immediately from the event detail', () => {
+			expect(get(authReason)).toBeNull();
+
+			window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { reason: 'expired' } }));
+
+			// Synchronous: setReason runs before the follow-up checkStatus() resolves.
+			expect(get(authStore).authenticated).toBe(false);
+			expect(get(authReason)).toBe('expired');
+		});
+
+		it('settles once via checkStatus() without looping back into a second 401', async () => {
+			let statusCalls = 0;
+			server.use(
+				http.get('/api/auth/status', () => {
+					statusCalls++;
+					return HttpResponse.json({
+						authenticated: false,
+						reason: 'expired',
+						preferred_network_id: null
+					});
+				})
+			);
+
+			window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { reason: 'expired' } }));
+
+			// Let the listener's checkStatus() call resolve.
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(get(authReason)).toBe('expired');
+			expect(get(isAuthenticated)).toBe(false);
+			// Exactly one follow-up read - the 401 itself never re-dispatches
+			// `auth:unauthorized` because `/auth/status` is a plain GET.
+			expect(statusCalls).toBe(1);
 		});
 	});
 });

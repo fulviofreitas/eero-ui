@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { authStore, isLoginPending, authError, isAuthLoading } from '$stores';
+	import { authStore, isLoginPending, authError, isAuthLoading, authReason } from '$stores';
 
 	let identifier = '';
 	let code = '';
@@ -62,6 +62,8 @@
 			<div class="error-message">
 				{$authError}
 			</div>
+		{:else if $authReason === 'expired' && !$isLoginPending}
+			<div class="session-expired-message">Your eero session expired — sign in again.</div>
 		{/if}
 
 		{#if $isLoginPending}
@@ -189,6 +191,16 @@
 		background-color: var(--color-danger-bg);
 		border: 1px solid var(--color-danger);
 		color: var(--color-danger);
+		padding: var(--space-3);
+		border-radius: var(--radius-md);
+		margin-bottom: var(--space-4);
+		font-size: 0.875rem;
+	}
+
+	.session-expired-message {
+		background-color: var(--color-bg-tertiary, var(--color-bg-secondary));
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
 		padding: var(--space-3);
 		border-radius: var(--radius-md);
 		margin-bottom: var(--space-4);

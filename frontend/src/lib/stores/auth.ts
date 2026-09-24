@@ -13,7 +13,13 @@ import { api, ApiClientError } from '$api/client';
 
 interface AuthState {
 	authenticated: boolean;
-	preferredNetworkId: string | null;
+	/**
+	 * Why the session is not authenticated: `"expired"` when a previously
+	 * valid token was rejected by the eero cloud, `"none"` when no session
+	 * was ever established, `null` while authenticated. Lets the login page
+	 * show "your session expired" instead of the bare login form (plan § 4.1).
+	 */
+	reason: 'none' | 'expired' | null;
 	userEmail: string | null;
 	userName: string | null;
 	userPhone: string | null;
@@ -31,7 +37,7 @@ interface AuthState {
 
 const initialState: AuthState = {
 	authenticated: false,
-	preferredNetworkId: null,
+	reason: null,
 	userEmail: null,
 	userName: null,
 	userPhone: null,
@@ -57,11 +63,10 @@ function createAuthStore() {
 
 			try {
 				const status = await api.auth.status();
-				console.log('[Auth] Status response:', status);
 				update((s) => ({
 					...s,
 					authenticated: status.authenticated,
-					preferredNetworkId: status.preferred_network_id,
+					reason: status.authenticated ? null : status.reason,
 					userEmail: status.user_email,
 					userName: status.user_name,
 					userPhone: status.user_phone,
@@ -130,7 +135,7 @@ function createAuthStore() {
 					update((s) => ({
 						...s,
 						authenticated: true,
-						preferredNetworkId: response.preferred_network_id,
+						reason: null,
 						loading: false,
 						loginPending: false
 					}));
@@ -183,6 +188,16 @@ function createAuthStore() {
 		},
 
 		/**
+		 * Set the unauthenticated `reason` immediately, ahead of the
+		 * `checkStatus()` round trip the `auth:unauthorized` listener always
+		 * follows up with. Purely a UX optimization - `checkStatus()` is the
+		 * source of truth and overwrites this once it resolves.
+		 */
+		setReason(reason: 'none' | 'expired' | null): void {
+			update((s) => ({ ...s, authenticated: false, reason }));
+		},
+
+		/**
 		 * Cancel login (go back from verification)
 		 */
 		cancelLogin(): void {
@@ -204,10 +219,21 @@ export const userPhone = derived(authStore, ($auth) => $auth.userPhone);
 export const userRole = derived(authStore, ($auth) => $auth.userRole);
 export const accountId = derived(authStore, ($auth) => $auth.accountId);
 export const premiumStatus = derived(authStore, ($auth) => $auth.premiumStatus);
+export const authReason = derived(authStore, ($auth) => $auth.reason);
 
-// Listen for 401 events from API client
+// Listen for 401 events from API client. `checkStatus()` re-probes
+// `/auth/status`, which the backend now clears the token before answering
+// (plan § 4.1), so this settles once and does not loop: the follow-up
+// `/auth/status` truthfully reports `authenticated: false`, never a second
+// 401. The layout's existing redirect-when-unauthenticated takes the user to
+// `/login`; the login page reads `authReason` to show the "session expired"
+// copy instead of a second, indistinguishable bare form.
 if (typeof window !== 'undefined') {
-	window.addEventListener('auth:unauthorized', () => {
+	window.addEventListener('auth:unauthorized', (event) => {
+		const reason = (event as CustomEvent<{ reason?: 'expired' }>).detail?.reason;
+		if (reason === 'expired') {
+			authStore.setReason('expired');
+		}
 		authStore.checkStatus();
 	});
 }

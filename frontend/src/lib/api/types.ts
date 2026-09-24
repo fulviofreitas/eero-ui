@@ -10,6 +10,12 @@
 
 export interface AuthStatus {
 	authenticated: boolean;
+	/**
+	 * Why `authenticated` is false. `null` when authenticated, `"none"` when
+	 * no session was ever established, `"expired"` when the stored token was
+	 * rejected by the eero cloud (§ 4.1 of the 6.0 revamp plan).
+	 */
+	reason: 'none' | 'expired' | null;
 	preferred_network_id: string | null;
 	user_email: string | null;
 	user_name: string | null;
@@ -161,6 +167,15 @@ export interface NetworkRenameRequest {
 
 export interface NetworkRenameResponse {
 	success: boolean;
+	/**
+	 * Whether the name actually changed on the eero cloud. `false` means the
+	 * backend's no-op guard skipped the write entirely (the requested name
+	 * matched the current one) - the settings-class contract in plan § 5, the
+	 * same shape as `DnsUpdateResponse.changed`. A network rename is treated
+	 * as a mesh reboot (decision 5), so this flag is what lets the store
+	 * avoid rebooting the network for nothing.
+	 */
+	changed: boolean;
 	network_id: string;
 	name: string;
 }
@@ -212,20 +227,27 @@ export interface DnsUpdateResponse {
 /** Form field identifiers used for inline validation/error mapping. */
 export type DnsFieldName = 'ipv4Primary' | 'ipv4Secondary' | 'ipv6Primary' | 'ipv6Secondary';
 
+/**
+ * Single normalised speed-test result shape returned by the backend.
+ *
+ * `run_speed_test` on eero-api v8 returns 202 with `data: null` - the result
+ * itself is never in the POST response. Per plan decision 4, `POST
+ * /networks/{id}/speedtest` now only kicks the test off (`{status:
+ * 'started'}`); the result is fetched separately via
+ * `GET /networks/{id}/speedtests?limit=1` and compared against the time the
+ * test was started, because the history endpoint may still return a stale
+ * (pre-test) entry for some seconds after the POST resolves.
+ */
 export interface SpeedTestResult {
-	// Normalized format from backend
-	download_mbps?: number | null;
-	upload_mbps?: number | null;
-	latency_ms?: number | null;
-	timestamp?: string | null;
-	// Raw format from eero API
-	download?: { value: number; units?: string } | null;
-	upload?: { value: number; units?: string } | null;
-	latency?: number | null;
-	date?: string | null;
-	// Alternative raw format
-	down?: { value?: number; units?: string } | null;
-	up?: { value?: number; units?: string } | null;
+	download_mbps: number | null;
+	upload_mbps: number | null;
+	latency_ms: number | null;
+	timestamp: string | null;
+}
+
+/** Response body for `POST /networks/{id}/speedtest` - starts, does not wait. */
+export interface SpeedTestStartResponse {
+	status: 'started';
 }
 
 // ============================================
@@ -492,15 +514,42 @@ export interface ProfileRenameRequest {
 // API Responses
 // ============================================
 
+/**
+ * Discriminates the kind of failure a non-2xx response represents, mirroring
+ * the SDK exception mapping in plan § 3.4. Present only for the exception
+ * classes that carry a machine-readable type; a plain 500/503/etc has none.
+ */
+export type ApiErrorType = 'premium_required' | 'feature_unavailable' | 'experimental_disabled';
+
 export interface ApiError {
 	detail: string;
-	type?: string;
+	type?: ApiErrorType | string;
 	/** Field name for validation failures, when the API identified one. */
 	field?: string;
+	/** Present on a 401; `"expired"` distinguishes a dead session from never having logged in. */
+	reason?: 'expired';
 }
 
 export interface ApiResponse<T> {
 	data: T | null;
 	error: ApiError | null;
 	loading: boolean;
+}
+
+// ============================================
+// Health
+// ============================================
+
+export interface HealthStatus {
+	status: string;
+	/** eero-ui's own version. */
+	version: string;
+	eero_client_version: string;
+	/**
+	 * Whether `EERO_DASHBOARD_EXPERIMENTAL_WRITES` is enabled on this
+	 * deployment (decision 6a) - gates the unverified / settings-class write
+	 * surfaces in the UI. Replaces `exporter_version`, which no longer exists
+	 * now that the embedded exporter process is gone (§ 2.4).
+	 */
+	experimental_writes: boolean;
 }
