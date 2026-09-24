@@ -8,7 +8,7 @@ from eero import EeroClient
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ValidationError
 
-from .._coercion import coerce_int, coerce_numeric
+from .._coercion import coerce_bool, coerce_int, coerce_numeric
 from ..deps import get_network_id, require_auth
 from ..transformers import check_success, extract_data, extract_list, normalize_eero
 
@@ -455,19 +455,58 @@ async def set_eero_led(
     )
 
 
-@router.put("/{eero_id}/led/brightness", response_model=EeroAction)
+class LedStatus(BaseModel):
+    """Current LED state for an eero node."""
+
+    led_on: bool | None = None
+    led_brightness: int | None = None
+
+
+@router.get("/{eero_id}/led", response_model=LedStatus)
+async def get_eero_led(
+    eero_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> LedStatus:
+    """Get the current LED on/off state and brightness for an eero node."""
+    raw = await client.get_led_status(eero_id, network_id=network_id)
+    data = extract_data(raw)
+    return LedStatus(
+        led_on=coerce_bool(data.get("led_on"), field_name="led_on"),
+        led_brightness=coerce_int(
+            data.get("led_brightness"), field_name="led_brightness"
+        ),
+    )
+
+
+class EeroLedBrightnessAction(EeroAction):
+    """Response for the LED brightness write, with a read-back."""
+
+    led_brightness: int | None = None
+
+
+@router.put("/{eero_id}/led/brightness", response_model=EeroLedBrightnessAction)
 async def set_eero_led_brightness(
     eero_id: str,
     brightness: int = Query(..., ge=0, le=100, description="LED brightness (0-100)"),
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
-) -> EeroAction:
-    """Set the LED brightness for an Eero node."""
+) -> EeroLedBrightnessAction:
+    """Set the LED brightness for an Eero node, then read it back.
+
+    Verified write (sdk-surface-map-v8.0.3.md WP6 allowlist); ``brightness``
+    is validated to 0-100 by the query parameter's own bounds before any
+    SDK call.
+    """
     raw_result = await client.set_led_brightness(
         eero_id, brightness=brightness, network_id=network_id
     )
     success = check_success(raw_result)
-    return EeroAction(
+    raw_status = await client.get_led_status(eero_id, network_id=network_id)
+    read_back = coerce_int(
+        extract_data(raw_status).get("led_brightness"), field_name="led_brightness"
+    )
+    return EeroLedBrightnessAction(
         success=success,
         eero_id=eero_id,
         action="led_brightness",
@@ -476,4 +515,22 @@ async def set_eero_led_brightness(
             if success
             else "Failed to set LED brightness."
         ),
+        led_brightness=read_back,
     )
+
+
+class EeroConnectionsResponse(BaseModel):
+    """An eero's client connections."""
+
+    connections: list[dict[str, Any]] = []
+
+
+@router.get("/{eero_id}/connections", response_model=EeroConnectionsResponse)
+async def get_eero_connections(
+    eero_id: str,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> EeroConnectionsResponse:
+    """Get an eero's client connections. Verified read."""
+    raw = await client.get_connections(eero_id, network_id=network_id)
+    return EeroConnectionsResponse(connections=extract_list(raw, "connections"))

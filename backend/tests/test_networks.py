@@ -320,7 +320,7 @@ class TestGetSpeedTestHistory:
         assert data[0]["download_mbps"] == 250.5
         assert data[0]["latency_ms"] == 12.3
         authenticated_client.get_speed_tests.assert_called_once_with(
-            network_id="net-1", limit=10
+            network_id="net-1", limit=10, start_time=None, end_time=None
         )
 
     async def test_limit_is_bounded(self, auth_client, authenticated_client):
@@ -347,6 +347,39 @@ class TestGetSpeedTestHistory:
 
         assert response.status_code == 422
 
+    async def test_start_end_time_forwarded_to_sdk(
+        self, auth_client, authenticated_client
+    ):
+        """start_time/end_time query params are forwarded to get_speed_tests by keyword."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response([])
+        )
+
+        response = await auth_client.get(
+            "/api/networks/net-1/speedtests",
+            params={
+                "start_time": "2026-01-01T00:00:00Z",
+                "end_time": "2026-01-02T00:00:00Z",
+            },
+        )
+
+        assert response.status_code == 200
+        authenticated_client.get_speed_tests.assert_called_once_with(
+            network_id="net-1",
+            limit=10,
+            start_time="2026-01-01T00:00:00Z",
+            end_time="2026-01-02T00:00:00Z",
+        )
+
+    async def test_invalid_start_time_rejected(self, auth_client, authenticated_client):
+        """A malformed start_time is rejected with 400 before any SDK call."""
+        response = await auth_client.get(
+            "/api/networks/net-1/speedtests", params={"start_time": "not-a-date"}
+        )
+
+        assert response.status_code == 400
+        authenticated_client.get_speed_tests.assert_not_called()
+
     async def test_default_limit_is_ten(self, auth_client, authenticated_client):
         """With no limit param at all, the SDK is called with limit=10."""
         authenticated_client.get_speed_tests = AsyncMock(
@@ -357,5 +390,5 @@ class TestGetSpeedTestHistory:
 
         assert response.status_code == 200
         authenticated_client.get_speed_tests.assert_called_once_with(
-            network_id="net-1", limit=10
+            network_id="net-1", limit=10, start_time=None, end_time=None
         )

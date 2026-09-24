@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ..deps import get_network_id, require_auth
 from ..transformers import check_success, extract_data, extract_list, normalize_profile
+from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -418,3 +419,26 @@ async def delete_profile(
             else "Failed to delete profile."
         ),
     )
+
+
+@router.get("/{profile_id}/insights", response_model=InsightsResponse)
+async def get_profile_insights_route(
+    profile_id: str,
+    start: str = Query(..., description="ISO-8601 window start"),
+    end: str = Query(..., description="ISO-8601 window end"),
+    insight_type: str = Query(..., description="adblock | blocked | inspected"),
+    cadence: str = Query("daily", description="daily | hourly"),
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> InsightsResponse:
+    """Query a single profile's insights time series. Premium-gated."""
+    validate_insight_params(start, end, insight_type, cadence)
+    raw = await client.get_profile_insights(
+        profile_id,
+        network_id=network_id,
+        start=start,
+        end=end,
+        cadence=cadence,
+        insight_type=insight_type,
+    )
+    return normalize_insights(raw)

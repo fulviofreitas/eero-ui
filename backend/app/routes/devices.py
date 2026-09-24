@@ -12,8 +12,10 @@ from ..transformers import (
     extract_data,
     extract_list,
     has_control_or_format_chars,
+    is_valid_device_type,
     normalize_device,
 )
+from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -399,3 +401,74 @@ async def set_device_nickname(
             f"Nickname set to '{nickname}'." if success else "Failed to set nickname."
         ),
     )
+
+
+class DeviceTypeRequest(BaseModel):
+    """Request body for setting a device's type."""
+
+    device_type: str
+
+    class Config:
+        """Pydantic config."""
+
+        extra = "ignore"
+
+
+@router.put("/{device_id}/type", response_model=DeviceAction)
+async def set_device_type_route(
+    device_id: str,
+    request: DeviceTypeRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> DeviceAction:
+    """Set a device's type.
+
+    Verified write (sdk-surface-map-v8.0.3.md WP6 allowlist): the value
+    persists and reads back correctly. eero-api ships no device-type
+    catalogue, so ``device_type`` is validated against a conservative
+    ``^[a-z0-9_]{1,40}$`` allowlist rather than a fixed enum; never expose
+    ``set_device_labels`` (verified no-op).
+    """
+    device_type = request.device_type.strip()
+    if not is_valid_device_type(device_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="device_type must match ^[a-z0-9_]{1,40}$.",
+        )
+    raw_result = await client.set_device_type(
+        device_id, device_type, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return DeviceAction(
+        success=success,
+        device_id=device_id,
+        action="device_type",
+        message=(
+            f"Device type set to '{device_type}'."
+            if success
+            else "Failed to set device type."
+        ),
+    )
+
+
+@router.get("/{device_id}/insights", response_model=InsightsResponse)
+async def get_device_insights_route(
+    device_id: str,
+    start: str = Query(..., description="ISO-8601 window start"),
+    end: str = Query(..., description="ISO-8601 window end"),
+    insight_type: str = Query(..., description="adblock | blocked | inspected"),
+    cadence: str = Query("daily", description="daily | hourly"),
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> InsightsResponse:
+    """Query a single device's insights time series. Premium-gated."""
+    validate_insight_params(start, end, insight_type, cadence)
+    raw = await client.get_device_insights(
+        device_id,
+        network_id=network_id,
+        start=start,
+        end=end,
+        cadence=cadence,
+        insight_type=insight_type,
+    )
+    return normalize_insights(raw)

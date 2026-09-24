@@ -7,10 +7,46 @@ This module provides extraction and normalization functions.
 """
 
 import ipaddress
+import re
 import unicodedata
+from datetime import datetime
 from typing import Any
 
 from ._coercion import coerce_bool, coerce_int, coerce_numeric
+
+# Shared identifier/format validators (phase-6.0-revamp.md WP6): kept here
+# alongside ``is_unsafe_short_text`` since they are reused across
+# ``routes/networks.py``, ``routes/devices.py``, ``routes/profiles.py`` and
+# ``routes/eeros.py`` for query/body validation before any SDK call.
+_MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+_DEVICE_TYPE_RE = re.compile(r"^[a-z0-9_]{1,40}$")
+
+
+def is_valid_mac(value: str) -> bool:
+    """Check whether ``value`` is a lowercase colon-separated MAC address."""
+    return bool(_MAC_RE.match(value))
+
+
+def is_valid_device_type(value: str) -> bool:
+    """Conservative allowlist for ``set_device_type``.
+
+    eero-api v8.0.3 ships no device-type catalogue
+    (sdk-surface-map-v8.0.3.md WP6: "ABSENT in SDK"), so this accepts any
+    lowercase snake_case token up to 40 characters rather than a fixed
+    enum built from unverified sources.
+    """
+    return bool(_DEVICE_TYPE_RE.match(value))
+
+
+def is_valid_iso8601(value: str) -> bool:
+    """Check whether ``value`` parses as an ISO-8601 datetime (Z accepted)."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
 
 
 def has_control_or_format_chars(value: str) -> bool:
