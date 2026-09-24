@@ -157,17 +157,57 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Assertion 2: exactly two service processes, no eero-exporter
+# Assertion 2: exactly two long-lived service processes, no eero-exporter
 # ---------------------------------------------------------------------------
-PS_OUTPUT="$(docker exec "$CONTAINER_NAME" ps -eo comm 2>/dev/null || true)"
-VM_PROC_COUNT="$(echo "$PS_OUTPUT" | grep -c 'victoria-metrics' || true)"
-API_PROC_COUNT="$(echo "$PS_OUTPUT" | grep -cE 'uvicorn|python' || true)"
-EXPORTER_PROC_COUNT="$(echo "$PS_OUTPUT" | grep -c 'eero-exporter' || true)"
+# `ps -eo comm` truncates command names to 15 characters, so
+# 'victoria-metrics' (16 chars) never matches — use `ps -eo pid,args` for the
+# full, untruncated argv instead.
+PS_OUTPUT="$(docker exec "$CONTAINER_NAME" ps -eo pid,args 2>/dev/null || true)"
 
-if [ "$VM_PROC_COUNT" -ge 1 ] && [ "$API_PROC_COUNT" -ge 1 ] && [ "$EXPORTER_PROC_COUNT" -eq 0 ]; then
-    pass "two service processes present (victoria-metrics, uvicorn/python), no eero-exporter"
+# Build the "service" view of the process table by excluding, explicitly and
+# for a documented reason each:
+#   - the ps(1) header line ("PID COMMAND"/"PID ARGS") — not a process at all
+#   - the `ps -eo pid,args` invocation itself — this is the measurement
+#     command; it always shows up in its own snapshot and would otherwise
+#     inflate the count by one on every run
+#   - the `sed 's/^/[victoria] /'` (and, after the two-child supervisor
+#     change, `sed 's/^/[api] /'`) log-prefix helpers attached via process
+#     substitution in container-start.sh — plumbing that shares the
+#     victoria-metrics/uvicorn process's stdout pipe, not a service in its
+#     own right
+#   - the container-start.sh orchestrator shell (PID 1). Since
+#     container-start.sh no longer `exec`s into uvicorn (it backgrounds both
+#     children so it can forward SIGTERM to each on `docker stop`), bash
+#     stays resident for the container's whole life. It is the
+#     entrypoint/orchestrator — container-start.sh's own header comment
+#     describes "the 2 processes" as victoria-metrics and FastAPI, not
+#     itself — so it is excluded here the same way the measurement and
+#     logging plumbing are.
+#
+# NOTE on matching the sed helper: ps(1) shows raw argv, not the shell's
+# quoted source — `sed 's/^/[victoria] /'` in container-start.sh appears in
+# `ps -eo pid,args` as the unquoted argv `sed s/^/[victoria] /` (verified: a
+# live `sed "s/^/[victoria] /"` background job shows exactly that in
+# `ps -eo pid,args`). The pattern below matches that literal, unquoted form.
+SERVICE_LINES="$(echo "$PS_OUTPUT" \
+    | grep -v -E '^\s*PID\s' \
+    | grep -v -- '-eo pid,args' \
+    | grep -v -E 'sed s/\^/\[(victoria|api)\] /' \
+    | grep -v -F 'container-start.sh' \
+    || true)"
+
+VM_MATCHES="$(echo "$SERVICE_LINES" | grep -c 'victoria-metrics' || true)"
+API_MATCHES="$(echo "$SERVICE_LINES" | grep -cE 'uvicorn' || true)"
+EXPORTER_MATCHES="$(echo "$SERVICE_LINES" | grep -c 'eero-exporter' || true)"
+TOTAL_SERVICE_LINES="$(echo "$SERVICE_LINES" | grep -c . || true)"
+
+if [ "$VM_MATCHES" -eq 1 ] && [ "$API_MATCHES" -eq 1 ] && [ "$EXPORTER_MATCHES" -eq 0 ] && [ "$TOTAL_SERVICE_LINES" -eq 2 ]; then
+    pass "exactly two long-lived service processes (victoria-metrics, uvicorn), no eero-exporter"
 else
-    fail "process check failed (victoria-metrics=${VM_PROC_COUNT}, api=${API_PROC_COUNT}, exporter=${EXPORTER_PROC_COUNT}); ps output:
+    fail "expected exactly 2 service processes (1 victoria-metrics + 1 uvicorn, 0 exporter); got victoria-metrics=${VM_MATCHES}, uvicorn=${API_MATCHES}, exporter=${EXPORTER_MATCHES}, total-after-exclusions=${TOTAL_SERVICE_LINES}
+filtered (post-exclusion) process list:
+${SERVICE_LINES}
+raw ps -eo pid,args:
 ${PS_OUTPUT}"
 fi
 

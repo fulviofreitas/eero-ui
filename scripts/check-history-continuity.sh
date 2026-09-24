@@ -6,10 +6,36 @@
 #
 # Given a VictoriaMetrics base URL and a boundary timestamp (the moment
 # collection handed over from eero-prometheus-exporter to eero-ui's own
-# collector), runs a `query_range` for each of the eight § 2.3 metrics across
-# a window of +/- 2h around the boundary, and reports whether each metric
-# returns exactly one series per distinct label set across that window (i.e.
-# no split into two disjoint series either side of the boundary).
+# collector), runs TWO separate `query_range` calls per § 2.3 metric — one
+# strictly before the boundary ([boundary-window, boundary-1s]) and one
+# strictly after it ([boundary+1s, boundary+window]) — and checks continuity
+# across the two independently:
+#
+#   1. Label-KEY-set continuity: every distinct set of label *names* seen
+#      pre-boundary (sorted, ignoring __name__ and ignoring values, since a
+#      device's `name`/label *values* may legitimately change) must still
+#      appear post-boundary. This catches the collector silently dropping or
+#      renaming a label across the handover.
+#   2. Identity continuity: using only the identity-stable labels
+#      (network_id, and device_id or eero_id where the metric has them —
+#      deliberately excluding churn-prone labels like name/mac/manufacturer,
+#      see phase-6.0-revamp.md § 2.3's "Rename-driven label churn" note),
+#      every pre-boundary identity is compared against the post-boundary
+#      identity set. If ALL pre-boundary identities vanish post-boundary
+#      (zero overlap) while post-boundary data exists for other identities,
+#      that's flagged as a hard FAIL — it means the collector re-derived
+#      entirely new identities across the boundary (e.g. a change in
+#      extract_id_from_url or its inputs), not ordinary device churn. If SOME
+#      but not all identities carry over, that's expected per the plan's
+#      documented stale-series/rename-churn behaviour and is reported as an
+#      informational note rather than a failure.
+#
+# A single-window "one series per label set" check (the previous version of
+# this script) cannot detect a real split: VictoriaMetrics already
+# deduplicates identical label sets into one series within a single query, so
+# that check could never fail. Querying pre- and post-boundary windows
+# independently and comparing across them is what actually exercises
+# continuity.
 #
 # This is a read-only diagnostic against an existing VictoriaMetrics volume
 # that already contains pre-6.0 data written by the embedded exporter — it
@@ -98,12 +124,20 @@ if [ -z "$BOUNDARY_EPOCH" ]; then
 fi
 
 WINDOW_SECONDS=$((WINDOW_HOURS * 3600))
-START_EPOCH=$((BOUNDARY_EPOCH - WINDOW_SECONDS))
-END_EPOCH=$((BOUNDARY_EPOCH + WINDOW_SECONDS))
+PRE_START_EPOCH=$((BOUNDARY_EPOCH - WINDOW_SECONDS))
+PRE_END_EPOCH=$((BOUNDARY_EPOCH - 1))
+POST_START_EPOCH=$((BOUNDARY_EPOCH + 1))
+POST_END_EPOCH=$((BOUNDARY_EPOCH + WINDOW_SECONDS))
+
+fmt_epoch() {
+    date -u -d "@$1" 2>/dev/null || date -u -r "$1" 2>/dev/null
+}
 
 echo "VictoriaMetrics URL: ${VM_URL}"
 echo "Boundary: ${BOUNDARY} (epoch ${BOUNDARY_EPOCH})"
-echo "Window: [$(date -u -d "@${START_EPOCH}" 2>/dev/null || date -u -r "${START_EPOCH}" 2>/dev/null), $(date -u -d "@${END_EPOCH}" 2>/dev/null || date -u -r "${END_EPOCH}" 2>/dev/null)] step=${STEP}"
+echo "Pre-boundary window:  [$(fmt_epoch "$PRE_START_EPOCH"), $(fmt_epoch "$PRE_END_EPOCH")]"
+echo "Post-boundary window: [$(fmt_epoch "$POST_START_EPOCH"), $(fmt_epoch "$POST_END_EPOCH")]"
+echo "step=${STEP}"
 echo ""
 
 METRICS=(
@@ -130,37 +164,100 @@ fail() {
     FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
-for metric in "${METRICS[@]}"; do
-    response="$(curl -s -G "${VM_URL}/api/v1/query_range" \
+# jq filter: for each result series, emit the sorted, comma-joined set of
+# label KEYS (excluding __name__) — schema shape, ignoring values.
+KEYSET_FILTER='[.data.result[] | (.metric | keys | map(select(. != "__name__")) | sort | join(","))] | unique | .[]'
+
+# jq filter: for each result series, emit the sorted, comma-joined
+# key=value pairs for ONLY the identity-stable labels (network_id,
+# device_id, eero_id) that are present — ignoring name/mac/manufacturer/etc,
+# which may legitimately change across the boundary without breaking
+# continuity of the underlying entity.
+IDENTITY_FILTER='[.data.result[] | (.metric | to_entries | map(select(.key == "network_id" or .key == "device_id" or .key == "eero_id")) | sort_by(.key) | map("\(.key)=\(.value)") | join(","))] | unique | .[]'
+
+query_window() {
+    local metric="$1" start="$2" end="$3"
+    curl -s -G "${VM_URL}/api/v1/query_range" \
         --data-urlencode "query=${metric}" \
-        --data-urlencode "start=${START_EPOCH}" \
-        --data-urlencode "end=${END_EPOCH}" \
-        --data-urlencode "step=${STEP}" || true)"
+        --data-urlencode "start=${start}" \
+        --data-urlencode "end=${end}" \
+        --data-urlencode "step=${STEP}" || true
+}
 
-    status="$(echo "$response" | jq -r '.status // "error"' 2>/dev/null || echo "error")"
-    if [ "$status" != "success" ]; then
-        fail "${metric}: query_range did not return success (raw: ${response})"
+for metric in "${METRICS[@]}"; do
+    pre_response="$(query_window "$metric" "$PRE_START_EPOCH" "$PRE_END_EPOCH")"
+    post_response="$(query_window "$metric" "$POST_START_EPOCH" "$POST_END_EPOCH")"
+
+    pre_status="$(echo "$pre_response" | jq -r '.status // "error"' 2>/dev/null || echo "error")"
+    post_status="$(echo "$post_response" | jq -r '.status // "error"' 2>/dev/null || echo "error")"
+
+    if [ "$pre_status" != "success" ] || [ "$post_status" != "success" ]; then
+        fail "${metric}: query_range did not return success (pre-status=${pre_status}, post-status=${post_status})"
         continue
     fi
 
-    series_count="$(echo "$response" | jq -r '.data.result | length' 2>/dev/null || echo 0)"
-    if [ "$series_count" -eq 0 ]; then
-        fail "${metric}: no series returned across the boundary window — cannot confirm continuity (metric absent, or no data in this window)"
+    pre_series_count="$(echo "$pre_response" | jq -r '.data.result | length' 2>/dev/null || echo 0)"
+    post_series_count="$(echo "$post_response" | jq -r '.data.result | length' 2>/dev/null || echo 0)"
+
+    if [ "$pre_series_count" -eq 0 ]; then
+        echo "SKIP: ${metric}: no pre-boundary data in this window — nothing to check continuity against (metric may be new in 6.0, or the window doesn't reach far enough back)"
         continue
     fi
 
-    # Group by label set (excluding __name__) and count occurrences.
-    # If names/labels were preserved across the handover, there should be
-    # exactly one series per distinct label set spanning the whole window —
-    # not two disjoint series (one pre-boundary, one post-boundary) for the
-    # same logical entity.
-    label_sets="$(echo "$response" | jq -r '.data.result[] | (.metric | to_entries | map(select(.key != "__name__")) | sort_by(.key) | map("\(.key)=\(.value)") | join(",")) ' 2>/dev/null)"
-    distinct_label_sets="$(echo "$label_sets" | sort -u | wc -l | tr -d '[:space:]')"
+    if [ "$post_series_count" -eq 0 ]; then
+        fail "${metric}: ${pre_series_count} series pre-boundary but ZERO post-boundary — collection did not resume for this metric after the handover"
+        continue
+    fi
 
-    if [ "$distinct_label_sets" -eq "$series_count" ]; then
-        pass "${metric}: ${series_count} series returned, ${distinct_label_sets} distinct label set(s) — one series per label set (no split detected)"
+    pre_key_sets="$(echo "$pre_response" | jq -r "$KEYSET_FILTER" 2>/dev/null)"
+    post_key_sets="$(echo "$post_response" | jq -r "$KEYSET_FILTER" 2>/dev/null)"
+
+    # (1) Label-key-set continuity: every pre-boundary key-set must still
+    # appear post-boundary.
+    missing_key_sets=""
+    while IFS= read -r ks; do
+        [ -z "$ks" ] && continue
+        if ! printf '%s\n' "$post_key_sets" | grep -qxF "$ks"; then
+            missing_key_sets="${missing_key_sets}[${ks}] "
+        fi
+    done <<< "$pre_key_sets"
+
+    if [ -n "$missing_key_sets" ]; then
+        fail "${metric}: label-key set(s) present pre-boundary are missing post-boundary — differing label keys: ${missing_key_sets}"
+        continue
+    fi
+
+    pre_identities="$(echo "$pre_response" | jq -r "$IDENTITY_FILTER" 2>/dev/null)"
+    post_identities="$(echo "$post_response" | jq -r "$IDENTITY_FILTER" 2>/dev/null)"
+
+    # Metrics with no identity-stable labels at all (e.g. eero_up has no
+    # labels) have nothing further to check here — presence in both windows,
+    # already confirmed above, is the whole story.
+    if [ -z "$pre_identities" ]; then
+        pass "${metric}: ${pre_series_count} series pre-boundary, ${post_series_count} post-boundary, label keys match, no identity labels to compare"
+        continue
+    fi
+
+    # (2) Identity continuity: compare pre- and post-boundary identity sets.
+    pre_identity_count=0
+    carried_over_count=0
+    missing_identities=""
+    while IFS= read -r id; do
+        [ -z "$id" ] && continue
+        pre_identity_count=$((pre_identity_count + 1))
+        if printf '%s\n' "$post_identities" | grep -qxF "$id"; then
+            carried_over_count=$((carried_over_count + 1))
+        else
+            missing_identities="${missing_identities}(${id}) "
+        fi
+    done <<< "$pre_identities"
+
+    if [ "$carried_over_count" -eq 0 ] && [ "$pre_identity_count" -gt 0 ]; then
+        fail "${metric}: ALL ${pre_identity_count} pre-boundary identities vanished post-boundary (zero overlap) — differing label keys/identities: ${missing_identities}. This indicates the collector re-derived new identities across the handover, not ordinary device churn."
+    elif [ -n "$missing_identities" ]; then
+        pass "${metric}: ${carried_over_count}/${pre_identity_count} pre-boundary identities carried over post-boundary; label keys match. Not carried over (expected churn — devices/eeros removed or renamed, see § 2.3 stale-series note): ${missing_identities}"
     else
-        fail "${metric}: ${series_count} series but only ${distinct_label_sets} distinct label set(s) — possible split series across the boundary (duplicate label sets returned as separate series)"
+        pass "${metric}: all ${pre_identity_count} pre-boundary identities carried over post-boundary; label keys match"
     fi
 done
 
