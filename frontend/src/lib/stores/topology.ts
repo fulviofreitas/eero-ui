@@ -577,9 +577,9 @@ function transformToTopology(
 			const isWired = !device.wireless;
 			const edgeStyle = device.connected
 				? isWired
-					? 'stroke: #22c55e; stroke-width: 2px;' // Wired: solid green
-					: 'stroke: #3b82f6; stroke-width: 1.5px; stroke-dasharray: 6 3;' // Wireless: dotted blue
-				: 'stroke: #6b7280; stroke-width: 1px; stroke-dasharray: 4 2;'; // Offline: gray dashed
+					? 'stroke: var(--color-success); stroke-width: 2px;' // Wired: solid
+					: 'stroke: var(--color-accent); stroke-width: 1.5px; stroke-dasharray: 6 3;' // Wireless: dotted
+				: 'stroke: var(--color-text-muted); stroke-width: 1px; stroke-dasharray: 4 2;'; // Offline: dashed
 
 			edges.push({
 				id: `client-${eeroId}-${deviceId}`,
@@ -602,14 +602,14 @@ function transformToTopology(
 function getQualityColor(quality: EdgeQuality): string {
 	switch (quality) {
 		case 'excellent':
-			return '#22c55e';
+			return 'var(--color-success)';
 		case 'good':
-			return '#3b82f6';
+			return 'var(--color-accent)';
 		case 'fair':
-			return '#f59e0b';
+			return 'var(--color-warning)';
 		case 'poor':
-			return '#ef4444';
+			return 'var(--color-danger)';
 		default:
-			return '#6b7280';
+			return 'var(--color-text-muted)';
 	}
 }

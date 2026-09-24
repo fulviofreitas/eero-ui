@@ -20,6 +20,8 @@
 	--color-text-primary: #e6edf3;
 	--color-text-secondary: #8b949e;
 	--color-text-muted: #6e7681;
+	/* Alias kept for call sites (BarGauge, dashboard) that reference --color-text directly. */
+	--color-text: var(--color-text-primary);
 
 	/* Status Colors */
 	--color-success: #3fb950;
@@ -61,6 +63,58 @@
 	--transition-fast: 0.1s ease;
 	--transition-normal: 0.2s ease;
 	--transition-slow: 0.3s ease;
+
+	/* Font-size scale */
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-base: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+
+	/*
+	 * Z-index scale.
+	 * Replaces the magic 1 / 2 / 10 / 15 / 20 / 40 / 49 / 50 / 100 / 1000 values that used to be
+	 * scattered across app.css, +layout.svelte, DeviceList.svelte, DeviceRow.svelte,
+	 * ExportMenu.svelte, ConfirmDialog.svelte, Toast.svelte, NetworkMap.svelte and the four route
+	 * detail pages that own a modal (devices/[id], profiles, profiles/[id], network/[id]).
+	 */
+	--z-base: 1;
+	--z-dropdown: 20;
+	--z-sticky: 40;
+	--z-overlay: 49;
+	--z-sidebar: 50;
+	--z-modal: 100;
+	--z-toast: 1000;
+
+	/*
+	 * Breakpoints (documentation only — CSS custom properties cannot be read inside a media query
+	 * feature list). This is the single source of truth for the pixel values; keep it in sync with
+	 * $lib/breakpoints.ts, which exposes the same numbers to TypeScript/JS.
+	 *   --bp-sm: 480px   phones
+	 *   --bp-md: 768px   tablets / sidebar collapse (see @media (max-width: 768px) below)
+	 *   --bp-lg: 1024px  small laptops
+	 *   --bp-xl: 1400px  matches .container max-width
+	 */
+
+	/* Chart series palette — shared across Chart.js components, defined for both themes */
+	--chart-1: #58a6ff;
+	--chart-2: #3fb950;
+	--chart-3: #d29922;
+	--chart-4: #f85149;
+	--chart-5: #bc8cff;
+	--chart-6: #39c5cf;
+	--chart-grid: rgba(230, 237, 243, 0.08);
+	--chart-text: var(--color-text-secondary);
+
+	/* Focus ring */
+	--focus-ring: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-accent);
+
+	/* Strong scrim for full-block overlays (loading/error/empty states over canvases like the
+	   topology map). Matches --color-bg-primary per theme so text drawn on top (using the normal
+	   text tokens) always has the contrast that theme expects. */
+	--color-overlay: rgba(13, 17, 23, 0.85);
 }
 
 /* ============================================
@@ -79,6 +133,7 @@
 	--color-text-primary: #1f2328;
 	--color-text-secondary: #656d76;
 	--color-text-muted: #8c959f;
+	--color-text: var(--color-text-primary);
 
 	/* Status Colors - slightly adjusted for light bg */
 	--color-success: #1a7f37;
@@ -93,6 +148,17 @@
 	/* Accent - adjusted for light bg */
 	--color-accent: #0969da;
 	--color-accent-hover: #0550ae;
+
+	/* Chart series palette - adjusted for light bg */
+	--chart-1: #0969da;
+	--chart-2: #1a7f37;
+	--chart-3: #9a6700;
+	--chart-4: #cf222e;
+	--chart-5: #8250df;
+	--chart-6: #1b7c83;
+	--chart-grid: rgba(31, 35, 40, 0.1);
+
+	--color-overlay: rgba(255, 255, 255, 0.9);
 
 	/* Shadows - softer for light theme */
 	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -314,12 +380,15 @@ code {
 	background-color: var(--color-bg-tertiary);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-md);
-	outline: none;
 	transition: border-color var(--transition-fast);
 }
 
 .input:focus {
 	border-color: var(--color-accent);
+}
+
+.input:focus-visible {
+	box-shadow: var(--focus-ring);
 }
 
 .input::placeholder {
@@ -459,7 +528,7 @@ code {
 	position: fixed;
 	bottom: var(--space-4);
 	right: var(--space-4);
-	z-index: 1000;
+	z-index: var(--z-toast);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2);
@@ -501,7 +570,7 @@ code {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	z-index: 100;
+	z-index: var(--z-modal);
 	animation: fadeIn 0.15s ease;
 }
 
@@ -585,5 +654,27 @@ code {
 
 	.container {
 		padding: 0 var(--space-3);
+	}
+}
+
+/* ============================================
+   Focus visibility
+   ============================================ */
+:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+/* ============================================
+   Reduced motion
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
 	}
 }

@@ -5,12 +5,12 @@
  */
 
 import { writable, derived } from 'svelte/store';
+import { resolveInitialTheme, hasStoredThemePreference, THEME_STORAGE_KEY } from '$lib/theme';
+import type { Theme } from '$lib/theme';
 
 // ============================================
 // Types
 // ============================================
-
-type Theme = 'dark' | 'light';
 
 interface Toast {
 	id: string;
@@ -42,15 +42,12 @@ interface UIState {
 // Store
 // ============================================
 
-// Get initial theme from localStorage or default to dark
+// Get initial theme from localStorage, falling back to the OS preference (see lib/theme.ts).
 function getInitialTheme(): Theme {
-	if (typeof window !== 'undefined') {
-		const saved = localStorage.getItem('eero-ui-theme') as Theme | null;
-		if (saved === 'light' || saved === 'dark') {
-			return saved;
-		}
-	}
-	return 'dark';
+	if (typeof window === 'undefined') return 'dark';
+	const stored = localStorage.getItem(THEME_STORAGE_KEY);
+	const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+	return resolveInitialTheme(stored, prefersDark);
 }
 
 // Persist sidebar state; first-time visitors default open on desktop, closed on mobile
@@ -197,12 +194,25 @@ function createUIStore() {
 		},
 
 		/**
-		 * Initialize theme from localStorage (call on mount)
+		 * Initialize theme from localStorage (call on mount). While no explicit preference is
+		 * stored, keep following the OS `prefers-color-scheme` setting live.
 		 */
 		initTheme(): void {
 			const theme = getInitialTheme();
 			update((s) => ({ ...s, theme }));
-			this.applyTheme(theme);
+			this.applyTheme(theme, { persist: false });
+
+			if (typeof window !== 'undefined' && window.matchMedia) {
+				const media = window.matchMedia('(prefers-color-scheme: dark)');
+				const handleChange = (e: MediaQueryListEvent) => {
+					const stored = localStorage.getItem(THEME_STORAGE_KEY);
+					if (hasStoredThemePreference(stored)) return; // explicit choice wins
+					const next: Theme = e.matches ? 'dark' : 'light';
+					update((s) => ({ ...s, theme: next }));
+					this.applyTheme(next, { persist: false });
+				};
+				media.addEventListener('change', handleChange);
+			}
 		},
 
 		/**
@@ -225,12 +235,15 @@ function createUIStore() {
 		},
 
 		/**
-		 * Apply theme to document and persist
+		 * Apply theme to document, and persist it as an explicit user preference unless told
+		 * otherwise (OS-driven updates while unset must NOT be written back as a stored choice).
 		 */
-		applyTheme(theme: Theme): void {
+		applyTheme(theme: Theme, { persist = true }: { persist?: boolean } = {}): void {
 			if (typeof window !== 'undefined') {
 				document.documentElement.setAttribute('data-theme', theme);
-				localStorage.setItem('eero-ui-theme', theme);
+				if (persist) {
+					localStorage.setItem(THEME_STORAGE_KEY, theme);
+				}
 			}
 		}
 	};

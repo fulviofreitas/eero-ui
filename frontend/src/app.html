@@ -9,6 +9,25 @@
 			content="Eero Network Dashboard - Monitor and manage your mesh network"
 		/>
 		<title>Eero Dashboard</title>
+		<script>
+			// Theme bootstrap: set data-theme before first paint to avoid a dark-theme flash for
+			// light-theme users. Mirrors the pure logic in src/lib/theme.ts (resolveInitialTheme) —
+			// duplicated here because this runs before the module graph exists.
+			(function () {
+				try {
+					var stored = localStorage.getItem('eero-ui-theme');
+					var theme =
+						stored === 'light' || stored === 'dark'
+							? stored
+							: window.matchMedia('(prefers-color-scheme: dark)').matches
+								? 'dark'
+								: 'light';
+					document.documentElement.setAttribute('data-theme', theme);
+				} catch (e) {
+					document.documentElement.setAttribute('data-theme', 'dark');
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
