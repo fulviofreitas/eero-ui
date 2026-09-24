@@ -41,7 +41,8 @@ class TestCreateInvite:
 
         assert response.status_code == 201
         assert "invite_url" not in response.text
-        assert response.json() == {"id": "inv-1", "role": "admin"}
+        assert "inv-1" not in response.text
+        assert response.json() == {"success": True, "role": "admin"}
         authenticated_client.create_invite.assert_called_once_with(
             role="admin", network_id="net-1"
         )

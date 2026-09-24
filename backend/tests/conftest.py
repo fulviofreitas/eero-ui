@@ -34,11 +34,32 @@ from httpx import ASGITransport, AsyncClient
 
 from app.deps import get_eero_client
 from app.main import app
+from app.routes.auth import limiter
 
 
 def make_raw_response(data, code: int = 200):
     """Helper to create a raw API response envelope."""
     return {"meta": {"code": code}, "data": data}
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset slowapi's in-memory limiter storage before every test.
+
+    WP7/WP8 (phase-6.0-revamp.md § 7) put dozens of routes across
+    networks.py/devices.py/eeros.py/profiles.py behind a handful of shared
+    scopes (``experimental_writes`` at 10/minute, plus ``speedtest``,
+    ``guest_password``, ``device_type``, ``led_brightness``). slowapi's
+    default storage is a single process-wide in-memory counter keyed by
+    remote address + scope, so without a reset a test late in the suite
+    that calls, say, an ``experimental_writes``-gated route inherits the
+    call count left behind by every earlier test that hit the same scope
+    from the same test-client IP, and starts failing with 429 instead of
+    the status the test actually asserts on. Reset happens before, not
+    after, so a test can still assert on rate-limit behavior itself
+    (e.g. a 429 on the Nth call within one test).
+    """
+    limiter.reset()
 
 
 @pytest.fixture(scope="session")
@@ -102,6 +123,14 @@ def authenticated_client(mock_eero_client):
     return mock_eero_client
 
 
+# Sent by every test client by default (main.py's CSRF guard middleware,
+# SECURITY-SME finding, 2026-09-24) so existing and new write tests keep
+# exercising the route logic they were written for rather than tripping
+# over the CSRF guard. ``test_csrf.py`` builds its own client without this
+# header to exercise the guard itself.
+_CSRF_HEADERS = {"X-Requested-With": "eero-ui"}
+
+
 @pytest.fixture
 async def async_client(mock_eero_client):
     """Async HTTP test client with mocked EeroClient.
@@ -115,7 +144,9 @@ async def async_client(mock_eero_client):
     app.dependency_overrides[get_eero_client] = override_get_eero_client
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=_CSRF_HEADERS
+    ) as client:
         yield client
 
     app.dependency_overrides.clear()
@@ -131,7 +162,9 @@ async def auth_client(authenticated_client):
     app.dependency_overrides[get_eero_client] = override_get_eero_client
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=_CSRF_HEADERS
+    ) as client:
         yield client
 
     app.dependency_overrides.clear()
@@ -156,6 +189,19 @@ def experimental_writes_enabled(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "experimental_writes", True)
+
+
+@pytest.fixture
+def account_identity_writes_enabled(monkeypatch):
+    """Enable ``EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES`` for one test.
+
+    Separate from, and additional to, ``experimental_writes_enabled``
+    (SECURITY-SME finding, 2026-09-24): account-identity routes require
+    both gates open.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "account_identity_writes", True)
     yield
 
 

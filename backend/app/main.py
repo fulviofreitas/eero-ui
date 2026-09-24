@@ -26,9 +26,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import settings
 from .deps import (
+    AccountIdentityWriteDisabledError,
     ExperimentalWriteDisabledError,
     clear_client_session,
     get_eero_client,
@@ -128,6 +130,41 @@ if settings.debug:
         allow_headers=["*"],
     )
 
+# CSRF guard (SECURITY-SME finding, 2026-09-24): the frontend authenticates
+# with an httpOnly cookie, so any cross-site page can make the browser send
+# it automatically on a state-changing request. This is a lightweight
+# custom-header check (not a token scheme) - a cross-site <form> or
+# fetch("no-cors") cannot set an arbitrary request header, so requiring one
+# is sufficient to block simple/no-cors CSRF while adding no state and no
+# extra round trip. Every POST/PUT/PATCH/DELETE under /api must carry
+# ``X-Requested-With: eero-ui``; GET/HEAD/OPTIONS are exempt (they must
+# stay side-effect-free anyway), and nothing outside /api is covered
+# (the SPA catch-all is not a same-origin-trust boundary). No path is
+# exempted - a route that legitimately needs to be called cross-site
+# (there are none today) would need a deliberate, separate carve-out.
+_CSRF_HEADER_NAME = "x-requested-with"
+_CSRF_HEADER_VALUE = "eero-ui"
+_CSRF_GUARDED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+async def _csrf_guard_middleware(request: Request, call_next):
+    if (
+        request.method in _CSRF_GUARDED_METHODS
+        and request.url.path.startswith("/api/")
+        and request.headers.get(_CSRF_HEADER_NAME, "").lower() != _CSRF_HEADER_VALUE
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": "Missing or invalid X-Requested-With header.",
+                "type": "csrf",
+            },
+        )
+    return await call_next(request)
+
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=_csrf_guard_middleware)
+
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -221,6 +258,25 @@ async def experimental_write_disabled_exception_handler(
                 "EERO_DASHBOARD_EXPERIMENTAL_WRITES=true to enable it."
             ),
             "type": "experimental_disabled",
+        },
+    )
+
+
+@app.exception_handler(AccountIdentityWriteDisabledError)
+async def account_identity_write_disabled_exception_handler(
+    request: Request, exc: AccountIdentityWriteDisabledError
+) -> JSONResponse:
+    """The write is gated behind ``EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES``,
+    in addition to the experimental-writes gate (SECURITY-SME finding,
+    2026-09-24)."""
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail": (
+                "This write is disabled. Set "
+                "EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES=true to enable it."
+            ),
+            "type": "account_identity_disabled",
         },
     )
 

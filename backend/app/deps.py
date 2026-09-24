@@ -11,7 +11,12 @@ from eero.exceptions import EeroAuthenticationException, EeroValidationException
 from fastapi import Depends, HTTPException, status
 
 from .config import settings
-from .transformers import extract_id_from_url, extract_list
+from .transformers import (
+    InvalidIdentifierError,
+    extract_id_from_url,
+    extract_list,
+    validate_path_id,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -97,6 +102,81 @@ async def require_experimental_writes() -> None:
     """
     if not settings.experimental_writes:
         raise ExperimentalWriteDisabledError()
+
+
+class AccountIdentityWriteDisabledError(Exception):
+    """Raised by ``require_account_identity_writes`` when its gate is closed.
+
+    Distinct from ``ExperimentalWriteDisabledError`` so ``main.py`` can map
+    it to a different ``type`` (``account_identity_disabled``) in the JSON
+    body, and so a route can require *both* gates independently.
+    """
+
+
+async def require_account_identity_writes() -> None:
+    """Second, independent dependency gating account-identity writes
+    (SECURITY-SME finding, 2026-09-24): ``PUT /account/email``,
+    ``PUT /account/phone`` and their ``/verify`` counterparts change the
+    credential eero uses to identify and recover the account, so
+    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` alone is not a strong enough
+    gate - an operator who enables it for an unrelated settings screen
+    would otherwise also silently expose account-takeover-adjacent writes.
+    Routes protected by this depend on it *in addition to*
+    ``require_experimental_writes``, not instead of it.
+
+    Raises ``AccountIdentityWriteDisabledError`` (mapped to 403 by the
+    handler in ``main.py``) unless
+    ``EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES`` is set.
+    """
+    if not settings.account_identity_writes:
+        raise AccountIdentityWriteDisabledError()
+
+
+async def validate_request_path_ids(
+    network_id: str | None = None,
+    eero_id: str | None = None,
+    profile_id: str | None = None,
+    device_id: str | None = None,
+) -> None:
+    """Router-level retrofit of ``transformers.validate_path_id`` (WP7
+    follow-up (a), coordinator directive 2026-09-24) onto every route with
+    a ``{network_id}``, ``{eero_id}``, ``{profile_id}`` or ``{device_id}``
+    path parameter.
+
+    Added to each of ``networks.py``/``devices.py``/``eeros.py``/
+    ``profiles.py``'s ``APIRouter(dependencies=[...])`` rather than to
+    every individual route: FastAPI resolves a router-level dependency's
+    own parameters from the request's actual path template, so a route
+    that has none of these four path parameters simply leaves them at
+    their ``None`` default here and this is a no-op for it - it is safe to
+    apply blanket rather than auditing each route's exact parameter set by
+    hand, and it can never mask a *body* or *query* parameter of the same
+    name (path parameters take precedence in FastAPI's own resolution, so
+    this dependency and the path operation function always see the same
+    value for a given name).
+
+    Raises:
+        HTTPException: 400 (static detail, never echoing the offending
+            value) if any of the four ids that IS present on this route
+            fails ``validate_path_id`` - rejects a value containing ``..``,
+            a bare newline (``%0A``), an embedded ``/``, or anything else
+            outside the SDK's own identifier grammar.
+    """
+    for name, value in (
+        ("network_id", network_id),
+        ("eero_id", eero_id),
+        ("profile_id", profile_id),
+        ("device_id", device_id),
+    ):
+        if value is None:
+            continue
+        try:
+            validate_path_id(value)
+        except InvalidIdentifierError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid {name}.",
+            )
 
 
 async def get_network_id(

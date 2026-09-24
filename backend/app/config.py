@@ -43,6 +43,15 @@ class Settings(BaseModel):
     # SDK writes are hidden behind this flag until a route opts in.
     experimental_writes: bool = False
 
+    # Account-identity writes gate (SECURITY-SME finding, 2026-09-24):
+    # PUT /account/email, PUT /account/phone and their /verify counterparts
+    # change the credential eero uses to identify and recover the account.
+    # ``experimental_writes`` alone is not a strong enough gate for that -
+    # any operator who turns it on for, say, the DHCP screen would also
+    # silently expose account takeover-adjacent writes. This is a second,
+    # independent flag; both must be on for those four routes.
+    account_identity_writes: bool = False
+
     class Config:
         """Pydantic config."""
 
@@ -108,6 +117,10 @@ def get_settings() -> Settings:
         ),
         experimental_writes=os.environ.get(
             "EERO_DASHBOARD_EXPERIMENTAL_WRITES", "false"
+        ).lower()
+        == "true",
+        account_identity_writes=os.environ.get(
+            "EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES", "false"
         ).lower()
         == "true",
     )

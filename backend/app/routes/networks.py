@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from .._coercion import coerce_bool
 from ..config import settings
-from ..deps import require_auth, require_experimental_writes
+from ..deps import require_auth, require_experimental_writes, validate_request_path_ids
 from ..transformers import (
     check_success,
     extract_data,
@@ -53,7 +53,7 @@ _PROPAGATE_FIRST = (
     EeroClientBlockedException,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_request_path_ids)])
 _LOGGER = logging.getLogger(__name__)
 
 # In-flight speed-test guard (security review finding, 2026-09-24): the last
@@ -1978,7 +1978,9 @@ class DdnsUpdateResponse(BaseModel):
     response_model=DdnsUpdateResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_ddns(
+    request: Request,
     network_id: str,
     body: DdnsUpdateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2034,7 +2036,9 @@ class BackupInternetToggleResponse(BaseModel):
     response_model=BackupInternetToggleResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_backup_internet(
+    request: Request,
     network_id: str,
     body: BackupInternetToggleRequest,
     client: EeroClient = Depends(require_auth),
@@ -2095,7 +2099,9 @@ class ThreadUpdateResponse(BaseModel):
     response_model=ThreadUpdateResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_thread(
+    request: Request,
     network_id: str,
     body: ThreadUpdateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2146,7 +2152,9 @@ async def update_thread(
     "/{network_id}/thread/regenerate",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("1/minute", scope="thread_regenerate")
 async def regenerate_thread_credentials_route(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> dict[str, Any]:
@@ -2258,7 +2266,9 @@ class NotificationSettingsUpdateRequest(BaseModel):
     response_model=NotificationsResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_network_notifications(
+    request: Request,
     network_id: str,
     body: NotificationSettingsUpdateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2317,7 +2327,9 @@ async def update_network_notifications(
     "/{network_id}/notifications/mark-read",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def mark_notifications_read_route(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> dict[str, Any]:
@@ -2352,10 +2364,13 @@ class InviteCreateResponse(BaseModel):
 
     Deliberately excludes ``invite_url`` (security review posture applied
     prospectively): a join credential the caller can act on out-of-band,
-    not something to echo back over this API.
+    not something to echo back over this API. Also excludes any id
+    (SECURITY-SME finding, 2026-09-24): the frontend re-lists
+    ``GET /{network_id}/invites`` to discover the new invite's id rather
+    than trust one echoed by the create response.
     """
 
-    id: str | None = None
+    success: bool = True
     role: str | None = None
 
 
@@ -2368,7 +2383,9 @@ _INVITE_ROLES = frozenset({"owner", "admin"})
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("2/minute", scope="invite_create")
 async def create_network_invite(
+    request: Request,
     network_id: str,
     body: InviteCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2377,7 +2394,9 @@ async def create_network_invite(
 
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); ``role`` is
     validated against the SDK's own ``owner``/``admin`` allowlist before
-    any network round trip. Never retried on failure.
+    any network round trip. Never retried on failure. Rate limited tighter
+    than the shared experimental-writes scope (2/minute, SECURITY-SME
+    finding 2026-09-24) since each call mints a join credential.
     """
     role = body.role.strip().lower()
     if role not in _INVITE_ROLES:
@@ -2388,7 +2407,7 @@ async def create_network_invite(
     raw_result = await client.create_invite(role=role, network_id=network_id)
     data = extract_data(raw_result)
     return InviteCreateResponse(
-        id=extract_id_from_url(data.get("url")) or data.get("invite_id"),
+        success=check_success(raw_result),
         role=data.get("invite_role") or role,
     )
 
@@ -2407,7 +2426,9 @@ class InviteUpdateRequest(BaseModel):
     response_model=InviteSummary,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_network_invite(
+    request: Request,
     network_id: str,
     invite_id: str,
     body: InviteUpdateRequest,
@@ -2434,7 +2455,9 @@ async def update_network_invite(
     "/{network_id}/invites/{invite_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_network_invite(
+    request: Request,
     network_id: str,
     invite_id: str,
     client: EeroClient = Depends(require_auth),
@@ -2452,7 +2475,9 @@ async def delete_network_invite(
     "/{network_id}/members/{member_id}/promote",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def promote_network_member(
+    request: Request,
     network_id: str,
     member_id: str,
     client: EeroClient = Depends(require_auth),
@@ -2470,7 +2495,9 @@ async def promote_network_member(
     "/{network_id}/admins/{user_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def remove_network_admin(
+    request: Request,
     network_id: str,
     user_id: str,
     client: EeroClient = Depends(require_auth),
@@ -2488,7 +2515,9 @@ async def remove_network_admin(
     "/{network_id}/pending-admin/cancel",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def cancel_pending_admin_route(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> dict[str, Any]:
@@ -2551,7 +2580,9 @@ class BackupAccessPointCreateRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_backup_access_point(
+    request: Request,
     network_id: str,
     body: BackupAccessPointCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2582,7 +2613,9 @@ class BackupAccessPointOrderRequest(BaseModel):
     "/{network_id}/backup-access-points/order",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def reorder_backup_access_points(
+    request: Request,
     network_id: str,
     body: BackupAccessPointOrderRequest,
     client: EeroClient = Depends(require_auth),
@@ -2618,7 +2651,9 @@ class BackupAccessPointUpdateRequest(BaseModel):
     response_model=BackupAccessPoint,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_backup_access_point_route(
+    request: Request,
     network_id: str,
     ap_id: str,
     body: BackupAccessPointUpdateRequest,
@@ -2647,7 +2682,9 @@ async def update_backup_access_point_route(
     "/{network_id}/backup-access-points/{ap_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_backup_access_point_route(
+    request: Request,
     network_id: str,
     ap_id: str,
     client: EeroClient = Depends(require_auth),
@@ -2672,7 +2709,9 @@ class BackupSsidDiscoveryResponse(BaseModel):
     response_model=BackupSsidDiscoveryResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def discover_backup_ssids_route(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> BackupSsidDiscoveryResponse:
@@ -2691,7 +2730,9 @@ async def discover_backup_ssids_route(
     "/{network_id}/backup-access-points/check",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def backup_connectivity_check_route(
+    request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> dict[str, Any]:
@@ -2814,7 +2855,9 @@ async def list_forwards(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_forward_route(
+    request: Request,
     network_id: str,
     body: ForwardCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2844,7 +2887,9 @@ async def create_forward_route(
     response_model=ForwardSummary,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_forward_route(
+    request: Request,
     network_id: str,
     forward_id: str,
     body: ForwardUpdateRequest,
@@ -2872,7 +2917,9 @@ async def update_forward_route(
     "/{network_id}/forwards/{forward_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_forward_route(
+    request: Request,
     network_id: str,
     forward_id: str,
     client: EeroClient = Depends(require_auth),
@@ -2960,7 +3007,9 @@ async def list_reservations(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_reservation_route(
+    request: Request,
     network_id: str,
     body: ReservationCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -2995,7 +3044,9 @@ async def create_reservation_route(
     response_model=ReservationSummary,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_reservation_route(
+    request: Request,
     network_id: str,
     reservation_id: str,
     body: ReservationUpdateRequest,
@@ -3026,7 +3077,9 @@ async def update_reservation_route(
     "/{network_id}/reservations/{reservation_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_reservation_route(
+    request: Request,
     network_id: str,
     reservation_id: str,
     delete_forwards: bool | None = Query(None),
@@ -3105,7 +3158,9 @@ class DomainRequest(BaseModel):
     response_model=ContentFilterResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def allow_domain_route(
+    request: Request,
     network_id: str,
     body: DomainRequest,
     client: EeroClient = Depends(require_auth),
@@ -3131,7 +3186,9 @@ async def allow_domain_route(
     response_model=ContentFilterResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def unallow_domain_route(
+    request: Request,
     network_id: str,
     body: DomainRequest,
     client: EeroClient = Depends(require_auth),
@@ -3159,7 +3216,9 @@ async def unallow_domain_route(
     response_model=ContentFilterResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def block_domain_route(
+    request: Request,
     network_id: str,
     body: DomainRequest,
     client: EeroClient = Depends(require_auth),
@@ -3183,7 +3242,9 @@ async def block_domain_route(
     response_model=ContentFilterResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def unblock_domain_route(
+    request: Request,
     network_id: str,
     body: DomainRequest,
     client: EeroClient = Depends(require_auth),
@@ -3221,7 +3282,9 @@ class DomainForProfilesRequest(BaseModel):
     "/{network_id}/content-filter/allow-for-profiles",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def allow_domain_for_profiles_route(
+    request: Request,
     network_id: str,
     body: DomainForProfilesRequest,
     client: EeroClient = Depends(require_auth),
@@ -3246,7 +3309,9 @@ async def allow_domain_for_profiles_route(
     "/{network_id}/content-filter/allow-for-profiles",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def unallow_domain_for_profiles_route(
+    request: Request,
     network_id: str,
     body: DomainForProfilesRequest,
     client: EeroClient = Depends(require_auth),
@@ -3282,7 +3347,9 @@ class DomainBlockForProfilesRequest(BaseModel):
     "/{network_id}/content-filter/block-for-profiles",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def block_domain_for_profiles_route(
+    request: Request,
     network_id: str,
     body: DomainBlockForProfilesRequest,
     client: EeroClient = Depends(require_auth),
@@ -3303,7 +3370,9 @@ async def block_domain_for_profiles_route(
     "/{network_id}/content-filter/block-for-profiles",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def unblock_domain_for_profiles_route(
+    request: Request,
     network_id: str,
     body: DomainBlockForProfilesRequest,
     client: EeroClient = Depends(require_auth),

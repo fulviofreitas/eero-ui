@@ -73,10 +73,29 @@ def validate_path_id(value: str) -> str:
 
 
 # Recursively stripped from every passthrough (undocumented-shape) API
-# response before it reaches the client (security review, 2026-09-24):
-# credential-shaped keys the eero cloud API is not contractually forbidden
-# from including in one of these payloads.
-_SENSITIVE_KEY_RE = re.compile(r"(password|psk|secret|token|invite_url)", re.IGNORECASE)
+# response before it reaches the client (security review, 2026-09-24;
+# widened by SECURITY-SME finding, 2026-09-24). Credential-shaped keys the
+# eero cloud API is not contractually forbidden from including in one of
+# these payloads. ``key``/``credential`` are broad on their own - e.g. a
+# scan result's "channel" or a connection's "network_key" - so
+# ``_SENSITIVE_KEY_ALLOWLIST`` exempts specific, verified-safe key names
+# rather than narrowing the pattern itself.
+_SENSITIVE_KEY_RE = re.compile(
+    r"(pass|psk|secret|token|key|credential|invite_(url|code)|^code$|^pin$)",
+    re.IGNORECASE,
+)
+
+# Key names that would otherwise match ``_SENSITIVE_KEY_RE`` (via "key") but
+# are verified-safe structural/label fields in eero-api v8.0.3 responses,
+# not credential material. Exact-match only (not substring), so this never
+# widens the hole for anything like "network_key" or "api_key".
+#
+# - "key": the entitlement-feature list element's own identifier field
+#   (``get_entitlement_features``' ``data.features`` entries look like
+#   ``{"key": "eero_plus"}`` - sdk-surface-map-v8.0.3.md WP6; confirmed by
+#   test_entitlements.py::test_returns_all_sources_combined), not a
+#   cryptographic key.
+_SENSITIVE_KEY_ALLOWLIST: frozenset[str] = frozenset({"key"})
 
 
 def strip_sensitive_keys(value: Any) -> Any:
@@ -84,23 +103,27 @@ def strip_sensitive_keys(value: Any) -> Any:
 
     Applied to every "pass the raw dict/list through unchanged" response in
     this backend - undocumented shapes from eero-api v8.0.3 may carry a
-    password, PSK, secret, token or join-credential URL that must never
-    reach the frontend. Matching is case-insensitive and substring-based
-    (``re.search``), so ``guest_password``, ``ssid_psk`` and
-    ``invite_url`` are all caught.
+    password, PSK, secret, token, credential, verification code/PIN, or
+    join-credential URL that must never reach the frontend. Matching is
+    case-insensitive and substring-based (``re.search``), so
+    ``guest_password``, ``ssid_psk``, ``network_key`` and ``invite_url``
+    are all caught; ``_SENSITIVE_KEY_ALLOWLIST`` exempts specific key names
+    known not to carry credential material.
 
     Args:
         value: A raw dict, list, or scalar from an API response.
 
     Returns:
         A deep copy of ``value`` with any dict key matching the sensitive
-        pattern removed. Non-dict/list values are returned unchanged.
+        pattern (and not allowlisted) removed. Non-dict/list values are
+        returned unchanged.
     """
     if isinstance(value, dict):
         return {
             k: strip_sensitive_keys(v)
             for k, v in value.items()
-            if not _SENSITIVE_KEY_RE.search(str(k))
+            if str(k).lower() in _SENSITIVE_KEY_ALLOWLIST
+            or not _SENSITIVE_KEY_RE.search(str(k))
         }
     if isinstance(value, list):
         return [strip_sensitive_keys(item) for item in value]

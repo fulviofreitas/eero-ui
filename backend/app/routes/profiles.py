@@ -5,10 +5,15 @@ import re
 from typing import Any
 
 from eero import EeroClient
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from ..deps import get_network_id, require_auth, require_experimental_writes
+from ..deps import (
+    get_network_id,
+    require_auth,
+    require_experimental_writes,
+    validate_request_path_ids,
+)
 from ..transformers import (
     check_success,
     extract_data,
@@ -16,9 +21,10 @@ from ..transformers import (
     extract_list,
     normalize_profile,
 )
+from .auth import limiter
 from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_request_path_ids)])
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -182,7 +188,9 @@ async def get_profile(
     response_model=ProfileAction,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def pause_profile(
+    request: Request,
     profile_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
@@ -209,7 +217,9 @@ async def pause_profile(
     response_model=ProfileAction,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def unpause_profile(
+    request: Request,
     profile_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
@@ -237,7 +247,9 @@ async def unpause_profile(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_profile(
+    request: Request,
     body: ProfileCreateRequest,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
@@ -285,7 +297,9 @@ async def create_profile(
     response_model=ProfileSummary,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def rename_profile(
+    request: Request,
     profile_id: str,
     body: ProfileRenameRequest,
     client: EeroClient = Depends(require_auth),
@@ -352,7 +366,9 @@ class AssignDevicesResponse(BaseModel):
     response_model=AssignDevicesResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def assign_devices_to_profile(
+    request: Request,
     profile_id: str,
     body: AssignDevicesRequest,
     client: EeroClient = Depends(require_auth),
@@ -434,7 +450,9 @@ async def assign_devices_to_profile(
     response_model=ProfileAction,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_profile(
+    request: Request,
     profile_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
@@ -607,7 +625,9 @@ class ScheduleCreateRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_profile_schedule(
+    request: Request,
     profile_id: str,
     body: ScheduleCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -658,7 +678,9 @@ class ScheduleUpdateRequest(BaseModel):
     response_model=ScheduleSummary,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def update_profile_schedule(
+    request: Request,
     profile_id: str,
     schedule_id: str,
     body: ScheduleUpdateRequest,
@@ -712,7 +734,9 @@ async def update_profile_schedule(
     "/{profile_id}/schedules/{schedule_id}",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def delete_profile_schedule(
+    request: Request,
     profile_id: str,
     schedule_id: str,
     client: EeroClient = Depends(require_auth),
@@ -733,7 +757,9 @@ async def delete_profile_schedule(
     "/{profile_id}/schedules",
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def clear_profile_schedules(
+    request: Request,
     profile_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
@@ -768,7 +794,9 @@ class BedtimeCreateRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def create_profile_bedtime(
+    request: Request,
     profile_id: str,
     body: BedtimeCreateRequest,
     client: EeroClient = Depends(require_auth),
@@ -842,7 +870,9 @@ class SetBlockedApplicationsRequest(BaseModel):
     response_model=BlockedApplicationsResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def set_profile_blocked_applications_route(
+    request: Request,
     profile_id: str,
     body: SetBlockedApplicationsRequest,
     client: EeroClient = Depends(require_auth),

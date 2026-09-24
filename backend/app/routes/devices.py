@@ -6,7 +6,12 @@ from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from ..deps import get_network_id, require_auth, require_experimental_writes
+from ..deps import (
+    get_network_id,
+    require_auth,
+    require_experimental_writes,
+    validate_request_path_ids,
+)
 from ..transformers import (
     check_success,
     extract_data,
@@ -18,7 +23,7 @@ from ..transformers import (
 from .auth import limiter
 from .networks import InsightsResponse, normalize_insights, validate_insight_params
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_request_path_ids)])
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -328,7 +333,9 @@ async def _resolve_device_mac(
     response_model=DeviceAction,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="experimental_writes")
 async def block_device(
+    request: Request,
     device_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),

@@ -13,7 +13,11 @@ from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from ..deps import require_auth, require_experimental_writes
+from ..deps import (
+    require_account_identity_writes,
+    require_auth,
+    require_experimental_writes,
+)
 from ..transformers import check_success, extract_data, has_control_or_format_chars
 from .auth import limiter
 
@@ -119,7 +123,10 @@ class AccountEmailRequest(BaseModel):
 @router.put(
     "/email",
     response_model=AccountActionResponse,
-    dependencies=[Depends(require_experimental_writes)],
+    dependencies=[
+        Depends(require_experimental_writes),
+        Depends(require_account_identity_writes),
+    ],
 )
 @limiter.shared_limit("10/minute", scope="account_writes")
 async def set_account_email_route(
@@ -150,7 +157,10 @@ class VerificationCodeRequest(BaseModel):
 @router.post(
     "/email/verify",
     response_model=AccountActionResponse,
-    dependencies=[Depends(require_experimental_writes)],
+    dependencies=[
+        Depends(require_experimental_writes),
+        Depends(require_account_identity_writes),
+    ],
 )
 @limiter.shared_limit("10/minute", scope="account_writes")
 async def verify_account_email_route(
@@ -180,7 +190,10 @@ class AccountPhoneRequest(BaseModel):
 @router.put(
     "/phone",
     response_model=AccountActionResponse,
-    dependencies=[Depends(require_experimental_writes)],
+    dependencies=[
+        Depends(require_experimental_writes),
+        Depends(require_account_identity_writes),
+    ],
 )
 @limiter.shared_limit("10/minute", scope="account_writes")
 async def set_account_phone_route(
@@ -202,7 +215,10 @@ async def set_account_phone_route(
 @router.post(
     "/phone/verify",
     response_model=AccountActionResponse,
-    dependencies=[Depends(require_experimental_writes)],
+    dependencies=[
+        Depends(require_experimental_writes),
+        Depends(require_account_identity_writes),
+    ],
 )
 @limiter.shared_limit("10/minute", scope="account_writes")
 async def verify_account_phone_route(
@@ -234,7 +250,9 @@ class AccountConsentsRequest(BaseModel):
     response_model=AccountActionResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("10/minute", scope="account_writes")
 async def set_account_consents_route(
+    request: Request,
     body: AccountConsentsRequest,
     client: EeroClient = Depends(require_auth),
 ) -> AccountActionResponse:

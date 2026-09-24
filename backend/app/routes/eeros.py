@@ -6,20 +6,27 @@ from typing import Any
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from .._coercion import coerce_bool, coerce_int, coerce_numeric
-from ..deps import get_network_id, require_auth, require_experimental_writes
+from ..deps import (
+    get_network_id,
+    require_auth,
+    require_experimental_writes,
+    validate_request_path_ids,
+)
 from ..transformers import (
     check_success,
     extract_data,
     extract_list,
+    is_unsafe_short_text,
     normalize_eero,
     strip_sensitive_keys,
 )
 from .auth import limiter
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_request_path_ids)])
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -462,6 +469,78 @@ async def set_eero_led(
     )
 
 
+_LOCATION_MAX_BYTES = 32
+
+
+class LocationUpdateRequest(BaseModel):
+    """Request body for PUT /{eero_id}/location."""
+
+    location: str
+
+    class Config:
+        extra = "ignore"
+
+
+class LocationUpdateResponse(BaseModel):
+    """Response for a location write, with a read-back."""
+
+    success: bool
+    changed: bool
+    location: str | None = None
+
+
+@router.put(
+    "/{eero_id}/location",
+    response_model=LocationUpdateResponse,
+    dependencies=[Depends(require_experimental_writes)],
+)
+@limiter.shared_limit("10/minute", scope="experimental_writes")
+async def set_eero_location_route(
+    request: Request,
+    eero_id: str,
+    body: LocationUpdateRequest,
+    client: EeroClient = Depends(require_auth),
+    network_id: str = Depends(get_network_id),
+) -> LocationUpdateResponse:
+    """Set the descriptive location label for an eero.
+
+    Unverified write (phase-6.0-revamp.md § 5, WP7 follow-up (c);
+    sdk-surface-map-v8.0.3.md WP7: ``set_location``'s own SDK docstring
+    says "has not been confirmed against a live network" and prescribes a
+    read-compare-skip discipline). Follows that discipline exactly: read
+    the eero first, skip the write entirely when the stripped requested
+    value already matches the stored one, and read back afterwards so the
+    response reflects what the API actually stored. Never retried on
+    failure.
+    """
+    new_location = body.location.strip()
+    if not new_location or is_unsafe_short_text(
+        new_location, max_bytes=_LOCATION_MAX_BYTES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"location must be 1-{_LOCATION_MAX_BYTES} bytes, no control characters.",
+        )
+
+    raw_eero = await client.get_eero(eero_id, network_id=network_id)
+    current = normalize_eero(extract_data(raw_eero))
+    current_location = (current.get("location") or "").strip()
+
+    if new_location == current_location:
+        return LocationUpdateResponse(
+            success=True, changed=False, location=current_location
+        )
+
+    raw_result = await client.set_location(eero_id, new_location, network_id=network_id)
+    success = check_success(raw_result)
+
+    raw_eero = await client.get_eero(eero_id, network_id=network_id, refresh_cache=True)
+    updated = normalize_eero(extract_data(raw_eero))
+    return LocationUpdateResponse(
+        success=success, changed=True, location=updated.get("location")
+    )
+
+
 class LedStatus(BaseModel):
     """Current LED state for an eero node."""
 
@@ -575,6 +654,61 @@ PORT_ACTIONS = frozenset(
 # action without hardcoding it a second time.
 _NODE_ACTION_REBOOTS = {"POWER_CYCLE_ALL_PORTS_AND_REBOOT"}
 
+# Disruptive PORT_ACTIONS this route refuses on a gateway's uplink port
+# (SECURITY-SME finding, 2026-09-24): disabling data/PoE/the port itself on
+# the gateway's WAN-facing port would sever the whole network's internet
+# connectivity through an "unverified write" endpoint with no confirmation
+# step of its own.
+_DISRUPTIVE_PORT_ACTIONS = frozenset({"DISABLE_DATA", "DISABLE_POE", "DISABLE_PORT"})
+
+
+async def _gateway_uplink_port_response(
+    client: EeroClient, eero_id: str, port_number: str, network_id: str
+) -> JSONResponse | None:
+    """Build a refusal response for a disruptive action on a gateway's
+    WAN/uplink port, or ``None`` if the action may proceed.
+
+    Reads the target eero's own record (never cached - a stale "is this
+    the uplink" read would defeat the guard) and inspects
+    ``ethernet_ports`` (``normalize_eero``'s ``is_wan_port`` field). If the
+    eero is the gateway and either the named port is flagged as the WAN
+    port, or the port list does not identify a WAN port at all (so the
+    uplink cannot be ruled out), the action is refused outright rather than
+    guessed at.
+
+    Returns:
+        A 422 ``JSONResponse`` with ``type: "port_protected"`` at the top
+        level (matching every other typed-error response in this API), or
+        ``None`` when the action is not against a gateway's uplink.
+    """
+    raw_eero = await client.get_eero(eero_id, network_id=network_id, refresh_cache=True)
+    eero = normalize_eero(extract_data(raw_eero))
+    if not eero.get("is_gateway"):
+        return None
+
+    ports = eero.get("ethernet_ports") or []
+    matched_port = next(
+        (p for p in ports if str(p.get("port_name")) == port_number), None
+    )
+    any_wan_port_identified = any(p.get("is_wan_port") for p in ports)
+
+    is_uplink = (matched_port is not None and matched_port.get("is_wan_port")) or (
+        not any_wan_port_identified
+    )
+    if not is_uplink:
+        return None
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": (
+                "Refusing to disable data/power/the port on the gateway's "
+                "WAN/uplink port - this would disconnect the whole network."
+            ),
+            "type": "port_protected",
+        },
+    )
+
 
 class NodeActionRequest(BaseModel):
     """Request body for POST /{eero_id}/node-action."""
@@ -599,7 +733,9 @@ class NodeActionResponse(BaseModel):
     response_model=NodeActionResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("2/minute", scope="node_actions")
 async def node_action_route(
+    request: Request,
     eero_id: str,
     body: NodeActionRequest,
     client: EeroClient = Depends(require_auth),
@@ -650,25 +786,36 @@ class PortActionResponse(BaseModel):
     response_model=PortActionResponse,
     dependencies=[Depends(require_experimental_writes)],
 )
+@limiter.shared_limit("2/minute", scope="node_actions")
 async def port_action_route(
+    request: Request,
     eero_id: str,
     port_number: str,
     body: PortActionRequest,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
-) -> PortActionResponse:
+) -> PortActionResponse | JSONResponse:
     """Run a port-level action (enable/disable data, PoE, the port itself,
     port security, or a power restart) on one of an eero's ports.
 
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); several actions
     are inherently disruptive to whatever is connected to that port. Never
-    retried on failure.
+    retried on failure. ``DISABLE_DATA``/``DISABLE_POE``/``DISABLE_PORT``
+    against a gateway's WAN/uplink port are refused outright (SECURITY-SME
+    finding, 2026-09-24) rather than executed - see
+    ``_gateway_uplink_port_response``.
     """
     if body.action not in PORT_ACTIONS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"action must be one of {sorted(PORT_ACTIONS)}.",
         )
+    if body.action in _DISRUPTIVE_PORT_ACTIONS:
+        refusal = await _gateway_uplink_port_response(
+            client, eero_id, port_number, network_id
+        )
+        if refusal is not None:
+            return refusal
     raw_result = await client.port_action(
         eero_id, port_number, body.action, network_id=network_id
     )

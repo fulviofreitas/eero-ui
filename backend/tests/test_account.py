@@ -68,7 +68,11 @@ class TestSetAccountEmail:
         authenticated_client.set_account_email.assert_not_called()
 
     async def test_valid_email_calls_sdk(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.set_account_email = AsyncMock(
             return_value=make_raw_response({})
@@ -82,7 +86,11 @@ class TestSetAccountEmail:
         authenticated_client.set_account_email.assert_called_once_with("a@example.com")
 
     async def test_invalid_email_rejected(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.set_account_email = AsyncMock()
 
@@ -108,7 +116,11 @@ class TestVerifyAccountEmail:
         authenticated_client.verify_account_email.assert_not_called()
 
     async def test_valid_code_calls_sdk(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.verify_account_email = AsyncMock(
             return_value=make_raw_response({})
@@ -122,7 +134,11 @@ class TestVerifyAccountEmail:
         authenticated_client.verify_account_email.assert_called_once_with("123456")
 
     async def test_non_numeric_code_rejected(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.verify_account_email = AsyncMock()
 
@@ -134,7 +150,11 @@ class TestVerifyAccountEmail:
         authenticated_client.verify_account_email.assert_not_called()
 
     async def test_response_never_contains_the_code(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.verify_account_email = AsyncMock(
             return_value=make_raw_response({})
@@ -161,7 +181,11 @@ class TestSetAccountPhone:
         authenticated_client.set_account_phone.assert_not_called()
 
     async def test_valid_phone_calls_sdk(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.set_account_phone = AsyncMock(
             return_value=make_raw_response({})
@@ -175,7 +199,11 @@ class TestSetAccountPhone:
         authenticated_client.set_account_phone.assert_called_once_with("+15551234567")
 
     async def test_invalid_phone_rejected(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.set_account_phone = AsyncMock()
 
@@ -201,7 +229,11 @@ class TestVerifyAccountPhone:
         authenticated_client.verify_account_phone.assert_not_called()
 
     async def test_valid_code_calls_sdk(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self,
+        auth_client,
+        authenticated_client,
+        experimental_writes_enabled,
+        account_identity_writes_enabled,
     ):
         authenticated_client.verify_account_phone = AsyncMock(
             return_value=make_raw_response({})

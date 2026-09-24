@@ -128,3 +128,102 @@ class TestPortAction:
 
         assert response.status_code == 422
         authenticated_client.port_action.assert_not_called()
+
+    async def test_disable_data_on_gateway_wan_port_refused(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """SECURITY-SME finding, 2026-09-24: a disruptive action against the
+        gateway's identified WAN/uplink port is refused outright, never
+        reaching the SDK."""
+        authenticated_client.get_eero = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "url": "/2.2/eeros/eero-1",
+                    "gateway": True,
+                    "ethernet_status": {
+                        "statuses": [
+                            {"port_name": "1", "isWanPort": True},
+                            {"port_name": "2", "isWanPort": False},
+                        ]
+                    },
+                }
+            )
+        )
+        authenticated_client.port_action = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/eeros/eero-1/ports/1/action", json={"action": "DISABLE_DATA"}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["type"] == "port_protected"
+        authenticated_client.port_action.assert_not_called()
+
+    async def test_disable_poe_on_gateway_with_unidentified_ports_refused(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """When the port list does not identify a WAN port at all, every
+        port on the gateway is treated as potentially the uplink."""
+        authenticated_client.get_eero = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "url": "/2.2/eeros/eero-1",
+                    "gateway": True,
+                    "ethernet_status": {
+                        "statuses": [{"port_name": "2"}],
+                    },
+                }
+            )
+        )
+        authenticated_client.port_action = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/eeros/eero-1/ports/2/action", json={"action": "DISABLE_POE"}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["type"] == "port_protected"
+        authenticated_client.port_action.assert_not_called()
+
+    async def test_disable_data_on_non_gateway_eero_proceeds(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """The guard only applies to the gateway eero; a leaf node's ports
+        are unaffected."""
+        authenticated_client.get_eero = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "url": "/2.2/eeros/eero-2",
+                    "gateway": False,
+                    "ethernet_status": {"statuses": [{"port_name": "1"}]},
+                }
+            )
+        )
+        authenticated_client.port_action = AsyncMock(return_value=make_raw_response({}))
+
+        response = await auth_client.post(
+            "/api/eeros/eero-2/ports/1/action", json={"action": "DISABLE_DATA"}
+        )
+
+        assert response.status_code == 200
+        authenticated_client.port_action.assert_called_once_with(
+            "eero-2", "1", "DISABLE_DATA", network_id="network-123"
+        )
+
+    async def test_enable_data_on_gateway_wan_port_not_guarded(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """The guard only covers the disruptive DISABLE_* subset - an
+        ENABLE_* action is never refused."""
+        authenticated_client.get_eero = AsyncMock()
+        authenticated_client.port_action = AsyncMock(return_value=make_raw_response({}))
+
+        response = await auth_client.post(
+            "/api/eeros/eero-1/ports/1/action", json={"action": "ENABLE_DATA"}
+        )
+
+        assert response.status_code == 200
+        authenticated_client.get_eero.assert_not_called()
+        authenticated_client.port_action.assert_called_once_with(
+            "eero-1", "1", "ENABLE_DATA", network_id="network-123"
+        )
