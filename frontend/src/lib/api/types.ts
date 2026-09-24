@@ -165,6 +165,36 @@ export interface NetworkRenameRequest {
 	name: string;
 }
 
+// ============================================
+// Guest network password (phase-6.0-revamp.md WP6, deliverable 2)
+//
+// The eero cloud API never returns the raw guest password - only whether one
+// is currently set - so `has_password` is the only thing this UI can ever
+// show. Never display or log a submitted password after the write resolves.
+// ============================================
+
+export interface GuestNetworkStatus {
+	enabled: boolean;
+	name: string | null;
+	has_password: boolean;
+}
+
+export interface GuestPasswordResponse {
+	success: boolean;
+	guest_network: GuestNetworkStatus;
+}
+
+// ============================================
+// Network scan (phase-6.0-revamp.md WP6, deliverable 6)
+//
+// Unfixtured upstream - each entry's shape is not guaranteed, so this is
+// rendered defensively via GenericRecordList rather than a typed model.
+// ============================================
+
+export interface NetworkScanResponse {
+	scan: Record<string, unknown>[];
+}
+
 export interface NetworkRenameResponse {
 	success: boolean;
 	/**
@@ -491,6 +521,19 @@ export interface EeroAction {
 	eero_id: string;
 	action: string;
 	message: string | null;
+}
+
+/** Response for `PUT /eeros/{id}/led/brightness` - a read-back, not an echo. */
+export interface EeroLedBrightnessAction extends EeroAction {
+	led_brightness: number | null;
+}
+
+/**
+ * An eero's client connections (phase-6.0-revamp.md WP6, deliverable 5).
+ * Unfixtured upstream - rendered defensively via GenericRecordList.
+ */
+export interface EeroConnectionsResponse {
+	connections: Record<string, unknown>[];
 }
 
 // ============================================

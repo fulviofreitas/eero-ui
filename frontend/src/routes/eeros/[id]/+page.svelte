@@ -10,7 +10,7 @@
   previous back-link + full-block spinner.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
@@ -27,12 +27,17 @@
 	import EeroPortsCard from '$lib/components/eero/EeroPortsCard.svelte';
 	import EeroTechnicalCard from '$lib/components/eero/EeroTechnicalCard.svelte';
 	import EeroActionsCard from '$lib/components/eero/EeroActionsCard.svelte';
+	import EeroConnectionsCard from '$lib/components/eero/EeroConnectionsCard.svelte';
 
 	let eero: EeroDetail | null = $state(null);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let actionLoading = $state(false);
 	let lastNetworkId: string | null = $state(null);
+	/** Last confirmed brightness - the rollback target if a debounced commit fails. */
+	let confirmedLedBrightness: number | null = null;
+	let ledBrightnessTimer: ReturnType<typeof setTimeout> | null = null;
+	const LED_BRIGHTNESS_DEBOUNCE_MS = 300;
 
 	let eeroId = $derived($page.params.id);
 
@@ -115,6 +120,45 @@
 		}
 	}
 
+	/**
+	 * LED brightness slider (plan § 7 WP6, deliverable 3). Verified write -
+	 * optimistic on every drag tick for a responsive slider, but only
+	 * committed to the API once 300ms have passed with no further input
+	 * (debounced), so dragging across the whole range does not fire a PUT
+	 * per pixel. The commit reconciles against the backend's read-back
+	 * (which can legitimately differ slightly from the requested value) and
+	 * rolls back to the last confirmed value on failure.
+	 */
+	function handleSetLedBrightness(brightness: number) {
+		if (!eero?.id) return;
+		if (confirmedLedBrightness === null) confirmedLedBrightness = eero.led_brightness;
+
+		// Optimistic - immediate visual feedback while dragging.
+		eero = { ...eero, led_brightness: brightness };
+
+		if (ledBrightnessTimer) clearTimeout(ledBrightnessTimer);
+		const eeroId = eero.id;
+		ledBrightnessTimer = setTimeout(async () => {
+			try {
+				const result = await api.eeros.setLedBrightness(eeroId, brightness);
+				confirmedLedBrightness = result.led_brightness ?? brightness;
+				if (eero) {
+					eero = { ...eero, led_brightness: confirmedLedBrightness };
+				}
+			} catch (err) {
+				console.error('Failed to set LED brightness:', err);
+				if (eero) {
+					eero = { ...eero, led_brightness: confirmedLedBrightness };
+				}
+				uiStore.error('Failed to set LED brightness');
+			}
+		}, LED_BRIGHTNESS_DEBOUNCE_MS);
+	}
+
+	onDestroy(() => {
+		if (ledBrightnessTimer) clearTimeout(ledBrightnessTimer);
+	});
+
 	// React to network changes
 	$effect(() => {
 		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
@@ -173,10 +217,13 @@
 			<EeroTechnicalCard {eero} networkId={$selectedNetworkId} />
 			<EeroActionsCard
 				ledOn={eero.led_on}
+				ledBrightness={eero.led_brightness}
 				loading={actionLoading}
 				onToggleLed={handleToggleLed}
 				onReboot={handleReboot}
+				onSetLedBrightness={handleSetLedBrightness}
 			/>
+			<EeroConnectionsCard eeroId={eero.id} />
 		</div>
 	{/if}
 </div>

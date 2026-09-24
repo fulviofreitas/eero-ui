@@ -256,6 +256,48 @@ describe('devicesStore', () => {
 		});
 	});
 
+	describe('setDeviceType (Verified, § 5 - optimistic)', () => {
+		it('optimistically sets device_type, keeping it on success', async () => {
+			server.use(
+				http.get('/api/devices', () =>
+					HttpResponse.json([makeDevice('dev-1', { device_type: null })])
+				),
+				http.put('/api/devices/:deviceId/type', () =>
+					HttpResponse.json({
+						success: true,
+						device_id: 'dev-1',
+						action: 'device_type',
+						message: null
+					})
+				)
+			);
+			await devicesStore.fetch();
+
+			await devicesStore.setDeviceType('dev-1', 'phone');
+
+			expect(get(devicesStore).devices.find((d) => d.id === 'dev-1')?.device_type).toBe('phone');
+		});
+
+		it('rolls back to the previous device_type on failure', async () => {
+			server.use(
+				http.get('/api/devices', () =>
+					HttpResponse.json([makeDevice('dev-1', { device_type: 'computer' })])
+				),
+				http.put('/api/devices/:deviceId/type', () =>
+					HttpResponse.json(
+						{ detail: 'device_type must match ^[a-z0-9_]{1,40}$.' },
+						{ status: 422 }
+					)
+				)
+			);
+			await devicesStore.fetch();
+
+			await expect(devicesStore.setDeviceType('dev-1', 'phone')).rejects.toThrow();
+
+			expect(get(devicesStore).devices.find((d) => d.id === 'dev-1')?.device_type).toBe('computer');
+		});
+	});
+
 	describe('writes never retry on a network error (fetch spy)', () => {
 		it('calls fetch exactly once for unblockDevice even when the request throws', async () => {
 			server.use(http.get('/api/devices', () => HttpResponse.json([makeDevice('dev-1')])));

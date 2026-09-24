@@ -344,6 +344,39 @@ function createDevicesStore() {
 		},
 
 		/**
+		 * Set a device's type (with optimistic update). Verified (plan § 5,
+		 * phase-6.0-revamp.md § 7 WP6 deliverable 4).
+		 */
+		async setDeviceType(deviceId: string, deviceType: string): Promise<boolean> {
+			const currentState = get({ subscribe });
+			const device = currentState.devices.find((d) => d.id === deviceId);
+			const previousType = device?.device_type ?? null;
+
+			// Optimistic update
+			update((s) => ({
+				...s,
+				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, device_type: deviceType } : d))
+			}));
+
+			try {
+				const result = await api.devices.setType(deviceId, deviceType);
+				if (!result.success) {
+					throw new Error(result.message || 'Failed to set device type');
+				}
+				return true;
+			} catch (error) {
+				// Rollback
+				update((s) => ({
+					...s,
+					devices: s.devices.map((d) =>
+						d.id === deviceId ? { ...d, device_type: previousType } : d
+					)
+				}));
+				throw error;
+			}
+		},
+
+		/**
 		 * Clear all data
 		 */
 		clear(): void {

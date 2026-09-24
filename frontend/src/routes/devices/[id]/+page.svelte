@@ -21,6 +21,7 @@
 	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import DeviceProfileSelector from '$lib/components/device/DeviceProfileSelector.svelte';
+	import DeviceTypePicker from '$lib/components/device/DeviceTypePicker.svelte';
 	import DeviceIdentificationCard from '$lib/components/device/DeviceIdentificationCard.svelte';
 	import DeviceConnectionCard from '$lib/components/device/DeviceConnectionCard.svelte';
 	import DeviceStatusCard from '$lib/components/device/DeviceStatusCard.svelte';
@@ -34,6 +35,7 @@
 	let profiles: ProfileSummary[] = $state([]);
 	let loadingProfiles = $state(false);
 	let changingProfile = $state(false);
+	let changingDeviceType = $state(false);
 
 	let deviceId = $derived($page.params.id);
 	let displayName = $derived(
@@ -96,6 +98,30 @@
 			uiStore.error(err instanceof Error ? err.message : 'Failed to change profile');
 		} finally {
 			changingProfile = false;
+		}
+	}
+
+	/**
+	 * Set the device's type (plan § 7 WP6, deliverable 4). Verified write -
+	 * optimistic with rollback (plan § 5), matching the LED-toggle pattern
+	 * on the eero detail page.
+	 */
+	async function handleDeviceTypeChange(newType: string) {
+		if (!device?.id) return;
+		const deviceId = device.id;
+		const previous = device.device_type;
+
+		device = { ...device, device_type: newType };
+		changingDeviceType = true;
+
+		try {
+			await devicesStore.setDeviceType(deviceId, newType);
+			uiStore.success(`Device type set to "${newType}".`);
+		} catch (err) {
+			if (device) device = { ...device, device_type: previous };
+			uiStore.error(err instanceof Error ? err.message : 'Failed to set device type');
+		} finally {
+			changingDeviceType = false;
 		}
 	}
 
@@ -215,6 +241,12 @@
 			{loadingProfiles}
 			{changingProfile}
 			onSelect={handleProfileChange}
+		/>
+
+		<DeviceTypePicker
+			deviceType={device.device_type}
+			changing={changingDeviceType}
+			onSelect={handleDeviceTypeChange}
 		/>
 
 		<div class="info-grid">

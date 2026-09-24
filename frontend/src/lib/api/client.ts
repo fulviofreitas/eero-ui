@@ -322,10 +322,21 @@ export const api = {
 				{ method: 'POST', retries: 0 }
 			),
 
-		/** Most recent speed-test result(s), newest first. */
-		speedTestHistory: (networkId: string, limit = 1) =>
+		/**
+		 * Past speed-test results, newest first (plan § 7 WP6, deliverable 1).
+		 * `limit` defaults to 1 to preserve `runSpeedTest`'s polling behaviour
+		 * (`stores/networks.ts`); the history card passes an explicit 10/25/50.
+		 */
+		speedTestHistory: (
+			networkId: string,
+			options: { limit?: number; startTime?: string; endTime?: string } = {}
+		) =>
 			fetchWithHandling<import('./types').SpeedTestResult[]>(`/networks/${networkId}/speedtests`, {
-				params: { limit }
+				params: {
+					limit: options.limit ?? 1,
+					...(options.startTime && { start_time: options.startTime }),
+					...(options.endTime && { end_time: options.endTime })
+				}
 			}),
 
 		toggleGuestNetwork: (networkId: string, enabled: boolean, name?: string) =>
@@ -334,6 +345,32 @@ export const api = {
 				params: { enabled, ...(name && { name }) },
 				retries: 0
 			}),
+
+		/** Current guest network configuration, incl. whether a password is set. */
+		getGuestNetwork: (networkId: string) =>
+			fetchWithHandling<import('./types').GuestNetworkStatus>(`/networks/${networkId}/guest`),
+
+		/**
+		 * Set the guest network password (plan § 7 WP6, deliverable 2). Verified
+		 * write; disconnects guest clients while it takes effect. Never a
+		 * password ever appears in the response - only `has_password`.
+		 */
+		setGuestPassword: (networkId: string, password: string) =>
+			fetchWithHandling<import('./types').GuestPasswordResponse>(
+				`/networks/${networkId}/guest/password`,
+				{ method: 'PUT', body: { password }, retries: 0 }
+			),
+
+		/** Clear the guest network password. Verified write. */
+		clearGuestPassword: (networkId: string) =>
+			fetchWithHandling<import('./types').GuestPasswordResponse>(
+				`/networks/${networkId}/guest/password`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/** Channel/neighbour scan result (plan § 7 WP6, deliverable 6). Verified read. */
+		getScan: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkScanResponse>(`/networks/${networkId}/scan`),
 
 		setName: (networkId: string, name: string) =>
 			fetchWithHandling<import('./types').NetworkRenameResponse>(`/networks/${networkId}/name`, {
@@ -411,6 +448,18 @@ export const api = {
 				method: 'PUT',
 				body: { nickname },
 				retries: 0
+			}),
+
+		/**
+		 * Set a device's type (plan § 7 WP6, deliverable 4). Verified write -
+		 * safe for the optimistic pattern. `deviceType` must match
+		 * `^[a-z0-9_]{1,40}$` (enforced again server-side).
+		 */
+		setType: (deviceId: string, deviceType: string) =>
+			fetchWithHandling<import('./types').DeviceAction>(`/devices/${deviceId}/type`, {
+				method: 'PUT',
+				body: { device_type: deviceType },
+				retries: 0
 			})
 	},
 
@@ -439,12 +488,19 @@ export const api = {
 				retries: 0
 			}),
 
+		/**
+		 * Verified write (plan § 7 WP6, deliverable 3); the response is a
+		 * read-back of `led_brightness`, not an echo of the request.
+		 */
 		setLedBrightness: (eeroId: string, brightness: number) =>
-			fetchWithHandling<import('./types').EeroAction>(`/eeros/${eeroId}/led/brightness`, {
-				method: 'PUT',
-				params: { brightness },
-				retries: 0
-			})
+			fetchWithHandling<import('./types').EeroLedBrightnessAction>(
+				`/eeros/${eeroId}/led/brightness`,
+				{ method: 'PUT', params: { brightness }, retries: 0 }
+			),
+
+		/** An eero's client connections (plan § 7 WP6, deliverable 5). Verified read. */
+		getConnections: (eeroId: string) =>
+			fetchWithHandling<import('./types').EeroConnectionsResponse>(`/eeros/${eeroId}/connections`)
 	},
 
 	// Profiles

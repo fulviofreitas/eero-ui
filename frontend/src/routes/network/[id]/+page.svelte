@@ -27,10 +27,13 @@
 	import HardwareFeaturesCard from '$lib/components/network/HardwareFeaturesCard.svelte';
 	import LocationPremiumCard from '$lib/components/network/LocationPremiumCard.svelte';
 	import GuestNetworkCard from '$lib/components/network/GuestNetworkCard.svelte';
+	import GuestPasswordCard from '$lib/components/network/GuestPasswordCard.svelte';
 	import PremiumDnsCard from '$lib/components/network/PremiumDnsCard.svelte';
 	import AdvancedSettingsCard from '$lib/components/network/AdvancedSettingsCard.svelte';
 	import NetworkHealthCard from '$lib/components/network/NetworkHealthCard.svelte';
 	import NetworkSpeedTestCard from '$lib/components/network/NetworkSpeedTestCard.svelte';
+	import SpeedTestHistoryCard from '$lib/components/network/SpeedTestHistoryCard.svelte';
+	import NetworkScanCard from '$lib/components/network/NetworkScanCard.svelte';
 	import NetworkRenameModal from '$lib/components/network/NetworkRenameModal.svelte';
 
 	let network: NetworkDetail | null = $state(null);
@@ -266,6 +269,9 @@
 						loading={guestToggleLoading}
 						onToggle={handleToggleGuestNetwork}
 					/>
+					{#if networkId}
+						<GuestPasswordCard {networkId} />
+					{/if}
 				</div>
 			{:else if activeTab === 'dns'}
 				<div class="info-grid" role="tabpanel" id="tabpanel-dns" aria-labelledby="tab-dns">
@@ -302,6 +308,10 @@
 					{/if}
 				</div>
 				{#if networkId}
+					<div class="info-grid diagnostics-secondary">
+						<SpeedTestHistoryCard {networkId} />
+						<NetworkScanCard {networkId} />
+					</div>
 					<section class="network-charts">
 						<SpeedtestChart {networkId} />
 					</section>
@@ -360,6 +370,10 @@
 
 	.network-charts {
 		margin-top: var(--space-6);
+	}
+
+	.diagnostics-secondary {
+		margin-top: var(--space-4);
 	}
 
 	@media (max-width: 768px) {

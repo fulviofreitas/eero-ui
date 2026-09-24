@@ -140,15 +140,17 @@ export const handlers = [
 		);
 	}),
 
-	http.get('/api/networks/:networkId/speedtests', () => {
-		return HttpResponse.json([
-			{
-				download_mbps: 480.2,
-				upload_mbps: 95.6,
-				latency_ms: 12,
-				timestamp: new Date().toISOString()
-			}
-		]);
+	http.get('/api/networks/:networkId/speedtests', ({ request }) => {
+		const url = new URL(request.url);
+		const limit = Number(url.searchParams.get('limit') ?? '1') || 1;
+		const now = Date.now();
+		const results = Array.from({ length: Math.min(limit, 50) }, (_, i) => ({
+			download_mbps: 480.2 - i * 5,
+			upload_mbps: 95.6 - i,
+			latency_ms: 12 + i,
+			timestamp: new Date(now - i * 60 * 60 * 1000).toISOString()
+		}));
+		return HttpResponse.json(results);
 	}),
 
 	http.put('/api/networks/:networkId/guest-network', () => {
@@ -197,6 +199,33 @@ export const handlers = [
 				parent_ips: ['203.0.113.1'],
 				providers: []
 			}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/guest', () => {
+		return HttpResponse.json({ enabled: true, name: 'Guest Network', has_password: true });
+	}),
+
+	http.put('/api/networks/:networkId/guest/password', () => {
+		return HttpResponse.json({
+			success: true,
+			guest_network: { enabled: true, name: 'Guest Network', has_password: true }
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/guest/password', () => {
+		return HttpResponse.json({
+			success: true,
+			guest_network: { enabled: true, name: 'Guest Network', has_password: false }
+		});
+	}),
+
+	http.get('/api/networks/:networkId/scan', () => {
+		return HttpResponse.json({
+			scan: [
+				{ channel: 6, band: '2.4GHz', ssid: 'Neighbor-WiFi', rssi: -70 },
+				{ channel: 44, band: '5GHz', ssid: 'Another-Network', rssi: -65 }
+			]
 		});
 	}),
 
@@ -351,6 +380,15 @@ export const handlers = [
 		});
 	}),
 
+	http.put('/api/devices/:deviceId/type', ({ params }) => {
+		return HttpResponse.json({
+			success: true,
+			device_id: params.deviceId,
+			action: 'device_type',
+			message: null
+		});
+	}),
+
 	http.put('/api/devices/:deviceId/nickname', ({ params }) => {
 		return HttpResponse.json({
 			success: true,
@@ -482,6 +520,15 @@ export const handlers = [
 			action: 'led_brightness',
 			message: 'LED brightness set to 80%.',
 			led_brightness: 80
+		});
+	}),
+
+	http.get('/api/eeros/:eeroId/connections', () => {
+		return HttpResponse.json({
+			connections: [
+				{ mac: 'AA:BB:CC:DD:EE:01', ip: '192.168.1.100', band: '5GHz', rssi: -50 },
+				{ mac: 'AA:BB:CC:DD:EE:02', ip: '192.168.1.101', band: '2.4GHz', rssi: -65 }
+			]
 		});
 	}),
 

@@ -340,7 +340,7 @@ function createNetworksStore() {
 
 				let history: SpeedTestResult[];
 				try {
-					history = await api.networks.speedTestHistory(networkId, 1);
+					history = await api.networks.speedTestHistory(networkId, { limit: 1 });
 				} catch {
 					// Transient read failure while polling - keep waiting for the
 					// next tick rather than failing the whole test.

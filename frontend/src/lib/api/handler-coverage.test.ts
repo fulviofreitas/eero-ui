@@ -60,16 +60,22 @@ describe('api client handler coverage', () => {
 					ipv4: { mode: 'automatic', servers: [] }
 				}),
 			() => api.networks.getEntitlements('network-123'),
+			() => api.networks.getGuestNetwork('network-123'),
+			() => api.networks.setGuestPassword('network-123', 'correct-horse-battery'),
+			() => api.networks.clearGuestPassword('network-123'),
+			() => api.networks.getScan('network-123'),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
 			() => api.devices.unblock('dev-1'),
 			() => api.devices.setNickname('dev-1', 'New Name'),
+			() => api.devices.setType('dev-1', 'phone'),
 			() => api.eeros.list(),
 			() => api.eeros.get('eero-1'),
 			() => api.eeros.reboot('eero-1'),
 			() => api.eeros.setLed('eero-1', true),
 			() => api.eeros.setLedBrightness('eero-1', 80),
+			() => api.eeros.getConnections('eero-1'),
 			() => api.profiles.list(),
 			() => api.profiles.get('profile-1'),
 			() => api.profiles.pause('profile-1'),
@@ -95,6 +101,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(33);
+		expect(countLeafMethods(api)).toBe(39);
 	});
 });

@@ -11,12 +11,32 @@
 
 	interface Props {
 		ledOn: boolean | null;
+		/** `null` when the eero hasn't reported a brightness (older firmware). */
+		ledBrightness?: number | null;
 		loading: boolean;
 		onToggleLed: () => void;
 		onReboot: () => void;
+		/**
+		 * Fired on every slider input event - the parent is responsible for the
+		 * optimistic update, the commit-on-release debounce and the
+		 * rollback-on-error (phase-6.0-revamp.md § 7 WP6, deliverable 3).
+		 */
+		onSetLedBrightness?: (brightness: number) => void;
 	}
 
-	let { ledOn, loading, onToggleLed, onReboot }: Props = $props();
+	let {
+		ledOn,
+		ledBrightness = null,
+		loading,
+		onToggleLed,
+		onReboot,
+		onSetLedBrightness
+	}: Props = $props();
+
+	function handleSliderInput(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		onSetLedBrightness?.(value);
+	}
 </script>
 
 <section class="card detail-card actions-card">
@@ -36,6 +56,26 @@
 			<Icon name="refresh" size={14} /> Reboot Eero
 		</button>
 	</div>
+
+	{#if onSetLedBrightness}
+		<div class="led-brightness-row">
+			<label for="led-brightness-slider" class="led-brightness-label">
+				LED Brightness
+				<span class="led-brightness-value">{ledBrightness ?? 0}%</span>
+			</label>
+			<input
+				id="led-brightness-slider"
+				type="range"
+				min="0"
+				max="100"
+				step="1"
+				value={ledBrightness ?? 0}
+				disabled={loading || !ledOn}
+				oninput={handleSliderInput}
+			/>
+		</div>
+	{/if}
+
 	<p class="action-warning text-muted text-sm">
 		<Icon name="alert-triangle" size={14} /> Rebooting will temporarily disconnect all devices connected
 		to this node.
@@ -61,6 +101,30 @@
 		display: flex;
 		gap: var(--space-3);
 		margin-bottom: var(--space-3);
+	}
+
+	.led-brightness-row {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+	}
+
+	.led-brightness-label {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+	}
+
+	.led-brightness-value {
+		font-family: var(--font-mono);
+		color: var(--color-text-primary);
+	}
+
+	.led-brightness-row input[type='range'] {
+		width: 100%;
+		accent-color: var(--color-accent);
 	}
 
 	.action-warning {
