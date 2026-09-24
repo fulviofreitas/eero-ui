@@ -178,12 +178,43 @@ describe('api client handler coverage', () => {
 			() => api.networks.setFastTransition('network-123', true),
 			() => api.networks.setPasspoint('network-123', true),
 			() => api.networks.setProxiedNodes('network-123', true),
+			() => api.networks.setPowerSaving('network-123', { enable: true }),
+			() => api.networks.getPowerSavingSchedules('network-123'),
+			() =>
+				api.networks.createPowerSavingSchedule('network-123', {
+					name: 'Overnight',
+					days: ['mon'],
+					start_time: '01:00',
+					end_time: '06:00'
+				}),
+			() => api.networks.updatePowerSavingSchedule('network-123', 'schedule-1', { enabled: false }),
+			() => api.networks.deletePowerSavingSchedule('network-123', 'schedule-1'),
+			() => api.networks.setSubnetConfig('network-123', { subnet_type: 'iot', enabled: true }),
+			() => api.networks.deleteSubnetConfig('network-123', 'iot'),
+			() =>
+				api.networks.setMultiStaticIp('network-123', {
+					enabled: true,
+					type: 'P',
+					multistaticip_settings: {
+						router_ip: '203.0.113.1',
+						subnet_ip: '203.0.113.0',
+						subnet_mask: '255.255.255.248'
+					}
+				}),
+			() =>
+				api.networks.setSecondaryWanConfig('network-123', {
+					devices: [{ mac: 'aa:bb:cc:dd:ee:ff', secondary_wan_deny_access: true }]
+				}),
+			() => api.networks.applyNetworkUpdate('network-123'),
+			() => api.networks.setNetworkPassword('network-123', 'correct-horse-battery'),
+			() => api.networks.clearNetworkPassword('network-123'),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
 			() => api.devices.unblock('dev-1'),
 			() => api.devices.setNickname('dev-1', 'New Name'),
 			() => api.devices.setType('dev-1', 'phone'),
+			() => api.devices.setSecondaryWanAccess('dev-1', true),
 			() => api.eeros.list(),
 			() => api.eeros.get('eero-1'),
 			() => api.eeros.reboot('eero-1'),
@@ -280,6 +311,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(123);
+		expect(countLeafMethods(api)).toBe(136);
 	});
 });

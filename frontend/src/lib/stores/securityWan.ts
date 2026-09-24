@@ -39,14 +39,23 @@ import type {
 	MloUpdateRequest,
 	MloUpdateResponse,
 	MultiStaticIpResponse,
+	MultiStaticIpUpdateRequest,
+	MultiStaticIpUpdateResultResponse,
 	NatPortRandomizationUpdateResponse,
 	NetworkSubnetsResponse,
+	NetworkUpdateApplyResponse,
 	PasspointUpdateResponse,
+	PowerSavingUpdateRequest,
+	PowerSavingUpdateResponse,
 	ProxiedNodesUpdateResponse,
+	SecondaryWanConfigRequest,
+	SecondaryWanConfigResponse,
 	SecurityEnvelopeUpdateRequest,
 	SecurityEnvelopeUpdateResponse,
 	SecuritySettingsResponse,
 	SqmUpdateResponse,
+	SubnetConfigRequest,
+	SubnetConfigResponse,
 	Wpa3PerBandUpdateRequest,
 	Wpa3PerBandUpdateResponse
 } from '$api/types';
@@ -384,6 +393,157 @@ function createSecurityWanStore() {
 				update((s) => ({
 					...s,
 					error: error instanceof Error ? error.message : 'Failed to update proxied nodes'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		// ------------------------------------------------------------
+		// WP8 part 2: power saving, subnets, WAN, firmware (plan § 5,
+		// § 7 WP8 part 2). Same policy as the block above - pessimistic,
+		// shared per-network `withSettingsLock`, re-fetch on `changed: true`.
+		// ------------------------------------------------------------
+
+		/** Set power-saving enable/schedule flags. */
+		async updatePowerSaving(
+			networkId: string,
+			body: PowerSavingUpdateRequest
+		): Promise<PowerSavingUpdateResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setPowerSaving(networkId, body)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update power saving'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/**
+		 * Create or edit a subnet configuration. The "main" subnet cannot be
+		 * disabled, opened, or cut off from the WAN - enforced server-side.
+		 */
+		async updateSubnet(
+			networkId: string,
+			body: SubnetConfigRequest
+		): Promise<SubnetConfigResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setSubnetConfig(networkId, body)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update subnet'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Delete a non-main subnet's configuration. */
+		async deleteSubnet(networkId: string, subnetType: string): Promise<SubnetConfigResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.deleteSubnetConfig(networkId, subnetType)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to delete subnet'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Set the network's multi-static-IP configuration. Only served on API 2.3. */
+		async updateMultiStaticIp(
+			networkId: string,
+			body: MultiStaticIpUpdateRequest
+		): Promise<MultiStaticIpUpdateResultResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setMultiStaticIp(networkId, body)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update multi-static-IP'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/**
+		 * Set per-device secondary-WAN access in bulk. No no-op guard exists
+		 * server-side for this bulk form - the write always proceeds
+		 * (documented gap, not a silent skip), so this always re-fetches.
+		 */
+		async updateSecondaryWanConfig(
+			networkId: string,
+			body: SecondaryWanConfigRequest
+		): Promise<SecondaryWanConfigResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setSecondaryWanConfig(networkId, body)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update secondary WAN access'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/**
+		 * Apply a pending firmware update to every node on the network.
+		 * No-op guard lives server-side (409 `no_update_available`/
+		 * `update_in_progress`) - a thrown `ApiClientError` with that status
+		 * is the caller's cue to show an inline note instead of the applying
+		 * state.
+		 */
+		async applyNetworkUpdate(networkId: string): Promise<NetworkUpdateApplyResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.applyNetworkUpdate(networkId)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to apply update'
 				}));
 				throw error;
 			} finally {

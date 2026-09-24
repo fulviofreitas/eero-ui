@@ -1350,3 +1350,172 @@ export interface ProxiedNodesUpdateResponse {
 	reboot_expected: boolean;
 	enabled: boolean;
 }
+
+// ============================================
+// WP8 part 2: power saving, subnets, WAN, firmware, network password
+// (phase-6.0-revamp.md § 5, § 7 WP8). Mirrors backend/app/routes/networks.py
+// ~1719-2635 and backend/app/routes/devices.py:465-527.
+// ============================================
+
+/** Request body for PUT /networks/{id}/power-saving. Settings-class write. */
+export interface PowerSavingUpdateRequest {
+	enable?: boolean;
+	schedule_enabled?: boolean;
+}
+
+export interface PowerSavingUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	enable: boolean | null;
+	schedule_enabled: boolean | null;
+}
+
+/**
+ * Power-saving schedules are NOT settings-class (plan § 5) - their own
+ * sub-resource with no documented reboot behaviour. Unverified,
+ * non-settings writes, gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`.
+ */
+export interface PowerSavingSchedule {
+	[key: string]: unknown;
+	id?: string;
+	name?: string;
+	days?: string[];
+	start_time?: string;
+	end_time?: string;
+	enabled?: boolean;
+}
+
+export interface PowerSavingSchedulesResponse {
+	schedules: PowerSavingSchedule[];
+}
+
+export interface PowerSavingScheduleCreateRequest {
+	name: string;
+	days: string[];
+	start_time: string;
+	end_time: string;
+	enabled?: boolean;
+}
+
+export interface PowerSavingScheduleUpdateRequest {
+	name?: string;
+	days?: string[];
+	start_time?: string;
+	end_time?: string;
+	enabled?: boolean;
+}
+
+export interface PowerSavingScheduleActionResponse {
+	success: boolean;
+	schedule: PowerSavingSchedule | null;
+}
+
+/**
+ * Request body for PUT /networks/{id}/subnets. Field names mirror
+ * `eero.api.subnets`'s declared `SubnetConfig` fields exactly. `password` is
+ * write-only - never echoed back by the backend.
+ */
+export interface SubnetConfigRequest {
+	subnet_type: string;
+	subnet_id?: string;
+	subnet_kind?: string;
+	dedicated_subnet?: boolean;
+	enabled?: boolean;
+	open_network?: boolean;
+	name?: string;
+	password?: string;
+	rate_limit_pct?: number;
+	wan_access?: boolean;
+}
+
+export interface SubnetConfigResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	subnet: Record<string, unknown> | null;
+}
+
+export interface MultiStaticIpSettings {
+	router_ip: string;
+	subnet_ip: string;
+	subnet_mask: string;
+}
+
+export interface MultiStaticIpNatPortForwarding {
+	subnet_ip_start: string;
+	subnet_ip_end: string;
+}
+
+/** Request body for PUT /networks/{id}/multistaticip. Settings-class write. */
+export interface MultiStaticIpUpdateRequest {
+	enabled: boolean;
+	type?: 'P';
+	multistaticip_settings?: MultiStaticIpSettings;
+	multistaticip_settings_nat_portfwd?: MultiStaticIpNatPortForwarding;
+}
+
+export interface MultiStaticIpUpdateResultResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	config: Record<string, unknown> | null;
+}
+
+export interface SecondaryWanDeviceEntry {
+	mac: string;
+	secondary_wan_deny_access: boolean;
+}
+
+/** Request body for PUT /networks/{id}/secondary-wan. Settings-class write, bulk. */
+export interface SecondaryWanConfigRequest {
+	devices: SecondaryWanDeviceEntry[];
+}
+
+export interface SecondaryWanConfigResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	config: Record<string, unknown> | null;
+}
+
+/** Per-device secondary-WAN toggle: PUT /devices/{id}/secondary-wan-access. */
+export interface DeviceSecondaryWanAccessRequest {
+	deny: boolean;
+}
+
+export interface DeviceSecondaryWanAccessResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	deny: boolean;
+}
+
+/**
+ * POST /networks/{id}/updates/apply. Reboot-class - `scope: "all_nodes"`
+ * always, every node restarts.
+ */
+export interface NetworkUpdateApplyResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	scope: string;
+}
+
+/** Request body for PUT /networks/{id}/password. Never logged, never echoed. */
+export interface NetworkPasswordUpdateRequest {
+	password: string;
+}
+
+export interface NetworkPasswordUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	disconnects_clients: boolean;
+	open_network: boolean;
+}
+
+/** Request body for DELETE /networks/{id}/password. Opens the network. */
+export interface NetworkPasswordClearRequest {
+	confirm_open_network: true;
+}

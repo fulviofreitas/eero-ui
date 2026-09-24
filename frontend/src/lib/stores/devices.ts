@@ -377,6 +377,23 @@ function createDevicesStore() {
 		},
 
 		/**
+		 * Deny/allow a single device's secondary-WAN access
+		 * (phase-6.0-revamp.md § 5, § 7 WP8, family 10). Settings-class by
+		 * its own SDK docstring - treated as a mesh reboot, so this is
+		 * PESSIMISTIC (no optimistic flip): `deny` only changes once the API
+		 * confirms it. No dedicated getter exists on `DeviceSummary`/
+		 * `DeviceDetail`, so this does not touch the devices list - the
+		 * caller (the device detail page) owns its own local state.
+		 */
+		async setSecondaryWanAccess(deviceId: string, deny: boolean): Promise<boolean> {
+			const result = await api.devices.setSecondaryWanAccess(deviceId, deny);
+			if (!result.success) {
+				throw new Error('Failed to update secondary WAN access');
+			}
+			return result.changed;
+		},
+
+		/**
 		 * Clear all data
 		 */
 		clear(): void {

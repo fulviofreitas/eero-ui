@@ -298,6 +298,41 @@ describe('devicesStore', () => {
 		});
 	});
 
+	describe('setSecondaryWanAccess', () => {
+		it('resolves with the backend changed flag (pessimistic - no list mutation)', async () => {
+			const changed = await devicesStore.setSecondaryWanAccess('dev-1', true);
+
+			expect(changed).toBe(true);
+		});
+
+		it('returns false when the backend reports changed:false', async () => {
+			server.use(
+				http.put('/api/devices/:deviceId/secondary-wan-access', () =>
+					HttpResponse.json({ success: true, changed: false, reboot_expected: true, deny: false })
+				)
+			);
+
+			const changed = await devicesStore.setSecondaryWanAccess('dev-1', false);
+
+			expect(changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/devices/:deviceId/secondary-wan-access', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(devicesStore.setSecondaryWanAccess('dev-1', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+		});
+	});
+
 	describe('writes never retry on a network error (fetch spy)', () => {
 		it('calls fetch exactly once for unblockDevice even when the request throws', async () => {
 			server.use(http.get('/api/devices', () => HttpResponse.json([makeDevice('dev-1')])));

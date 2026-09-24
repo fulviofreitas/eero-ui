@@ -1156,6 +1156,128 @@ export const api = {
 			fetchWithHandling<import('./types').ProxiedNodesUpdateResponse>(
 				`/networks/${networkId}/proxied-nodes`,
 				{ method: 'PUT', body: { enabled }, retries: 0 }
+			),
+
+		/** Set power-saving enable/schedule flags. Settings-class write. */
+		setPowerSaving: (networkId: string, body: import('./types').PowerSavingUpdateRequest) =>
+			fetchWithHandling<import('./types').PowerSavingUpdateResponse>(
+				`/networks/${networkId}/power-saving`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/**
+		 * List power-saving schedules. Verified read, not gated - own
+		 * sub-resource, not a settings-class family.
+		 */
+		getPowerSavingSchedules: (networkId: string) =>
+			fetchWithHandling<import('./types').PowerSavingSchedulesResponse>(
+				`/networks/${networkId}/power-saving/schedules`
+			).then((r) => r.schedules),
+
+		/**
+		 * Create a power-saving schedule. Unverified, non-settings write -
+		 * gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, never retried.
+		 */
+		createPowerSavingSchedule: (
+			networkId: string,
+			body: import('./types').PowerSavingScheduleCreateRequest
+		) =>
+			fetchWithHandling<import('./types').PowerSavingScheduleActionResponse>(
+				`/networks/${networkId}/power-saving/schedules`,
+				{ method: 'POST', body, retries: 0 }
+			),
+
+		/** Update a power-saving schedule. Unverified, non-settings write. */
+		updatePowerSavingSchedule: (
+			networkId: string,
+			scheduleId: string,
+			body: import('./types').PowerSavingScheduleUpdateRequest
+		) =>
+			fetchWithHandling<import('./types').PowerSavingScheduleActionResponse>(
+				`/networks/${networkId}/power-saving/schedules/${scheduleId}`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Delete a power-saving schedule. Unverified, non-settings write. */
+		deletePowerSavingSchedule: (networkId: string, scheduleId: string) =>
+			fetchWithHandling<import('./types').PowerSavingScheduleActionResponse>(
+				`/networks/${networkId}/power-saving/schedules/${scheduleId}`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/**
+		 * Create or edit a subnet configuration. Settings-class write. The
+		 * "main" subnet cannot be disabled, opened, or cut off from the WAN
+		 * (backend 422s).
+		 */
+		setSubnetConfig: (networkId: string, body: import('./types').SubnetConfigRequest) =>
+			fetchWithHandling<import('./types').SubnetConfigResponse>(`/networks/${networkId}/subnets`, {
+				method: 'PUT',
+				body,
+				retries: 0
+			}),
+
+		/**
+		 * Delete a subnet's configuration. Settings-class write. The "main"
+		 * subnet cannot be deleted (backend 409 `subnet_protected`).
+		 */
+		deleteSubnetConfig: (networkId: string, subnetType: string) =>
+			fetchWithHandling<import('./types').SubnetConfigResponse>(
+				`/networks/${networkId}/subnets/${subnetType}`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/**
+		 * Set the network's multi-static-IP configuration. Settings-class
+		 * write. Only served on API 2.3.
+		 */
+		setMultiStaticIp: (networkId: string, body: import('./types').MultiStaticIpUpdateRequest) =>
+			fetchWithHandling<import('./types').MultiStaticIpUpdateResultResponse>(
+				`/networks/${networkId}/multistaticip`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/**
+		 * Set per-device secondary-WAN access in bulk. Settings-class write,
+		 * no no-op guard - always proceeds.
+		 */
+		setSecondaryWanConfig: (networkId: string, body: import('./types').SecondaryWanConfigRequest) =>
+			fetchWithHandling<import('./types').SecondaryWanConfigResponse>(
+				`/networks/${networkId}/secondary-wan`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/**
+		 * Apply a pending firmware update to every node on the network.
+		 * Reboot-class write - `scope: "all_nodes"` always. 409s with
+		 * `no_update_available`/`update_in_progress` when not applicable.
+		 */
+		applyNetworkUpdate: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkUpdateApplyResponse>(
+				`/networks/${networkId}/updates/apply`,
+				{ method: 'POST', retries: 0 }
+			),
+
+		/**
+		 * Set the network's Wi-Fi password. Not settings-class by § 5's own
+		 * table, but treated with the same danger-dialog contract - it
+		 * disconnects every client while it takes effect. Never logged,
+		 * never echoed back.
+		 */
+		setNetworkPassword: (networkId: string, password: string) =>
+			fetchWithHandling<import('./types').NetworkPasswordUpdateResponse>(
+				`/networks/${networkId}/password`,
+				{ method: 'PUT', body: { password }, retries: 0 }
+			),
+
+		/**
+		 * Clear the network's Wi-Fi password - opens the network. Requires
+		 * `confirm_open_network: true` (422 otherwise).
+		 */
+		clearNetworkPassword: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkPasswordUpdateResponse>(
+				`/networks/${networkId}/password`,
+				{ method: 'DELETE', body: { confirm_open_network: true }, retries: 0 }
 			)
 	},
 
@@ -1220,6 +1342,17 @@ export const api = {
 				body: { device_type: deviceType },
 				retries: 0
 			}),
+
+		/**
+		 * Deny/allow a single device's secondary-WAN access
+		 * (phase-6.0-revamp.md § 5, § 7 WP8, family 10). Settings-class by
+		 * its own SDK docstring - treated as a mesh reboot. Never retried.
+		 */
+		setSecondaryWanAccess: (deviceId: string, deny: boolean) =>
+			fetchWithHandling<import('./types').DeviceSecondaryWanAccessResponse>(
+				`/devices/${deviceId}/secondary-wan-access`,
+				{ method: 'PUT', body: { deny }, retries: 0 }
+			),
 
 		/** A single device's insights time series (plan § 7 WP6, deliverable 6). Premium-gated. */
 		getInsights: (

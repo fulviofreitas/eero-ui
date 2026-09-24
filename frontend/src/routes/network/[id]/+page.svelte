@@ -45,6 +45,12 @@
 	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
 	import NetworkSettingsControls from '$lib/components/network/NetworkSettingsControls.svelte';
 	import WifiSecurityControls from '$lib/components/network/WifiSecurityControls.svelte';
+	import PowerSavingControls from '$lib/components/network/PowerSavingControls.svelte';
+	import PowerSavingSchedulesCard from '$lib/components/network/PowerSavingSchedulesCard.svelte';
+	import SubnetsControls from '$lib/components/network/SubnetsControls.svelte';
+	import WanControls from '$lib/components/network/WanControls.svelte';
+	import UpdatesControls from '$lib/components/network/UpdatesControls.svelte';
+	import NetworkPasswordCard from '$lib/components/network/NetworkPasswordCard.svelte';
 	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
 	import ContentFilterCard from '$lib/components/network/ContentFilterCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
@@ -334,7 +340,21 @@
 							{#snippet wifiSecurityControls()}
 								<WifiSecurityControls {networkId} />
 							{/snippet}
+							{#snippet powerThreadControls()}
+								<PowerSavingControls {networkId} />
+							{/snippet}
+							{#snippet subnetsControls()}
+								<SubnetsControls {networkId} />
+							{/snippet}
+							{#snippet wanControls()}
+								<WanControls {networkId} />
+							{/snippet}
+							{#snippet updatesControls()}
+								<UpdatesControls {networkId} />
+							{/snippet}
 						</SecurityWanCard>
+						<PowerSavingSchedulesCard {networkId} />
+						<NetworkPasswordCard {networkId} />
 						<NotificationsCard {networkId} />
 						<ForwardsReservationsCard {networkId} />
 					</div>

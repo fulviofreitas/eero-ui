@@ -334,4 +334,155 @@ describe('securityWanStore', () => {
 			expect(result.changed).toBe(true);
 		});
 	});
+
+	// ==================================================================
+	// WP8 part 2: power saving, subnets, WAN, firmware
+	// (phase-6.0-revamp.md § 5, § 7 WP8 part 2)
+	// ==================================================================
+
+	describe('updatePowerSaving', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updatePowerSaving('network-123', { enable: true });
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+		});
+
+		it('does not re-fetch when the backend reports changed:false', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/power-saving', () =>
+					HttpResponse.json({
+						success: true,
+						changed: false,
+						reboot_expected: true,
+						enable: false,
+						schedule_enabled: null
+					})
+				)
+			);
+
+			const result = await securityWanStore.updatePowerSaving('network-123', { enable: false });
+
+			expect(result.changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/power-saving', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(
+				securityWanStore.updatePowerSaving('network-123', { enable: true })
+			).rejects.toThrow('Experimental writes are disabled.');
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	describe('updateSubnet', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateSubnet('network-123', {
+				subnet_type: 'iot',
+				enabled: true
+			});
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+		});
+
+		it('surfaces a 409 conflict response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/subnets', () =>
+					HttpResponse.json(
+						{ type: 'subnet_protected', detail: 'The main subnet cannot be modified.' },
+						{ status: 409 }
+					)
+				)
+			);
+
+			await expect(
+				securityWanStore.updateSubnet('network-123', { subnet_type: 'main', enabled: false })
+			).rejects.toThrow();
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	describe('deleteSubnet', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.deleteSubnet('network-123', 'iot');
+
+			expect(result.changed).toBe(true);
+		});
+
+		it('surfaces a 409 subnet_protected response for the main subnet', async () => {
+			await expect(securityWanStore.deleteSubnet('network-123', 'main')).rejects.toThrow();
+		});
+	});
+
+	describe('updateMultiStaticIp', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateMultiStaticIp('network-123', {
+				enabled: true,
+				type: 'P',
+				multistaticip_settings: {
+					router_ip: '203.0.113.1',
+					subnet_ip: '203.0.113.0',
+					subnet_mask: '255.255.255.248'
+				}
+			});
+
+			expect(result.changed).toBe(true);
+			expect(result.reboot_expected).toBe(true);
+		});
+
+		it('surfaces a 429 rate-limit response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/multistaticip', () =>
+					HttpResponse.json({ detail: 'Rate limit exceeded.' }, { status: 429 })
+				)
+			);
+
+			await expect(
+				securityWanStore.updateMultiStaticIp('network-123', { enabled: false })
+			).rejects.toThrow();
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	describe('updateSecondaryWanConfig', () => {
+		it('always proceeds (no no-op guard) and re-fetches on success', async () => {
+			const result = await securityWanStore.updateSecondaryWanConfig('network-123', {
+				devices: [{ mac: 'aa:bb:cc:dd:ee:ff', secondary_wan_deny_access: true }]
+			});
+
+			expect(result.changed).toBe(true);
+		});
+	});
+
+	describe('applyNetworkUpdate', () => {
+		it('re-fetches the store and reports scope: all_nodes', async () => {
+			const result = await securityWanStore.applyNetworkUpdate('network-123');
+
+			expect(result.changed).toBe(true);
+			expect(result.scope).toBe('all_nodes');
+		});
+
+		it('surfaces a 409 no_update_available response as a rejected promise', async () => {
+			server.use(
+				http.post('/api/networks/:networkId/updates/apply', () =>
+					HttpResponse.json(
+						{ type: 'no_update_available', detail: 'No update is pending.' },
+						{ status: 409 }
+					)
+				)
+			);
+
+			await expect(securityWanStore.applyNetworkUpdate('network-123')).rejects.toThrow();
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
 });

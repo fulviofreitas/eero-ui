@@ -631,6 +631,127 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// WP8 part 2: power saving, subnets, WAN, firmware, network password
+	// (phase-6.0-revamp.md § 5, § 7 WP8 part 2). Same default-open-gate,
+	// `changed: true` convention as the block above.
+	// ============================================
+	http.put('/api/networks/:networkId/power-saving', async ({ request }) => {
+		const body = (await request.json()) as { enable?: boolean; schedule_enabled?: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			enable: body.enable ?? null,
+			schedule_enabled: body.schedule_enabled ?? null
+		});
+	}),
+
+	http.get('/api/networks/:networkId/power-saving/schedules', () => {
+		return HttpResponse.json({
+			schedules: [
+				{
+					id: 'schedule-1',
+					name: 'Overnight',
+					days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+					start_time: '01:00',
+					end_time: '06:00',
+					enabled: true
+				}
+			]
+		});
+	}),
+
+	http.post('/api/networks/:networkId/power-saving/schedules', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json({ success: true, schedule: { id: 'schedule-new', ...body } });
+	}),
+
+	http.put(
+		'/api/networks/:networkId/power-saving/schedules/:scheduleId',
+		async ({ request, params }) => {
+			const body = (await request.json()) as Record<string, unknown>;
+			return HttpResponse.json({
+				success: true,
+				schedule: { id: params.scheduleId, ...body }
+			});
+		}
+	),
+
+	http.delete('/api/networks/:networkId/power-saving/schedules/:scheduleId', () => {
+		return HttpResponse.json({ success: true, schedule: null });
+	}),
+
+	http.put('/api/networks/:networkId/subnets', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		const { password: _password, ...rest } = body;
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			subnet: rest
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/subnets/:subnetType', ({ params }) => {
+		if (params.subnetType === 'main') {
+			return HttpResponse.json(
+				{ type: 'subnet_protected', detail: 'The main subnet cannot be deleted.' },
+				{ status: 409 }
+			);
+		}
+		return HttpResponse.json({ success: true, changed: true, reboot_expected: true, subnet: null });
+	}),
+
+	http.put('/api/networks/:networkId/multistaticip', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			config: body
+		});
+	}),
+
+	http.put('/api/networks/:networkId/secondary-wan', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			config: body
+		});
+	}),
+
+	http.post('/api/networks/:networkId/updates/apply', () => {
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			scope: 'all_nodes'
+		});
+	}),
+
+	http.put('/api/networks/:networkId/password', async () => {
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: false,
+			disconnects_clients: true,
+			open_network: false
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/password', () => {
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: false,
+			disconnects_clients: true,
+			open_network: true
+		});
+	}),
+
+	// ============================================
 	// Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
 	// ============================================
 	http.get('/api/networks/:networkId/notifications', () => {
@@ -816,6 +937,19 @@ export const handlers = [
 			device_id: params.deviceId,
 			action: 'nickname',
 			message: null
+		});
+	}),
+
+	// Per-device secondary-WAN-access toggle (phase-6.0-revamp.md § 5,
+	// § 7 WP8, family 10). Default here simulates the gate open and a real
+	// change - individual tests override with 403/409/429 variants.
+	http.put('/api/devices/:deviceId/secondary-wan-access', async ({ request }) => {
+		const body = (await request.json()) as { deny: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: true,
+			deny: body.deny
 		});
 	}),
 

@@ -25,6 +25,7 @@
 	import DeviceIdentificationCard from '$lib/components/device/DeviceIdentificationCard.svelte';
 	import DeviceConnectionCard from '$lib/components/device/DeviceConnectionCard.svelte';
 	import DeviceStatusCard from '$lib/components/device/DeviceStatusCard.svelte';
+	import DeviceSecondaryWanToggle from '$lib/components/device/DeviceSecondaryWanToggle.svelte';
 	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
@@ -233,6 +234,9 @@
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						<Icon name="x" size={14} /> Block
 					</button>
+				{/if}
+				{#if device!.id}
+					<DeviceSecondaryWanToggle deviceId={device!.id} />
 				{/if}
 			{/snippet}
 		</DetailHeader>
