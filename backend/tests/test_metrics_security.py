@@ -184,6 +184,29 @@ class TestIdentifierValidation:
             assert response.status_code == 400
             mocked_query_range.assert_not_called()
 
+    async def test_device_id_with_raw_percent_0a_rejected_before_query(
+        self, auth_client, authenticated_client
+    ):
+        """A raw "%0A"-encoded trailing newline in the device_id path
+        segment is rejected with 400, not just the equivalent Python
+        "\\n" literal (see ``test_network_id_with_raw_percent_0a_rejected_
+        before_query`` for the query-parameter analogue).
+
+        This is caught by the router-level ``validate_request_path_ids``
+        dependency, which runs before the path operation function -- and
+        therefore before any VictoriaMetrics query -- ever executes.
+        """
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(),
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/devices/abc%0A/signal" "?start=0&end=100&step=1m"
+            )
+
+            assert response.status_code == 400
+            mocked_query_range.assert_not_called()
+
 
 class TestNoIndexHtmlLeak:
     """`/metrics` and unclaimed `/api/*` paths must never fall through to the SPA."""

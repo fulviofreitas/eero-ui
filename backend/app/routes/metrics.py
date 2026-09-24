@@ -6,11 +6,13 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from ..deps import require_auth
+from ..deps import require_auth, validate_request_path_ids
 from ..services.victoria import victoria_client
 from ..transformers import InvalidIdentifierError, validate_path_id
 
-router = APIRouter(dependencies=[Depends(require_auth)])
+router = APIRouter(
+    dependencies=[Depends(require_auth), Depends(validate_request_path_ids)]
+)
 _LOGGER = logging.getLogger(__name__)
 
 

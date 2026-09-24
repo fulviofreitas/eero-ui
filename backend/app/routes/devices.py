@@ -4,7 +4,7 @@ import logging
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..deps import (
     get_network_id,
@@ -53,10 +53,7 @@ class DeviceSummary(BaseModel):
     profile_id: str | None = None
     profile_name: str | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DeviceDetail(BaseModel):
@@ -117,10 +114,7 @@ class DeviceDetail(BaseModel):
     subnet_kind: str | None = None
     auth: str | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DeviceAction(BaseModel):
@@ -322,7 +316,7 @@ async def _resolve_device_mac(
     mac = device.get("mac")
     if not mac:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Device has no known MAC address.",
         )
     return mac
@@ -390,19 +384,19 @@ async def set_device_nickname(
     nickname = request.nickname.strip()
     if not nickname:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Nickname cannot be empty.",
         )
     if len(nickname) > 64:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Nickname must be 64 characters or fewer.",
         )
     if has_control_or_format_chars(nickname):
         # Static detail (security review, 2026-09-24): never echoes the
         # offending character or its position back to the caller.
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Nickname is invalid.",
         )
 
@@ -425,10 +419,7 @@ class DeviceTypeRequest(BaseModel):
 
     device_type: str
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put("/{device_id}/type", response_model=DeviceAction)
@@ -452,7 +443,7 @@ async def set_device_type_route(
     device_type = body.device_type.strip()
     if not is_valid_device_type(device_type):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="device_type must match ^[a-z0-9_]{1,40}$.",
         )
     raw_result = await client.set_device_type(

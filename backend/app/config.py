@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class Settings(BaseModel):
@@ -52,10 +52,7 @@ class Settings(BaseModel):
     # independent flag; both must be on for those four routes.
     account_identity_writes: bool = False
 
-    class Config:
-        """Pydantic config."""
-
-        env_prefix = "EERO_DASHBOARD_"
+    model_config = ConfigDict(env_prefix="EERO_DASHBOARD_")
 
 
 def get_settings() -> Settings:

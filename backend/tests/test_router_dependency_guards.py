@@ -76,18 +76,14 @@ def _iter_routes():
             yield name, prefix, route
 
 
-# KNOWN, TRACKED GAP (TEST-SME backend audit, 2026-09-24) -- NOT a design
-# exemption like the auth ones above. ``GET /api/metrics/devices/{device_id}
-# /signal`` (routes/metrics.py) has a ``device_id`` path parameter but
-# metrics.router's only dependency is ``require_auth``; the sanitisation
-# every other ``{device_id}``/``{network_id}``/``{eero_id}``/``{profile_id}``
-# route gets from ``validate_request_path_ids`` (rejecting newlines, ``..``,
-# embedded ``/``) never runs for it. Reported upstream rather than fixed
-# here (TEST-SME owns backend/tests/** only): one-line fix is
-# ``router = APIRouter(dependencies=[Depends(require_auth), Depends(validate_request_path_ids)])``
-# in routes/metrics.py, matching networks.py/devices.py/eeros.py/profiles.py.
-# Scoped to this exact route so a *new* offending route is still caught.
-_KNOWN_PATH_ID_GAPS = {"metrics: /api/metrics/devices/{device_id}/signal (['GET'])"}
+# Previously tracked a known gap: ``GET /api/metrics/devices/{device_id}
+# /signal`` (routes/metrics.py) lacked ``validate_request_path_ids`` on
+# metrics.router. Fixed (BACKEND-SME, 2026-09-24) by adding
+# ``Depends(validate_request_path_ids)`` to metrics.router's dependencies,
+# matching networks.py/devices.py/eeros.py/profiles.py. Kept as an empty
+# set (rather than deleted) so the mechanism -- and the "shrinks to empty"
+# assertion below -- stays in place to catch any future regression.
+_KNOWN_PATH_ID_GAPS: set[str] = set()
 
 
 class TestPathIdValidationOnEveryRouter:

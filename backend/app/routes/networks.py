@@ -18,7 +18,7 @@ from eero.exceptions import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .._coercion import coerce_bool
 from ..config import settings
@@ -95,10 +95,7 @@ class NetworkSummary(BaseModel):
     public_ip: str | None = None
     isp_name: str | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class NetworkDetail(NetworkSummary):
@@ -202,8 +199,7 @@ class NetworkRenameRequest(BaseModel):
 
     name: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 # Matches the eero mobile app's own network-name cap (security review
@@ -222,7 +218,7 @@ def _reject_unsafe_name(name: str) -> None:
     """
     if is_unsafe_short_text(name, max_bytes=_NETWORK_NAME_MAX_BYTES):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Network name is invalid.",
         )
 
@@ -468,8 +464,7 @@ class GuestNetworkStatus(BaseModel):
     name: str | None = None
     has_password: bool = False
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_guest_network(data: dict[str, Any]) -> GuestNetworkStatus:
@@ -495,8 +490,7 @@ class GuestPasswordRequest(BaseModel):
 
     password: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class GuestPasswordResponse(BaseModel):
@@ -518,7 +512,7 @@ def _reject_unsafe_guest_password(password: str) -> None:
     """
     if not (_GUEST_PASSWORD_MIN <= len(password) <= _GUEST_PASSWORD_MAX):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"Guest password must be {_GUEST_PASSWORD_MIN}-"
                 f"{_GUEST_PASSWORD_MAX} characters."
@@ -526,7 +520,7 @@ def _reject_unsafe_guest_password(password: str) -> None:
         )
     if not all(0x20 <= ord(c) < 0x7F for c in password):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Guest password must be printable ASCII.",
         )
 
@@ -609,8 +603,7 @@ class DnsFamilyUpdate(BaseModel):
     mode: Literal["custom", "automatic"]
     servers: list[str] = []
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DnsUpdateRequest(BaseModel):
@@ -624,8 +617,7 @@ class DnsUpdateRequest(BaseModel):
     ipv6: DnsFamilyUpdate | None = None
     caching: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DnsUpdateResponse(BaseModel):
@@ -1014,8 +1006,7 @@ class DhcpCustomLease(BaseModel):
     subnet_ip: str
     subnet_mask: str
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class DhcpUpdateRequest(BaseModel):
@@ -1024,8 +1015,7 @@ class DhcpUpdateRequest(BaseModel):
     mode: Literal["automatic", "manual"] | None = None
     custom: DhcpCustomLease | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DhcpUpdateResponse(BaseModel):
@@ -1047,7 +1037,7 @@ def _reject_invalid_ip_literal(value: str, field: str) -> None:
         ipaddress.ip_address(value)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be a valid IP address.",
         )
 
@@ -1063,7 +1053,7 @@ def _reject_non_ipv4(value: str, field: str) -> ipaddress.IPv4Address:
         return ipaddress.IPv4Address(value)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be a valid IPv4 address.",
         )
 
@@ -1091,35 +1081,35 @@ def _validate_dhcp_custom_range(custom: DhcpCustomLease) -> None:
         )
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
         )
     if not network.is_private:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask must be an RFC1918 private network.",
         )
     if not (16 <= network.prefixlen <= 30):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask prefix must be between /16 and /30.",
         )
     if start > end:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_ip must be less than or equal to end_ip.",
         )
     hosts = list(network.hosts())
     if start not in hosts or end not in hosts:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_ip/end_ip must both fall within the subnet's usable "
             "host range.",
         )
     router = hosts[0]
     if start <= router <= end:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="start_ip/end_ip range must exclude the subnet's router " "address.",
         )
 
@@ -1142,7 +1132,7 @@ async def update_dhcp(
     """
     if body.mode is None and body.custom is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="At least one of mode or custom must be provided.",
         )
     if body.custom is not None:
@@ -1235,7 +1225,7 @@ async def update_connection_mode(
     """
     if body.mode == "BRIDGE" and not body.acknowledge_disables_routing:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "acknowledge_disables_routing must be true when switching to "
                 "BRIDGE mode."
@@ -1346,8 +1336,7 @@ class Wpa3PerBandRequest(BaseModel):
     band_2_4_ghz: Literal["WPA2", "WPA2_WPA3", "WPA3"] | None = None
     band_5_ghz: Literal["WPA2", "WPA2_WPA3", "WPA3"] | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class Wpa3PerBandResponse(BaseModel):
@@ -1381,7 +1370,7 @@ async def update_wpa3_per_band(
     """
     if body.band_2_4_ghz is None and body.band_5_ghz is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="At least one of band_2_4_ghz or band_5_ghz must be provided.",
         )
 
@@ -1428,8 +1417,7 @@ class SecurityUpdateRequest(BaseModel):
     upnp: bool | None = None
     ipv6: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class SecurityUpdateResponse(BaseModel):
@@ -1475,7 +1463,7 @@ async def update_security(
     }
     if len(provided) != 1:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Exactly one of wpa3, band_steering, upnp, ipv6 must be provided.",
         )
     field, value = next(iter(provided.items()))
@@ -1737,8 +1725,7 @@ class PowerSavingRequest(BaseModel):
     enable: bool | None = None
     schedule_enabled: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class PowerSavingResponse(BaseModel):
@@ -1772,7 +1759,7 @@ async def update_power_saving(
     """
     if body.enable is None and body.schedule_enabled is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="At least one of enable or schedule_enabled must be provided.",
         )
 
@@ -1839,12 +1826,12 @@ def _validate_schedule_days_field(days: list[str]) -> None:
     """
     if not days or len(days) > 7:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="days must be a non-empty list of at most 7 day names.",
         )
     if any(d.lower() not in _POWER_SAVING_SCHEDULE_DAYS for d in days):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="days must be one of mon/tue/wed/thu/fri/sat/sun.",
         )
 
@@ -1857,7 +1844,7 @@ def _validate_schedule_time_field(value: str, field: str) -> None:
     """
     if not isinstance(value, str) or not _SCHEDULE_TIME_RE.match(value):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be HH:MM (24-hour).",
         )
 
@@ -1871,8 +1858,7 @@ class PowerSavingScheduleCreateRequest(BaseModel):
     end_time: str
     enabled: bool = True
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class PowerSavingScheduleUpdateRequest(BaseModel):
@@ -1884,8 +1870,7 @@ class PowerSavingScheduleUpdateRequest(BaseModel):
     end_time: str | None = None
     enabled: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class PowerSavingSchedulesResponse(BaseModel):
@@ -1936,7 +1921,7 @@ async def create_power_saving_schedule(
     name = body.name.strip()
     if not name or is_unsafe_short_text(name, max_bytes=64):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="name must be 1-64 bytes, no control characters.",
         )
     _validate_schedule_days_field(body.days)
@@ -1986,7 +1971,7 @@ async def update_power_saving_schedule(
         and body.enabled is None
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="At least one field must be provided.",
         )
     name = None
@@ -1994,7 +1979,7 @@ async def update_power_saving_schedule(
         name = body.name.strip()
         if not name or is_unsafe_short_text(name, max_bytes=64):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="name must be 1-64 bytes, no control characters.",
             )
     if body.days is not None:
@@ -2081,8 +2066,7 @@ class SubnetConfigRequest(BaseModel):
     rate_limit_pct: int | None = None
     wan_access: bool | None = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class SubnetConfigResponse(BaseModel):
@@ -2118,12 +2102,12 @@ async def update_subnet_config(
         stripped_name = body.name.strip()
         if not stripped_name or is_unsafe_short_text(stripped_name, max_bytes=64):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="name must be 1-64 bytes, no control characters.",
             )
     if body.password is not None and not _SUBNET_PASSWORD_RE.fullmatch(body.password):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="password must be 8-63 printable ASCII characters.",
         )
     if body.subnet_type == _MAIN_SUBNET_TYPE:
@@ -2135,7 +2119,7 @@ async def update_subnet_config(
             value = getattr(body, field)
             if value is forbidden:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"{field} cannot be set to {forbidden} for the main "
                     "subnet.",
                 )
@@ -2226,8 +2210,7 @@ class MultiStaticIpSettings(BaseModel):
     subnet_ip: str
     subnet_mask: str
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class MultiStaticIpNatPortForwarding(BaseModel):
@@ -2236,8 +2219,7 @@ class MultiStaticIpNatPortForwarding(BaseModel):
     subnet_ip_start: str
     subnet_ip_end: str
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class MultiStaticIpRequest(BaseModel):
@@ -2255,8 +2237,7 @@ class MultiStaticIpRequest(BaseModel):
     multistaticip_settings: MultiStaticIpSettings | None = None
     multistaticip_settings_nat_portfwd: MultiStaticIpNatPortForwarding | None = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class MultiStaticIpUpdateResponse(BaseModel):
@@ -2287,12 +2268,12 @@ def _validate_multistaticip_settings(model: MultiStaticIpSettings) -> None:
         )
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
         )
     if router_ip not in network:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="router_ip must fall within subnet_ip/subnet_mask.",
         )
 
@@ -2310,7 +2291,7 @@ def _validate_multistaticip_nat_portfwd(
     end = _reject_non_ipv4(model.subnet_ip_end, "subnet_ip_end")
     if start > end:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip_start must be less than or equal to subnet_ip_end.",
         )
 
@@ -2370,8 +2351,7 @@ class SecondaryWanDeviceEntry(BaseModel):
     mac: str
     secondary_wan_deny_access: bool
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class SecondaryWanConfigRequest(BaseModel):
@@ -2379,8 +2359,7 @@ class SecondaryWanConfigRequest(BaseModel):
 
     devices: list[SecondaryWanDeviceEntry]
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class SecondaryWanConfigResponse(BaseModel):
@@ -2415,13 +2394,13 @@ async def update_secondary_wan_config(
     """
     if not body.devices or len(body.devices) > 100:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="devices must be a non-empty list of at most 100 entries.",
         )
     for entry in body.devices:
         if not is_valid_mac(entry.mac):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Each device entry must carry a valid MAC address.",
             )
 
@@ -2606,7 +2585,7 @@ async def set_network_password_route(
     """
     if not _NETWORK_PASSWORD_RE.fullmatch(body.password):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="password must be 8-63 printable ASCII characters.",
         )
 
@@ -2641,7 +2620,7 @@ async def clear_network_password_route(
     """
     if not body.confirm_open_network:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="confirm_open_network must be true to open the network.",
         )
 
@@ -2815,12 +2794,12 @@ def validate_insight_params(
     """
     if insight_type not in INSIGHT_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"insight_type must be one of {sorted(INSIGHT_TYPES)}.",
         )
     if cadence not in INSIGHT_CADENCES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"cadence must be one of {sorted(INSIGHT_CADENCES)}.",
         )
     if not is_valid_iso8601(start) or not is_valid_iso8601(end):
@@ -2848,8 +2827,7 @@ class InsightValue(BaseModel):
     time: str | None = None
     value: float | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class InsightSeries(BaseModel):
@@ -2859,8 +2837,7 @@ class InsightSeries(BaseModel):
     sum: float | None = None
     values: list[InsightValue] = []
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class InsightsResponse(BaseModel):
@@ -2950,12 +2927,12 @@ def _validate_usage_window(
     if cadence is None:
         if cadence_required:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"cadence is required and must be one of {sorted(DATA_USAGE_CADENCES)}.",
             )
     elif cadence not in DATA_USAGE_CADENCES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"cadence must be one of {sorted(DATA_USAGE_CADENCES)}.",
         )
 
@@ -3011,8 +2988,7 @@ class DataUsageResponse(BaseModel):
     values: list[dict[str, Any]] = []
     raw: dict[str, Any] = {}
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_data_usage(raw: Any) -> DataUsageResponse:
@@ -3271,7 +3247,7 @@ async def get_channel_utilization(
         )
     if band is not None and band not in CHANNEL_UTILIZATION_BANDS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"band must be one of {sorted(CHANNEL_UTILIZATION_BANDS)}.",
         )
     raw = await client.get_channel_utilization(
@@ -3326,8 +3302,7 @@ class Member(BaseModel):
     role: str | None = None
     status: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_member(raw: dict[str, Any]) -> Member:
@@ -3374,8 +3349,7 @@ class InviteSummary(BaseModel):
     created: str | None = None
     expires: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_invite(raw: dict[str, Any]) -> InviteSummary:
@@ -3488,8 +3462,7 @@ class BackupAccessPoint(BaseModel):
     status: str | None = None
     connectivity: Any = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_backup_access_point(raw: dict[str, Any]) -> BackupAccessPoint:
@@ -3549,8 +3522,7 @@ class ThreadSummary(BaseModel):
     channel: int | None = None
     pan_id: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_thread(raw: dict[str, Any]) -> ThreadSummary:
@@ -3738,8 +3710,7 @@ class DdnsUpdateRequest(BaseModel):
 
     enabled: bool
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class DdnsUpdateResponse(BaseModel):
@@ -3796,8 +3767,7 @@ class BackupInternetToggleRequest(BaseModel):
 
     enabled: bool
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class BackupInternetToggleResponse(BaseModel):
@@ -3859,8 +3829,7 @@ class ThreadUpdateRequest(BaseModel):
     enabled: bool
     enable_credential_syncing: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ThreadUpdateResponse(BaseModel):
@@ -4034,8 +4003,7 @@ class NotificationSettingsUpdateRequest(BaseModel):
 
     settings: dict[str, bool]
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -4070,7 +4038,7 @@ async def update_network_notifications(
     unknown_keys = set(body.settings) - set(current_settings)
     if unknown_keys:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown notification setting(s): {sorted(unknown_keys)}.",
         )
 
@@ -4132,8 +4100,7 @@ class InviteCreateRequest(BaseModel):
 
     role: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class InviteCreateResponse(BaseModel):
@@ -4178,7 +4145,7 @@ async def create_network_invite(
     role = body.role.strip().lower()
     if role not in _INVITE_ROLES:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"role must be one of {sorted(_INVITE_ROLES)}.",
         )
     raw_result = await client.create_invite(role=role, network_id=network_id)
@@ -4194,8 +4161,7 @@ class InviteUpdateRequest(BaseModel):
 
     nickname: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -4219,7 +4185,7 @@ async def update_network_invite(
     nickname = body.nickname.strip()
     if not nickname or is_unsafe_short_text(nickname, max_bytes=64):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="nickname is invalid.",
         )
     raw_result = await client.update_invite(
@@ -4323,7 +4289,7 @@ _AP_PASSWORD_MAX_LEN = 63
 def _validate_ap_ssid(ssid: str) -> None:
     if not ssid or is_unsafe_short_text(ssid, max_bytes=_AP_SSID_MAX_LEN):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ssid is invalid."
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="ssid is invalid."
         )
 
 
@@ -4332,7 +4298,7 @@ def _validate_ap_password(password: str) -> None:
         0x20 <= ord(c) < 0x7F for c in password
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"password must be {_AP_PASSWORD_MIN_LEN}-{_AP_PASSWORD_MAX_LEN} "
                 "printable ASCII characters."
@@ -4347,8 +4313,7 @@ class BackupAccessPointCreateRequest(BaseModel):
     password: str
     uuid: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -4382,8 +4347,7 @@ class BackupAccessPointOrderRequest(BaseModel):
 
     order: list[str]
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -4420,8 +4384,7 @@ class BackupAccessPointUpdateRequest(BaseModel):
     password: str | None = None
     enabled: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -4500,8 +4463,7 @@ class DiscoveredBackupSsid(BaseModel):
     signal: Any = None
     timestamp: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class BackupSsidDiscoveryResponse(BaseModel):
@@ -4581,8 +4543,7 @@ class ForwardCreateRequest(BaseModel):
     description: str | None = None
     enabled: bool = True
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ForwardUpdateRequest(BaseModel):
@@ -4595,8 +4556,7 @@ class ForwardUpdateRequest(BaseModel):
     description: str | None = None
     enabled: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ForwardSummary(BaseModel):
@@ -4610,8 +4570,7 @@ class ForwardSummary(BaseModel):
     description: str | None = None
     enabled: bool = True
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_forward(raw: dict[str, Any]) -> ForwardSummary:
@@ -4629,7 +4588,7 @@ def _normalize_forward(raw: dict[str, Any]) -> ForwardSummary:
 def _validate_port(value: int, field_name: str) -> None:
     if not (1 <= value <= 65535):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be between 1 and 65535.",
         )
 
@@ -4639,7 +4598,7 @@ def _validate_ip_literal(value: str, field_name: str) -> None:
         ipaddress.ip_address(value)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be a valid IP address.",
         )
 
@@ -4660,12 +4619,12 @@ def _validate_private_ipv4(value: str, field_name: str) -> None:
         address = ipaddress.IPv4Address(value)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be a valid private IPv4 address.",
         )
     if not address.is_private:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be a valid private IPv4 address.",
         )
 
@@ -4682,7 +4641,7 @@ def _validate_short_description(value: str | None, field_name: str) -> None:
     """
     if value is not None and is_unsafe_short_text(value, max_bytes=64):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be at most 64 bytes, no control characters.",
         )
 
@@ -4702,7 +4661,7 @@ def _validate_id_list(
     """
     if len(values) > max_items:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must have at most {max_items} entries.",
         )
     for entry in values:
@@ -4710,7 +4669,7 @@ def _validate_id_list(
             validate_path_id(entry)
         except InvalidIdentifierError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{field_name} entries must be valid identifiers.",
             )
 
@@ -4829,8 +4788,7 @@ class ReservationCreateRequest(BaseModel):
     description: str | None = None
     public_static_ip: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ReservationUpdateRequest(BaseModel):
@@ -4841,8 +4799,7 @@ class ReservationUpdateRequest(BaseModel):
     description: str | None = None
     public_static_ip: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ReservationSummary(BaseModel):
@@ -4854,8 +4811,7 @@ class ReservationSummary(BaseModel):
     description: str | None = None
     public_static_ip: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_reservation(raw: dict[str, Any]) -> ReservationSummary:
@@ -4910,7 +4866,7 @@ async def create_reservation_route(
     _validate_private_ipv4(body.ip, "ip")
     if not is_valid_mac(body.mac.lower()):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="mac must be a lowercase colon-separated MAC address.",
         )
     if body.public_static_ip is not None:
@@ -4950,7 +4906,7 @@ async def update_reservation_route(
         _validate_private_ipv4(body.ip, "ip")
     if body.mac is not None and not is_valid_mac(body.mac.lower()):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="mac must be a lowercase colon-separated MAC address.",
         )
     if body.public_static_ip is not None:
@@ -5023,12 +4979,12 @@ def _validate_domain(domain: str) -> str:
     candidate = domain.strip().lower()
     if "://" in candidate or "/" in candidate:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="domain must be a bare hostname (no scheme or path).",
         )
     if len(candidate) > _DOMAIN_MAX_LEN:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"domain must be at most {_DOMAIN_MAX_LEN} characters.",
         )
     try:
@@ -5037,24 +4993,24 @@ def _validate_domain(domain: str) -> str:
         pass
     else:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="domain must not be an IP address literal.",
         )
     try:
         ascii_candidate = candidate.encode("idna").decode("ascii")
     except UnicodeError:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="domain could not be encoded to IDNA (punycode).",
         )
     if len(ascii_candidate) > _DOMAIN_MAX_LEN:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"domain must be at most {_DOMAIN_MAX_LEN} characters.",
         )
     if not _HOSTNAME_RE.fullmatch(ascii_candidate):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="domain must be a bare hostname (no scheme or path).",
         )
     return ascii_candidate
@@ -5090,8 +5046,7 @@ class DomainRequest(BaseModel):
     domain: str
     add_cname: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -5215,8 +5170,7 @@ class DomainForProfilesRequest(BaseModel):
     override: bool | None = None
     add_cname: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -5282,8 +5236,7 @@ class DomainBlockForProfilesRequest(BaseModel):
     profiles: list[str]
     override: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(

@@ -7,7 +7,7 @@ from typing import Any
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .._coercion import coerce_bool, coerce_int, coerce_numeric
 from ..deps import (
@@ -112,10 +112,7 @@ class EeroSummary(BaseModel):
     led_on: bool | None = None
     wired: bool = False
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class EeroDetail(BaseModel):
@@ -196,10 +193,7 @@ class EeroDetail(BaseModel):
     power_source: str | None = None
     power_saving_active: bool | None = None
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class EeroAction(BaseModel):
@@ -478,8 +472,7 @@ class LocationUpdateRequest(BaseModel):
 
     location: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class LocationUpdateResponse(BaseModel):
@@ -519,7 +512,7 @@ async def set_eero_location_route(
         new_location, max_bytes=_LOCATION_MAX_BYTES
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"location must be 1-{_LOCATION_MAX_BYTES} bytes, no control characters.",
         )
 
@@ -635,8 +628,7 @@ class EeroConnection(BaseModel):
     signal: Any = None
     last_active: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_eero_connection(raw: dict[str, Any]) -> EeroConnection:
@@ -775,7 +767,7 @@ async def _gateway_uplink_port_response(
         return None
 
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "detail": (
                 "Refusing to disable data/power/the port on the gateway's "
@@ -791,8 +783,7 @@ class NodeActionRequest(BaseModel):
 
     action: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class NodeActionResponse(BaseModel):
@@ -826,7 +817,7 @@ async def node_action_route(
     """
     if body.action not in NODE_ACTIONS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"action must be one of {sorted(NODE_ACTIONS)}.",
         )
     raw_result = await client.node_action(eero_id, body.action, network_id=network_id)
@@ -844,8 +835,7 @@ class PortActionRequest(BaseModel):
 
     action: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class PortActionResponse(BaseModel):
@@ -883,7 +873,7 @@ async def port_action_route(
     """
     if body.action not in PORT_ACTIONS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"action must be one of {sorted(PORT_ACTIONS)}.",
         )
     if body.action in _DISRUPTIVE_PORT_ACTIONS:

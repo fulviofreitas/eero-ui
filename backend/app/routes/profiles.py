@@ -6,7 +6,7 @@ from typing import Any
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..deps import (
     get_network_id,
@@ -45,10 +45,7 @@ class ProfileDevice(BaseModel):
     wireless: bool = False
     paused: bool = False
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProfileSummary(BaseModel):
@@ -62,10 +59,7 @@ class ProfileSummary(BaseModel):
     device_ids: list[str] = []
     devices: list[ProfileDevice] = []
 
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProfileAction(BaseModel):
@@ -82,8 +76,7 @@ class ProfileCreateRequest(BaseModel):
 
     name: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class ProfileRenameRequest(BaseModel):
@@ -91,8 +84,7 @@ class ProfileRenameRequest(BaseModel):
 
     name: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.get("", response_model=list[ProfileSummary])
@@ -351,8 +343,7 @@ class AssignDevicesRequest(BaseModel):
 
     device_ids: list[str]
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 class AssignDevicesResponse(BaseModel):
@@ -535,7 +526,7 @@ def _validate_id_list(
     """
     if len(values) > max_items:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must have at most {max_items} entries.",
         )
     for entry in values:
@@ -543,7 +534,7 @@ def _validate_id_list(
             validate_path_id(entry)
         except InvalidIdentifierError:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{field_name} entries must be valid identifiers.",
             )
 
@@ -551,12 +542,12 @@ def _validate_id_list(
 def _validate_schedule_days(days: list[str]) -> None:
     if not days:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="days must not be empty.",
         )
     if not set(days) <= SCHEDULE_DAYS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"days must be a subset of {sorted(SCHEDULE_DAYS)}.",
         )
 
@@ -564,7 +555,7 @@ def _validate_schedule_days(days: list[str]) -> None:
 def _validate_schedule_time(value: str, field_name: str) -> None:
     if not _TIME_RE.fullmatch(value):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be HH:MM (24-hour).",
         )
 
@@ -576,7 +567,7 @@ def _validate_schedule_name(name: str) -> None:
     schedule/subnet names in ``routes/networks.py``)."""
     if not name or is_unsafe_short_text(name, max_bytes=_SCHEDULE_NAME_MAX_LEN):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"name must be 1-{_SCHEDULE_NAME_MAX_LEN} bytes, no control "
                 "characters."
@@ -594,8 +585,7 @@ class ScheduleSummary(BaseModel):
     end: str | None = None
     enabled: bool = True
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 def _normalize_schedule(raw: dict) -> ScheduleSummary:
@@ -654,8 +644,7 @@ class ScheduleCreateRequest(BaseModel):
     end: str
     enabled: bool = True
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -708,8 +697,7 @@ class ScheduleUpdateRequest(BaseModel):
     end: str | None = None
     enabled: bool | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -823,8 +811,7 @@ class BedtimeCreateRequest(BaseModel):
     end_time: str
     days: list[str] | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -874,8 +861,7 @@ class BlockedApplicationsResponse(BaseModel):
 
     applications: list[Any] = []
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.get(
@@ -900,8 +886,7 @@ class SetBlockedApplicationsRequest(BaseModel):
 
     applications: list[str]
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(

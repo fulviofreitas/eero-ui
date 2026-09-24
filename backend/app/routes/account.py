@@ -11,7 +11,7 @@ import re
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..deps import (
     require_account_identity_writes,
@@ -36,12 +36,12 @@ def _validate_name(name: str) -> str:
     stripped = name.strip()
     if not stripped or len(stripped) > _NAME_MAX_LEN:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"name must be 1-{_NAME_MAX_LEN} characters.",
         )
     if has_control_or_format_chars(stripped):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is invalid."
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="name is invalid."
         )
     return stripped
 
@@ -49,7 +49,7 @@ def _validate_name(name: str) -> str:
 def _validate_email(email: str) -> str:
     if not _EMAIL_RE.fullmatch(email):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="email is not a valid address.",
         )
     return email
@@ -58,7 +58,7 @@ def _validate_email(email: str) -> str:
 def _validate_phone(phone: str) -> str:
     if not _PHONE_RE.fullmatch(phone):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="phone must be 7-15 digits, optionally prefixed with '+'.",
         )
     return phone
@@ -67,7 +67,7 @@ def _validate_phone(phone: str) -> str:
 def _validate_verification_code(code: str) -> str:
     if not _VERIFICATION_CODE_RE.fullmatch(code):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="code must be 4-8 digits.",
         )
     return code
@@ -86,8 +86,7 @@ class AccountNameRequest(BaseModel):
 
     name: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -116,8 +115,7 @@ class AccountEmailRequest(BaseModel):
 
     email: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -150,8 +148,7 @@ class VerificationCodeRequest(BaseModel):
 
     code: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -183,8 +180,7 @@ class AccountPhoneRequest(BaseModel):
 
     phone: str
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
@@ -241,8 +237,7 @@ class AccountConsentsRequest(BaseModel):
 
     marketing_emails: bool
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.put(
