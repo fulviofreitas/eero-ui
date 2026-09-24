@@ -161,9 +161,13 @@
 			confirmText: 'Delete',
 			danger: true,
 			onConfirm: async () => {
-				await api.profiles.delete(profileId);
-				uiStore.success('Profile deleted');
-				goto('/profiles');
+				try {
+					await api.profiles.delete(profileId);
+					uiStore.success('Profile deleted');
+					goto('/profiles');
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to delete profile');
+				}
 			}
 		});
 	}

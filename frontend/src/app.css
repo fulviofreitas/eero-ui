@@ -30,8 +30,13 @@
 	--color-warning-bg: rgba(210, 153, 34, 0.15);
 	--color-danger: #f85149;
 	--color-danger-bg: rgba(248, 81, 73, 0.15);
+	--color-danger-hover: #da3633;
 	--color-info: #58a6ff;
 	--color-info-bg: rgba(88, 166, 255, 0.15);
+
+	/* Premium/plus accent - reuses the warning hue per Q4 (no design pass; no new palette) */
+	--color-premium: var(--color-warning);
+	--color-premium-bg: var(--color-warning-bg);
 
 	/* Accent */
 	--color-accent: #58a6ff;
@@ -142,6 +147,7 @@
 	--color-warning-bg: rgba(154, 103, 0, 0.1);
 	--color-danger: #cf222e;
 	--color-danger-bg: rgba(207, 34, 46, 0.1);
+	--color-danger-hover: #a40e26;
 	--color-info: #0969da;
 	--color-info-bg: rgba(9, 105, 218, 0.1);
 
@@ -353,7 +359,7 @@ code {
 }
 
 .btn-danger:hover:not(:disabled) {
-	background-color: #da3633;
+	background-color: var(--color-danger-hover);
 }
 
 .btn-ghost {
