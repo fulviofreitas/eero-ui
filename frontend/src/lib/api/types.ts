@@ -640,3 +640,65 @@ export interface HealthStatus {
 	 */
 	experimental_writes: boolean;
 }
+
+// ============================================
+// Insights (phase-6.0-revamp.md § 7 WP6, deliverable 6)
+//
+// Shared shape across `GET /networks/{id}/insights`, `/devices/{id}/insights`
+// and `/profiles/{id}/insights` (backend/app/routes/networks.py:2845-2915,
+// re-exported by devices.py/profiles.py). Premium-gated - a 402 surfaces via
+// `ApiClientError.type === 'premium_required'`.
+// ============================================
+
+/** Scope an insights/data-usage request is made against. */
+export type InsightScope = 'network' | 'device' | 'profile';
+
+export type InsightType = 'adblock' | 'blocked' | 'inspected';
+
+export type InsightCadence = 'daily' | 'hourly';
+
+export interface InsightValue {
+	time: string | null;
+	value: number | null;
+}
+
+export interface InsightSeries {
+	insight_type: string | null;
+	sum: number | null;
+	values: InsightValue[];
+}
+
+export interface InsightsResponse {
+	series: InsightSeries[];
+}
+
+// ============================================
+// Data usage (phase-6.0-revamp.md § 7 WP6, deliverable 7)
+//
+// `values`/`raw` are intentionally loose - the upstream shape is undocumented
+// beyond the common `download`/`upload` key spellings the backend normalizes
+// (backend/app/routes/networks.py:2998-3033). Render defensively.
+// ============================================
+
+export type DataUsageCadence = 'daily' | 'hourly';
+
+export interface DataUsageResponse {
+	download_bytes: number | null;
+	upload_bytes: number | null;
+	values: Record<string, unknown>[];
+	raw: Record<string, unknown>;
+}
+
+// ============================================
+// Events + channel utilisation (phase-6.0-revamp.md § 7 WP6, deliverable 8)
+// ============================================
+
+export interface AppEventsResponse {
+	events: Record<string, unknown>[];
+}
+
+export type ChannelUtilizationBand =
+	'band_2_4GHz' | 'band_5GHz_low' | 'band_5GHz_high' | 'band_5GHz_full' | 'band_6GHz';
+
+/** Raw dict, shape undocumented upstream - rendered defensively. */
+export type ChannelUtilizationResponse = Record<string, unknown>;

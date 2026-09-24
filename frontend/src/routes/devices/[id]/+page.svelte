@@ -25,6 +25,9 @@
 	import DeviceIdentificationCard from '$lib/components/device/DeviceIdentificationCard.svelte';
 	import DeviceConnectionCard from '$lib/components/device/DeviceConnectionCard.svelte';
 	import DeviceStatusCard from '$lib/components/device/DeviceStatusCard.svelte';
+	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
+	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let device = $state<DeviceDetail | null>(null);
 	let loading = $state(true);
@@ -261,6 +264,24 @@
 				<BandwidthChart deviceMac={device.mac} />
 			</section>
 		{/if}
+
+		{#if device.id}
+			<div class="info-grid premium-grid">
+				<PremiumGate feature="Device insights">
+					<InsightsCard scope="device" id={device.id} />
+				</PremiumGate>
+				{#if device.mac}
+					<PremiumGate feature="Data usage">
+						<DataUsageMiniCard
+							networkId={device.network_id ?? ''}
+							entity="device"
+							entityId={device.mac}
+							title="Data Usage"
+						/>
+					</PremiumGate>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -298,6 +319,10 @@
 	}
 
 	.device-charts {
+		margin-top: var(--space-6);
+	}
+
+	.premium-grid {
 		margin-top: var(--space-6);
 	}
 

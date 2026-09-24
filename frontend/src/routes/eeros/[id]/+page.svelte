@@ -28,6 +28,8 @@
 	import EeroTechnicalCard from '$lib/components/eero/EeroTechnicalCard.svelte';
 	import EeroActionsCard from '$lib/components/eero/EeroActionsCard.svelte';
 	import EeroConnectionsCard from '$lib/components/eero/EeroConnectionsCard.svelte';
+	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let eero: EeroDetail | null = $state(null);
 	let loading = $state(true);
@@ -224,6 +226,16 @@
 				onSetLedBrightness={handleSetLedBrightness}
 			/>
 			<EeroConnectionsCard eeroId={eero.id} />
+			{#if $selectedNetworkId}
+				<PremiumGate feature="Data usage">
+					<DataUsageMiniCard
+						networkId={$selectedNetworkId}
+						entity="eero"
+						entityId={eero.id}
+						title="Data Usage"
+					/>
+				</PremiumGate>
+			{/if}
 		</div>
 	{/if}
 </div>

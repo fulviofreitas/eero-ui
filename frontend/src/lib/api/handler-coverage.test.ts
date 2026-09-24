@@ -64,6 +64,58 @@ describe('api client handler coverage', () => {
 			() => api.networks.setGuestPassword('network-123', 'correct-horse-battery'),
 			() => api.networks.clearGuestPassword('network-123'),
 			() => api.networks.getScan('network-123'),
+			() =>
+				api.networks.getInsights('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					insightType: 'blocked'
+				}),
+			() =>
+				api.networks.getDataUsage('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					cadence: 'daily'
+				}),
+			() =>
+				api.networks.getDataUsageBreakdown('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z'
+				}),
+			() =>
+				api.networks.getDevicesDataUsage('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z'
+				}),
+			() =>
+				api.networks.getDeviceDataUsage('network-123', 'aa:bb:cc:dd:ee:01', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					cadence: 'daily'
+				}),
+			() =>
+				api.networks.getEerosDataUsageSummary('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					cadence: 'daily'
+				}),
+			() =>
+				api.networks.getEeroDataUsage('network-123', 'eero-1', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					cadence: 'daily'
+				}),
+			() =>
+				api.networks.getProfileDataUsage('network-123', 'profile-1', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					cadence: 'daily'
+				}),
+			() => api.networks.getEvents('network-123'),
+			() =>
+				api.networks.getChannelUtilization('network-123', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z'
+				}),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -76,6 +128,12 @@ describe('api client handler coverage', () => {
 			() => api.eeros.setLed('eero-1', true),
 			() => api.eeros.setLedBrightness('eero-1', 80),
 			() => api.eeros.getConnections('eero-1'),
+			() =>
+				api.devices.getInsights('dev-1', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					insightType: 'blocked'
+				}),
 			() => api.profiles.list(),
 			() => api.profiles.get('profile-1'),
 			() => api.profiles.pause('profile-1'),
@@ -83,7 +141,13 @@ describe('api client handler coverage', () => {
 			() => api.profiles.create('New Profile'),
 			() => api.profiles.rename('profile-1', 'Renamed'),
 			() => api.profiles.delete('profile-1'),
-			() => api.profiles.assignDevices('profile-1', ['dev-1'])
+			() => api.profiles.assignDevices('profile-1', ['dev-1']),
+			() =>
+				api.profiles.getInsights('profile-1', {
+					start: '2026-01-01T00:00:00Z',
+					end: '2026-01-02T00:00:00Z',
+					insightType: 'blocked'
+				})
 		];
 
 		// Every call is allowed to reject (e.g. a fixture returns a shape a
@@ -101,6 +165,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(39);
+		expect(countLeafMethods(api)).toBe(51);
 	});
 });

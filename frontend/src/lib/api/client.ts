@@ -397,6 +397,232 @@ export const api = {
 		getEntitlements: (networkId: string) =>
 			fetchWithHandling<import('./types').NetworkEntitlements>(
 				`/networks/${networkId}/entitlements`
+			),
+
+		/**
+		 * Network-level insights time series (plan § 7 WP6, deliverable 6).
+		 * Premium-gated - a 402 surfaces as `ApiClientError.type ===
+		 * 'premium_required'`.
+		 */
+		getInsights: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				insightType: import('./types').InsightType;
+				cadence?: import('./types').InsightCadence;
+			}
+		) =>
+			fetchWithHandling<import('./types').InsightsResponse>(`/networks/${networkId}/insights`, {
+				params: {
+					start: params.start,
+					end: params.end,
+					insight_type: params.insightType,
+					...(params.cadence && { cadence: params.cadence })
+				}
+			}),
+
+		/**
+		 * Network-level data usage (plan § 7 WP6, deliverable 7). Premium-gated.
+		 */
+		getDataUsage: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(`/networks/${networkId}/data-usage`, {
+				params: {
+					start: params.start,
+					end: params.end,
+					cadence: params.cadence,
+					...(params.timezone && { timezone: params.timezone })
+				}
+			}),
+
+		/** Data-usage breakdown (plan § 7 WP6, deliverable 7). Premium-gated. */
+		getDataUsageBreakdown: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence?: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/breakdown`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						...(params.cadence && { cadence: params.cadence }),
+						...(params.timezone && { timezone: params.timezone })
+					}
+				}
+			),
+
+		/**
+		 * Per-device data usage across the whole network - top-N table on the
+		 * network Overview data-usage card (plan § 7 WP6, deliverable 7).
+		 * Premium-gated.
+		 */
+		getDevicesDataUsage: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence?: import('./types').DataUsageCadence;
+				timezone?: string;
+				profileId?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/devices`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						...(params.cadence && { cadence: params.cadence }),
+						...(params.timezone && { timezone: params.timezone }),
+						...(params.profileId && { profile_id: params.profileId })
+					}
+				}
+			),
+
+		/** Data usage for a single device, by MAC (device detail page). Premium-gated. */
+		getDeviceDataUsage: (
+			networkId: string,
+			deviceMac: string,
+			params: {
+				start: string;
+				end: string;
+				cadence: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/devices/${deviceMac}`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						cadence: params.cadence,
+						...(params.timezone && { timezone: params.timezone })
+					}
+				}
+			),
+
+		/** Data-usage summary across every eero on the network. Premium-gated. */
+		getEerosDataUsageSummary: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/eeros/summary`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						cadence: params.cadence,
+						...(params.timezone && { timezone: params.timezone })
+					}
+				}
+			),
+
+		/** Data usage for a single eero (eero detail page). Premium-gated. */
+		getEeroDataUsage: (
+			networkId: string,
+			eeroId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/eeros/${eeroId}`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						cadence: params.cadence,
+						...(params.timezone && { timezone: params.timezone })
+					}
+				}
+			),
+
+		/** Data usage for a single profile (profile detail page). Premium-gated. */
+		getProfileDataUsage: (
+			networkId: string,
+			profileId: string,
+			params: {
+				start: string;
+				end: string;
+				cadence: import('./types').DataUsageCadence;
+				timezone?: string;
+			}
+		) =>
+			fetchWithHandling<import('./types').DataUsageResponse>(
+				`/networks/${networkId}/data-usage/profiles/${profileId}`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						cadence: params.cadence,
+						...(params.timezone && { timezone: params.timezone })
+					}
+				}
+			),
+
+		/**
+		 * The network's app events, most recent first (plan § 7 WP6,
+		 * deliverable 8). Verified read - paginate older pages by passing the
+		 * last event's timestamp as the cursor.
+		 */
+		getEvents: (networkId: string, params: { pageSize?: number; timestamp?: string } = {}) =>
+			fetchWithHandling<import('./types').AppEventsResponse>(`/networks/${networkId}/events`, {
+				params: {
+					...(params.pageSize !== undefined && { page_size: params.pageSize }),
+					...(params.timestamp && { timestamp: params.timestamp })
+				}
+			}),
+
+		/**
+		 * Wi-Fi channel utilisation series (plan § 7 WP6, deliverable 8).
+		 * Verified read; not cached server-side. `eeroId` is the eero's
+		 * numeric backend id (distinct from its opaque `id`/`url` string).
+		 */
+		getChannelUtilization: (
+			networkId: string,
+			params: {
+				start: string;
+				end: string;
+				band?: import('./types').ChannelUtilizationBand;
+				eeroId?: number;
+				granularity?: number;
+			}
+		) =>
+			fetchWithHandling<import('./types').ChannelUtilizationResponse>(
+				`/networks/${networkId}/channel-utilization`,
+				{
+					params: {
+						start: params.start,
+						end: params.end,
+						...(params.band && { band: params.band }),
+						...(params.eeroId !== undefined && { eero_id: params.eeroId }),
+						...(params.granularity !== undefined && { granularity: params.granularity })
+					}
+				}
 			)
 	},
 
@@ -460,6 +686,25 @@ export const api = {
 				method: 'PUT',
 				body: { device_type: deviceType },
 				retries: 0
+			}),
+
+		/** A single device's insights time series (plan § 7 WP6, deliverable 6). Premium-gated. */
+		getInsights: (
+			deviceId: string,
+			params: {
+				start: string;
+				end: string;
+				insightType: import('./types').InsightType;
+				cadence?: import('./types').InsightCadence;
+			}
+		) =>
+			fetchWithHandling<import('./types').InsightsResponse>(`/devices/${deviceId}/insights`, {
+				params: {
+					start: params.start,
+					end: params.end,
+					insight_type: params.insightType,
+					...(params.cadence && { cadence: params.cadence })
+				}
 			})
 	},
 
@@ -555,7 +800,26 @@ export const api = {
 					body: { device_ids: deviceIds },
 					retries: 0
 				}
-			)
+			),
+
+		/** A single profile's insights time series (plan § 7 WP6, deliverable 6). Premium-gated. */
+		getInsights: (
+			profileId: string,
+			params: {
+				start: string;
+				end: string;
+				insightType: import('./types').InsightType;
+				cadence?: import('./types').InsightCadence;
+			}
+		) =>
+			fetchWithHandling<import('./types').InsightsResponse>(`/profiles/${profileId}/insights`, {
+				params: {
+					start: params.start,
+					end: params.end,
+					insight_type: params.insightType,
+					...(params.cadence && { cadence: params.cadence })
+				}
+			})
 	}
 };
 

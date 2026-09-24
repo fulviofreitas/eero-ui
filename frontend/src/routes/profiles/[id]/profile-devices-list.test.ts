@@ -93,6 +93,10 @@ describe('profile detail page - devices list view', () => {
 		await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
 	}
 
+	// 15s timeout (default 5s): the profile detail page now also pulls in
+	// InsightsCard/DataUsageMiniCard (phase-6.0-revamp.md § 7 WP6, deliverable
+	// 6/7), which transitively load Chart.js - the first cold transform of
+	// that tree inside this test's dynamic `importPage()` can exceed 5s.
 	it('defaults to sorting by name ascending', async () => {
 		await renderListView();
 
@@ -100,7 +104,7 @@ describe('profile detail page - devices list view', () => {
 		expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
 		// API order is Zulu, Alpha - ascending-by-name flips it to Alpha, Zulu.
 		expect(bodyRowFirstCellText()).toEqual(['Alpha Phone', 'Zulu Laptop']);
-	});
+	}, 15000);
 
 	it('shows an empty state when the profile has no devices', async () => {
 		server.use(
@@ -123,5 +127,5 @@ describe('profile detail page - devices list view', () => {
 		await waitFor(() =>
 			expect(screen.getByText('No devices found for this profile.')).toBeInTheDocument()
 		);
-	});
+	}, 15000);
 });

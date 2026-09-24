@@ -241,6 +241,148 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// Insights (phase-6.0-revamp.md § 7 WP6, deliverable 6)
+	// ============================================
+	http.get('/api/networks/:networkId/insights', ({ request }) => {
+		const url = new URL(request.url);
+		const insightType = url.searchParams.get('insight_type') ?? 'blocked';
+		return HttpResponse.json({
+			series: [
+				{
+					insight_type: insightType,
+					sum: 42,
+					values: [
+						{ time: '2026-01-01T00:00:00Z', value: 10 },
+						{ time: '2026-01-02T00:00:00Z', value: 32 }
+					]
+				}
+			]
+		});
+	}),
+
+	http.get('/api/devices/:deviceId/insights', ({ request }) => {
+		const url = new URL(request.url);
+		const insightType = url.searchParams.get('insight_type') ?? 'blocked';
+		return HttpResponse.json({
+			series: [
+				{ insight_type: insightType, sum: 7, values: [{ time: '2026-01-01T00:00:00Z', value: 7 }] }
+			]
+		});
+	}),
+
+	http.get('/api/profiles/:profileId/insights', ({ request }) => {
+		const url = new URL(request.url);
+		const insightType = url.searchParams.get('insight_type') ?? 'blocked';
+		return HttpResponse.json({
+			series: [
+				{ insight_type: insightType, sum: 3, values: [{ time: '2026-01-01T00:00:00Z', value: 3 }] }
+			]
+		});
+	}),
+
+	// ============================================
+	// Data usage (phase-6.0-revamp.md § 7 WP6, deliverable 7)
+	// ============================================
+	http.get('/api/networks/:networkId/data-usage', () => {
+		return HttpResponse.json({
+			download_bytes: 1073741824,
+			upload_bytes: 104857600,
+			values: [
+				{ time: '2026-01-01T00:00:00Z', download: 536870912, upload: 52428800 },
+				{ time: '2026-01-02T00:00:00Z', download: 536870912, upload: 52428800 }
+			],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/breakdown', () => {
+		return HttpResponse.json({
+			download_bytes: null,
+			upload_bytes: null,
+			values: [{ category: 'streaming', download: 400000000, upload: 1000000 }],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/devices', () => {
+		return HttpResponse.json({
+			download_bytes: null,
+			upload_bytes: null,
+			values: [
+				{ mac: 'AA:BB:CC:DD:EE:01', nickname: 'iPhone', download: 300000000, upload: 20000000 },
+				{ mac: 'AA:BB:CC:DD:EE:02', nickname: 'Laptop', download: 700000000, upload: 30000000 }
+			],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/devices/:mac', () => {
+		return HttpResponse.json({
+			download_bytes: 300000000,
+			upload_bytes: 20000000,
+			values: [{ time: '2026-01-01T00:00:00Z', download: 300000000, upload: 20000000 }],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/eeros/summary', () => {
+		return HttpResponse.json({
+			download_bytes: 1073741824,
+			upload_bytes: 104857600,
+			values: [],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/eeros/:eeroId', () => {
+		return HttpResponse.json({
+			download_bytes: 500000000,
+			upload_bytes: 50000000,
+			values: [{ time: '2026-01-01T00:00:00Z', download: 500000000, upload: 50000000 }],
+			raw: {}
+		});
+	}),
+
+	http.get('/api/networks/:networkId/data-usage/profiles/:profileId', () => {
+		return HttpResponse.json({
+			download_bytes: 200000000,
+			upload_bytes: 10000000,
+			values: [{ time: '2026-01-01T00:00:00Z', download: 200000000, upload: 10000000 }],
+			raw: {}
+		});
+	}),
+
+	// ============================================
+	// Events + channel utilisation (phase-6.0-revamp.md § 7 WP6, deliverable 8)
+	// ============================================
+	http.get('/api/networks/:networkId/events', () => {
+		return HttpResponse.json({
+			events: [
+				{
+					timestamp: '2026-01-02T00:00:00Z',
+					type: 'device_connected',
+					message: 'iPhone connected'
+				},
+				{
+					timestamp: '2026-01-01T00:00:00Z',
+					type: 'device_disconnected',
+					message: 'Laptop disconnected'
+				}
+			]
+		});
+	}),
+
+	http.get('/api/networks/:networkId/channel-utilization', () => {
+		return HttpResponse.json({
+			band: 'band_2_4GHz',
+			series: [
+				{ channel: 1, utilization: 0.2 },
+				{ channel: 6, utilization: 0.4 }
+			]
+		});
+	}),
+
+	// ============================================
 	// Device endpoints
 	// ============================================
 	http.get('/api/devices', () => {

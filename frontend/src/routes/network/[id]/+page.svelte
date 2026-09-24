@@ -35,6 +35,11 @@
 	import SpeedTestHistoryCard from '$lib/components/network/SpeedTestHistoryCard.svelte';
 	import NetworkScanCard from '$lib/components/network/NetworkScanCard.svelte';
 	import NetworkRenameModal from '$lib/components/network/NetworkRenameModal.svelte';
+	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
+	import DataUsageCard from '$lib/components/network/DataUsageCard.svelte';
+	import EventsCard from '$lib/components/network/EventsCard.svelte';
+	import ChannelUtilizationCard from '$lib/components/network/ChannelUtilizationCard.svelte';
+	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let network: NetworkDetail | null = $state(null);
 	let loading = $state(true);
@@ -262,6 +267,16 @@
 					<HardwareFeaturesCard {network} />
 					<LocationPremiumCard {network} />
 				</div>
+				{#if networkId}
+					<div class="info-grid premium-grid">
+						<PremiumGate feature="Network insights">
+							<InsightsCard scope="network" id={networkId} />
+						</PremiumGate>
+						<PremiumGate feature="Data usage">
+							<DataUsageCard {networkId} />
+						</PremiumGate>
+					</div>
+				{/if}
 			{:else if activeTab === 'wifi'}
 				<div class="info-grid" role="tabpanel" id="tabpanel-wifi" aria-labelledby="tab-wifi">
 					<GuestNetworkCard
@@ -311,6 +326,8 @@
 					<div class="info-grid diagnostics-secondary">
 						<SpeedTestHistoryCard {networkId} />
 						<NetworkScanCard {networkId} />
+						<EventsCard {networkId} />
+						<ChannelUtilizationCard {networkId} />
 					</div>
 					<section class="network-charts">
 						<SpeedtestChart {networkId} />
@@ -373,6 +390,10 @@
 	}
 
 	.diagnostics-secondary {
+		margin-top: var(--space-4);
+	}
+
+	.premium-grid {
 		margin-top: var(--space-4);
 	}
 

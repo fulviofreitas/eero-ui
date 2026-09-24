@@ -23,6 +23,9 @@
 	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
 	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
 	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
+	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
+	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let profile = $state<ProfileSummary | null>(null);
 	let loading = $state(true);
@@ -243,6 +246,24 @@
 
 		<ProfileTechnicalCard {profile} networkId={$selectedNetworkId} />
 
+		{#if profile.id}
+			<div class="info-grid premium-grid">
+				<PremiumGate feature="Profile insights">
+					<InsightsCard scope="profile" id={profile.id} />
+				</PremiumGate>
+				{#if $selectedNetworkId}
+					<PremiumGate feature="Data usage">
+						<DataUsageMiniCard
+							networkId={$selectedNetworkId}
+							entity="profile"
+							entityId={profile.id}
+							title="Data Usage"
+						/>
+					</PremiumGate>
+				{/if}
+			</div>
+		{/if}
+
 		<ProfileDevicesSection
 			{devices}
 			deviceCount={profile.device_count}
@@ -296,5 +317,21 @@
 
 	.btn-danger:hover:not(:disabled) {
 		opacity: 0.85;
+	}
+
+	.info-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+		gap: var(--space-4);
+	}
+
+	.premium-grid {
+		margin-top: var(--space-4);
+	}
+
+	@media (max-width: 768px) {
+		.info-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
