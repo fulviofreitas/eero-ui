@@ -623,6 +623,97 @@ export const api = {
 						...(params.granularity !== undefined && { granularity: params.granularity })
 					}
 				}
+			),
+
+		/**
+		 * The current user's permissions and role on the network (plan § 7 WP6,
+		 * deliverable 10). Verified read; fails soft server-side to
+		 * `partial: true` on a 403.
+		 */
+		getPermissions: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkPermissions>(`/networks/${networkId}/permissions`),
+
+		/** The network's members (plan § 7 WP6, deliverable 10). Verified read; fails soft to `partial: true`. */
+		getMembers: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkMembersResponse>(`/networks/${networkId}/members`),
+
+		/** The network's pending invites (plan § 7 WP6, deliverable 10). Verified read; fails soft to `partial: true`. */
+		getInvites: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkInvitesResponse>(`/networks/${networkId}/invites`),
+
+		/**
+		 * Backup-internet (cellular failover) status, usage and events (plan §
+		 * 7 WP6, deliverable 11). Plus-gated; each field fails soft to `null`
+		 * server-side.
+		 */
+		getBackupInternet: (networkId: string) =>
+			fetchWithHandling<import('./types').BackupInternetStatus>(
+				`/networks/${networkId}/backup-internet`
+			),
+
+		/** Configured backup Wi-Fi access points (plan § 7 WP6, deliverable 11). Verified read. */
+		getBackupAccessPoints: (networkId: string) =>
+			fetchWithHandling<import('./types').BackupAccessPointsResponse>(
+				`/networks/${networkId}/backup-access-points`
+			),
+
+		/**
+		 * Combined security settings: WPA3, band steering, UPnP, IPv6,
+		 * per-band WPA3, fast transition, SQM, Thread and pending updates
+		 * (plan § 7 WP6, deliverable 12). Read-only; each field fails soft to
+		 * `null` server-side.
+		 */
+		getSecurity: (networkId: string) =>
+			fetchWithHandling<import('./types').SecuritySettingsResponse>(
+				`/networks/${networkId}/security`
+			),
+
+		/** Configured subnets (plan § 7 WP6, deliverable 12). Verified read. */
+		getSubnets: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkSubnetsResponse>(`/networks/${networkId}/subnets`),
+
+		/**
+		 * Multi-static-IP WAN configuration (plan § 7 WP6, deliverable 12).
+		 * `configured: false` means the feature is absent on this network, not
+		 * an error - the backend never propagates the underlying 404.
+		 */
+		getMultiStaticIp: (networkId: string) =>
+			fetchWithHandling<import('./types').MultiStaticIpResponse>(
+				`/networks/${networkId}/multistaticip`
+			),
+
+		/**
+		 * DHCP, connection mode, power saving and DDNS (plan § 7 WP6,
+		 * deliverable 12). Read from the network envelope server-side - no
+		 * dedicated SDK getter exists for this combination.
+		 */
+		getAdvanced: (networkId: string) =>
+			fetchWithHandling<import('./types').AdvancedNetworkSettings>(
+				`/networks/${networkId}/advanced`
+			),
+
+		/**
+		 * Notification settings and the unread flag (plan § 7 WP6, deliverable
+		 * 13). Verified reads; each source fails soft server-side.
+		 */
+		getNotifications: (networkId: string) =>
+			fetchWithHandling<import('./types').NetworkNotificationsResponse>(
+				`/networks/${networkId}/notifications`
+			),
+
+		/**
+		 * Notification history, most recent first (plan § 7 WP6, deliverable
+		 * 13). Verified read; paginate older pages by passing the last
+		 * entry's own timestamp field as the cursor.
+		 */
+		getNotificationHistory: (networkId: string, params: { timestamp?: string } = {}) =>
+			fetchWithHandling<import('./types').NotificationHistoryResponse>(
+				`/networks/${networkId}/notifications/history`,
+				{
+					params: {
+						...(params.timestamp && { timestamp: params.timestamp })
+					}
+				}
 			)
 	},
 

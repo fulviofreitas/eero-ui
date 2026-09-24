@@ -116,6 +116,17 @@ describe('api client handler coverage', () => {
 					start: '2026-01-01T00:00:00Z',
 					end: '2026-01-02T00:00:00Z'
 				}),
+			() => api.networks.getPermissions('network-123'),
+			() => api.networks.getMembers('network-123'),
+			() => api.networks.getInvites('network-123'),
+			() => api.networks.getBackupInternet('network-123'),
+			() => api.networks.getBackupAccessPoints('network-123'),
+			() => api.networks.getSecurity('network-123'),
+			() => api.networks.getSubnets('network-123'),
+			() => api.networks.getMultiStaticIp('network-123'),
+			() => api.networks.getAdvanced('network-123'),
+			() => api.networks.getNotifications('network-123'),
+			() => api.networks.getNotificationHistory('network-123'),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -165,6 +176,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(51);
+		expect(countLeafMethods(api)).toBe(62);
 	});
 });

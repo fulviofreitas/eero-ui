@@ -702,3 +702,129 @@ export type ChannelUtilizationBand =
 
 /** Raw dict, shape undocumented upstream - rendered defensively. */
 export type ChannelUtilizationResponse = Record<string, unknown>;
+
+// ============================================
+// Members / permissions / invites (phase-6.0-revamp.md § 7 WP6, deliverable 10)
+//
+// Mirrors backend/app/routes/networks.py:3271-3392. `partial: true` on any of
+// the three means the account received a 403 for that one call (fails soft,
+// per the route docstrings) - render a muted note rather than an error.
+// ============================================
+
+export interface NetworkPermissions {
+	permissions: Record<string, boolean>;
+	role: string | null;
+	partial: boolean;
+}
+
+export interface NetworkMember {
+	name: string | null;
+	role: string | null;
+	status: string | null;
+}
+
+export interface NetworkMembersResponse {
+	members: NetworkMember[];
+	partial: boolean;
+}
+
+export interface NetworkInvite {
+	id: string | null;
+	role: string | null;
+	status: string | null;
+	created: string | null;
+	expires: string | null;
+}
+
+export interface NetworkInvitesResponse {
+	invites: NetworkInvite[];
+	partial: boolean;
+}
+
+// ============================================
+// Backup internet (phase-6.0-revamp.md § 7 WP6, deliverable 11)
+//
+// Mirrors backend/app/routes/networks.py:3400-3507. Plus-gated; each field is
+// fetched independently server-side and fails soft to `null`/`[]`.
+// ============================================
+
+export interface BackupInternetStatus {
+	enabled: boolean | null;
+	cellular_usage: Record<string, unknown> | null;
+	cellular_events: Record<string, unknown>[] | null;
+}
+
+export interface BackupAccessPoint {
+	id: string | null;
+	ssid: string | null;
+	uuid: string | null;
+	priority: number | null;
+	enabled: boolean | null;
+	status: string | null;
+	connectivity: unknown;
+}
+
+export interface BackupAccessPointsResponse {
+	access_points: BackupAccessPoint[];
+}
+
+// ============================================
+// Security / WAN (phase-6.0-revamp.md § 7 WP6, deliverable 12)
+//
+// Mirrors backend/app/routes/networks.py:3515-3692. Every field on
+// `SecuritySettingsResponse` is fetched from its own SDK call server-side and
+// fails soft to `null` independently, so a single missing source never blanks
+// the whole card.
+// ============================================
+
+export interface ThreadSummary {
+	enabled: boolean | null;
+	name: string | null;
+	channel: number | null;
+	pan_id: string | null;
+}
+
+export interface SecuritySettingsResponse {
+	wpa3: boolean | null;
+	band_steering: boolean | null;
+	upnp: boolean | null;
+	ipv6: unknown;
+	wpa3_per_band: Record<string, unknown> | null;
+	fast_transition: Record<string, unknown> | null;
+	sqm: boolean | null;
+	thread: ThreadSummary | null;
+	updates: Record<string, unknown> | null;
+}
+
+export interface NetworkSubnetsResponse {
+	subnets: Record<string, unknown>[];
+}
+
+export interface MultiStaticIpResponse {
+	configured: boolean;
+	config: Record<string, unknown> | null;
+}
+
+export interface AdvancedNetworkSettings {
+	dhcp: Record<string, unknown> | null;
+	connection_mode: string | null;
+	power_saving: unknown;
+	ddns: unknown;
+}
+
+// ============================================
+// Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
+//
+// Mirrors backend/app/routes/networks.py:3924-3987. Editing `settings` is
+// gated behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES` and lands in WP7 - this
+// WP only reads.
+// ============================================
+
+export interface NetworkNotificationsResponse {
+	settings: Record<string, boolean>;
+	has_unread: boolean | null;
+}
+
+export interface NotificationHistoryResponse {
+	history: Record<string, unknown>[];
+}

@@ -39,6 +39,10 @@
 	import DataUsageCard from '$lib/components/network/DataUsageCard.svelte';
 	import EventsCard from '$lib/components/network/EventsCard.svelte';
 	import ChannelUtilizationCard from '$lib/components/network/ChannelUtilizationCard.svelte';
+	import MembersCard from '$lib/components/network/MembersCard.svelte';
+	import BackupInternetCard from '$lib/components/network/BackupInternetCard.svelte';
+	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
+	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let network: NetworkDetail | null = $state(null);
@@ -305,6 +309,18 @@
 				>
 					<AdvancedSettingsCard {network} />
 				</div>
+				{#if networkId}
+					<div class="info-grid advanced-secondary">
+						<MembersCard {networkId} />
+						<PremiumGate feature="Backup internet">
+							<BackupInternetCard {networkId} />
+						</PremiumGate>
+					</div>
+					<div class="advanced-full">
+						<SecurityWanCard {networkId} />
+						<NotificationsCard {networkId} />
+					</div>
+				{/if}
 			{:else if activeTab === 'diagnostics'}
 				<div
 					class="info-grid"
@@ -394,6 +410,17 @@
 	}
 
 	.premium-grid {
+		margin-top: var(--space-4);
+	}
+
+	.advanced-secondary {
+		margin-top: var(--space-4);
+	}
+
+	.advanced-full {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 		margin-top: var(--space-4);
 	}
 

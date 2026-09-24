@@ -383,6 +383,121 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// Members / permissions / invites (phase-6.0-revamp.md § 7 WP6, deliverable 10)
+	// ============================================
+	http.get('/api/networks/:networkId/permissions', () => {
+		return HttpResponse.json({
+			permissions: { can_manage_devices: true, can_manage_members: false },
+			role: 'owner',
+			partial: false
+		});
+	}),
+
+	http.get('/api/networks/:networkId/members', () => {
+		return HttpResponse.json({
+			members: [{ name: 'Alice', role: 'owner', status: 'active' }],
+			partial: false
+		});
+	}),
+
+	http.get('/api/networks/:networkId/invites', () => {
+		return HttpResponse.json({
+			invites: [
+				{
+					id: 'invite-1',
+					role: 'member',
+					status: 'pending',
+					created: '2026-01-01T00:00:00Z',
+					expires: '2026-02-01T00:00:00Z'
+				}
+			],
+			partial: false
+		});
+	}),
+
+	// ============================================
+	// Backup internet (phase-6.0-revamp.md § 7 WP6, deliverable 11)
+	// ============================================
+	http.get('/api/networks/:networkId/backup-internet', () => {
+		return HttpResponse.json({
+			enabled: true,
+			cellular_usage: { used_bytes: 1000, limit_bytes: 5000 },
+			cellular_events: [{ timestamp: '2026-01-01T00:00:00Z', type: 'failover_started' }]
+		});
+	}),
+
+	http.get('/api/networks/:networkId/backup-access-points', () => {
+		return HttpResponse.json({
+			access_points: [
+				{
+					id: 'ap-1',
+					ssid: 'Backup-5G',
+					uuid: 'uuid-1',
+					priority: 1,
+					enabled: true,
+					status: 'active',
+					connectivity: { signal: 'good' }
+				}
+			]
+		});
+	}),
+
+	// ============================================
+	// Security / WAN (phase-6.0-revamp.md § 7 WP6, deliverable 12)
+	// ============================================
+	http.get('/api/networks/:networkId/security', () => {
+		return HttpResponse.json({
+			wpa3: true,
+			band_steering: true,
+			upnp: false,
+			ipv6: 'enabled',
+			wpa3_per_band: { band_2_4_ghz: true, band_5_ghz: true, band_6_ghz: false },
+			fast_transition: { enabled: false },
+			sqm: false,
+			thread: { enabled: true, name: 'thread-net', channel: 15, pan_id: '0x1234' },
+			updates: { has_update: false }
+		});
+	}),
+
+	http.get('/api/networks/:networkId/subnets', () => {
+		return HttpResponse.json({
+			subnets: [{ name: 'guest', cidr: '10.0.1.0/24', dhcp_enabled: true }]
+		});
+	}),
+
+	http.get('/api/networks/:networkId/multistaticip', () => {
+		return HttpResponse.json({ configured: false, config: null });
+	}),
+
+	http.get('/api/networks/:networkId/advanced', () => {
+		return HttpResponse.json({
+			dhcp: { starting_address: '10.0.0.10', ending_address: '10.0.0.254' },
+			connection_mode: 'router',
+			power_saving: false,
+			ddns: { enabled: false }
+		});
+	}),
+
+	// ============================================
+	// Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
+	// ============================================
+	http.get('/api/networks/:networkId/notifications', () => {
+		return HttpResponse.json({
+			settings: { device_connected: true, device_disconnected: false },
+			has_unread: true
+		});
+	}),
+
+	http.get('/api/networks/:networkId/notifications/history', () => {
+		return HttpResponse.json({
+			history: [
+				{ timestamp: '2026-01-02T00:00:00Z', message: 'New device connected' },
+				{ timestamp: '2026-01-01T00:00:00Z', message: 'Software updated' }
+			]
+		});
+	}),
+
+	// ============================================
 	// Device endpoints
 	// ============================================
 	http.get('/api/devices', () => {
