@@ -32,9 +32,9 @@
 	import ExportMenu from '$components/common/ExportMenu.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import Dropdown, { type DropdownItem } from '$components/common/Dropdown.svelte';
 
 	let refreshing = $state(false);
-	let profileSelectorOpen = $state(false);
 	let profiles: { id: string; name: string }[] = $state([]);
 	let loadingProfiles = $state(false);
 	let assigningProfile = $state(false);
@@ -79,6 +79,18 @@
 		}
 	}
 
+	let profileItems: DropdownItem[] = $derived(
+		loadingProfiles
+			? [{ id: '__loading', label: 'Loading profiles…', onSelect: () => {}, disabled: true }]
+			: profiles.length === 0
+				? [{ id: '__empty', label: 'No profiles available', onSelect: () => {}, disabled: true }]
+				: profiles.map((profile) => ({
+						id: profile.id,
+						label: profile.name,
+						onSelect: () => assignToProfile(profile.id, profile.name)
+					}))
+	);
+
 	async function assignToProfile(profileId: string, profileName: string) {
 		if (selectedCount === 0) return;
 
@@ -88,7 +100,6 @@
 		try {
 			await devicesStore.assignToProfile(ids, profileId, profileName);
 			uiStore.success(`Assigned ${ids.length} device(s) to "${profileName}"`);
-			profileSelectorOpen = false;
 			clearSelection();
 			toggleSelectionMode();
 			await devicesStore.fetch(true);
@@ -100,6 +111,14 @@
 			assigningProfile = false;
 		}
 	}
+
+	// Prefetch profiles as soon as there's a selection to assign, so the Dropdown's item list is
+	// ready (not empty) by the time the user opens it - Dropdown itself has no "on open" hook.
+	$effect(() => {
+		if ($selectionMode && selectedCount > 0) {
+			loadProfiles();
+		}
+	});
 
 	onMount(() => {
 		devicesStore.fetch();
@@ -316,43 +335,16 @@
 
 			<!-- Profile Assignment (only in selection mode) -->
 			{#if $selectionMode && selectedCount > 0}
-				<div class="profile-selector">
-					<button
-						class="btn btn-primary btn-sm"
-						onclick={() => {
-							profileSelectorOpen = !profileSelectorOpen;
-							loadProfiles();
-						}}
-						disabled={assigningProfile}
-					>
+				<Dropdown
+					label={`Assign to Profile (${selectedCount})`}
+					items={profileItems}
+					disabled={assigningProfile}
+					triggerClass="btn btn-primary btn-sm dropdown-trigger"
+				>
+					{#snippet trigger()}
 						<Icon name="folder" size={14} /> Assign to Profile ({selectedCount})
-					</button>
-					{#if profileSelectorOpen}
-						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-						<div class="profile-dropdown" onclick={(e) => e.stopPropagation()}>
-							<div class="profile-dropdown-header">
-								<span class="text-sm text-muted">Select Profile</span>
-							</div>
-							{#if loadingProfiles}
-								<div class="profile-loading">
-									<span class="loading-spinner"></span>
-									Loading profiles...
-								</div>
-							{:else if profiles.length === 0}
-								<div class="profile-empty">No profiles available</div>
-							{:else}
-								{#each profiles as profile}
-									<button
-										class="profile-option"
-										onclick={() => assignToProfile(profile.id, profile.name)}
-									>
-										{profile.name}
-									</button>
-								{/each}
-							{/if}
-						</div>
-					{/if}
-				</div>
+					{/snippet}
+				</Dropdown>
 			{/if}
 
 			<!-- Export -->
@@ -655,59 +647,6 @@
 		gap: var(--space-2);
 	}
 
-	.profile-selector {
-		position: relative;
-	}
-
-	.profile-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: var(--space-1);
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		min-width: 200px;
-		z-index: var(--z-modal);
-	}
-
-	.profile-dropdown-header {
-		padding: var(--space-2) var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.profile-option {
-		display: block;
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		text-align: left;
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-text-primary);
-		transition: background-color var(--transition-fast);
-	}
-
-	.profile-option:hover {
-		background-color: var(--color-bg-primary);
-	}
-
-	.profile-loading,
-	.profile-empty {
-		padding: var(--space-3);
-		text-align: center;
-		color: var(--color-text-muted);
-		font-size: 0.875rem;
-	}
-
-	.profile-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-2);
-	}
-
 	.device-counts {
 		display: flex;
 		gap: var(--space-2);
@@ -754,7 +693,10 @@
 		color: var(--color-text-muted);
 		font-size: 1rem;
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.search-clear-btn:hover {
@@ -787,7 +729,10 @@
 		border-radius: var(--radius-sm);
 		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.filter-btn:hover {

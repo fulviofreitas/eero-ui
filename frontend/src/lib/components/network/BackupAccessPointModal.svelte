@@ -61,7 +61,6 @@
 <Modal {open} title={ap ? 'Edit Access Point' : 'Add Access Point'} {onClose}>
 	<form onsubmit={handleSubmit}>
 		<label class="modal-label" for="ap-ssid-input">SSID</label>
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			id="ap-ssid-input"
 			class="modal-input"
@@ -69,7 +68,6 @@
 			bind:value={ssid}
 			disabled={submitting}
 			maxlength="32"
-			autofocus
 		/>
 
 		<label class="modal-label" for="ap-password-input">

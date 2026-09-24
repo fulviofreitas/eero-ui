@@ -72,14 +72,12 @@
 >
 	<form onsubmit={handleSubmit}>
 		<label class="modal-label" for="power-saving-schedule-name-input">Name</label>
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			id="power-saving-schedule-name-input"
 			class="modal-input"
 			type="text"
 			bind:value={name}
 			disabled={submitting}
-			autofocus
 		/>
 
 		<fieldset class="days-fieldset">

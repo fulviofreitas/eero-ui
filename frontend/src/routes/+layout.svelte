@@ -421,7 +421,10 @@
 		border-radius: var(--radius-md);
 		color: var(--color-text-secondary);
 		text-decoration: none;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.nav-item:hover {
@@ -470,7 +473,10 @@
 		padding: 2px 8px;
 		border-radius: 10px;
 		border: 1px solid var(--color-border-muted);
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.version-link {
@@ -478,7 +484,10 @@
 		border-radius: var(--radius-sm);
 		padding: 4px 0;
 		margin: -4px 0;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.version-link:hover {
@@ -617,7 +626,10 @@
 		font-size: 0.75rem;
 		color: var(--color-text-muted);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.signout-btn:hover {
@@ -640,7 +652,10 @@
 		background: var(--color-bg-tertiary);
 		border: 1px solid var(--color-border-muted);
 		border-radius: 20px;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.network-bar-inner:hover {
@@ -709,7 +724,10 @@
 		border-radius: var(--radius-md);
 		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 		flex-shrink: 0;
 	}
 

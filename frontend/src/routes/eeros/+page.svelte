@@ -410,7 +410,10 @@
 		cursor: pointer;
 		font-size: 1rem;
 		color: var(--color-text-secondary);
-		transition: all 0.15s ease;
+		transition:
+			background-color 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.toggle-btn:hover {

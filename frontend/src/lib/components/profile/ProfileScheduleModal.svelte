@@ -68,14 +68,12 @@
 <Modal {open} title={schedule ? 'Edit Schedule' : 'Add Schedule'} {onClose}>
 	<form onsubmit={handleSubmit}>
 		<label class="modal-label" for="schedule-name-input">Name</label>
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			id="schedule-name-input"
 			class="modal-input"
 			type="text"
 			bind:value={name}
 			disabled={submitting}
-			autofocus
 		/>
 
 		<fieldset class="days-fieldset">

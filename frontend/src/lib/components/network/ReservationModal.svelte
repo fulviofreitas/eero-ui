@@ -63,7 +63,6 @@
 <Modal {open} title={reservation ? 'Edit Reservation' : 'Add Reservation'} {onClose}>
 	<form onsubmit={handleSubmit}>
 		<label class="modal-label" for="reservation-ip-input">IP (private IPv4)</label>
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			id="reservation-ip-input"
 			class="modal-input"
@@ -71,7 +70,6 @@
 			placeholder="192.168.1.50"
 			bind:value={ip}
 			disabled={submitting}
-			autofocus
 		/>
 
 		<label class="modal-label" for="reservation-mac-input">MAC Address</label>

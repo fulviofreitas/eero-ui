@@ -194,12 +194,12 @@
 						{/if}
 					</div>
 
-					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-					<div class="device-actions" onclick={(e) => e.stopPropagation()}>
+					<div class="device-actions">
 						<button
 							class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
 							onclick={(e) => {
 								e.preventDefault();
+								e.stopPropagation();
 								onPauseDevice(device);
 							}}
 						>
@@ -298,7 +298,10 @@
 		cursor: pointer;
 		font-size: 1rem;
 		color: var(--color-text-secondary);
-		transition: all 0.15s ease;
+		transition:
+			background-color 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.toggle-btn:hover {

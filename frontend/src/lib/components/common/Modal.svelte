@@ -49,8 +49,16 @@
 <svelte:window onkeydown={open ? handleKeydown : undefined} />
 
 {#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={onClose}>
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		transition:fade={{ duration: 150 }}
+		onclick={onClose}
+		onkeydown={(e) => e.key === 'Escape' && onClose()}
+	>
+		<!-- Click handler only stops propagation to the backdrop above; onkeydown is a deliberate
+		     no-op (never stopPropagation on keydown - Escape must still reach the window listener)
+		     that satisfies the a11y click/keyboard pairing rule without duplicating Escape logic. -->
 		<div
 			class="modal-card card"
 			role="dialog"
@@ -59,6 +67,7 @@
 			tabindex="-1"
 			use:trapFocus
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={() => {}}
 		>
 			<h2 id={titleId}>{title}</h2>
 			{@render children()}

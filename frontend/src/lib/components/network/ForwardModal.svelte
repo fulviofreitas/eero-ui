@@ -70,7 +70,6 @@
 		<div class="form-row">
 			<div>
 				<label class="modal-label" for="forward-client-port-input">Client Port</label>
-				<!-- svelte-ignore a11y_autofocus -->
 				<input
 					id="forward-client-port-input"
 					class="modal-input"
@@ -79,7 +78,6 @@
 					max="65535"
 					bind:value={clientPort}
 					disabled={submitting}
-					autofocus
 				/>
 			</div>
 			<div>

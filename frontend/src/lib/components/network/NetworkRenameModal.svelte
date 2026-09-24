@@ -28,7 +28,6 @@
 <Modal {open} title="Rename Network" {onClose}>
 	<form onsubmit={handleSubmit}>
 		<label class="modal-label" for="rename-network-input">New name</label>
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			id="rename-network-input"
 			class="modal-input"
@@ -36,7 +35,6 @@
 			{value}
 			oninput={(e) => onValueChange(e.currentTarget.value)}
 			disabled={submitting}
-			autofocus
 		/>
 		<div class="modal-actions">
 			<button type="button" class="btn btn-secondary" onclick={onClose} disabled={submitting}>

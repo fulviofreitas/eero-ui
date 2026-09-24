@@ -50,7 +50,10 @@
 		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--color-text-secondary);
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.time-range-selector button:hover {

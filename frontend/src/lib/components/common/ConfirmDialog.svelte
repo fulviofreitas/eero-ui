@@ -53,15 +53,23 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if $confirmDialog}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={handleCancel}>
-		<!-- A5 (WP5 a11y fix): role="dialog" below satisfies a11y_no_static_element_interactions,
-		     and Escape is handled globally via svelte:window - the pre-existing svelte-ignore for
-		     both rules on this element is no longer needed and was removed once lint confirmed it. -->
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		transition:fade={{ duration: 150 }}
+		onclick={handleCancel}
+		onkeydown={(e) => e.key === 'Escape' && handleCancel()}
+	>
+		<!-- The click handler here only stops propagation to the backdrop (so clicking inside the
+		     dialog doesn't close it) - it's not a user-facing interactive gesture of its own.
+		     onkeydown is a deliberate no-op (never stopPropagation on keydown: Escape must still
+		     bubble to the <svelte:window> handler above) that satisfies the a11y rule pairing every
+		     click handler with a keyboard one, without duplicating the Escape logic. -->
 		<div
 			class="modal"
 			transition:scale={{ duration: 150, start: 0.95 }}
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={() => {}}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"

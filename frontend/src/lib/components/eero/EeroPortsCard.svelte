@@ -177,7 +177,10 @@
 		border: 1px solid var(--color-border-muted);
 		border-radius: var(--radius-md);
 		padding: var(--space-3);
-		transition: all var(--transition-fast);
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
 	}
 
 	.port-card.has-carrier {

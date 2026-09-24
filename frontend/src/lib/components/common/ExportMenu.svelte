@@ -1,13 +1,15 @@
 <!--
   Export Menu Component
-  
-  Dropdown button for exporting list data in CSV, JSON, or YAML format.
+
+  Dropdown button for exporting list data in CSV, JSON, or YAML format. Built on the shared
+  Dropdown primitive (keyboard nav, roving tabindex, Escape/outside-click) instead of the
+  hand-rolled open-state div this used to be.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { exportData, type ExportFormat } from '$lib/utils/export';
 	import Icon from './Icon.svelte';
 	import type { IconName } from '$lib/icons/paths';
+	import Dropdown, { type DropdownItem } from './Dropdown.svelte';
 
 	interface Props {
 		data?: object[];
@@ -16,8 +18,6 @@
 	}
 
 	let { data = [], filename = 'export', disabled = false }: Props = $props();
-
-	let open = $state(false);
 
 	const formats: { id: ExportFormat; label: string; icon: IconName }[] = [
 		{ id: 'csv', label: 'CSV', icon: 'bar-chart' },
@@ -28,100 +28,25 @@
 	function handleExport(format: ExportFormat) {
 		if (data.length === 0) return;
 		exportData(data, format, filename);
-		open = false;
 	}
 
-	onMount(() => {
-		function handleClickOutside(event: MouseEvent) {
-			const target = event.target as HTMLElement;
-			if (!target.closest('.export-menu')) {
-				open = false;
-			}
-		}
-
-		document.addEventListener('click', handleClickOutside);
-		return () => document.removeEventListener('click', handleClickOutside);
-	});
+	let items: DropdownItem[] = $derived(
+		formats.map((format) => ({
+			id: format.id,
+			label: format.label,
+			icon: format.icon,
+			onSelect: () => handleExport(format.id)
+		}))
+	);
 </script>
 
-<div class="export-menu">
-	<button
-		class="btn btn-secondary btn-sm"
-		onclick={() => (open = !open)}
-		disabled={disabled || data.length === 0}
-		title={data.length === 0 ? 'No data to export' : 'Export data'}
-	>
+<Dropdown
+	label="Export"
+	{items}
+	disabled={disabled || data.length === 0}
+	triggerClass="btn btn-secondary btn-sm dropdown-trigger"
+>
+	{#snippet trigger()}
 		<Icon name="download" size={14} /> Export
-	</button>
-	{#if open}
-		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="export-dropdown" onclick={(e) => e.stopPropagation()}>
-			<div class="export-dropdown-header">
-				<span class="text-sm text-muted">Export {data.length} items as</span>
-			</div>
-			{#each formats as format}
-				<button class="export-option" onclick={() => handleExport(format.id)}>
-					<span class="export-icon"><Icon name={format.icon} size={14} /></span>
-					<span>{format.label}</span>
-				</button>
-			{/each}
-		</div>
-	{/if}
-</div>
-
-<style>
-	.export-menu {
-		position: relative;
-	}
-
-	.export-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: var(--space-1);
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		min-width: 180px;
-		z-index: var(--z-modal);
-	}
-
-	.export-dropdown-header {
-		padding: var(--space-2) var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.export-option {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		text-align: left;
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-text-primary);
-		font-size: 0.875rem;
-		transition: background-color var(--transition-fast);
-	}
-
-	.export-option:hover {
-		background-color: var(--color-bg-primary);
-	}
-
-	.export-option:first-of-type {
-		border-radius: 0;
-	}
-
-	.export-option:last-of-type {
-		border-radius: 0 0 var(--radius-md) var(--radius-md);
-	}
-
-	.export-icon {
-		width: 24px;
-		text-align: center;
-		font-size: 0.875rem;
-	}
-</style>
+	{/snippet}
+</Dropdown>
