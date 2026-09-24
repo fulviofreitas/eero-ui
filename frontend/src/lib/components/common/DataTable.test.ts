@@ -1,0 +1,222 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
+import DataTable, { type DataTableColumn } from './DataTable.svelte';
+
+interface Row {
+	id: string;
+	name: string;
+	ip: string;
+}
+
+const rows: Row[] = [
+	{ id: '1', name: 'Bravo', ip: '10.0.0.2' },
+	{ id: '2', name: 'Alpha', ip: '10.0.0.1' }
+];
+
+// `render()` from @testing-library/svelte can't thread a concrete type argument through to a
+// component declared with `generics="T"`, so it infers `T = unknown` for the rendered instance.
+// Typing the fixtures against `unknown` (with a cast at the one point each callback narrows
+// back to `Row`) keeps the test honest about that rather than silencing it with `any`.
+const columns: DataTableColumn<unknown>[] = [
+	{
+		key: 'name',
+		header: 'Name',
+		sortable: true,
+		required: true,
+		accessor: (r) => (r as Row).name
+	},
+	{ key: 'ip', header: 'IP', sortable: true, accessor: (r) => (r as Row).ip },
+	{ key: 'status', header: 'Status', sortable: false }
+];
+
+const getRowId = (r: unknown) => (r as Row).id;
+
+function bodyRowNames() {
+	return within(screen.getByRole('table'))
+		.getAllByRole('row')
+		.slice(1) // skip header row
+		.map((row) => row.querySelector('td')?.textContent);
+}
+
+describe('DataTable', () => {
+	beforeEach(() => {
+		localStorage.clear();
+	});
+
+	it('renders one column header per column, with a real <button> inside sortable headers', () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		expect(screen.getByRole('columnheader', { name: /^Name/ })).toBeInTheDocument();
+		expect(
+			within(screen.getByRole('columnheader', { name: /^Name/ })).getByRole('button')
+		).toBeInTheDocument();
+		// Non-sortable column renders plain text, no button
+		const statusHeader = screen.getByRole('columnheader', { name: 'Status' });
+		expect(within(statusHeader).queryByRole('button')).toBeNull();
+	});
+
+	it('renders rows in the given order when unsorted, with aria-sort=none on sortable columns', () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		expect(screen.getByRole('columnheader', { name: /^Name/ })).toHaveAttribute(
+			'aria-sort',
+			'none'
+		);
+		expect(bodyRowNames()).toEqual(['Bravo', 'Alpha']);
+	});
+
+	it('cycles aria-sort none -> ascending -> descending -> none on repeated activation', async () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		const nameHeader = () => screen.getByRole('columnheader', { name: /^Name/ });
+		const sortButton = () => within(nameHeader()).getByRole('button');
+
+		// A native <button> activates on both click and Enter/Space in a real browser without any
+		// extra keydown wiring in DataTable; jsdom does not synthesize that click from keydown, so
+		// `click` is what's exercised here — the same activation path Enter/Space triggers natively.
+		await fireEvent.click(sortButton());
+		expect(nameHeader()).toHaveAttribute('aria-sort', 'ascending');
+		expect(bodyRowNames()).toEqual(['Alpha', 'Bravo']);
+
+		await fireEvent.click(sortButton());
+		expect(nameHeader()).toHaveAttribute('aria-sort', 'descending');
+		expect(bodyRowNames()).toEqual(['Bravo', 'Alpha']);
+
+		await fireEvent.click(sortButton());
+		expect(nameHeader()).toHaveAttribute('aria-sort', 'none');
+		expect(bodyRowNames()).toEqual(['Bravo', 'Alpha']);
+	});
+
+	it('switching sort column resets the previous column to ascending, not descending', async () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		await fireEvent.click(
+			within(screen.getByRole('columnheader', { name: /^Name/ })).getByRole('button')
+		);
+		await fireEvent.click(
+			within(screen.getByRole('columnheader', { name: /^IP/ })).getByRole('button')
+		);
+
+		expect(screen.getByRole('columnheader', { name: /^Name/ })).toHaveAttribute(
+			'aria-sort',
+			'none'
+		);
+		expect(screen.getByRole('columnheader', { name: /^IP/ })).toHaveAttribute(
+			'aria-sort',
+			'ascending'
+		);
+	});
+
+	it('supports a fully controlled sort via sortBy/sortDirection/onSort', async () => {
+		const onSort = vi.fn();
+		render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows,
+				getRowId,
+				sortBy: 'name',
+				sortDirection: 'ascending',
+				onSort
+			}
+		});
+		expect(screen.getByRole('columnheader', { name: /^Name/ })).toHaveAttribute(
+			'aria-sort',
+			'ascending'
+		);
+
+		await fireEvent.click(
+			within(screen.getByRole('columnheader', { name: /^Name/ })).getByRole('button')
+		);
+		expect(onSort).toHaveBeenCalledWith('name', 'descending');
+		// Controlled: the prop hasn't changed, so the header still reflects the old state.
+		expect(screen.getByRole('columnheader', { name: /^Name/ })).toHaveAttribute(
+			'aria-sort',
+			'ascending'
+		);
+	});
+
+	it('shows a loading skeleton when loading and no rows are available yet', () => {
+		render(DataTable, {
+			props: { id: 'test', columns, rows: [], loading: true, getRowId }
+		});
+		expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+		expect(screen.queryByRole('table')).toBeNull();
+	});
+
+	it('shows an empty state when not loading and there are no rows', () => {
+		render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows: [],
+				getRowId,
+				emptyTitle: 'No devices found'
+			}
+		});
+		expect(screen.getByText('No devices found')).toBeInTheDocument();
+		expect(screen.queryByRole('table')).toBeNull();
+	});
+
+	it('toggles optional column visibility and persists the choice to localStorage', async () => {
+		render(DataTable, { props: { id: 'persist-test', columns, rows, getRowId } });
+
+		expect(screen.getByRole('columnheader', { name: /^IP/ })).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+		await fireEvent.click(screen.getByLabelText('IP'));
+
+		expect(screen.queryByRole('columnheader', { name: /^IP/ })).toBeNull();
+		expect(JSON.parse(localStorage.getItem('datatable:persist-test:columns')!)).toMatchObject({
+			ip: false
+		});
+	});
+
+	it('cannot hide a required column', async () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		await fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+		expect(screen.getByLabelText('Name')).toBeDisabled();
+	});
+
+	it('restores column visibility from localStorage on mount', () => {
+		localStorage.setItem('datatable:restore-test:columns', JSON.stringify({ ip: false }));
+		render(DataTable, { props: { id: 'restore-test', columns, rows, getRowId } });
+		expect(screen.queryByRole('columnheader', { name: /^IP/ })).toBeNull();
+	});
+
+	it('supports row selection with a select-all checkbox', async () => {
+		const onSelectionChange = vi.fn();
+		render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows,
+				getRowId,
+				selectable: true,
+				onSelectionChange
+			}
+		});
+		await fireEvent.click(screen.getByLabelText('Select all rows'));
+		expect(onSelectionChange).toHaveBeenCalledWith(new Set(['1', '2']));
+	});
+
+	it('supports shift-click range selection', async () => {
+		const threeRows: Row[] = [
+			{ id: '1', name: 'A', ip: '10.0.0.1' },
+			{ id: '2', name: 'B', ip: '10.0.0.2' },
+			{ id: '3', name: 'C', ip: '10.0.0.3' }
+		];
+		const onSelectionChange = vi.fn();
+		render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows: threeRows,
+				getRowId,
+				selectable: true,
+				onSelectionChange
+			}
+		});
+		await fireEvent.click(screen.getByLabelText('Select row 1'));
+		await fireEvent.click(screen.getByLabelText('Select row 3'), { shiftKey: true });
+
+		const lastCall = onSelectionChange.mock.calls.at(-1)?.[0] as Set<string>;
+		expect([...lastCall].sort()).toEqual(['1', '2', '3']);
+	});
+});
