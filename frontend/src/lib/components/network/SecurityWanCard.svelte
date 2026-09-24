@@ -12,11 +12,15 @@
   attach to, one family at a time, without touching this component's layout.
 
   The WAN section additionally owns its own DDNS toggle (phase-6.0-revamp.md
-  § 7 WP7, family 4) - an unverified, non-settings write (plan § 5), built
-  directly into this card rather than routed through the `wanControls` seam
-  (that seam is reserved for WP8's settings-class controls). Pessimistic,
-  gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, every write goes through a
-  `ConfirmDialog` naming "not verified end-to-end".
+  § 7 WP7, family 4), and the Power & Thread section owns its own Thread
+  enable/disable and regenerate-credentials controls (phase-6.0-revamp.md § 7
+  WP7, family 7) - both unverified, non-settings writes (plan § 5), built
+  directly into this card rather than routed through the `wanControls`/
+  `powerThreadControls` seams (those seams are reserved for WP8's
+  settings-class controls). Pessimistic, gated on
+  `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, every write goes through a
+  `ConfirmDialog` naming "not verified end-to-end". Regenerating Thread
+  credentials additionally names the re-commissioning consequence.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -105,6 +109,53 @@
 		Boolean(state.advanced?.ddns && (state.advanced.ddns as { enabled?: unknown }).enabled)
 	);
 
+	let threadEnabled = $derived(Boolean(state.security?.thread?.enabled));
+
+	function requestToggleThread() {
+		const nextEnabled = !threadEnabled;
+		uiStore.confirm({
+			title: 'Update Thread',
+			message: `${nextEnabled ? 'Enable' : 'Disable'} Thread for this network?`,
+			details: [NOT_VERIFIED_DETAIL],
+			confirmText: nextEnabled ? 'Enable' : 'Disable',
+			onConfirm: async () => {
+				try {
+					const changed = await securityWanStore.updateThread(networkId, nextEnabled);
+					if (!changed) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					uiStore.success('Thread setting updated');
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to update Thread');
+				}
+			}
+		});
+	}
+
+	function requestRegenerateThreadCredentials() {
+		uiStore.confirm({
+			title: 'Regenerate Thread Credentials',
+			message: 'Regenerate this network’s Thread credentials?',
+			details: [
+				NOT_VERIFIED_DETAIL,
+				'Thread and Matter devices must be re-commissioned after this change.'
+			],
+			confirmText: 'Regenerate',
+			danger: true,
+			onConfirm: async () => {
+				try {
+					await securityWanStore.regenerateThreadCredentials(networkId);
+					uiStore.success('Thread credentials regenerated');
+				} catch (err) {
+					uiStore.error(
+						err instanceof Error ? err.message : 'Failed to regenerate Thread credentials'
+					);
+				}
+			}
+		});
+	}
+
 	function requestToggleDdns() {
 		const nextEnabled = !ddnsEnabled;
 		uiStore.confirm({
@@ -191,6 +242,24 @@
 				<InfoRow label="Thread channel" value={state.security.thread.channel ?? '—'} />
 				<InfoRow label="Thread PAN ID" value={state.security.thread.pan_id ?? '—'} mono />
 			{/if}
+			<ExperimentalGate>
+				<div class="thread-buttons">
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={requestToggleThread}
+						disabled={state.applying}
+					>
+						{threadEnabled ? 'Disable Thread' : 'Enable Thread'}
+					</button>
+					<button
+						class="btn btn-danger btn-sm"
+						onclick={requestRegenerateThreadCredentials}
+						disabled={state.applying}
+					>
+						Regenerate Credentials
+					</button>
+				</div>
+			</ExperimentalGate>
 			{#if powerThreadControls}
 				<div class="section-controls">{@render powerThreadControls()}</div>
 			{/if}
@@ -277,6 +346,12 @@
 	}
 
 	.section-controls {
+		margin-top: var(--space-3);
+	}
+
+	.thread-buttons {
+		display: flex;
+		gap: var(--space-2);
 		margin-top: var(--space-3);
 	}
 </style>

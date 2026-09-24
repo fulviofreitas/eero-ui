@@ -12,6 +12,12 @@
  * - a backend `changed:false` renders an informational message, not a
  *   success toast
  * - a failed toggle surfaces an error toast
+ * - gate-off hides the add/edit/delete/reorder/discover/check access-point
+ *   controls (phase-6.0-revamp.md § 7 WP7, family 5)
+ * - gate-on: adding an access point goes through ConfirmDialog naming "not
+ *   verified end-to-end" before any POST fires
+ * - a successful add confirmation re-fetches the access-point list
+ * - a failed add surfaces an error toast
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -188,6 +194,126 @@ describe('BackupInternetCard', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
 		const dialog = get(confirmDialog);
 		await dialog!.onConfirm();
+
+		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
+	});
+
+	it('hides the add/edit/delete/reorder/discover/check access-point controls when the gate is off', async () => {
+		mockEntitlements(false);
+		await entitlementsStore.fetch('network-123');
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+		expect(screen.queryByRole('button', { name: 'Add Access Point' })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Discover' })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Check Connectivity' })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+	});
+
+	it('gate-on: deleting an access point goes through ConfirmDialog naming "not verified end-to-end"', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		let deleteCalls = 0;
+		server.use(
+			http.delete('/api/networks/:networkId/backup-access-points/:apId', () => {
+				deleteCalls++;
+				return HttpResponse.json({ success: true });
+			})
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+		const dialog = get(confirmDialog);
+		expect(dialog).not.toBeNull();
+		expect(dialog!.details).toContain(
+			'This action is not verified end-to-end against the eero cloud.'
+		);
+		expect(deleteCalls).toBe(0);
+	});
+
+	it('adding an access point via the modal re-fetches the (now longer) access-point list', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		server.use(
+			http.post('/api/networks/:networkId/backup-access-points', () =>
+				HttpResponse.json(
+					{
+						id: 'ap-new',
+						ssid: 'New AP',
+						uuid: null,
+						priority: 2,
+						enabled: true,
+						status: null,
+						connectivity: null
+					},
+					{ status: 201 }
+				)
+			),
+			http.get('/api/networks/:networkId/backup-access-points', () =>
+				HttpResponse.json({
+					access_points: [
+						{
+							id: 'ap-1',
+							ssid: 'Backup-5G',
+							uuid: 'uuid-1',
+							priority: 1,
+							enabled: true,
+							status: 'active',
+							connectivity: null
+						},
+						{
+							id: 'ap-new',
+							ssid: 'New AP',
+							uuid: null,
+							priority: 2,
+							enabled: true,
+							status: null,
+							connectivity: null
+						}
+					]
+				})
+			)
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Add Access Point' }));
+		await fireEvent.input(screen.getByLabelText('SSID'), { target: { value: 'New AP' } });
+		await fireEvent.input(screen.getByLabelText(/Password/), {
+			target: { value: 'correct-horse-battery' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(screen.getByText('New AP')).toBeInTheDocument());
+	});
+
+	it('surfaces a failed add as an error toast', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		server.use(
+			http.post('/api/networks/:networkId/backup-access-points', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			)
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Add Access Point' }));
+		await fireEvent.input(screen.getByLabelText('SSID'), { target: { value: 'New AP' } });
+		await fireEvent.input(screen.getByLabelText(/Password/), {
+			target: { value: 'correct-horse-battery' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
 	});

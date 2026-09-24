@@ -10,12 +10,23 @@
   unverified, non-settings write (plan § 5) - wrapped in `ExperimentalGate`, the
   parent route owns the `ConfirmDialog` naming "not verified end-to-end" (same
   split of responsibility as `onReboot`).
+
+  The node action control (phase-6.0-revamp.md § 7 WP7, family 6) is a second
+  unverified, non-settings write - self-contained here (like
+  `BackupInternetCard`'s toggle) since it needs no state from the parent
+  route: it calls `api.eeros.nodeAction` directly, owns its own `applying`
+  flag and `ConfirmDialog`, and names the reboot consequence for
+  `POWER_CYCLE_ALL_PORTS_AND_REBOOT` specifically.
 -->
 <script lang="ts">
+	import { api } from '$api/client';
+	import { uiStore } from '$stores';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import { NODE_ACTIONS, type NodeAction } from '$api/types';
 
 	interface Props {
+		eeroId: string;
 		ledOn: boolean | null;
 		/** `null` when the eero hasn't reported a brightness (older firmware). */
 		ledBrightness?: number | null;
@@ -34,6 +45,7 @@
 	}
 
 	let {
+		eeroId,
 		ledOn,
 		ledBrightness = null,
 		location = null,
@@ -45,6 +57,48 @@
 	}: Props = $props();
 
 	let locationInput = $derived(location ?? '');
+
+	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
+	const NODE_ACTION_LABELS: Record<NodeAction, string> = {
+		POWER_CYCLE_ALL_PORTS: 'Power-Cycle All Ports',
+		POWER_CYCLE_ALL_PORTS_AND_REBOOT: 'Power-Cycle All Ports & Reboot'
+	};
+
+	let selectedNodeAction = $state<NodeAction>(NODE_ACTIONS[0]);
+	let nodeActionApplying = $state(false);
+
+	function requestNodeAction() {
+		const action = selectedNodeAction;
+		const reboots = action === 'POWER_CYCLE_ALL_PORTS_AND_REBOOT';
+		uiStore.confirm({
+			title: 'Run Node Action',
+			message: `Run "${NODE_ACTION_LABELS[action]}" on this eero?`,
+			details: [
+				NOT_VERIFIED_DETAIL,
+				'Wired clients on this eero will drop while ports renegotiate.',
+				...(reboots ? ['This action reboots this node.'] : [])
+			],
+			confirmText: 'Run Action',
+			danger: reboots,
+			onConfirm: async () => {
+				nodeActionApplying = true;
+				try {
+					const result = await api.eeros.nodeAction(eeroId, action);
+					if (result.success) {
+						uiStore.success(
+							result.reboots_node
+								? 'Node action started; this eero is rebooting.'
+								: 'Node action started.'
+						);
+					}
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to run node action');
+				} finally {
+					nodeActionApplying = false;
+				}
+			}
+		});
+	}
 
 	function handleSliderInput(event: Event) {
 		const value = Number((event.currentTarget as HTMLInputElement).value);
@@ -95,6 +149,33 @@
 			/>
 		</div>
 	{/if}
+
+	<ExperimentalGate>
+		<div class="node-action-row">
+			<label for="node-action-select" class="node-action-label">Node Action</label>
+			<div class="node-action-input-row">
+				<select
+					id="node-action-select"
+					bind:value={selectedNodeAction}
+					disabled={nodeActionApplying}
+				>
+					{#each NODE_ACTIONS as action (action)}
+						<option value={action}>{NODE_ACTION_LABELS[action]}</option>
+					{/each}
+				</select>
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={requestNodeAction}
+					disabled={nodeActionApplying}
+				>
+					{#if nodeActionApplying}
+						<span class="loading-spinner"></span>
+					{/if}
+					Run
+				</button>
+			</div>
+		</div>
+	</ExperimentalGate>
 
 	{#if onSetLocation}
 		<ExperimentalGate>
@@ -172,6 +253,32 @@
 
 	.action-warning {
 		margin: 0;
+	}
+
+	.node-action-row {
+		margin-bottom: var(--space-3);
+	}
+
+	.node-action-label {
+		display: block;
+		font-size: 0.875rem;
+		color: var(--color-text-secondary);
+		margin-bottom: var(--space-2);
+	}
+
+	.node-action-input-row {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.node-action-input-row select {
+		flex: 1;
+		padding: var(--space-2) var(--space-3);
+		background-color: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text-primary);
+		font-size: 0.9375rem;
 	}
 
 	.location-row {

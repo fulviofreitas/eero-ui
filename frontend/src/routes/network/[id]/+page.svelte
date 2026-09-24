@@ -41,6 +41,7 @@
 	import ChannelUtilizationCard from '$lib/components/network/ChannelUtilizationCard.svelte';
 	import MembersCard from '$lib/components/network/MembersCard.svelte';
 	import BackupInternetCard from '$lib/components/network/BackupInternetCard.svelte';
+	import ForwardsReservationsCard from '$lib/components/network/ForwardsReservationsCard.svelte';
 	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
 	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
@@ -322,6 +323,7 @@
 					<div class="advanced-full">
 						<SecurityWanCard {networkId} />
 						<NotificationsCard {networkId} />
+						<ForwardsReservationsCard {networkId} />
 					</div>
 				{/if}
 			{:else if activeTab === 'diagnostics'}

@@ -1021,6 +1021,214 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// Backup access points writes (phase-6.0-revamp.md § 7 WP7, family 5).
+	// Default here simulates the gate open - individual tests override with a
+	// 403 `experimental_disabled` variant to exercise the gate-off path.
+	// ============================================
+	http.post('/api/networks/:networkId/backup-access-points', async ({ request }) => {
+		const body = (await request.json()) as { ssid: string; uuid?: string };
+		return HttpResponse.json(
+			{
+				id: 'ap-new',
+				ssid: body.ssid,
+				uuid: body.uuid ?? null,
+				priority: 2,
+				enabled: true,
+				status: 'active',
+				connectivity: null
+			},
+			{ status: 201 }
+		);
+	}),
+
+	http.put('/api/networks/:networkId/backup-access-points/order', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.put('/api/networks/:networkId/backup-access-points/:apId', async ({ params, request }) => {
+		const body = (await request.json()) as { ssid?: string; enabled?: boolean };
+		return HttpResponse.json({
+			id: params.apId,
+			ssid: body.ssid ?? 'Backup-5G',
+			uuid: 'uuid-1',
+			priority: 1,
+			enabled: body.enabled ?? true,
+			status: 'active',
+			connectivity: null
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/backup-access-points/:apId', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.post('/api/networks/:networkId/backup-access-points/discover', () => {
+		return HttpResponse.json({
+			ssids: [
+				{
+					ssid: 'Discovered-5G',
+					uuid: 'uuid-discovered',
+					status: null,
+					connectivity: null,
+					signal: null,
+					timestamp: null
+				}
+			]
+		});
+	}),
+
+	http.post('/api/networks/:networkId/backup-access-points/check', () => {
+		return HttpResponse.json({
+			ssid: 'Backup-5G',
+			uuid: 'uuid-1',
+			status: 'connected',
+			connectivity: { signal: 'good' },
+			signal: null,
+			timestamp: null
+		});
+	}),
+
+	// ============================================
+	// Thread write (phase-6.0-revamp.md § 7 WP7, family 7). Default here
+	// simulates the gate open and a real change - individual tests override
+	// with a 403 `experimental_disabled` or `changed: false` variant.
+	// ============================================
+	http.put('/api/networks/:networkId/thread', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			thread: { enabled: body.enabled, name: 'thread-net', channel: 15, pan_id: '0x1234' }
+		});
+	}),
+
+	http.post('/api/networks/:networkId/thread/regenerate', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	// ============================================
+	// Forwards and reservations (phase-6.0-revamp.md § 7 WP7, family 8).
+	// Default here simulates the gate open - individual tests override with a
+	// 403 `experimental_disabled` variant.
+	// ============================================
+	http.get('/api/networks/:networkId/forwards', () => {
+		return HttpResponse.json({
+			forwards: [
+				{
+					id: 'forward-1',
+					client_port: 8080,
+					gateway_port: 80,
+					ip: '192.168.1.50',
+					protocol: 'tcp',
+					description: 'Web server',
+					enabled: true
+				}
+			]
+		});
+	}),
+
+	http.post('/api/networks/:networkId/forwards', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json(
+			{
+				id: 'forward-new',
+				client_port: body.client_port,
+				gateway_port: body.gateway_port,
+				ip: body.ip,
+				protocol: body.protocol,
+				description: body.description ?? null,
+				enabled: body.enabled ?? true
+			},
+			{ status: 201 }
+		);
+	}),
+
+	http.put('/api/networks/:networkId/forwards/:forwardId', async ({ params, request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json({
+			id: params.forwardId,
+			client_port: body.client_port ?? 8080,
+			gateway_port: body.gateway_port ?? 80,
+			ip: body.ip ?? '192.168.1.50',
+			protocol: body.protocol ?? 'tcp',
+			description: body.description ?? null,
+			enabled: body.enabled ?? true
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/forwards/:forwardId', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.get('/api/networks/:networkId/reservations', () => {
+		return HttpResponse.json({
+			reservations: [
+				{
+					id: 'reservation-1',
+					ip: '192.168.1.60',
+					mac: 'aa:bb:cc:dd:ee:ff',
+					description: 'Printer',
+					public_static_ip: null
+				}
+			]
+		});
+	}),
+
+	http.post('/api/networks/:networkId/reservations', async ({ request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json(
+			{
+				id: 'reservation-new',
+				ip: body.ip,
+				mac: body.mac,
+				description: body.description ?? null,
+				public_static_ip: body.public_static_ip ?? null
+			},
+			{ status: 201 }
+		);
+	}),
+
+	http.put('/api/networks/:networkId/reservations/:reservationId', async ({ params, request }) => {
+		const body = (await request.json()) as Record<string, unknown>;
+		return HttpResponse.json({
+			id: params.reservationId,
+			ip: body.ip ?? '192.168.1.60',
+			mac: body.mac ?? 'aa:bb:cc:dd:ee:ff',
+			description: body.description ?? null,
+			public_static_ip: body.public_static_ip ?? null
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/reservations/:reservationId', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	// ============================================
+	// Node/port actions (phase-6.0-revamp.md § 7 WP7, family 6). Default here
+	// simulates the gate open - individual tests override with a 403
+	// `experimental_disabled` or 422 `port_protected` variant.
+	// ============================================
+	http.post('/api/eeros/:eeroId/node-action', async ({ params, request }) => {
+		const body = (await request.json()) as { action: string };
+		return HttpResponse.json({
+			success: true,
+			eero_id: params.eeroId,
+			action: body.action,
+			reboots_node: body.action === 'POWER_CYCLE_ALL_PORTS_AND_REBOOT'
+		});
+	}),
+
+	http.post('/api/eeros/:eeroId/ports/:portNumber/action', async ({ params, request }) => {
+		const body = (await request.json()) as { action: string };
+		return HttpResponse.json({
+			success: true,
+			eero_id: params.eeroId,
+			port_number: params.portNumber,
+			action: body.action
+		});
+	}),
+
+	// ============================================
 	// Health endpoint
 	// ============================================
 	http.get('/api/health', () => {

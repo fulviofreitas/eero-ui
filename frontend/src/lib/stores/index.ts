@@ -10,6 +10,7 @@ export * from './devices';
 export * from './dns';
 export * from './entitlements';
 export * from './events';
+export * from './forwardsReservations';
 export * from './guestPassword';
 export * from './insights';
 export * from './members';

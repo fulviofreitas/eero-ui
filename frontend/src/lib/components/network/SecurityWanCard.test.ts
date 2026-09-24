@@ -12,6 +12,13 @@
  * - a backend `changed:false` renders an informational message, not a
  *   success toast
  * - a failed toggle surfaces an error toast
+ * - gate-off hides the Thread enable/disable and regenerate-credentials
+ *   buttons (phase-6.0-revamp.md § 7 WP7, family 7)
+ * - gate-on: toggling Thread goes through ConfirmDialog naming "not
+ *   verified end-to-end" before any PUT fires
+ * - gate-on: regenerating Thread credentials names the re-commissioning
+ *   consequence
+ * - a successful Thread toggle re-fetches; a failed one surfaces an error toast
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -215,5 +222,134 @@ describe('SecurityWanCard', () => {
 		await dialog!.onConfirm();
 
 		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
+	});
+
+	it('hides the Thread enable/disable and regenerate-credentials buttons when the gate is off', async () => {
+		mockEntitlements(false);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+		expect(screen.queryByRole('button', { name: /disable thread/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /enable thread/i })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole('button', { name: 'Regenerate Credentials' })
+		).not.toBeInTheDocument();
+	});
+
+	it('gate-on: toggling Thread goes through ConfirmDialog naming "not verified end-to-end"', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		let putCalls = 0;
+		server.use(
+			http.put('/api/networks/:networkId/thread', () => {
+				putCalls++;
+				return HttpResponse.json({ success: true, changed: true, thread: { enabled: false } });
+			})
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: /disable thread/i }));
+
+		const dialog = get(confirmDialog);
+		expect(dialog).not.toBeNull();
+		expect(dialog!.details).toContain(
+			'This action is not verified end-to-end against the eero cloud.'
+		);
+		expect(putCalls).toBe(0);
+	});
+
+	it('a successful Thread toggle confirmation re-fetches the security/WAN state', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		server.use(
+			http.put('/api/networks/:networkId/thread', () =>
+				HttpResponse.json({
+					success: true,
+					changed: true,
+					thread: { enabled: false, name: 'thread-net', channel: 15, pan_id: '0x1234' }
+				})
+			),
+			http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: 'enabled',
+					wpa3_per_band: null,
+					fast_transition: null,
+					sqm: false,
+					thread: { enabled: false, name: 'thread-net', channel: 15, pan_id: '0x1234' },
+					updates: null
+				})
+			)
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: /disable thread/i }));
+		const dialog = get(confirmDialog);
+		await dialog!.onConfirm();
+
+		await waitFor(() =>
+			expect(screen.getByRole('button', { name: /enable thread/i })).toBeInTheDocument()
+		);
+	});
+
+	it('surfaces a failed Thread toggle as an error toast', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		server.use(
+			http.put('/api/networks/:networkId/thread', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			)
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: /disable thread/i }));
+		const dialog = get(confirmDialog);
+		await dialog!.onConfirm();
+
+		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
+	});
+
+	it('gate-on: regenerating Thread credentials names the re-commissioning consequence', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		let postCalls = 0;
+		server.use(
+			http.post('/api/networks/:networkId/thread/regenerate', () => {
+				postCalls++;
+				return HttpResponse.json({ success: true });
+			})
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Regenerate Credentials' }));
+
+		const dialog = get(confirmDialog);
+		expect(dialog).not.toBeNull();
+		expect(dialog!.details).toContain(
+			'This action is not verified end-to-end against the eero cloud.'
+		);
+		expect(dialog!.details).toContain(
+			'Thread and Matter devices must be re-commissioned after this change.'
+		);
+		expect(postCalls).toBe(0);
+
+		await dialog!.onConfirm();
+		expect(postCalls).toBe(1);
 	});
 });

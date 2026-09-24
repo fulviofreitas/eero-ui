@@ -9,6 +9,8 @@
  * - updateDdns (phase-6.0-revamp.md § 7 WP7, family 4) re-fetches on success
  *   and returns the backend's own `changed` flag
  * - a 403 experimental_disabled response surfaces as a rejected promise
+ * - updateThread/regenerateThreadCredentials (phase-6.0-revamp.md § 7 WP7,
+ *   family 7) re-fetch the store on success
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -93,6 +95,59 @@ describe('securityWanStore', () => {
 			);
 
 			await expect(securityWanStore.updateDdns('network-123', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	describe('updateThread', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			await securityWanStore.fetch('network-123');
+
+			const changed = await securityWanStore.updateThread('network-123', false);
+
+			expect(changed).toBe(true);
+			expect(get(securityWanStore).applying).toBe(false);
+			expect(get(securityWanStore).security).not.toBeNull();
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/thread', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(securityWanStore.updateThread('network-123', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+	});
+
+	describe('regenerateThreadCredentials', () => {
+		it('re-fetches the store on success', async () => {
+			await securityWanStore.regenerateThreadCredentials('network-123');
+
+			expect(get(securityWanStore).applying).toBe(false);
+			expect(get(securityWanStore).security).not.toBeNull();
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.post('/api/networks/:networkId/thread/regenerate', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(securityWanStore.regenerateThreadCredentials('network-123')).rejects.toThrow(
 				'Experimental writes are disabled.'
 			);
 			expect(get(securityWanStore).applying).toBe(false);

@@ -950,3 +950,175 @@ export interface NotificationHistoryResponse {
 export interface NotificationSettingsUpdateRequest {
 	settings: Record<string, boolean>;
 }
+
+// ============================================
+// Backup access points writes (phase-6.0-revamp.md § 7 WP7, family 5)
+//
+// Mirrors backend/app/routes/networks.py:4276-4521. Unverified, non-settings
+// writes (§ 5); the AP's own password is write-only through this API - it is
+// accepted on create/update but never echoed back in `BackupAccessPoint`.
+// ============================================
+
+export interface BackupAccessPointCreateRequest {
+	ssid: string;
+	password: string;
+	uuid?: string | null;
+}
+
+export interface BackupAccessPointUpdateRequest {
+	ssid?: string | null;
+	password?: string | null;
+	enabled?: boolean | null;
+}
+
+export interface BackupAccessPointOrderRequest {
+	order: string[];
+}
+
+/**
+ * One SSID reported by backup-AP discovery or a connectivity check
+ * (`DiscoveredBackupSsid` server-side). Allowlisted - never a password/PSK.
+ */
+export interface DiscoveredBackupSsid {
+	ssid: string | null;
+	uuid: string | null;
+	status: string | null;
+	connectivity: unknown;
+	signal: unknown;
+	timestamp: string | null;
+}
+
+export interface BackupSsidDiscoveryResponse {
+	ssids: DiscoveredBackupSsid[];
+}
+
+// ============================================
+// Node/port actions (phase-6.0-revamp.md § 7 WP7, family 6)
+//
+// Mirrors backend/app/routes/eeros.py:704-895. Unverified, non-settings
+// writes (§ 5); `PORT_ACTIONS`/`NODE_ACTIONS` mirror the backend's own
+// allowlists so an invalid action is rejected client-side before any request.
+// ============================================
+
+export const NODE_ACTIONS = ['POWER_CYCLE_ALL_PORTS', 'POWER_CYCLE_ALL_PORTS_AND_REBOOT'] as const;
+export type NodeAction = (typeof NODE_ACTIONS)[number];
+
+export const PORT_ACTIONS = [
+	'ENABLE_DATA',
+	'DISABLE_DATA',
+	'ENABLE_POE',
+	'DISABLE_POE',
+	'ENABLE_PORT',
+	'DISABLE_PORT',
+	'RESTART_POWER',
+	'ENABLE_PORT_SECURITY',
+	'DISABLE_PORT_SECURITY'
+] as const;
+export type PortAction = (typeof PORT_ACTIONS)[number];
+
+export interface NodeActionRequest {
+	action: NodeAction;
+}
+
+export interface NodeActionResponse {
+	success: boolean;
+	eero_id: string;
+	action: string;
+	reboots_node: boolean;
+}
+
+export interface PortActionRequest {
+	action: PortAction;
+}
+
+export interface PortActionResponse {
+	success: boolean;
+	eero_id: string;
+	port_number: string;
+	action: string;
+}
+
+// ============================================
+// Thread write (phase-6.0-revamp.md § 7 WP7, family 7)
+//
+// Mirrors backend/app/routes/networks.py:3819-3920. Unverified, non-settings
+// write (§ 5); read-compare-skip discipline via `get_thread` - the SDK's own
+// docstring says the write "has not been confirmed against a live network".
+// ============================================
+
+export interface ThreadUpdateRequest {
+	enabled: boolean;
+	enable_credential_syncing?: boolean | null;
+}
+
+export interface ThreadUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	thread: ThreadSummary | null;
+}
+
+// ============================================
+// Forwards and reservations (phase-6.0-revamp.md § 7 WP7, family 8)
+//
+// Mirrors backend/app/routes/networks.py:4524-4943. Unverified, non-settings
+// writes (§ 5); client-side validation mirrors the backend's own checks
+// (ports 1-65535, private IPv4, lowercase colon-separated MAC).
+// ============================================
+
+export interface ForwardSummary {
+	id: string | null;
+	client_port: number | null;
+	gateway_port: number | null;
+	ip: string | null;
+	protocol: string | null;
+	description: string | null;
+	enabled: boolean;
+}
+
+export interface ForwardsResponse {
+	forwards: ForwardSummary[];
+}
+
+export interface ForwardCreateRequest {
+	client_port: number;
+	gateway_port: number;
+	ip: string;
+	protocol: 'tcp' | 'udp' | 'both';
+	description?: string | null;
+	enabled?: boolean;
+}
+
+export interface ForwardUpdateRequest {
+	client_port?: number;
+	gateway_port?: number;
+	ip?: string;
+	protocol?: 'tcp' | 'udp' | 'both';
+	description?: string | null;
+	enabled?: boolean;
+}
+
+export interface ReservationSummary {
+	id: string | null;
+	ip: string | null;
+	mac: string | null;
+	description: string | null;
+	public_static_ip: string | null;
+}
+
+export interface ReservationsResponse {
+	reservations: ReservationSummary[];
+}
+
+export interface ReservationCreateRequest {
+	ip: string;
+	mac: string;
+	description?: string | null;
+	public_static_ip?: string | null;
+}
+
+export interface ReservationUpdateRequest {
+	ip?: string;
+	mac?: string;
+	description?: string | null;
+	public_static_ip?: string | null;
+}

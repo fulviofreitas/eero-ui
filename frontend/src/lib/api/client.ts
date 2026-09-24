@@ -794,7 +794,173 @@ export const api = {
 			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/pending-admin/cancel`, {
 				method: 'POST',
 				retries: 0
-			})
+			}),
+
+		/**
+		 * Add a backup Wi-Fi access point (plan § 7 WP7, family 5). Unverified
+		 * write - the password is never echoed back in the response. Never
+		 * retried.
+		 */
+		addBackupAccessPoint: (
+			networkId: string,
+			body: import('./types').BackupAccessPointCreateRequest
+		) =>
+			fetchWithHandling<import('./types').BackupAccessPoint>(
+				`/networks/${networkId}/backup-access-points`,
+				{ method: 'POST', body, retries: 0 }
+			),
+
+		/**
+		 * Update a backup Wi-Fi access point (plan § 7 WP7, family 5).
+		 * Unverified write - the password is never echoed back. Never retried.
+		 */
+		updateBackupAccessPoint: (
+			networkId: string,
+			apId: string,
+			body: import('./types').BackupAccessPointUpdateRequest
+		) =>
+			fetchWithHandling<import('./types').BackupAccessPoint>(
+				`/networks/${networkId}/backup-access-points/${apId}`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Delete a backup Wi-Fi access point (plan § 7 WP7, family 5). Unverified write. */
+		deleteBackupAccessPoint: (networkId: string, apId: string) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/backup-access-points/${apId}`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/**
+		 * Reorder backup Wi-Fi access points (plan § 7 WP7, family 5).
+		 * Unverified write. `order` is the full list of access-point ids in
+		 * the desired priority order. Never retried.
+		 */
+		reorderBackupAccessPoints: (networkId: string, order: string[]) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/backup-access-points/order`, {
+				method: 'PUT',
+				body: { order },
+				retries: 0
+			}),
+
+		/**
+		 * Start backup-SSID discovery and return the result (plan § 7 WP7,
+		 * family 5). Unverified write. Never retried.
+		 */
+		discoverBackupSsids: (networkId: string) =>
+			fetchWithHandling<import('./types').BackupSsidDiscoveryResponse>(
+				`/networks/${networkId}/backup-access-points/discover`,
+				{ method: 'POST', retries: 0 }
+			),
+
+		/**
+		 * Run a backup-connectivity check (plan § 7 WP7, family 5). Unverified
+		 * write. Never retried.
+		 */
+		backupConnectivityCheck: (networkId: string) =>
+			fetchWithHandling<import('./types').DiscoveredBackupSsid>(
+				`/networks/${networkId}/backup-access-points/check`,
+				{ method: 'POST', retries: 0 }
+			),
+
+		/**
+		 * Enable/disable Thread, optionally toggling credential syncing (plan
+		 * § 7 WP7, family 7). Unverified write - the SDK's own docstring says
+		 * this "has not been confirmed against a live network". Read-first
+		 * with a skip-when-unchanged no-op guard server-side (`changed: false`).
+		 * Never retried.
+		 */
+		updateThread: (networkId: string, enabled: boolean, enableCredentialSyncing?: boolean) =>
+			fetchWithHandling<import('./types').ThreadUpdateResponse>(`/networks/${networkId}/thread`, {
+				method: 'PUT',
+				body: {
+					enabled,
+					...(enableCredentialSyncing !== undefined && {
+						enable_credential_syncing: enableCredentialSyncing
+					})
+				},
+				retries: 0
+			}),
+
+		/**
+		 * Regenerate the network's Thread credentials (plan § 7 WP7, family
+		 * 7). Unverified write - no no-op guard is possible, regenerating is
+		 * inherently a change. The response never echoes the new Thread
+		 * key/dataset/PSKc. Never retried.
+		 */
+		regenerateThreadCredentials: (networkId: string) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/thread/regenerate`, {
+				method: 'POST',
+				retries: 0
+			}),
+
+		/** The network's configured port forwards (plan § 7 WP7, family 8). Verified read. */
+		getForwards: (networkId: string) =>
+			fetchWithHandling<import('./types').ForwardsResponse>(`/networks/${networkId}/forwards`),
+
+		/** Create a port forward (plan § 7 WP7, family 8). Unverified write. Never retried. */
+		createForward: (networkId: string, body: import('./types').ForwardCreateRequest) =>
+			fetchWithHandling<import('./types').ForwardSummary>(`/networks/${networkId}/forwards`, {
+				method: 'POST',
+				body,
+				retries: 0
+			}),
+
+		/** Update a port forward (plan § 7 WP7, family 8). Unverified write. Never retried. */
+		updateForward: (
+			networkId: string,
+			forwardId: string,
+			body: import('./types').ForwardUpdateRequest
+		) =>
+			fetchWithHandling<import('./types').ForwardSummary>(
+				`/networks/${networkId}/forwards/${forwardId}`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Delete a port forward (plan § 7 WP7, family 8). Unverified write. Never retried. */
+		deleteForward: (networkId: string, forwardId: string) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/forwards/${forwardId}`, {
+				method: 'DELETE',
+				retries: 0
+			}),
+
+		/** The network's configured DHCP reservations (plan § 7 WP7, family 8). Verified read. */
+		getReservations: (networkId: string) =>
+			fetchWithHandling<import('./types').ReservationsResponse>(
+				`/networks/${networkId}/reservations`
+			),
+
+		/** Create a DHCP reservation (plan § 7 WP7, family 8). Unverified write. Never retried. */
+		createReservation: (networkId: string, body: import('./types').ReservationCreateRequest) =>
+			fetchWithHandling<import('./types').ReservationSummary>(
+				`/networks/${networkId}/reservations`,
+				{ method: 'POST', body, retries: 0 }
+			),
+
+		/** Update a DHCP reservation (plan § 7 WP7, family 8). Unverified write. Never retried. */
+		updateReservation: (
+			networkId: string,
+			reservationId: string,
+			body: import('./types').ReservationUpdateRequest
+		) =>
+			fetchWithHandling<import('./types').ReservationSummary>(
+				`/networks/${networkId}/reservations/${reservationId}`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/**
+		 * Delete a DHCP reservation, optionally also deleting its forwards
+		 * (plan § 7 WP7, family 8). Unverified write. Never retried.
+		 */
+		deleteReservation: (networkId: string, reservationId: string, deleteForwards?: boolean) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/reservations/${reservationId}`,
+				{
+					method: 'DELETE',
+					params: { ...(deleteForwards !== undefined && { delete_forwards: deleteForwards }) },
+					retries: 0
+				}
+			)
 	},
 
 	// Devices
@@ -930,7 +1096,34 @@ export const api = {
 				method: 'PUT',
 				body: { location },
 				retries: 0
-			})
+			}),
+
+		/**
+		 * Power-cycle an eero's ports, optionally rebooting the node (plan §
+		 * 7 WP7, family 6). Unverified write - both actions drop wired
+		 * clients while ports renegotiate; `POWER_CYCLE_ALL_PORTS_AND_REBOOT`
+		 * additionally reboots the eero (`reboots_node: true` in the
+		 * response). Never retried.
+		 */
+		nodeAction: (eeroId: string, action: import('./types').NodeAction) =>
+			fetchWithHandling<import('./types').NodeActionResponse>(`/eeros/${eeroId}/node-action`, {
+				method: 'POST',
+				body: { action },
+				retries: 0
+			}),
+
+		/**
+		 * Run a port-level action on one of an eero's ethernet ports (plan §
+		 * 7 WP7, family 6). Unverified write - several actions are
+		 * inherently disruptive to whatever is connected to that port. A
+		 * disruptive action against a gateway's WAN/uplink port is refused
+		 * server-side with a 422 `port_protected` type. Never retried.
+		 */
+		portAction: (eeroId: string, portNumber: string, action: import('./types').PortAction) =>
+			fetchWithHandling<import('./types').PortActionResponse>(
+				`/eeros/${eeroId}/ports/${portNumber}/action`,
+				{ method: 'POST', body: { action }, retries: 0 }
+			)
 	},
 
 	// Profiles

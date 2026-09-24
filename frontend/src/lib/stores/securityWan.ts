@@ -19,6 +19,12 @@
  * (`client.ts` passes `retries: 0`), re-fetches this whole store on success
  * (there is no dedicated DDNS getter - it lives on the `advanced.ddns`
  * envelope field).
+ *
+ * The Thread enable/disable and regenerate-credentials controls
+ * (phase-6.0-revamp.md § 7 WP7, family 7) follow the same policy: pessimistic,
+ * gated, `retries: 0`. Both re-fetch this whole store on success so the
+ * `security.thread` read-back stays in sync (there is no dedicated Thread
+ * getter of its own on the frontend).
  */
 
 import { writable } from 'svelte/store';
@@ -87,6 +93,42 @@ function createSecurityWanStore() {
 				const result = await api.networks.updateDdns(networkId, enabled);
 				await this.fetch(networkId);
 				return result.changed;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/**
+		 * Enable/disable Thread, optionally toggling credential syncing.
+		 * Pessimistic - re-fetches the whole store on success. Returns the
+		 * backend's own `changed` flag (`false` means the no-op guard
+		 * skipped the write entirely).
+		 */
+		async updateThread(
+			networkId: string,
+			enabled: boolean,
+			enableCredentialSyncing?: boolean
+		): Promise<boolean> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await api.networks.updateThread(networkId, enabled, enableCredentialSyncing);
+				await this.fetch(networkId);
+				return result.changed;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/**
+		 * Regenerate the network's Thread credentials. Pessimistic -
+		 * re-fetches the whole store on success. No no-op guard is possible
+		 * (regenerating is inherently a change).
+		 */
+		async regenerateThreadCredentials(networkId: string): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.regenerateThreadCredentials(networkId);
+				await this.fetch(networkId);
 			} finally {
 				update((s) => ({ ...s, applying: false }));
 			}

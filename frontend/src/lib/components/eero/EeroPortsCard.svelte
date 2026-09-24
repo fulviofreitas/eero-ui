@@ -3,16 +3,90 @@
 
   Eero detail "Ethernet Ports" card. Extracted from routes/eeros/[id]/+page.svelte
   (WP5 decomposition).
+
+  Per-port action controls (phase-6.0-revamp.md § 7 WP7, family 6) are an
+  unverified, non-settings write (plan § 5) - self-contained here (like
+  `BackupInternetCard`'s toggle), gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`,
+  every write goes through a `ConfirmDialog` naming "not verified end-to-end".
+  A 422 `port_protected` response (the backend refuses a disruptive action
+  against a gateway's WAN/uplink port) is rendered inline against that port's
+  own card, not as a toast - every other failure is a toast.
 -->
 <script lang="ts">
+	import { api, ApiClientError } from '$api/client';
+	import { uiStore } from '$stores';
 	import type { EeroDetail } from '$api/types';
+	import { PORT_ACTIONS, type PortAction } from '$api/types';
 	import { formatPortSpeed } from '$lib/utils/eero-format';
+	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	interface Props {
+		eeroId: string;
 		ports: EeroDetail['ethernet_ports'];
 	}
 
-	let { ports }: Props = $props();
+	let { eeroId, ports }: Props = $props();
+
+	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
+	const PORT_ACTION_LABELS: Record<PortAction, string> = {
+		ENABLE_DATA: 'Enable Data',
+		DISABLE_DATA: 'Disable Data',
+		ENABLE_POE: 'Enable PoE',
+		DISABLE_POE: 'Disable PoE',
+		ENABLE_PORT: 'Enable Port',
+		DISABLE_PORT: 'Disable Port',
+		RESTART_POWER: 'Restart Power',
+		ENABLE_PORT_SECURITY: 'Enable Port Security',
+		DISABLE_PORT_SECURITY: 'Disable Port Security'
+	};
+	const DISRUPTIVE_PORT_ACTIONS: PortAction[] = ['DISABLE_DATA', 'DISABLE_POE', 'DISABLE_PORT'];
+
+	let selectedAction = $state<Record<string, PortAction>>({});
+	let applyingPort = $state<string | null>(null);
+	let portErrors = $state<Record<string, string>>({});
+
+	function portKey(portName: string | null, index: number): string {
+		return portName ?? `port-${index}`;
+	}
+
+	function actionForPort(key: string): PortAction {
+		return selectedAction[key] ?? PORT_ACTIONS[0];
+	}
+
+	function requestPortAction(portName: string | null, index: number) {
+		if (!portName) return;
+		const key = portKey(portName, index);
+		const action = actionForPort(key);
+		const disruptive = DISRUPTIVE_PORT_ACTIONS.includes(action);
+		uiStore.confirm({
+			title: 'Run Port Action',
+			message: `Run "${PORT_ACTION_LABELS[action]}" on port "${portName}"?`,
+			details: [
+				NOT_VERIFIED_DETAIL,
+				...(disruptive ? ['Whatever is connected to this port may lose connectivity.'] : [])
+			],
+			confirmText: 'Run Action',
+			danger: disruptive,
+			onConfirm: async () => {
+				applyingPort = key;
+				portErrors = { ...portErrors, [key]: '' };
+				try {
+					const result = await api.eeros.portAction(eeroId, portName, action);
+					if (result.success) {
+						uiStore.success(`Port action "${PORT_ACTION_LABELS[action]}" applied.`);
+					}
+				} catch (err) {
+					if (err instanceof ApiClientError && err.type === 'port_protected') {
+						portErrors = { ...portErrors, [key]: err.detail };
+					} else {
+						uiStore.error(err instanceof Error ? err.message : 'Failed to run port action');
+					}
+				} finally {
+					applyingPort = null;
+				}
+			}
+		});
+	}
 </script>
 
 {#if ports && ports.length > 0}
@@ -44,6 +118,33 @@
 							→ {port.neighbor_location}{port.neighbor_port ? ` (${port.neighbor_port})` : ''}
 						</div>
 					{/if}
+					<ExperimentalGate>
+						<div class="port-action-row">
+							<select
+								bind:value={selectedAction[portKey(port.port_name, i)]}
+								disabled={applyingPort === portKey(port.port_name, i)}
+							>
+								{#each PORT_ACTIONS as action (action)}
+									<option value={action}>{PORT_ACTION_LABELS[action]}</option>
+								{/each}
+							</select>
+							<button
+								class="btn btn-secondary btn-sm"
+								onclick={() => requestPortAction(port.port_name, i)}
+								disabled={applyingPort === portKey(port.port_name, i) || !port.port_name}
+							>
+								{#if applyingPort === portKey(port.port_name, i)}
+									<span class="loading-spinner"></span>
+								{/if}
+								Run
+							</button>
+						</div>
+						{#if portErrors[portKey(port.port_name, i)]}
+							<p class="port-error text-danger text-sm" role="alert">
+								{portErrors[portKey(port.port_name, i)]}
+							</p>
+						{/if}
+					</ExperimentalGate>
 				</div>
 			{/each}
 		</div>
@@ -120,6 +221,29 @@
 		margin-top: var(--space-2);
 		padding-top: var(--space-2);
 		border-top: 1px solid var(--color-border-muted);
+	}
+
+	.port-action-row {
+		display: flex;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+		padding-top: var(--space-2);
+		border-top: 1px solid var(--color-border-muted);
+	}
+
+	.port-action-row select {
+		flex: 1;
+		min-width: 0;
+		padding: var(--space-1) var(--space-2);
+		background-color: var(--color-bg-primary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		color: var(--color-text-primary);
+		font-size: 0.75rem;
+	}
+
+	.port-error {
+		margin: var(--space-2) 0 0;
 	}
 
 	@media (max-width: 768px) {

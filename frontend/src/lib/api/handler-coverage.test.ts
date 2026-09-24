@@ -135,6 +135,39 @@ describe('api client handler coverage', () => {
 			() => api.networks.updateInvite('network-123', 'invite-1', 'New nickname'),
 			() => api.networks.deleteInvite('network-123', 'invite-1'),
 			() => api.networks.cancelPendingAdmin('network-123'),
+			() =>
+				api.networks.addBackupAccessPoint('network-123', {
+					ssid: 'Backup-5G',
+					password: 'correct-horse-battery'
+				}),
+			() =>
+				api.networks.updateBackupAccessPoint('network-123', 'ap-1', {
+					ssid: 'Backup-5G'
+				}),
+			() => api.networks.deleteBackupAccessPoint('network-123', 'ap-1'),
+			() => api.networks.reorderBackupAccessPoints('network-123', ['ap-1']),
+			() => api.networks.discoverBackupSsids('network-123'),
+			() => api.networks.backupConnectivityCheck('network-123'),
+			() => api.networks.updateThread('network-123', true),
+			() => api.networks.regenerateThreadCredentials('network-123'),
+			() => api.networks.getForwards('network-123'),
+			() =>
+				api.networks.createForward('network-123', {
+					client_port: 8080,
+					gateway_port: 80,
+					ip: '192.168.1.50',
+					protocol: 'tcp'
+				}),
+			() => api.networks.updateForward('network-123', 'forward-1', { enabled: false }),
+			() => api.networks.deleteForward('network-123', 'forward-1'),
+			() => api.networks.getReservations('network-123'),
+			() =>
+				api.networks.createReservation('network-123', {
+					ip: '192.168.1.60',
+					mac: 'aa:bb:cc:dd:ee:ff'
+				}),
+			() => api.networks.updateReservation('network-123', 'reservation-1', { description: 'x' }),
+			() => api.networks.deleteReservation('network-123', 'reservation-1', true),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -148,6 +181,8 @@ describe('api client handler coverage', () => {
 			() => api.eeros.setLedBrightness('eero-1', 80),
 			() => api.eeros.getConnections('eero-1'),
 			() => api.eeros.setLocation('eero-1', 'Living Room'),
+			() => api.eeros.nodeAction('eero-1', 'POWER_CYCLE_ALL_PORTS'),
+			() => api.eeros.portAction('eero-1', 'eth1', 'ENABLE_DATA'),
 			() =>
 				api.devices.getInsights('dev-1', {
 					start: '2026-01-01T00:00:00Z',
@@ -201,6 +236,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(77);
+		expect(countLeafMethods(api)).toBe(95);
 	});
 });

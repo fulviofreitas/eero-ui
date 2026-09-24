@@ -252,9 +252,10 @@
 			<EeroNetworkHardwareCard {eero} />
 			<EeroPerformanceHistoryCard {eero} />
 			<EeroRadiosCard {eero} />
-			<EeroPortsCard ports={eero.ethernet_ports} />
+			<EeroPortsCard eeroId={eero.id} ports={eero.ethernet_ports} />
 			<EeroTechnicalCard {eero} networkId={$selectedNetworkId} />
 			<EeroActionsCard
+				eeroId={eero.id}
 				ledOn={eero.led_on}
 				ledBrightness={eero.led_brightness}
 				location={eero.location}
