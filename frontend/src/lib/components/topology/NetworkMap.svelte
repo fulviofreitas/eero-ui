@@ -33,9 +33,13 @@
 	import Icon from '$components/common/Icon.svelte';
 	import type { IconName } from '$lib/icons/paths';
 
-	// Props
-	export let readonly: boolean = false;
-	export let onNodeClick: ((nodeId: string) => void) | undefined = undefined;
+	interface Props {
+		// Props
+		readonly?: boolean;
+		onNodeClick?: ((nodeId: string) => void) | undefined;
+	}
+
+	let { readonly = false, onNodeClick = undefined }: Props = $props();
 
 	// Layout options for dropdown
 	const layoutOptions: { value: LayoutType; label: string; icon: IconName }[] = [
@@ -59,14 +63,16 @@
 	};
 
 	// Local reactive state bound to store
-	$: nodes = $filteredTopology.nodes.map((node) => ({
-		...node,
-		data: {
-			...node.data,
-			detailLevel: $layoutOptionsStore.detailLevel
-		}
-	}));
-	$: edges = $filteredTopology.edges;
+	let nodes = $derived(
+		$filteredTopology.nodes.map((node) => ({
+			...node,
+			data: {
+				...node.data,
+				detailLevel: $layoutOptionsStore.detailLevel
+			}
+		}))
+	);
+	let edges = $derived($filteredTopology.edges);
 
 	// Load topology on mount
 	onMount(() => {
@@ -123,7 +129,7 @@
 	}
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} />
 
 <div class="topology-container">
 	<!-- Controls bar -->
@@ -133,7 +139,7 @@
 			<select
 				class="control-select"
 				value={$layoutOptionsStore.layoutType}
-				on:change={handleLayoutChange}
+				onchange={handleLayoutChange}
 			>
 				{#each layoutOptions as opt}
 					<!-- Native <option> cannot render an <Icon>; label text stands alone here. -->
@@ -147,7 +153,7 @@
 			<select
 				class="control-select"
 				value={$layoutOptionsStore.detailLevel}
-				on:change={handleDetailChange}
+				onchange={handleDetailChange}
 			>
 				{#each detailOptions as opt}
 					<option value={opt.value}>{opt.label}</option>
@@ -166,7 +172,7 @@
 			<span>Offline</span>
 		</label>
 
-		<button class="refresh-btn" on:click={refresh} disabled={$filteredTopology.loading}>
+		<button class="refresh-btn" onclick={refresh} disabled={$filteredTopology.loading}>
 			{#if $filteredTopology.loading}
 				<span class="loading-spinner small"></span>
 			{:else}
@@ -184,13 +190,13 @@
 		<div class="error-overlay">
 			<span class="error-icon"><Icon name="alert-triangle" size={36} /></span>
 			<span>{$filteredTopology.error}</span>
-			<button class="retry-btn" on:click={refresh}>Retry</button>
+			<button class="retry-btn" onclick={refresh}>Retry</button>
 		</div>
 	{:else if nodes.length === 0}
 		<div class="empty-overlay">
 			<span class="empty-icon"><Icon name="router" size={36} /></span>
 			<span>No topology data available</span>
-			<button class="retry-btn" on:click={refresh}>Refresh</button>
+			<button class="retry-btn" onclick={refresh}>Refresh</button>
 		</div>
 	{:else}
 		<SvelteFlow
@@ -250,7 +256,7 @@
 				<h3>{$selectedNode.data.label}</h3>
 				<button
 					class="close-btn"
-					on:click={() => topologyStore.selectNode(null)}
+					onclick={() => topologyStore.selectNode(null)}
 					aria-label="Close details"
 				>
 					<Icon name="close" size={16} />
@@ -319,7 +325,7 @@
 			<div class="details-actions">
 				<button
 					class="btn btn-sm btn-primary"
-					on:click={() => {
+					onclick={() => {
 						const data = $selectedNode?.data;
 						if (!data) return;
 						if (data.type === 'gateway' || data.type === 'eero') {

@@ -20,19 +20,19 @@
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
-	let profile: ProfileSummary | null = null;
-	let loading = true;
-	let error: string | null = null;
-	let actionLoading = false;
-	let viewMode: 'blocks' | 'list' = 'blocks';
-	let showRenameModal = false;
-	let renameValue = '';
-	let renaming = false;
+	let profile = $state<ProfileSummary | null>(null);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let actionLoading = $state(false);
+	let viewMode: 'blocks' | 'list' = $state('blocks');
+	let showRenameModal = $state(false);
+	let renameValue = $state('');
+	let renaming = $state(false);
 
 	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
 	// in controlled mode so the header reflects that default instead of only the data.
-	let sortBy: string | null = 'name';
-	let sortDirection: SortDirection = 'ascending';
+	let sortBy: string | null = $state('name');
+	let sortDirection: SortDirection = $state('ascending');
 
 	function handleSort(key: string | null, direction: SortDirection) {
 		sortBy = key;
@@ -43,8 +43,8 @@
 		if (device.id) goto(`/devices/${device.id}`);
 	}
 
-	$: profileId = $page.params.id;
-	$: devices = profile?.devices || [];
+	let profileId = $derived($page.params.id);
+	let devices = $derived(profile?.devices || []);
 
 	onMount(async () => {
 		await fetchProfile();
@@ -231,7 +231,10 @@
 {#snippet deviceActionsCell(device: ProfileDevice)}
 	<button
 		class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
-		on:click|stopPropagation={() => handlePauseDevice(device)}
+		onclick={(e) => {
+			e.stopPropagation();
+			handlePauseDevice(device);
+		}}
 	>
 		{device.paused ? 'Resume' : 'Pause'}
 	</button>
@@ -256,8 +259,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchProfile(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/profiles')}> Back to Profiles </button>
+				<button class="btn btn-secondary" onclick={() => fetchProfile(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/profiles')}> Back to Profiles </button>
 			</div>
 		</div>
 	{:else if profile}
@@ -277,20 +280,20 @@
 			<div class="header-actions">
 				<button
 					class="btn btn-secondary"
-					on:click={() => fetchProfile(true)}
+					onclick={() => fetchProfile(true)}
 					disabled={actionLoading}
 				>
 					<Icon name="refresh" size={14} /> Refresh
 				</button>
-				<button class="btn btn-secondary" on:click={openRenameModal} disabled={actionLoading}>
+				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}>
 					<Icon name="edit" size={14} /> Rename
 				</button>
-				<button class="btn btn-danger" on:click={handleDeleteProfile} disabled={actionLoading}>
+				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}>
 					Delete
 				</button>
 				<button
 					class="btn {profile.paused ? 'btn-primary' : 'btn-warning'}"
-					on:click={handleTogglePause}
+					onclick={handleTogglePause}
 					disabled={actionLoading}
 				>
 					{#if actionLoading}
@@ -360,7 +363,7 @@
 					<button
 						class="toggle-btn"
 						class:active={viewMode === 'blocks'}
-						on:click={() => (viewMode = 'blocks')}
+						onclick={() => (viewMode = 'blocks')}
 						title="Block view"
 					>
 						▦
@@ -368,7 +371,7 @@
 					<button
 						class="toggle-btn"
 						class:active={viewMode === 'list'}
-						on:click={() => (viewMode = 'list')}
+						onclick={() => (viewMode = 'list')}
 						title="List view"
 					>
 						<Icon name="menu" size={14} />
@@ -386,7 +389,7 @@
 								This profile has {profile?.device_count} assigned devices, but they may not be in the
 								current device cache.
 							</p>
-							<button class="btn btn-secondary btn-sm" on:click={() => fetchProfile(true)}>
+							<button class="btn btn-secondary btn-sm" onclick={() => fetchProfile(true)}>
 								Refresh
 							</button>
 						{:else}
@@ -451,11 +454,14 @@
 								{/if}
 							</div>
 
-							<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-							<div class="device-actions" on:click|stopPropagation>
+							<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+							<div class="device-actions" onclick={(e) => e.stopPropagation()}>
 								<button
 									class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
-									on:click|preventDefault={() => handlePauseDevice(device)}
+									onclick={(e) => {
+										e.preventDefault();
+										handlePauseDevice(device);
+									}}
 								>
 									{device.paused ? '▶ Resume' : '⏸ Pause'}
 								</button>
@@ -525,12 +531,17 @@
 		</section>
 
 		{#if showRenameModal}
-			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-			<div class="modal-backdrop" on:click={() => (showRenameModal = false)}>
-				<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-				<div class="modal-card card" on:click|stopPropagation>
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div class="modal-backdrop" onclick={() => (showRenameModal = false)}>
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+				<div class="modal-card card" onclick={(e) => e.stopPropagation()}>
 					<h2>Rename Profile</h2>
-					<form on:submit|preventDefault={handleRenameProfile}>
+					<form
+						onsubmit={(e) => {
+							e.preventDefault();
+							handleRenameProfile();
+						}}
+					>
 						<label class="modal-label" for="rename-profile-input">New name</label>
 						<!-- svelte-ignore a11y_autofocus -->
 						<input
@@ -545,7 +556,7 @@
 							<button
 								type="button"
 								class="btn btn-secondary"
-								on:click={() => (showRenameModal = false)}
+								onclick={() => (showRenameModal = false)}
 								disabled={renaming}
 							>
 								Cancel

@@ -15,21 +15,24 @@
 	import Icon from '$components/common/Icon.svelte';
 	import { getDeviceTypeIcon } from '$lib/deviceIcons';
 
-	let device: DeviceDetail | null = null;
-	let loading = true;
-	let error: string | null = null;
-	let actionLoading = false;
+	let device = $state<DeviceDetail | null>(null);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let actionLoading = $state(false);
 
 	// Profile management
-	let profiles: ProfileSummary[] = [];
-	let loadingProfiles = false;
-	let profileDropdownOpen = false;
-	let changingProfile = false;
+	let profiles: ProfileSummary[] = $state([]);
+	let loadingProfiles = $state(false);
+	let profileDropdownOpen = $state(false);
+	let changingProfile = $state(false);
 
-	$: deviceId = $page.params.id;
-	$: displayName =
-		device?.display_name || device?.nickname || device?.hostname || device?.mac || 'Unknown Device';
-	$: statusLabel = device?.blocked ? 'blocked' : device?.connected ? 'connected' : 'disconnected';
+	let deviceId = $derived($page.params.id);
+	let displayName = $derived(
+		device?.display_name || device?.nickname || device?.hostname || device?.mac || 'Unknown Device'
+	);
+	let statusLabel = $derived(
+		device?.blocked ? 'blocked' : device?.connected ? 'connected' : 'disconnected'
+	);
 
 	onMount(async () => {
 		await fetchDevice();
@@ -155,7 +158,7 @@
 	}
 </script>
 
-<svelte:window on:click={closeProfileDropdown} />
+<svelte:window onclick={closeProfileDropdown} />
 
 <svelte:head>
 	<title>{displayName} | Eero Dashboard</title>
@@ -176,8 +179,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchDevice(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/devices')}> Back to Devices </button>
+				<button class="btn btn-secondary" onclick={() => fetchDevice(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/devices')}> Back to Devices </button>
 			</div>
 		</div>
 	{:else if device}
@@ -204,21 +207,21 @@
 			<div class="header-actions">
 				<button
 					class="btn btn-secondary"
-					on:click={() => fetchDevice(true)}
+					onclick={() => fetchDevice(true)}
 					disabled={actionLoading}
 				>
 					<Icon name="refresh" size={14} /> Refresh
 				</button>
-				<button class="btn btn-secondary" on:click={handleRename} disabled={actionLoading}>
+				<button class="btn btn-secondary" onclick={handleRename} disabled={actionLoading}>
 					<Icon name="edit" size={14} /> Rename
 				</button>
 				{#if device.blocked}
-					<button class="btn btn-primary" on:click={handleUnblock} disabled={actionLoading}>
+					<button class="btn btn-primary" onclick={handleUnblock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						<Icon name="check" size={14} /> Unblock
 					</button>
 				{:else}
-					<button class="btn btn-danger" on:click={handleBlock} disabled={actionLoading}>
+					<button class="btn btn-danger" onclick={handleBlock} disabled={actionLoading}>
 						{#if actionLoading}<span class="loading-spinner"></span>{/if}
 						<Icon name="x" size={14} /> Block
 					</button>
@@ -230,10 +233,10 @@
 		<section class="profile-section card">
 			<div class="profile-header">
 				<h2><Icon name="folder" size={18} /> Profile</h2>
-				<div class="profile-selector" on:click|stopPropagation>
+				<div class="profile-selector" onclick={(e) => e.stopPropagation()}>
 					<button
 						class="btn btn-secondary"
-						on:click={() => (profileDropdownOpen = !profileDropdownOpen)}
+						onclick={() => (profileDropdownOpen = !profileDropdownOpen)}
 						disabled={changingProfile || loadingProfiles}
 					>
 						{#if changingProfile}
@@ -256,7 +259,7 @@
 								<button
 									class="profile-option"
 									class:active={!device.profile_id}
-									on:click={() => handleProfileChange(null, 'No Profile')}
+									onclick={() => handleProfileChange(null, 'No Profile')}
 								>
 									<span>No Profile</span>
 								</button>
@@ -264,7 +267,7 @@
 									<button
 										class="profile-option"
 										class:active={device.profile_id === profile.id}
-										on:click={() => handleProfileChange(profile.id, profile.name)}
+										onclick={() => handleProfileChange(profile.id, profile.name)}
 									>
 										<span>{profile.name}</span>
 										{#if device.profile_id === profile.id}

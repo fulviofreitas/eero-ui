@@ -13,24 +13,16 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import Icon from '$components/common/Icon.svelte';
 
-	let eero: EeroDetail | null = null;
-	let loading = true;
-	let error: string | null = null;
-	let actionLoading = false;
-	let lastNetworkId: string | null = null;
-
-	$: eeroId = $page.params.id;
+	let eero: EeroDetail | null = $state(null);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let actionLoading = $state(false);
+	let lastNetworkId: string | null = $state(null);
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
 		await fetchEero();
 	});
-
-	// React to network changes
-	$: if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
-		lastNetworkId = $selectedNetworkId;
-		fetchEero(true);
-	}
 
 	async function fetchEero(refresh = false) {
 		if (!eeroId) {
@@ -179,6 +171,14 @@
 		if (speed.includes('Gbps') || speed.includes('Mbps')) return speed;
 		return speed;
 	}
+	let eeroId = $derived($page.params.id);
+	// React to network changes
+	$effect(() => {
+		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
+			lastNetworkId = $selectedNetworkId;
+			fetchEero(true);
+		}
+	});
 </script>
 
 <svelte:head>
@@ -200,8 +200,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchEero(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/eeros')}> Back to Eeros </button>
+				<button class="btn btn-secondary" onclick={() => fetchEero(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/eeros')}> Back to Eeros </button>
 			</div>
 		</div>
 	{:else if eero}
@@ -222,7 +222,7 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button class="btn btn-secondary" on:click={() => fetchEero(true)} disabled={actionLoading}>
+				<button class="btn btn-secondary" onclick={() => fetchEero(true)} disabled={actionLoading}>
 					<Icon name="refresh" size={14} /> Refresh
 				</button>
 			</div>
@@ -608,14 +608,14 @@
 			<section class="card detail-card actions-card">
 				<h2>Actions</h2>
 				<div class="action-buttons">
-					<button class="btn btn-secondary" on:click={handleToggleLed} disabled={actionLoading}>
+					<button class="btn btn-secondary" onclick={handleToggleLed} disabled={actionLoading}>
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}
 						<Icon name={eero.led_on ? 'moon' : 'lightbulb'} size={14} />
 						{eero.led_on ? 'Turn LED Off' : 'Turn LED On'}
 					</button>
-					<button class="btn btn-danger" on:click={handleReboot} disabled={actionLoading}>
+					<button class="btn btn-danger" onclick={handleReboot} disabled={actionLoading}>
 						{#if actionLoading}
 							<span class="loading-spinner"></span>
 						{/if}

@@ -17,13 +17,18 @@
 	import { devicesStore, uiStore } from '$stores';
 	import Icon from '$components/common/Icon.svelte';
 
-	export let device: DeviceSummary;
+	interface Props {
+		device: DeviceSummary;
+	}
 
-	let actionMenuOpen = false;
-	let loading = false;
+	let { device }: Props = $props();
 
-	$: displayName =
-		device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device';
+	let actionMenuOpen = $state(false);
+	let loading = $state(false);
+
+	let displayName = $derived(
+		device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device'
+	);
 
 	function toggleActionMenu() {
 		actionMenuOpen = !actionMenuOpen;
@@ -90,7 +95,7 @@
 <div class="action-menu-wrapper">
 	<button
 		class="btn btn-ghost btn-sm action-btn"
-		on:click={toggleActionMenu}
+		onclick={toggleActionMenu}
 		disabled={loading}
 		aria-label="Device actions"
 	>
@@ -102,16 +107,16 @@
 	</button>
 
 	{#if actionMenuOpen}
-		<div class="action-menu" on:mouseleave={closeActionMenu} role="menu" tabindex="-1">
-			<button class="action-item" on:click={handleRename} role="menuitem">
+		<div class="action-menu" onmouseleave={closeActionMenu} role="menu" tabindex="-1">
+			<button class="action-item" onclick={handleRename} role="menuitem">
 				<Icon name="edit" size={14} /> Rename
 			</button>
 			{#if device.blocked}
-				<button class="action-item" on:click={handleUnblock} role="menuitem">
+				<button class="action-item" onclick={handleUnblock} role="menuitem">
 					<Icon name="check" size={14} /> Unblock
 				</button>
 			{:else}
-				<button class="action-item danger" on:click={handleBlock} role="menuitem">
+				<button class="action-item danger" onclick={handleBlock} role="menuitem">
 					<Icon name="x" size={14} /> Block
 				</button>
 			{/if}

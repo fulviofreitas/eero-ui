@@ -7,7 +7,7 @@
 	import { confirmDialog, uiStore } from '$stores';
 	import { fade, scale } from 'svelte/transition';
 
-	let loading = false;
+	let loading = $state(false);
 
 	async function handleConfirm() {
 		if (!$confirmDialog) return;
@@ -32,16 +32,16 @@
 	}
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if $confirmDialog}
-	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-	<div class="modal-backdrop" transition:fade={{ duration: 150 }} on:click={handleCancel}>
-		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={handleCancel}>
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 		<div
 			class="modal"
 			transition:scale={{ duration: 150, start: 0.95 }}
-			on:click|stopPropagation
+			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"
@@ -63,12 +63,12 @@
 			{/if}
 
 			<div class="modal-actions">
-				<button class="btn btn-secondary" on:click={handleCancel} disabled={loading}>
+				<button class="btn btn-secondary" onclick={handleCancel} disabled={loading}>
 					{$confirmDialog.cancelText || 'Cancel'}
 				</button>
 				<button
 					class="btn {$confirmDialog.danger ? 'btn-danger' : 'btn-primary'}"
-					on:click={handleConfirm}
+					onclick={handleConfirm}
 					disabled={loading}
 				>
 					{#if loading}

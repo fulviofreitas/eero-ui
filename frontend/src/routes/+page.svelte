@@ -15,24 +15,17 @@
 	import ClientCountChart from '$lib/components/charts/ClientCountChart.svelte';
 	import Icon from '$components/common/Icon.svelte';
 
-	let network: NetworkDetail | null = null;
-	let eeros: EeroSummary[] = [];
-	let profiles: ProfileSummary[] = [];
-	let loading = true;
-	let speedTestLoading = false;
-	let lastNetworkId: string | null = null;
+	let network: NetworkDetail | null = $state(null);
+	let eeros: EeroSummary[] = $state([]);
+	let profiles: ProfileSummary[] = $state([]);
+	let loading = $state(true);
+	let speedTestLoading = $state(false);
+	let lastNetworkId: string | null = $state(null);
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
 		await Promise.all([loadNetworkData(), devicesStore.fetch()]);
 	});
-
-	// React to network changes
-	$: if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
-		lastNetworkId = $selectedNetworkId;
-		loadNetworkData();
-		devicesStore.fetch(true);
-	}
 
 	async function loadNetworkData() {
 		loading = true;
@@ -57,68 +50,6 @@
 			loading = false;
 		}
 	}
-
-	// Computed values for profiles
-	$: totalProfileDevices = profiles.reduce((sum, p) => sum + p.device_count, 0);
-	$: pausedProfiles = profiles.filter((p) => p.paused).length;
-
-	// Computed values for charts
-	$: connectionTypeData = [
-		{ label: 'Wireless', value: $deviceCounts.wireless, color: 'rgba(99, 102, 241, 0.8)' },
-		{ label: 'Wired', value: $deviceCounts.wired, color: 'rgba(251, 146, 60, 0.8)' }
-	];
-
-	$: wifiBandData = [
-		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: 'rgba(34, 197, 94, 0.8)' },
-		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' },
-		{ label: '6 GHz', value: $deviceCounts.freq6, color: 'rgba(59, 130, 246, 0.8)' }
-	];
-
-	$: clientsPerEeroData = eeros.map((eero, index) => ({
-		label: eero.location || eero.model,
-		value: eero.connected_clients_count,
-		color: `hsl(${(index * 360) / Math.max(eeros.length, 1)}, 70%, 60%)`
-	}));
-
-	$: meshQualityItems = eeros
-		.filter((e) => e.mesh_quality_bars !== null)
-		.map((eero) => ({
-			label: eero.location || eero.model,
-			value: eero.mesh_quality_bars ?? 0,
-			maxValue: 5
-		}))
-		.sort((a, b) => b.value - a.value);
-
-	// Top manufacturers from devices
-	$: topManufacturers = (() => {
-		const devices = $devicesStore?.devices ?? [];
-		// Using plain Map for intermediate computation (not reactive state)
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity
-		const manufacturerCounts = new Map<string, number>();
-
-		devices.forEach((d: DeviceSummary) => {
-			if (d.connected && d.manufacturer) {
-				const manufacturer = d.manufacturer;
-				manufacturerCounts.set(manufacturer, (manufacturerCounts.get(manufacturer) ?? 0) + 1);
-			}
-		});
-
-		return Array.from(manufacturerCounts.entries())
-			.map(([label, value]) => ({
-				label,
-				value,
-				maxValue: Math.max(...Array.from(manufacturerCounts.values()))
-			}))
-			.sort((a, b) => b.value - a.value)
-			.slice(0, 8);
-	})();
-
-	// Eero status summary (backend normalizes: green->online, yellow->warning, red->offline)
-	$: eeroStatusCounts = {
-		online: eeros.filter((e) => e.status === 'online' || e.status === 'green').length,
-		warning: eeros.filter((e) => e.status === 'warning' || e.status === 'yellow').length,
-		offline: eeros.filter((e) => e.status === 'offline' || e.status === 'red').length
-	};
 
 	// NOTE (6.0 revamp, frontend SME): `POST /speedtest` now only starts the
 	// test (202, no result) - the result is fetched separately by polling
@@ -182,6 +113,75 @@
 		if (!dateStr) return '';
 		return new Date(dateStr).toLocaleString();
 	}
+	// React to network changes
+	$effect(() => {
+		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
+			lastNetworkId = $selectedNetworkId;
+			loadNetworkData();
+			devicesStore.fetch(true);
+		}
+	});
+	// Computed values for profiles
+	let totalProfileDevices = $derived(profiles.reduce((sum, p) => sum + p.device_count, 0));
+	let pausedProfiles = $derived(profiles.filter((p) => p.paused).length);
+	// Computed values for charts
+	let connectionTypeData = $derived([
+		{ label: 'Wireless', value: $deviceCounts.wireless, color: 'rgba(99, 102, 241, 0.8)' },
+		{ label: 'Wired', value: $deviceCounts.wired, color: 'rgba(251, 146, 60, 0.8)' }
+	]);
+	let wifiBandData = $derived([
+		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: 'rgba(34, 197, 94, 0.8)' },
+		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' },
+		{ label: '6 GHz', value: $deviceCounts.freq6, color: 'rgba(59, 130, 246, 0.8)' }
+	]);
+	let clientsPerEeroData = $derived(
+		eeros.map((eero, index) => ({
+			label: eero.location || eero.model,
+			value: eero.connected_clients_count,
+			color: `hsl(${(index * 360) / Math.max(eeros.length, 1)}, 70%, 60%)`
+		}))
+	);
+	let meshQualityItems = $derived(
+		eeros
+			.filter((e) => e.mesh_quality_bars !== null)
+			.map((eero) => ({
+				label: eero.location || eero.model,
+				value: eero.mesh_quality_bars ?? 0,
+				maxValue: 5
+			}))
+			.sort((a, b) => b.value - a.value)
+	);
+	// Top manufacturers from devices
+	let topManufacturers = $derived(
+		(() => {
+			const devices = $devicesStore?.devices ?? [];
+			// Using plain Map for intermediate computation (not reactive state)
+			// eslint-disable-next-line svelte/prefer-svelte-reactivity
+			const manufacturerCounts = new Map<string, number>();
+
+			devices.forEach((d: DeviceSummary) => {
+				if (d.connected && d.manufacturer) {
+					const manufacturer = d.manufacturer;
+					manufacturerCounts.set(manufacturer, (manufacturerCounts.get(manufacturer) ?? 0) + 1);
+				}
+			});
+
+			return Array.from(manufacturerCounts.entries())
+				.map(([label, value]) => ({
+					label,
+					value,
+					maxValue: Math.max(...Array.from(manufacturerCounts.values()))
+				}))
+				.sort((a, b) => b.value - a.value)
+				.slice(0, 8);
+		})()
+	);
+	// Eero status summary (backend normalizes: green->online, yellow->warning, red->offline)
+	let eeroStatusCounts = $derived({
+		online: eeros.filter((e) => e.status === 'online' || e.status === 'green').length,
+		warning: eeros.filter((e) => e.status === 'warning' || e.status === 'yellow').length,
+		offline: eeros.filter((e) => e.status === 'offline' || e.status === 'red').length
+	});
 </script>
 
 <svelte:head>
@@ -369,7 +369,7 @@
 					<span class="stat-label">Speed Test</span>
 					<button
 						class="btn btn-secondary btn-sm"
-						on:click={runSpeedTest}
+						onclick={runSpeedTest}
 						disabled={speedTestLoading}
 					>
 						{#if speedTestLoading}

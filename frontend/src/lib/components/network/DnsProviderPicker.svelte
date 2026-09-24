@@ -8,10 +8,14 @@
 <script lang="ts">
 	import type { DnsProvider } from '$api/types';
 
-	export let providers: DnsProvider[];
-	export let selectedName: string | null = null;
-	export let disabled = false;
-	export let onSelect: (provider: DnsProvider) => void;
+	interface Props {
+		providers: DnsProvider[];
+		selectedName?: string | null;
+		disabled?: boolean;
+		onSelect: (provider: DnsProvider) => void;
+	}
+
+	let { providers, selectedName = null, disabled = false, onSelect }: Props = $props();
 </script>
 
 {#if providers.length > 0}
@@ -22,7 +26,7 @@
 				class="provider-chip"
 				class:selected={selectedName === provider.name}
 				{disabled}
-				on:click={() => onSelect(provider)}
+				onclick={() => onSelect(provider)}
 			>
 				{provider.name}
 			</button>

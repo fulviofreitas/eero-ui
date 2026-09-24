@@ -20,16 +20,16 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
-	let eeros: EeroSummary[] = [];
-	let loading = true;
-	let error: string | null = null;
-	let viewMode: 'blocks' | 'list' = 'blocks';
-	let lastNetworkId: string | null = null;
+	let eeros: EeroSummary[] = $state([]);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let viewMode: 'blocks' | 'list' = $state('blocks');
+	let lastNetworkId: string | null = $state(null);
 
 	// Default sort is location ascending (house rule - see lessons-learned.md); DataTable is
 	// driven in controlled mode so the header reflects that default instead of only the data.
-	let sortBy: string | null = 'location';
-	let sortDirection: SortDirection = 'ascending';
+	let sortBy: string | null = $state('location');
+	let sortDirection: SortDirection = $state('ascending');
 
 	function handleSort(key: string | null, direction: SortDirection) {
 		sortBy = key;
@@ -40,12 +40,6 @@
 		lastNetworkId = $selectedNetworkId;
 		await fetchEeros();
 	});
-
-	// React to network changes
-	$: if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
-		lastNetworkId = $selectedNetworkId;
-		fetchEeros(true);
-	}
 
 	async function fetchEeros(refresh = false) {
 		loading = true;
@@ -85,6 +79,13 @@
 	function goToEero(eero: EeroSummary) {
 		if (eero.id) goto(`/eeros/${eero.id}`);
 	}
+	// React to network changes
+	$effect(() => {
+		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
+			lastNetworkId = $selectedNetworkId;
+			fetchEeros(true);
+		}
+	});
 </script>
 
 {#snippet locationCell(eero: EeroSummary)}
@@ -149,7 +150,7 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'blocks'}
-					on:click={() => (viewMode = 'blocks')}
+					onclick={() => (viewMode = 'blocks')}
 					title="Block view"
 				>
 					▦
@@ -157,14 +158,14 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'list'}
-					on:click={() => (viewMode = 'list')}
+					onclick={() => (viewMode = 'list')}
 					title="List view"
 				>
 					<Icon name="menu" size={14} />
 				</button>
 			</div>
 			<ExportMenu data={eeros} filename="eeros" disabled={loading} />
-			<button class="btn btn-secondary" on:click={() => fetchEeros(true)} disabled={loading}>
+			<button class="btn btn-secondary" onclick={() => fetchEeros(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}

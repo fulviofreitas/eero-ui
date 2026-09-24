@@ -10,25 +10,28 @@
 	import Icon from '$components/common/Icon.svelte';
 	import { inferDeviceIconFromLabel } from '$lib/deviceIcons';
 
-	export let data: {
-		label: string;
-		status: 'online' | 'offline';
-		signal?: number;
-		connectionType?: 'wired' | 'wireless';
-		ip?: string;
-		mac?: string;
-		manufacturer?: string;
-		isBlocked?: boolean;
-		isPaused?: boolean;
-		profileName?: string;
-		detailLevel?: NodeDetailLevel;
-	};
+	interface Props {
+		data: {
+			label: string;
+			status: 'online' | 'offline';
+			signal?: number;
+			connectionType?: 'wired' | 'wireless';
+			ip?: string;
+			mac?: string;
+			manufacturer?: string;
+			isBlocked?: boolean;
+			isPaused?: boolean;
+			profileName?: string;
+			detailLevel?: NodeDetailLevel;
+		};
+		selected?: boolean;
+	}
 
-	export let selected: boolean = false;
+	let { data, selected = false }: Props = $props();
 
-	$: detailLevel = data.detailLevel || 'minimal';
-	$: statusClass = data.status === 'online' ? 'online' : 'offline';
-	$: deviceIcon = inferDeviceIconFromLabel(data.label);
+	let detailLevel = $derived(data.detailLevel || 'minimal');
+	let statusClass = $derived(data.status === 'online' ? 'online' : 'offline');
+	let deviceIcon = $derived(inferDeviceIconFromLabel(data.label));
 </script>
 
 <div

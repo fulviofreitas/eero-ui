@@ -7,8 +7,8 @@
 	import { goto } from '$app/navigation';
 	import { authStore, isLoginPending, authError, isAuthLoading, authReason } from '$stores';
 
-	let identifier = '';
-	let code = '';
+	let identifier = $state('');
+	let code = $state('');
 
 	async function handleLogin() {
 		if (!identifier.trim()) return;
@@ -83,7 +83,7 @@
 					class="input code-input"
 					placeholder="Enter 6-digit code"
 					bind:value={code}
-					on:keydown={handleKeydown}
+					onkeydown={handleKeydown}
 					disabled={$isAuthLoading}
 					autocomplete="one-time-code"
 					inputmode="numeric"
@@ -92,7 +92,7 @@
 
 				<button
 					class="btn btn-primary btn-full"
-					on:click={handleVerify}
+					onclick={handleVerify}
 					disabled={$isAuthLoading || !code.trim()}
 				>
 					{#if $isAuthLoading}
@@ -101,7 +101,7 @@
 					Verify
 				</button>
 
-				<button class="btn btn-ghost btn-full" on:click={handleBack} disabled={$isAuthLoading}>
+				<button class="btn btn-ghost btn-full" onclick={handleBack} disabled={$isAuthLoading}>
 					← Back
 				</button>
 			</div>
@@ -118,14 +118,14 @@
 					class="input"
 					placeholder="Email or phone number"
 					bind:value={identifier}
-					on:keydown={handleKeydown}
+					onkeydown={handleKeydown}
 					disabled={$isAuthLoading}
 					autocomplete="email"
 				/>
 
 				<button
 					class="btn btn-primary btn-full"
-					on:click={handleLogin}
+					onclick={handleLogin}
 					disabled={$isAuthLoading || !identifier.trim()}
 				>
 					{#if $isAuthLoading}

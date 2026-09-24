@@ -26,9 +26,14 @@
 	import IconSprite from '$lib/icons/IconSprite.svelte';
 	import type { IconName } from '$lib/icons/paths';
 	import '../app.css';
+	interface Props {
+		children?: import('svelte').Snippet;
+	}
 
-	let initialized = false;
-	let eeroClientVersion: string | null = null;
+	let { children }: Props = $props();
+
+	let initialized = $state(false);
+	let eeroClientVersion: string | null = $state(null);
 
 	onMount(async () => {
 		uiStore.initTheme();
@@ -47,19 +52,23 @@
 	});
 
 	// Fetch networks when authenticated
-	$: if (initialized && $isAuthenticated) {
-		networksStore.fetch();
-	}
+	$effect(() => {
+		if (initialized && $isAuthenticated) {
+			networksStore.fetch();
+		}
+	});
 
 	// Reactive navigation guard
-	$: if (
-		initialized &&
-		!$isAuthLoading &&
-		!$isAuthenticated &&
-		!$page.url.pathname.startsWith('/login')
-	) {
-		goto('/login');
-	}
+	$effect(() => {
+		if (
+			initialized &&
+			!$isAuthLoading &&
+			!$isAuthenticated &&
+			!$page.url.pathname.startsWith('/login')
+		) {
+			goto('/login');
+		}
+	});
 
 	// Navigation items (base items)
 	const baseNavItems: { path: string; label: string; icon: IconName }[] = [
@@ -71,14 +80,16 @@
 	];
 
 	// Dynamic nav items including network link
-	$: navItems = [
-		baseNavItems[0], // Dashboard
-		$selectedNetwork
-			? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: 'network' as IconName }
-			: null,
-		...baseNavItems.slice(1, 4), // Devices, Eeros, Profiles
-		{ path: '/topology', label: 'Topology', icon: 'topology' as IconName } // Topology at the end
-	].filter(Boolean) as { path: string; label: string; icon: IconName }[];
+	let navItems = $derived(
+		[
+			baseNavItems[0], // Dashboard
+			$selectedNetwork
+				? { path: `/network/${$selectedNetwork.id}`, label: 'Network', icon: 'network' as IconName }
+				: null,
+			...baseNavItems.slice(1, 4), // Devices, Eeros, Profiles
+			{ path: '/topology', label: 'Topology', icon: 'topology' as IconName } // Topology at the end
+		].filter(Boolean) as { path: string; label: string; icon: IconName }[]
+	);
 
 	// Close sidebar on navigation (mobile only)
 	afterNavigate(() => {
@@ -130,24 +141,20 @@
 	<main class="login-layout">
 		<button
 			class="theme-toggle-btn login-theme-toggle"
-			on:click={() => uiStore.toggleTheme()}
+			onclick={() => uiStore.toggleTheme()}
 			title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 			aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 		>
 			<Icon name={$theme === 'dark' ? 'sun' : 'moon'} size={14} />
 		</button>
-		<slot />
+		{@render children?.()}
 	</main>
 {:else}
 	<!-- Main app layout -->
 	<div class="app-layout" class:sidebar-open={$sidebarOpen}>
 		<!-- Sidebar overlay (mobile) -->
 		{#if $sidebarOpen}
-			<div
-				class="sidebar-overlay"
-				role="presentation"
-				on:click={() => uiStore.closeSidebar()}
-			></div>
+			<div class="sidebar-overlay" role="presentation" onclick={() => uiStore.closeSidebar()}></div>
 		{/if}
 
 		<!-- Sidebar -->
@@ -204,7 +211,7 @@
 				<!-- Hamburger toggle -->
 				<button
 					class="sidebar-toggle"
-					on:click={() => uiStore.toggleSidebar()}
+					onclick={() => uiStore.toggleSidebar()}
 					aria-label="Toggle navigation"
 					aria-expanded={$sidebarOpen}
 				>
@@ -239,11 +246,11 @@
 				<div class="top-bar-right">
 					<div class="signout-row">
 						<span class="status-dot online"></span>
-						<button class="signout-btn" on:click={handleLogout} title="Sign out"> Sign out </button>
+						<button class="signout-btn" onclick={handleLogout} title="Sign out"> Sign out </button>
 					</div>
 					<button
 						class="theme-toggle-btn"
-						on:click={() => uiStore.toggleTheme()}
+						onclick={() => uiStore.toggleTheme()}
 						title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 						aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
 					>
@@ -256,7 +263,7 @@
 								></span>
 								<select
 									class="network-select"
-									on:change={(e) => handleNetworkChange(e.currentTarget.value)}
+									onchange={(e) => handleNetworkChange(e.currentTarget.value)}
 								>
 									{#each $networksStore.networks as network (network.id)}
 										<option value={network.id} selected={network.id === $selectedNetwork?.id}>
@@ -271,7 +278,7 @@
 			</div>
 
 			<div class="page-content">
-				<slot />
+				{@render children?.()}
 			</div>
 		</main>
 	</div>

@@ -33,32 +33,27 @@
 	import Icon from '$components/common/Icon.svelte';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 
-	let refreshing = false;
-	let profileSelectorOpen = false;
-	let profiles: { id: string; name: string }[] = [];
-	let loadingProfiles = false;
-	let assigningProfile = false;
+	let refreshing = $state(false);
+	let profileSelectorOpen = $state(false);
+	let profiles: { id: string; name: string }[] = $state([]);
+	let loadingProfiles = $state(false);
+	let assigningProfile = $state(false);
 
 	// Mirrors DataTable's resolved visible-column set (see DataTable's `onVisibleColumnsChange`)
 	// so the name column can suppress its manufacturer sub-label once the Manufacturer column
 	// itself is shown, without DataTable needing to know anything about device-list semantics.
-	let visibleColumnKeys = new Set([
-		'name',
-		'ip',
-		'mac',
-		'connection',
-		'connectedTo',
-		'status',
-		'actions'
-	]);
+	let visibleColumnKeys = $state(
+		new Set(['name', 'ip', 'mac', 'connection', 'connectedTo', 'status', 'actions'])
+	);
 
-	$: selectedCount = $selectedDevices.size;
+	let selectedCount = $derived($selectedDevices.size);
 
-	$: hasActiveFilters =
+	let hasActiveFilters = $derived(
 		!!$deviceFilters.search ||
-		$deviceFilters.status !== 'all' ||
-		$deviceFilters.connectionType !== 'all' ||
-		$deviceFilters.frequency !== 'all';
+			$deviceFilters.status !== 'all' ||
+			$deviceFilters.connectionType !== 'all' ||
+			$deviceFilters.frequency !== 'all'
+	);
 
 	function clearFilters() {
 		deviceFilters.set({
@@ -310,7 +305,7 @@
 				class="btn btn-sm"
 				class:btn-primary={$selectionMode}
 				class:btn-secondary={!$selectionMode}
-				on:click={toggleSelectionMode}
+				onclick={toggleSelectionMode}
 			>
 				{#if $selectionMode}
 					<Icon name="x" size={14} /> Cancel Selection
@@ -324,7 +319,7 @@
 				<div class="profile-selector">
 					<button
 						class="btn btn-primary btn-sm"
-						on:click={() => {
+						onclick={() => {
 							profileSelectorOpen = !profileSelectorOpen;
 							loadProfiles();
 						}}
@@ -333,8 +328,8 @@
 						<Icon name="folder" size={14} /> Assign to Profile ({selectedCount})
 					</button>
 					{#if profileSelectorOpen}
-						<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-						<div class="profile-dropdown" on:click|stopPropagation>
+						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+						<div class="profile-dropdown" onclick={(e) => e.stopPropagation()}>
 							<div class="profile-dropdown-header">
 								<span class="text-sm text-muted">Select Profile</span>
 							</div>
@@ -349,7 +344,7 @@
 								{#each profiles as profile}
 									<button
 										class="profile-option"
-										on:click={() => assignToProfile(profile.id, profile.name)}
+										onclick={() => assignToProfile(profile.id, profile.name)}
 									>
 										{profile.name}
 									</button>
@@ -365,7 +360,7 @@
 
 			<button
 				class="btn btn-secondary btn-sm"
-				on:click={handleRefresh}
+				onclick={handleRefresh}
 				disabled={refreshing || $isDevicesLoading}
 			>
 				{#if refreshing}
@@ -388,10 +383,10 @@
 					class="input search-input"
 					placeholder="Search devices... (try: ip=10.0.5, device=phone, mac=AA:BB)"
 					value={$deviceFilters.search}
-					on:input={handleSearch}
+					oninput={handleSearch}
 				/>
 				{#if $deviceFilters.search}
-					<button class="search-clear-btn" on:click={handleClearSearch} title="Clear search">
+					<button class="search-clear-btn" onclick={handleClearSearch} title="Clear search">
 						×
 					</button>
 				{/if}
@@ -405,14 +400,14 @@
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'all'}
-					on:click={() => handleStatusFilter('all')}
+					onclick={() => handleStatusFilter('all')}
 				>
 					All
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'connected'}
-					on:click={() => handleStatusFilter('connected')}
+					onclick={() => handleStatusFilter('connected')}
 				>
 					<span class="status-dot online"></span>
 					Connected ({$deviceCounts.connected})
@@ -420,14 +415,14 @@
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'disconnected'}
-					on:click={() => handleStatusFilter('disconnected')}
+					onclick={() => handleStatusFilter('disconnected')}
 				>
 					Offline ({$deviceCounts.disconnected})
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.status === 'blocked'}
-					on:click={() => handleStatusFilter('blocked')}
+					onclick={() => handleStatusFilter('blocked')}
 				>
 					<span class="status-dot danger"></span>
 					Blocked ({$deviceCounts.blocked})
@@ -439,21 +434,21 @@
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'all'}
-					on:click={() => handleConnectionFilter('all')}
+					onclick={() => handleConnectionFilter('all')}
 				>
 					All Types
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'wireless'}
-					on:click={() => handleConnectionFilter('wireless')}
+					onclick={() => handleConnectionFilter('wireless')}
 				>
 					<Icon name="wifi" size={14} /> Wireless ({$deviceCounts.wireless})
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.connectionType === 'wired'}
-					on:click={() => handleConnectionFilter('wired')}
+					onclick={() => handleConnectionFilter('wired')}
 				>
 					<Icon name="ethernet" size={14} /> Wired ({$deviceCounts.wired})
 				</button>
@@ -464,28 +459,28 @@
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === 'all'}
-					on:click={() => handleFrequencyFilter('all')}
+					onclick={() => handleFrequencyFilter('all')}
 				>
 					All Bands
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === '2.4GHz'}
-					on:click={() => handleFrequencyFilter('2.4GHz')}
+					onclick={() => handleFrequencyFilter('2.4GHz')}
 				>
 					2.4 GHz ({$deviceCounts.freq24})
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === '5GHz'}
-					on:click={() => handleFrequencyFilter('5GHz')}
+					onclick={() => handleFrequencyFilter('5GHz')}
 				>
 					5 GHz ({$deviceCounts.freq5})
 				</button>
 				<button
 					class="filter-btn"
 					class:active={$deviceFilters.frequency === '6GHz'}
-					on:click={() => handleFrequencyFilter('6GHz')}
+					onclick={() => handleFrequencyFilter('6GHz')}
 				>
 					6 GHz ({$deviceCounts.freq6})
 				</button>
@@ -498,7 +493,7 @@
 		{#if $filteredDevices.length === 0 && !$isDevicesLoading && hasActiveFilters}
 			<EmptyState title="No devices match your filters.">
 				{#snippet action()}
-					<button class="btn btn-secondary btn-sm" on:click={clearFilters}>Clear filters</button>
+					<button class="btn btn-secondary btn-sm" onclick={clearFilters}>Clear filters</button>
 				{/snippet}
 			</EmptyState>
 		{:else}

@@ -9,22 +9,21 @@
 	import type { NodeDetailLevel } from '$lib/stores/topology';
 	import Icon from '$components/common/Icon.svelte';
 
-	export let data: {
-		label: string;
-		status: 'online' | 'offline';
-		meshQuality?: number;
-		deviceCount?: number;
-		model?: string;
-		wired?: boolean;
-		ipAddress?: string;
-		detailLevel?: NodeDetailLevel;
-	};
+	interface Props {
+		data: {
+			label: string;
+			status: 'online' | 'offline';
+			meshQuality?: number;
+			deviceCount?: number;
+			model?: string;
+			wired?: boolean;
+			ipAddress?: string;
+			detailLevel?: NodeDetailLevel;
+		};
+		selected?: boolean;
+	}
 
-	export let selected: boolean = false;
-
-	$: detailLevel = data.detailLevel || 'minimal';
-	$: statusClass = data.status === 'online' ? 'online' : 'offline';
-	$: qualityClass = getQualityClass(data.meshQuality);
+	let { data, selected = false }: Props = $props();
 
 	function getQualityClass(quality: number | undefined): string {
 		if (quality === undefined || quality === null) return 'unknown';
@@ -39,6 +38,9 @@
 		const filled = Math.min(Math.max(0, bars), 5);
 		return '█'.repeat(filled) + '░'.repeat(5 - filled);
 	}
+	let detailLevel = $derived(data.detailLevel || 'minimal');
+	let statusClass = $derived(data.status === 'online' ? 'online' : 'offline');
+	let qualityClass = $derived(getQualityClass(data.meshQuality));
 </script>
 
 <div class="eero-node {statusClass}" class:selected class:minimal={detailLevel === 'minimal'}>

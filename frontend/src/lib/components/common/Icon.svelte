@@ -15,10 +15,14 @@
 <script lang="ts">
 	import type { IconName } from '$lib/icons/paths';
 
-	export let name: IconName;
-	export let size: number = 16;
-	/** Provide only when the icon carries meaning with no adjacent text label. */
-	export let label: string | undefined = undefined;
+	interface Props {
+		name: IconName;
+		size?: number;
+		/** Provide only when the icon carries meaning with no adjacent text label. */
+		label?: string | undefined;
+	}
+
+	let { name, size = 16, label = undefined }: Props = $props();
 </script>
 
 {#if label}

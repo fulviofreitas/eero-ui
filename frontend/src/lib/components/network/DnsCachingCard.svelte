@@ -21,14 +21,18 @@
 	import { ApiClientError } from '$api/client';
 	import { buildCachingUpdateRequest } from '$lib/utils/dns-form';
 
-	export let networkId: string;
+	interface Props {
+		networkId: string;
+	}
 
-	let caching = false;
-	let submitError: string | null = null;
-	let justApplied = false;
+	let { networkId }: Props = $props();
 
-	$: state = $dnsStore;
-	$: settings = state.settings;
+	let caching = $state(false);
+	let submitError: string | null = $state(null);
+	let justApplied = $state(false);
+
+	let dnsState = $derived($dnsStore);
+	let settings = $derived(dnsState.settings);
 
 	// Seed from settings on first load, and re-seed whenever the loaded
 	// settings object changes identity AFTERWARDS - but only while this
@@ -49,18 +53,20 @@
 	// variable is equivalent (both express "has the user changed this since
 	// we last loaded it") without the cyclic dependency.
 	let seededFor: typeof settings = null;
-	$: if (settings && settings !== seededFor && (!seededFor || caching === seededFor.caching)) {
-		caching = settings.caching;
-		seededFor = settings;
-	}
+	$effect(() => {
+		if (settings && settings !== seededFor && (!seededFor || caching === seededFor.caching)) {
+			caching = settings.caching;
+			seededFor = settings;
+		}
+	});
 
-	$: dirty = settings ? caching !== settings.caching : false;
-	$: canSave = dirty && !state.applying;
+	let dirty = $derived(settings ? caching !== settings.caching : false);
+	let canSave = $derived(dirty && !dnsState.applying);
 
 	onMount(() => {
 		// DnsSettingsCard normally fetches DNS settings for this store already;
 		// fetch defensively in case this card is ever mounted on its own.
-		if (!state.settings) {
+		if (!dnsState.settings) {
 			dnsStore.fetchDns(networkId);
 		}
 	});
@@ -122,11 +128,11 @@
 <section class="card info-card dns-card dns-caching-card">
 	<h2>DNS Caching</h2>
 
-	{#if state.loading && !settings}
+	{#if dnsState.loading && !settings}
 		<p class="text-muted text-sm">Loading DNS settings…</p>
-	{:else if state.error && !settings}
-		<p class="text-danger text-sm">{state.error}</p>
-		<button type="button" class="btn btn-secondary btn-sm" on:click={handleRefresh}> Retry </button>
+	{:else if dnsState.error && !settings}
+		<p class="text-danger text-sm">{dnsState.error}</p>
+		<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}> Retry </button>
 	{:else if settings}
 		{#if justApplied}
 			<div class="dns-applying" role="status">
@@ -135,13 +141,13 @@
 					Eeros typically finish rebooting within a few minutes. This page will not update on its
 					own while the mesh is offline.
 				</p>
-				<button type="button" class="btn btn-secondary btn-sm" on:click={handleRefresh}>
+				<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}>
 					Refresh Status
 				</button>
 			</div>
 		{:else}
 			<label class="dns-toggle-row">
-				<input type="checkbox" bind:checked={caching} disabled={state.applying} />
+				<input type="checkbox" bind:checked={caching} disabled={dnsState.applying} />
 				<span>DNS Caching</span>
 			</label>
 
@@ -150,8 +156,8 @@
 			{/if}
 
 			<div class="dns-actions">
-				<button type="button" class="btn btn-primary" disabled={!canSave} on:click={requestSave}>
-					{#if state.applying}
+				<button type="button" class="btn btn-primary" disabled={!canSave} onclick={requestSave}>
+					{#if dnsState.applying}
 						<span class="loading-spinner"></span>
 					{/if}
 					Save

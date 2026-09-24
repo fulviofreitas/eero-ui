@@ -30,14 +30,18 @@
 	} from '$lib/utils/dns-form';
 	import DnsProviderPicker from './DnsProviderPicker.svelte';
 
-	export let networkId: string;
+	interface Props {
+		networkId: string;
+	}
 
-	let form: DnsFormState | null = null;
-	let submitError: string | null = null;
-	let justApplied = false;
+	let { networkId }: Props = $props();
 
-	$: state = $dnsStore;
-	$: settings = state.settings;
+	let form = $state<DnsFormState | null>(null);
+	let submitError: string | null = $state(null);
+	let justApplied = $state(false);
+
+	let dnsState = $derived($dnsStore);
+	let settings = $derived(dnsState.settings);
 
 	// Seed the form on first load, and re-seed whenever the loaded settings
 	// object changes identity AFTERWARDS - but only while this form has no
@@ -58,21 +62,23 @@
 	// equivalent (both express "has the user changed this since we last
 	// loaded it") without the cyclic dependency.
 	let seededFor: typeof settings = null;
-	$: if (
-		settings &&
-		settings !== seededFor &&
-		(!seededFor || (form && !isFormDirty(seededFor, form)))
-	) {
-		form = formFromSettings(settings);
-		seededFor = settings;
-	}
+	$effect(() => {
+		if (
+			settings &&
+			settings !== seededFor &&
+			(!seededFor || (form && !isFormDirty(seededFor, form)))
+		) {
+			form = formFromSettings(settings);
+			seededFor = settings;
+		}
+	});
 
-	$: errors = form ? validateForm(form) : {};
-	$: valid = form ? formIsValid(form) : false;
-	$: dirty = settings && form ? isFormDirty(settings, form) : false;
-	$: canSave = dirty && valid && !state.applying;
+	let errors = $derived(form ? validateForm(form) : {});
+	let valid = $derived(form ? formIsValid(form) : false);
+	let dirty = $derived(settings && form ? isFormDirty(settings, form) : false);
+	let canSave = $derived(dirty && valid && !dnsState.applying);
 
-	$: selectedProviderName = getSelectedProviderName(form, settings?.providers ?? []);
+	let selectedProviderName = $derived(getSelectedProviderName(form, settings?.providers ?? []));
 
 	onMount(() => {
 		dnsStore.fetchDns(networkId);
@@ -162,11 +168,11 @@
 <section class="card info-card dns-card">
 	<h2>DNS Configuration</h2>
 
-	{#if state.loading && !settings}
+	{#if dnsState.loading && !settings}
 		<p class="text-muted text-sm">Loading DNS settings…</p>
-	{:else if state.error && !settings}
-		<p class="text-danger text-sm">{state.error}</p>
-		<button type="button" class="btn btn-secondary btn-sm" on:click={handleRefresh}> Retry </button>
+	{:else if dnsState.error && !settings}
+		<p class="text-danger text-sm">{dnsState.error}</p>
+		<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}> Retry </button>
 	{:else if settings && form}
 		{#if justApplied}
 			<div class="dns-applying" role="status">
@@ -175,7 +181,7 @@
 					Eeros typically finish rebooting within a few minutes. This page will not update on its
 					own while the mesh is offline.
 				</p>
-				<button type="button" class="btn btn-secondary btn-sm" on:click={handleRefresh}>
+				<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}>
 					Refresh Status
 				</button>
 			</div>
@@ -186,8 +192,8 @@
 						type="radio"
 						name="dns-mode-{networkId}"
 						checked={form.mode === 'automatic'}
-						disabled={state.applying}
-						on:change={() => handleModeChange('automatic')}
+						disabled={dnsState.applying}
+						onchange={() => handleModeChange('automatic')}
 					/>
 					<span>ISP DNS (Default)</span>
 				</label>
@@ -196,8 +202,8 @@
 						type="radio"
 						name="dns-mode-{networkId}"
 						checked={form.mode === 'custom'}
-						disabled={state.applying}
-						on:change={() => handleModeChange('custom')}
+						disabled={dnsState.applying}
+						onchange={() => handleModeChange('custom')}
 					/>
 					<span>Custom DNS</span>
 				</label>
@@ -210,7 +216,7 @@
 						<DnsProviderPicker
 							providers={settings.providers}
 							selectedName={selectedProviderName}
-							disabled={state.applying}
+							disabled={dnsState.applying}
 							onSelect={handleProviderSelect}
 						/>
 					</div>
@@ -226,7 +232,7 @@
 							type="text"
 							placeholder="1.1.1.1"
 							bind:value={form.ipv4Primary}
-							disabled={state.applying}
+							disabled={dnsState.applying}
 						/>
 						{#if errors.ipv4Primary}
 							<span class="dns-field-error">{errors.ipv4Primary}</span>
@@ -242,7 +248,7 @@
 							type="text"
 							placeholder="1.0.0.1"
 							bind:value={form.ipv4Secondary}
-							disabled={state.applying}
+							disabled={dnsState.applying}
 						/>
 						{#if errors.ipv4Secondary}
 							<span class="dns-field-error">{errors.ipv4Secondary}</span>
@@ -258,7 +264,7 @@
 							type="text"
 							placeholder="2606:4700:4700::1111"
 							bind:value={form.ipv6Primary}
-							disabled={state.applying}
+							disabled={dnsState.applying}
 						/>
 						{#if errors.ipv6Primary}
 							<span class="dns-field-error">{errors.ipv6Primary}</span>
@@ -274,7 +280,7 @@
 							type="text"
 							placeholder="2606:4700:4700::1001"
 							bind:value={form.ipv6Secondary}
-							disabled={state.applying}
+							disabled={dnsState.applying}
 						/>
 						{#if errors.ipv6Secondary}
 							<span class="dns-field-error">{errors.ipv6Secondary}</span>
@@ -297,8 +303,8 @@
 			{/if}
 
 			<div class="dns-actions">
-				<button type="button" class="btn btn-primary" disabled={!canSave} on:click={requestSave}>
-					{#if state.applying}
+				<button type="button" class="btn btn-primary" disabled={!canSave} onclick={requestSave}>
+					{#if dnsState.applying}
 						<span class="loading-spinner"></span>
 					{/if}
 					Save

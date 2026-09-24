@@ -9,20 +9,23 @@
 	import type { NodeDetailLevel } from '$lib/stores/topology';
 	import Icon from '$components/common/Icon.svelte';
 
-	export let data: {
-		label: string;
-		status: 'online' | 'offline';
-		deviceCount?: number;
-		model?: string;
-		wired?: boolean;
-		ipAddress?: string;
-		detailLevel?: NodeDetailLevel;
-	};
+	interface Props {
+		data: {
+			label: string;
+			status: 'online' | 'offline';
+			deviceCount?: number;
+			model?: string;
+			wired?: boolean;
+			ipAddress?: string;
+			detailLevel?: NodeDetailLevel;
+		};
+		selected?: boolean;
+	}
 
-	export let selected: boolean = false;
+	let { data, selected = false }: Props = $props();
 
-	$: detailLevel = data.detailLevel || 'minimal';
-	$: statusClass = data.status === 'online' ? 'online' : 'offline';
+	let detailLevel = $derived(data.detailLevel || 'minimal');
+	let statusClass = $derived(data.status === 'online' ? 'online' : 'offline');
 </script>
 
 <div class="gateway-node {statusClass}" class:selected class:minimal={detailLevel === 'minimal'}>

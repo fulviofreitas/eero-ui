@@ -20,19 +20,19 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
-	let profiles: ProfileSummary[] = [];
-	let loading = true;
-	let error: string | null = null;
-	let viewMode: 'blocks' | 'list' = 'blocks';
-	let lastNetworkId: string | null = null;
-	let showCreateModal = false;
-	let newProfileName = '';
-	let creating = false;
+	let profiles: ProfileSummary[] = $state([]);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let viewMode: 'blocks' | 'list' = $state('blocks');
+	let lastNetworkId: string | null = $state(null);
+	let showCreateModal = $state(false);
+	let newProfileName = $state('');
+	let creating = $state(false);
 
 	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
 	// in controlled mode so the header reflects that default instead of only the data.
-	let sortBy: string | null = 'name';
-	let sortDirection: SortDirection = 'ascending';
+	let sortBy: string | null = $state('name');
+	let sortDirection: SortDirection = $state('ascending');
 
 	function handleSort(key: string | null, direction: SortDirection) {
 		sortBy = key;
@@ -47,12 +47,6 @@
 		lastNetworkId = $selectedNetworkId;
 		await fetchProfiles();
 	});
-
-	// React to network changes
-	$: if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
-		lastNetworkId = $selectedNetworkId;
-		fetchProfiles(true);
-	}
 
 	async function fetchProfiles(refresh = false) {
 		loading = true;
@@ -97,6 +91,13 @@
 			creating = false;
 		}
 	}
+	// React to network changes
+	$effect(() => {
+		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
+			lastNetworkId = $selectedNetworkId;
+			fetchProfiles(true);
+		}
+	});
 </script>
 
 {#snippet profileCell(profile: ProfileSummary)}
@@ -133,7 +134,7 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'blocks'}
-					on:click={() => (viewMode = 'blocks')}
+					onclick={() => (viewMode = 'blocks')}
 					title="Block view"
 				>
 					▦
@@ -141,14 +142,14 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'list'}
-					on:click={() => (viewMode = 'list')}
+					onclick={() => (viewMode = 'list')}
 					title="List view"
 				>
 					<Icon name="menu" size={14} />
 				</button>
 			</div>
 			<ExportMenu data={profiles} filename="profiles" disabled={loading} />
-			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)} disabled={loading}>
+			<button class="btn btn-secondary" onclick={() => fetchProfiles(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
@@ -156,7 +157,7 @@
 				{/if}
 				Refresh
 			</button>
-			<button class="btn btn-primary" on:click={() => (showCreateModal = true)}>
+			<button class="btn btn-primary" onclick={() => (showCreateModal = true)}>
 				+ New profile
 			</button>
 		</div>
@@ -239,12 +240,17 @@
 	{/if}
 
 	{#if showCreateModal}
-		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-		<div class="modal-backdrop" on:click={() => (showCreateModal = false)}>
-			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-			<div class="modal-card card" on:click|stopPropagation>
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<div class="modal-backdrop" onclick={() => (showCreateModal = false)}>
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div class="modal-card card" onclick={(e) => e.stopPropagation()}>
 				<h2>New Profile</h2>
-				<form on:submit|preventDefault={handleCreateProfile}>
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						handleCreateProfile();
+					}}
+				>
 					<label class="modal-label" for="new-profile-name">Profile name</label>
 					<!-- svelte-ignore a11y_autofocus -->
 					<input
@@ -260,7 +266,7 @@
 						<button
 							type="button"
 							class="btn btn-secondary"
-							on:click={() => (showCreateModal = false)}
+							onclick={() => (showCreateModal = false)}
 							disabled={creating}
 						>
 							Cancel

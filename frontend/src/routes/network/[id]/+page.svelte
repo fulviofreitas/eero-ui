@@ -11,19 +11,19 @@
 	import DnsCachingCard from '$lib/components/network/DnsCachingCard.svelte';
 	import Icon from '$components/common/Icon.svelte';
 
-	let network: NetworkDetail | null = null;
-	let loading = true;
-	let error: string | null = null;
-	let speedTestLoading = false;
-	let guestToggleLoading = false;
-	let showRenameModal = false;
-	let renameValue = '';
-	let renaming = false;
+	let network: NetworkDetail | null = $state(null);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let speedTestLoading = $state(false);
+	let guestToggleLoading = $state(false);
+	let showRenameModal = $state(false);
+	let renameValue = $state('');
+	let renaming = $state(false);
 	/** Cancelled on unmount (REVIEWER finding, Medium) so an in-flight poll loop stops immediately rather than leaking past navigation. */
 	let speedTestController: AbortController | null = null;
 
-	$: networkId = $page.params.id;
-	$: speedTestProgress = speedTestFor(networkId ?? '');
+	let networkId = $derived($page.params.id);
+	let speedTestProgress = $derived(speedTestFor(networkId ?? ''));
 
 	onMount(() => {
 		console.log('Network page mounted, ID:', networkId);
@@ -335,16 +335,16 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/')}> Back to Dashboard </button>
+				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
 			</div>
 		</div>
 	{:else if !network}
 		<div class="empty-state">
 			<p>No network data available.</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/')}> Back to Dashboard </button>
+				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
 			</div>
 		</div>
 	{:else}
@@ -369,10 +369,10 @@
 				</div>
 			</div>
 			<div class="header-actions">
-				<button class="btn btn-secondary" on:click={() => fetchNetwork(true)} disabled={loading}>
+				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)} disabled={loading}>
 					<Icon name="refresh" size={14} /> Refresh
 				</button>
-				<button class="btn btn-secondary" on:click={openRenameNetworkModal} disabled={loading}>
+				<button class="btn btn-secondary" onclick={openRenameNetworkModal} disabled={loading}>
 					<Icon name="edit" size={14} /> Rename
 				</button>
 			</div>
@@ -491,7 +491,7 @@
 					</div>
 					<button
 						class="btn {network.guest_network_enabled ? 'btn-secondary' : 'btn-primary'}"
-						on:click={handleToggleGuestNetwork}
+						onclick={handleToggleGuestNetwork}
 						disabled={guestToggleLoading}
 					>
 						{#if guestToggleLoading}
@@ -508,7 +508,7 @@
 					<h2>Speed Test</h2>
 					<button
 						class="btn btn-primary btn-sm"
-						on:click={handleSpeedTest}
+						onclick={handleSpeedTest}
 						disabled={speedTestLoading}
 					>
 						{#if speedTestLoading}
@@ -880,12 +880,17 @@
 		{/if}
 
 		{#if showRenameModal}
-			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-			<div class="modal-backdrop" on:click={() => (showRenameModal = false)}>
-				<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-				<div class="modal-card card" on:click|stopPropagation>
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div class="modal-backdrop" onclick={() => (showRenameModal = false)}>
+				<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+				<div class="modal-card card" onclick={(e) => e.stopPropagation()}>
 					<h2>Rename Network</h2>
-					<form on:submit|preventDefault={handleRenameNetwork}>
+					<form
+						onsubmit={(e) => {
+							e.preventDefault();
+							handleRenameNetwork();
+						}}
+					>
 						<label class="modal-label" for="rename-network-input">New name</label>
 						<!-- svelte-ignore a11y_autofocus -->
 						<input
@@ -900,7 +905,7 @@
 							<button
 								type="button"
 								class="btn btn-secondary"
-								on:click={() => (showRenameModal = false)}
+								onclick={() => (showRenameModal = false)}
 								disabled={renaming}
 							>
 								Cancel

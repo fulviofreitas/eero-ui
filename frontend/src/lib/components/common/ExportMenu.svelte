@@ -9,11 +9,15 @@
 	import Icon from './Icon.svelte';
 	import type { IconName } from '$lib/icons/paths';
 
-	export let data: object[] = [];
-	export let filename = 'export';
-	export let disabled = false;
+	interface Props {
+		data?: object[];
+		filename?: string;
+		disabled?: boolean;
+	}
 
-	let open = false;
+	let { data = [], filename = 'export', disabled = false }: Props = $props();
+
+	let open = $state(false);
 
 	const formats: { id: ExportFormat; label: string; icon: IconName }[] = [
 		{ id: 'csv', label: 'CSV', icon: 'bar-chart' },
@@ -43,20 +47,20 @@
 <div class="export-menu">
 	<button
 		class="btn btn-secondary btn-sm"
-		on:click={() => (open = !open)}
+		onclick={() => (open = !open)}
 		disabled={disabled || data.length === 0}
 		title={data.length === 0 ? 'No data to export' : 'Export data'}
 	>
 		<Icon name="download" size={14} /> Export
 	</button>
 	{#if open}
-		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-		<div class="export-dropdown" on:click|stopPropagation>
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<div class="export-dropdown" onclick={(e) => e.stopPropagation()}>
 			<div class="export-dropdown-header">
 				<span class="text-sm text-muted">Export {data.length} items as</span>
 			</div>
 			{#each formats as format}
-				<button class="export-option" on:click={() => handleExport(format.id)}>
+				<button class="export-option" onclick={() => handleExport(format.id)}>
 					<span class="export-icon"><Icon name={format.icon} size={14} /></span>
 					<span>{format.label}</span>
 				</button>
