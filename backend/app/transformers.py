@@ -602,6 +602,29 @@ def normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a single raw speed-test result to a consistent shape.
+
+    Shared by ``routes/networks.py`` and ``services/collector.py`` so both
+    consumers of ``get_speed_tests`` agree on where ``down``/``up``/``date``
+    live (phase-6.0-revamp.md § 3.3, § 8.1).
+
+    Args:
+        raw: One entry from ``get_speed_tests``' result list.
+
+    Returns:
+        A dict with ``down_mbps``, ``up_mbps``, ``latency_ms`` and ``date``.
+    """
+    down = raw.get("down") if isinstance(raw, dict) else None
+    up = raw.get("up") if isinstance(raw, dict) else None
+    return {
+        "down_mbps": down.get("value") if isinstance(down, dict) else None,
+        "up_mbps": up.get("value") if isinstance(up, dict) else None,
+        "latency_ms": raw.get("latency") if isinstance(raw, dict) else None,
+        "date": raw.get("date") if isinstance(raw, dict) else None,
+    }
+
+
 def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
     """Normalize DHCP data to frontend-expected format.
 

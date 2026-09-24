@@ -6,7 +6,21 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from eero.exceptions import (
+    EeroAccessDeniedException,
+    EeroAPIException,
+    EeroAuthenticationException,
+    EeroClientBlockedException,
+    EeroException,
+    EeroFeatureUnavailableException,
+    EeroNetworkException,
+    EeroNotFoundException,
+    EeroPremiumRequiredException,
+    EeroRateLimitException,
+    EeroTimeoutException,
+    EeroValidationException,
+)
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +28,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .config import settings
-from .deps import get_eero_client, shutdown_client
+from .deps import clear_client_session, get_eero_client, shutdown_client
 from .routes import auth, devices, eeros, metrics, networks, profiles
 from .services.collector import MetricsCollector
 from .services.victoria import victoria_client
@@ -122,6 +136,181 @@ async def global_exception_handler(request, exc):
     )
 
 
+# ---------------------------------------------------------------------------
+# eero-api exception -> HTTP mapping (phase-6.0-revamp.md § 3.4)
+#
+# Registered by subclass before base so a caller instantiating a subclass
+# always gets the most specific mapping; Starlette's own dispatch walks
+# type(exc).__mro__ from the concrete type upward, so this ordering is
+# belt-and-braces rather than load-bearing, but keeping it explicit matches
+# the table exactly and avoids relying on that lookup detail.
+#
+# The SDK message (``str(exc)``) and the raw envelope are never surfaced in
+# ``detail`` - only the static strings below. ``envelope`` is logged, if at
+# all, only at DEBUG.
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(EeroAuthenticationException)
+async def eero_authentication_exception_handler(
+    request: Request, exc: EeroAuthenticationException
+) -> JSONResponse:
+    """A dead/expired session: clear the stored token so /auth/status agrees."""
+    _LOGGER.warning("Session expired or invalid")
+    await clear_client_session()
+    return JSONResponse(
+        status_code=401,
+        content={
+            "detail": "Session expired. Please log in again.",
+            "reason": "expired",
+        },
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@app.exception_handler(EeroNotFoundException)
+async def eero_not_found_exception_handler(
+    request: Request, exc: EeroNotFoundException
+) -> JSONResponse:
+    """A resource the eero cloud does not have."""
+    resource = (exc.resource_type or "Resource").capitalize()
+    return JSONResponse(status_code=404, content={"detail": f"{resource} not found."})
+
+
+@app.exception_handler(EeroAccessDeniedException)
+async def eero_access_denied_exception_handler(
+    request: Request, exc: EeroAccessDeniedException
+) -> JSONResponse:
+    """Authenticated, but not permitted to perform this action."""
+    return JSONResponse(
+        status_code=403,
+        content={"detail": "Your eero account does not permit this action."},
+    )
+
+
+@app.exception_handler(EeroPremiumRequiredException)
+async def eero_premium_required_exception_handler(
+    request: Request, exc: EeroPremiumRequiredException
+) -> JSONResponse:
+    """The feature requires an eero Plus/Secure subscription."""
+    return JSONResponse(
+        status_code=402,
+        content={
+            "detail": "This feature requires an eero Plus/Secure subscription.",
+            "type": "premium_required",
+        },
+    )
+
+
+@app.exception_handler(EeroFeatureUnavailableException)
+async def eero_feature_unavailable_exception_handler(
+    request: Request, exc: EeroFeatureUnavailableException
+) -> JSONResponse:
+    """The feature is not available on this network right now."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": "This feature is not available on this network right now.",
+            "type": "feature_unavailable",
+            "error_code": exc.error_code,
+        },
+    )
+
+
+@app.exception_handler(EeroClientBlockedException)
+async def eero_client_blocked_exception_handler(
+    request: Request, exc: EeroClientBlockedException
+) -> JSONResponse:
+    """The eero cloud rejected this client version."""
+    _LOGGER.error(
+        "eero cloud rejected the client version: error_code=%s", exc.error_code
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "The eero cloud rejected this client version; update eero-ui."
+        },
+    )
+
+
+@app.exception_handler(EeroRateLimitException)
+async def eero_rate_limit_exception_handler(
+    request: Request, exc: EeroRateLimitException
+) -> JSONResponse:
+    """The eero cloud rate-limited this account."""
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "eero rate limit hit. Try again shortly."},
+        headers={"Retry-After": "60"},
+    )
+
+
+@app.exception_handler(EeroValidationException)
+async def eero_validation_exception_handler(
+    request: Request, exc: EeroValidationException
+) -> JSONResponse:
+    """Client-side or API-reported validation failure."""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"field": exc.field, "message": str(exc)}},
+    )
+
+
+@app.exception_handler(EeroNetworkException)
+async def eero_network_exception_handler(
+    request: Request, exc: EeroNetworkException
+) -> JSONResponse:
+    """Transport-level failure reaching the eero cloud."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "eero cloud unreachable. Try again."},
+    )
+
+
+@app.exception_handler(EeroTimeoutException)
+async def eero_timeout_exception_handler(
+    request: Request, exc: EeroTimeoutException
+) -> JSONResponse:
+    """A request to the eero cloud timed out."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "eero cloud unreachable. Try again."},
+    )
+
+
+@app.exception_handler(EeroAPIException)
+async def eero_api_exception_handler(
+    request: Request, exc: EeroAPIException
+) -> JSONResponse:
+    """Catch-all for any other eero cloud API error response."""
+    _LOGGER.error(
+        "eero cloud API error: error_code=%s status_code=%s",
+        exc.error_code,
+        exc.status_code,
+    )
+    _LOGGER.debug("eero cloud API error envelope: %s", exc.envelope)
+    return JSONResponse(
+        status_code=502,
+        content={"detail": "eero cloud returned an error."},
+    )
+
+
+@app.exception_handler(EeroException)
+async def eero_base_exception_handler(
+    request: Request, exc: EeroException
+) -> JSONResponse:
+    """Any other/base eero-api exception - existing global 500 behaviour.
+
+    Registered explicitly for ``EeroException`` (not just bare ``Exception``)
+    so it is handled by Starlette's ``ExceptionMiddleware`` like every other
+    typed handler above, rather than being promoted to
+    ``ServerErrorMiddleware``'s handler slot - which re-raises after
+    building the response, a behaviour meant for truly uncaught errors, not
+    a documented part of this mapping.
+    """
+    return await global_exception_handler(request, exc)
+
+
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(networks.router, prefix="/api/networks", tags=["Networks"])
@@ -139,6 +328,9 @@ async def health_check():
         "status": "healthy",
         "version": "1.0.0",
         "eero_client_version": get_eero_client_version(),
+        # So the frontend can hide gated controls without a round trip
+        # through /auth/status (decision 6a).
+        "experimental_writes": settings.experimental_writes,
     }
     return response
 

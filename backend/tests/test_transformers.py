@@ -4,6 +4,8 @@ These tests verify that data extraction and normalization works correctly
 with the raw API response format from eero-api v2.0+.
 """
 
+import pytest
+
 from app.transformers import (
     check_success,
     extract_data,
@@ -117,6 +119,52 @@ class TestExtractIdFromUrl:
         """Should return None for empty input."""
         assert extract_id_from_url(None) is None
         assert extract_id_from_url("") is None
+
+
+class TestExtractIdFromUrlIdentifierGuard:
+    """extract_id_from_url output must be rejected by validate_identifier
+    when it is not a single, safe path segment (phase-6.0-revamp.md § 3.2,
+    § 2.5). extract_id_from_url() itself does no validation - it is the
+    caller's job (deps.get_network_id, routes/metrics.py) to run the result
+    through eero.api.links.validate_identifier before using it in a path or
+    a PromQL selector. These tests document exactly which extracted values
+    that guard must reject.
+    """
+
+    def test_rejects_query_string(self):
+        """A URL whose last segment carries a query string is rejected."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        extracted = extract_id_from_url("/2.2/networks/123?evil=1")
+        assert extracted == "123?evil=1"
+        with pytest.raises(EeroValidationException):
+            validate_identifier(extracted)
+
+    def test_rejects_dot_dot_traversal(self):
+        """A URL segment containing '..' is rejected even if regex-shaped."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        extracted = extract_id_from_url("/2.2/networks/..-evil")
+        assert extracted == "..-evil"
+        with pytest.raises(EeroValidationException):
+            validate_identifier(extracted)
+
+    def test_rejects_embedded_slash(self):
+        """A value containing an unescaped slash is rejected."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        with pytest.raises(EeroValidationException):
+            validate_identifier("abc/def")
+
+    def test_accepts_a_well_formed_id(self):
+        """A normal, single-segment id extracted from a URL is accepted."""
+        from eero.api.links import validate_identifier
+
+        extracted = extract_id_from_url("/2.2/networks/net-123_abc.def:1")
+        assert validate_identifier(extracted) == extracted
 
 
 class TestNormalizeStatus:

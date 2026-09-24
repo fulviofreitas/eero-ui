@@ -5,11 +5,30 @@ with a mocked EeroClient dependency.
 
 As of eero-api v2.0.0, all client methods return raw JSON responses
 in the format {"meta": {...}, "data": {...}}.
+
+As of phase-6.0-revamp.md § 8.1, the mock is built with
+``create_autospec(EeroClient, instance=True)`` rather than a bare
+``MagicMock()``: a renamed or removed SDK method now fails the test at
+call time instead of silently returning a non-awaitable mock.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, create_autospec
 
 import pytest
+from eero import EeroClient
+from eero.exceptions import (
+    EeroAccessDeniedException,
+    EeroAPIException,
+    EeroAuthenticationException,
+    EeroClientBlockedException,
+    EeroFeatureUnavailableException,
+    EeroNetworkException,
+    EeroNotFoundException,
+    EeroPremiumRequiredException,
+    EeroRateLimitException,
+    EeroTimeoutException,
+    EeroValidationException,
+)
 from httpx import ASGITransport, AsyncClient
 
 from app.deps import get_eero_client
@@ -23,7 +42,7 @@ def make_raw_response(data, code: int = 200):
 
 @pytest.fixture
 def mock_eero_client():
-    """Create a mock EeroClient for unit tests.
+    """Create an autospec'd mock EeroClient for unit tests.
 
     Mock at the external boundary - the eero-api SDK.
     This is the right place to mock since eero-api
@@ -31,7 +50,7 @@ def mock_eero_client():
 
     As of v2.0.0, all methods return raw JSON responses.
     """
-    client = MagicMock()
+    client = create_autospec(EeroClient, instance=True)
     client.is_authenticated = False
     client.preferred_network_id = None
 
@@ -40,6 +59,7 @@ def mock_eero_client():
     client.login = AsyncMock(return_value=make_raw_response({}))
     client.verify = AsyncMock(return_value=make_raw_response({}))
     client.logout = AsyncMock(return_value=make_raw_response({}))
+    client.clear_session_token = AsyncMock(return_value=None)
     client.get_account = AsyncMock(return_value=make_raw_response({}))
     # Networks endpoint returns list directly in data
     client.get_networks = AsyncMock(return_value=make_raw_response([]))
@@ -94,3 +114,64 @@ async def auth_client(authenticated_client):
         yield client
 
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Exception fixtures (phase-6.0-revamp.md § 8.1): one factory per v8
+# exception class, each carrying error_code/envelope so
+# test_exception_mapping.py can assert on them.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def eero_exceptions():
+    """Factory functions building one instance of each v8 exception class.
+
+    Each carries a representative ``error_code`` and ``envelope`` so
+    handler tests can assert those are logged/used but never leaked to
+    the client in ``detail``.
+    """
+    envelope = {"meta": {"code": 400, "error": "test_error"}}
+
+    return {
+        "authentication": lambda: EeroAuthenticationException(
+            "session dead", envelope=envelope, error_code="auth_error"
+        ),
+        "not_found": lambda: EeroNotFoundException(
+            "device", "abc123", envelope=envelope, error_code="not_found"
+        ),
+        "access_denied": lambda: EeroAccessDeniedException(
+            403, "forbidden", envelope=envelope, error_code="access_denied"
+        ),
+        "premium_required": lambda: EeroPremiumRequiredException(
+            "Guest network",
+            status_code=402,
+            envelope=envelope,
+            error_code="premium_required",
+        ),
+        "feature_unavailable": lambda: EeroFeatureUnavailableException(
+            "Thread",
+            "not supported on this hardware",
+            status_code=409,
+            envelope=envelope,
+            error_code="feature_unavailable",
+        ),
+        "client_blocked": lambda: EeroClientBlockedException(
+            426, "upgrade required", envelope=envelope, error_code="client_blocked"
+        ),
+        "rate_limit": lambda: EeroRateLimitException(
+            "slow down", envelope=envelope, error_code="rate_limited"
+        ),
+        "validation": lambda: EeroValidationException(
+            "name", "cannot be empty", envelope=envelope, error_code="validation"
+        ),
+        "network": lambda: EeroNetworkException(
+            "connection reset", envelope=envelope, error_code="network_error"
+        ),
+        "timeout": lambda: EeroTimeoutException(
+            "timed out", envelope=envelope, error_code="timeout"
+        ),
+        "api": lambda: EeroAPIException(
+            500, "internal error", envelope=envelope, error_code="api_error"
+        ),
+    }

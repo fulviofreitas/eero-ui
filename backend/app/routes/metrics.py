@@ -13,8 +13,8 @@ from ..services.victoria import victoria_client
 
 try:
     # Available from eero-api >= 8.0.1 (eero.api.links.validate_identifier).
-    # TODO(WP1): drop the local fallback below once this branch upgrades
-    # past eero-api 7.x (see phase-6.0-revamp.md § 2.5, § 1.6).
+    # Confirmed present at the pinned eero-api>=8.0.3 floor (WP1); the
+    # ImportError fallback below is defensive only and should never trigger.
     from eero.api.links import validate_identifier as _sdk_validate_identifier
 except ImportError:
     _sdk_validate_identifier = None

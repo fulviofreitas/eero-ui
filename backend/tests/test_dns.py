@@ -125,7 +125,6 @@ class TestUpdateDns:
         authenticated_client.set_custom_dns_ipv4 = AsyncMock()
         authenticated_client.set_custom_dns = AsyncMock()
         authenticated_client.clear_custom_dns = AsyncMock()
-        authenticated_client.set_dns_mode = AsyncMock()
         authenticated_client.set_dns_caching = AsyncMock()
 
         response = await auth_client.put(
@@ -142,7 +141,6 @@ class TestUpdateDns:
         authenticated_client.set_custom_dns_ipv4.assert_not_called()
         authenticated_client.set_custom_dns.assert_not_called()
         authenticated_client.clear_custom_dns.assert_not_called()
-        authenticated_client.set_dns_mode.assert_not_called()
         authenticated_client.set_dns_caching.assert_not_called()
 
     async def test_noop_guard_not_fooled_by_ipv6_expanded_form(

@@ -5,8 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eero import EeroClient
-from eero.exceptions import EeroException
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ValidationError
 
 from .._coercion import coerce_int, coerce_numeric
@@ -204,55 +203,48 @@ async def list_eeros(
     refresh: bool = Query(False, description="Force cache refresh"),
 ) -> list[EeroSummary]:
     """Get list of all Eero nodes on the network."""
-    try:
-        raw_response = await client.get_eeros(network_id, refresh_cache=refresh)
-        raw_eeros = extract_list(raw_response, "eeros")
+    raw_response = await client.get_eeros(network_id, refresh_cache=refresh)
+    raw_eeros = extract_list(raw_response, "eeros")
 
-        result = []
-        for raw_eero in raw_eeros:
-            eero = normalize_eero(raw_eero)
-            try:
-                result.append(
-                    EeroSummary(
-                        id=_safe_str(eero.get("id") or eero.get("serial")),
-                        url=_safe_str(eero.get("url")),
-                        serial=_safe_str(eero.get("serial")),
-                        mac_address=_safe_str(eero.get("mac_address")),
-                        model=_safe_str(eero.get("model")),
-                        status=eero.get("status") or "unknown",
-                        location=eero.get("location"),
-                        is_gateway=eero.get("is_gateway", False),
-                        is_primary=eero.get("is_primary", False),
-                        connected_clients_count=eero.get("connected_clients_count", 0),
-                        firmware_version=eero.get("firmware_version"),
-                        ip_address=eero.get("ip_address"),
-                        mesh_quality_bars=eero.get("mesh_quality_bars"),
-                        led_on=eero.get("led_on"),
-                        wired=eero.get("wired", False),
-                    )
+    result = []
+    for raw_eero in raw_eeros:
+        eero = normalize_eero(raw_eero)
+        try:
+            result.append(
+                EeroSummary(
+                    id=_safe_str(eero.get("id") or eero.get("serial")),
+                    url=_safe_str(eero.get("url")),
+                    serial=_safe_str(eero.get("serial")),
+                    mac_address=_safe_str(eero.get("mac_address")),
+                    model=_safe_str(eero.get("model")),
+                    status=eero.get("status") or "unknown",
+                    location=eero.get("location"),
+                    is_gateway=eero.get("is_gateway", False),
+                    is_primary=eero.get("is_primary", False),
+                    connected_clients_count=eero.get("connected_clients_count", 0),
+                    firmware_version=eero.get("firmware_version"),
+                    ip_address=eero.get("ip_address"),
+                    mesh_quality_bars=eero.get("mesh_quality_bars"),
+                    led_on=eero.get("led_on"),
+                    wired=eero.get("wired", False),
                 )
-            except ValidationError as e:
-                # An unexpected response shape for one eero must not blank
-                # the entire list — degrade that entry to a minimal summary.
-                _LOGGER.error("Eero summary failed validation, degrading entry: %s", e)
-                result.append(
-                    EeroSummary(
-                        id=_safe_str(eero.get("id") or eero.get("serial")),
-                        url=_safe_str(eero.get("url")),
-                        serial=_safe_str(eero.get("serial")),
-                        mac_address=_safe_str(eero.get("mac_address")),
-                        model=_safe_str(eero.get("model")),
-                        status="unknown",
-                    )
+            )
+        except ValidationError as e:
+            # An unexpected response shape for one eero must not blank
+            # the entire list — degrade that entry to a minimal summary.
+            _LOGGER.error("Eero summary failed validation, degrading entry: %s", e)
+            result.append(
+                EeroSummary(
+                    id=_safe_str(eero.get("id") or eero.get("serial")),
+                    url=_safe_str(eero.get("url")),
+                    serial=_safe_str(eero.get("serial")),
+                    mac_address=_safe_str(eero.get("mac_address")),
+                    model=_safe_str(eero.get("model")),
+                    status="unknown",
                 )
+            )
 
-        return result
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get eeros: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve eero nodes. Please try again.",
-        )
+    return result
 
 
 @router.get("/{eero_id}", response_model=EeroDetail)
@@ -263,164 +255,159 @@ async def get_eero(
     refresh: bool = Query(False, description="Force cache refresh"),
 ) -> EeroDetail:
     """Get detailed information about a specific Eero node."""
+    raw_response = await client.get_eero(eero_id, network_id, refresh_cache=refresh)
+    eero = normalize_eero(extract_data(raw_response))
+
+    # Extract network info
+    network = eero.get("network", {}) or {}
+    network_name = network.get("name") if isinstance(network, dict) else None
+    network_url = network.get("url") if isinstance(network, dict) else None
+
+    # Extract organization info
+    org = eero.get("organization", {}) or {}
+    organization_name = org.get("name") if isinstance(org, dict) else None
+    organization_id = (
+        coerce_int(org.get("id"), field_name="organization_id")
+        if isinstance(org, dict)
+        else None
+    )
+
+    # Extract power info
+    power_info = eero.get("power_info", {}) or {}
+    power_source = (
+        power_info.get("power_source") if isinstance(power_info, dict) else None
+    )
+
+    # Extract power saving info
+    power_saving = eero.get("power_saving", {}) or {}
+    power_saving_active = None
+    if isinstance(power_saving, dict):
+        schedule = power_saving.get("schedule", {})
+        if isinstance(schedule, dict):
+            power_saving_active = schedule.get("active")
+
+    # Format timestamps
+    last_heartbeat = eero.get("last_heartbeat")
+    if last_heartbeat and hasattr(last_heartbeat, "isoformat"):
+        last_heartbeat = last_heartbeat.isoformat()
+
+    # Format bssids_with_bands — keep only dict entries so the field
+    # always matches the declared list[dict] type.
+    bssids_with_bands = eero.get("bssids_with_bands")
+    if isinstance(bssids_with_bands, list):
+        bssids_with_bands = [
+            {
+                "band": b.get("band"),
+                "ethernet_address": b.get("ethernet_address"),
+            }
+            for b in bssids_with_bands
+            if isinstance(b, dict)
+        ] or None
+    else:
+        bssids_with_bands = None
+
+    # Format IPv6 addresses
+    ipv6_addresses = eero.get("ipv6_addresses")
+    if ipv6_addresses and isinstance(ipv6_addresses, list):
+        ipv6_addresses = [
+            {
+                "address": (
+                    addr.get("address") if isinstance(addr, dict) else str(addr)
+                ),
+                "scope": addr.get("scope") if isinstance(addr, dict) else None,
+                "interface": (
+                    addr.get("interface") if isinstance(addr, dict) else None
+                ),
+            }
+            for addr in ipv6_addresses
+        ]
+
+    # Coerce numeric performance fields — the Eero Cloud API may return
+    # these as dicts (e.g. {"seconds": N}) instead of plain numbers.
+    # coerce_numeric() always yields float | None so callers are safe.
+    _raw_uptime = coerce_numeric(eero.get("uptime"), field_name="uptime")
+    uptime_seconds: int | None = (
+        int(_raw_uptime)
+        if _raw_uptime is not None
+        else calculate_uptime_seconds(eero.get("last_reboot"))
+    )
+
+    eero_id_value = _safe_str(eero.get("id") or eero.get("serial") or eero_id)
+
+    # This inner try/except is a real fallback (phase-6.0-revamp.md § 3.4):
+    # an unexpected response shape must degrade to a minimal record, not 500.
     try:
-        raw_response = await client.get_eero(eero_id, network_id, refresh_cache=refresh)
-        eero = normalize_eero(extract_data(raw_response))
-
-        # Extract network info
-        network = eero.get("network", {}) or {}
-        network_name = network.get("name") if isinstance(network, dict) else None
-        network_url = network.get("url") if isinstance(network, dict) else None
-
-        # Extract organization info
-        org = eero.get("organization", {}) or {}
-        organization_name = org.get("name") if isinstance(org, dict) else None
-        organization_id = (
-            coerce_int(org.get("id"), field_name="organization_id")
-            if isinstance(org, dict)
-            else None
+        return EeroDetail(
+            id=eero_id_value,
+            url=_safe_str(eero.get("url")),
+            serial=_safe_str(eero.get("serial")),
+            mac_address=_safe_str(eero.get("mac_address")),
+            model=_safe_str(eero.get("model")),
+            model_number=eero.get("model_number"),
+            status=eero.get("status") or "unknown",
+            state=eero.get("state"),
+            location=eero.get("location"),
+            is_gateway=eero.get("is_gateway", False),
+            is_primary=eero.get("is_primary", False),
+            wired=eero.get("wired", False),
+            connection_type=eero.get("connection_type"),
+            mesh_quality_bars=eero.get("mesh_quality_bars"),
+            ip_address=eero.get("ip_address"),
+            using_wan=eero.get("using_wan"),
+            connected_clients_count=eero.get("connected_clients_count", 0),
+            connected_wired_clients_count=eero.get("connected_wired_clients_count"),
+            connected_wireless_clients_count=eero.get(
+                "connected_wireless_clients_count"
+            ),
+            firmware_version=eero.get("firmware_version"),
+            os_version=eero.get("os_version"),
+            led_on=eero.get("led_on"),
+            led_brightness=eero.get("led_brightness"),
+            uptime=uptime_seconds,
+            cpu_usage=coerce_numeric(eero.get("cpu_usage"), field_name="cpu_usage"),
+            memory_usage=coerce_numeric(
+                eero.get("memory_usage"), field_name="memory_usage"
+            ),
+            temperature=coerce_numeric(
+                eero.get("temperature"), field_name="temperature"
+            ),
+            heartbeat_ok=eero.get("heartbeat_ok"),
+            update_available=eero.get("update_available"),
+            provides_wifi=eero.get("provides_wifi"),
+            auto_provisioned=eero.get("auto_provisioned"),
+            retrograde_capable=eero.get("retrograde_capable"),
+            last_heartbeat=last_heartbeat,
+            last_reboot=eero.get("last_reboot"),
+            joined=eero.get("joined"),
+            network_name=network_name,
+            network_url=network_url,
+            bands=eero.get("bands"),
+            wifi_bssids=eero.get("wifi_bssids"),
+            bssids_with_bands=bssids_with_bands,
+            ethernet_addresses=eero.get("ethernet_addresses"),
+            ethernet_ports=eero.get("ethernet_ports"),
+            ipv6_addresses=ipv6_addresses,
+            organization_name=organization_name,
+            organization_id=organization_id,
+            power_source=power_source,
+            power_saving_active=power_saving_active,
         )
-
-        # Extract power info
-        power_info = eero.get("power_info", {}) or {}
-        power_source = (
-            power_info.get("power_source") if isinstance(power_info, dict) else None
+    except ValidationError as e:
+        # The Eero Cloud API returned a shape that does not match the
+        # EeroDetail model. Degrade gracefully to a minimal record
+        # instead of returning HTTP 500, so the detail page still loads.
+        _LOGGER.error(
+            "Eero %s response failed validation, returning degraded detail: %s",
+            eero_id,
+            e,
         )
-
-        # Extract power saving info
-        power_saving = eero.get("power_saving", {}) or {}
-        power_saving_active = None
-        if isinstance(power_saving, dict):
-            schedule = power_saving.get("schedule", {})
-            if isinstance(schedule, dict):
-                power_saving_active = schedule.get("active")
-
-        # Format timestamps
-        last_heartbeat = eero.get("last_heartbeat")
-        if last_heartbeat and hasattr(last_heartbeat, "isoformat"):
-            last_heartbeat = last_heartbeat.isoformat()
-
-        # Format bssids_with_bands — keep only dict entries so the field
-        # always matches the declared list[dict] type.
-        bssids_with_bands = eero.get("bssids_with_bands")
-        if isinstance(bssids_with_bands, list):
-            bssids_with_bands = [
-                {
-                    "band": b.get("band"),
-                    "ethernet_address": b.get("ethernet_address"),
-                }
-                for b in bssids_with_bands
-                if isinstance(b, dict)
-            ] or None
-        else:
-            bssids_with_bands = None
-
-        # Format IPv6 addresses
-        ipv6_addresses = eero.get("ipv6_addresses")
-        if ipv6_addresses and isinstance(ipv6_addresses, list):
-            ipv6_addresses = [
-                {
-                    "address": (
-                        addr.get("address") if isinstance(addr, dict) else str(addr)
-                    ),
-                    "scope": addr.get("scope") if isinstance(addr, dict) else None,
-                    "interface": (
-                        addr.get("interface") if isinstance(addr, dict) else None
-                    ),
-                }
-                for addr in ipv6_addresses
-            ]
-
-        # Coerce numeric performance fields — the Eero Cloud API may return
-        # these as dicts (e.g. {"seconds": N}) instead of plain numbers.
-        # coerce_numeric() always yields float | None so callers are safe.
-        _raw_uptime = coerce_numeric(eero.get("uptime"), field_name="uptime")
-        uptime_seconds: int | None = (
-            int(_raw_uptime)
-            if _raw_uptime is not None
-            else calculate_uptime_seconds(eero.get("last_reboot"))
-        )
-
-        eero_id_value = _safe_str(eero.get("id") or eero.get("serial") or eero_id)
-
-        try:
-            return EeroDetail(
-                id=eero_id_value,
-                url=_safe_str(eero.get("url")),
-                serial=_safe_str(eero.get("serial")),
-                mac_address=_safe_str(eero.get("mac_address")),
-                model=_safe_str(eero.get("model")),
-                model_number=eero.get("model_number"),
-                status=eero.get("status") or "unknown",
-                state=eero.get("state"),
-                location=eero.get("location"),
-                is_gateway=eero.get("is_gateway", False),
-                is_primary=eero.get("is_primary", False),
-                wired=eero.get("wired", False),
-                connection_type=eero.get("connection_type"),
-                mesh_quality_bars=eero.get("mesh_quality_bars"),
-                ip_address=eero.get("ip_address"),
-                using_wan=eero.get("using_wan"),
-                connected_clients_count=eero.get("connected_clients_count", 0),
-                connected_wired_clients_count=eero.get("connected_wired_clients_count"),
-                connected_wireless_clients_count=eero.get(
-                    "connected_wireless_clients_count"
-                ),
-                firmware_version=eero.get("firmware_version"),
-                os_version=eero.get("os_version"),
-                led_on=eero.get("led_on"),
-                led_brightness=eero.get("led_brightness"),
-                uptime=uptime_seconds,
-                cpu_usage=coerce_numeric(eero.get("cpu_usage"), field_name="cpu_usage"),
-                memory_usage=coerce_numeric(
-                    eero.get("memory_usage"), field_name="memory_usage"
-                ),
-                temperature=coerce_numeric(
-                    eero.get("temperature"), field_name="temperature"
-                ),
-                heartbeat_ok=eero.get("heartbeat_ok"),
-                update_available=eero.get("update_available"),
-                provides_wifi=eero.get("provides_wifi"),
-                auto_provisioned=eero.get("auto_provisioned"),
-                retrograde_capable=eero.get("retrograde_capable"),
-                last_heartbeat=last_heartbeat,
-                last_reboot=eero.get("last_reboot"),
-                joined=eero.get("joined"),
-                network_name=network_name,
-                network_url=network_url,
-                bands=eero.get("bands"),
-                wifi_bssids=eero.get("wifi_bssids"),
-                bssids_with_bands=bssids_with_bands,
-                ethernet_addresses=eero.get("ethernet_addresses"),
-                ethernet_ports=eero.get("ethernet_ports"),
-                ipv6_addresses=ipv6_addresses,
-                organization_name=organization_name,
-                organization_id=organization_id,
-                power_source=power_source,
-                power_saving_active=power_saving_active,
-            )
-        except ValidationError as e:
-            # The Eero Cloud API returned a shape that does not match the
-            # EeroDetail model. Degrade gracefully to a minimal record
-            # instead of returning HTTP 500, so the detail page still loads.
-            _LOGGER.error(
-                "Eero %s response failed validation, returning degraded " "detail: %s",
-                eero_id,
-                e,
-            )
-            return EeroDetail(
-                id=eero_id_value,
-                url=_safe_str(eero.get("url")),
-                serial=_safe_str(eero.get("serial")),
-                mac_address=_safe_str(eero.get("mac_address")),
-                model=_safe_str(eero.get("model")),
-                status="unknown",
-            )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to get eero {eero_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Eero not found: {eero_id}",
+        return EeroDetail(
+            id=eero_id_value,
+            url=_safe_str(eero.get("url")),
+            serial=_safe_str(eero.get("serial")),
+            mac_address=_safe_str(eero.get("mac_address")),
+            model=_safe_str(eero.get("model")),
+            status="unknown",
         )
 
 
@@ -431,25 +418,18 @@ async def reboot_eero(
     network_id: str = Depends(get_network_id),
 ) -> EeroAction:
     """Reboot an Eero node."""
-    try:
-        raw_result = await client.reboot_eero(eero_id, network_id=network_id)
-        success = check_success(raw_result)
-        return EeroAction(
-            success=success,
-            eero_id=eero_id,
-            action="reboot",
-            message=(
-                "Reboot initiated. The eero will be back online in a few minutes."
-                if success
-                else "Failed to initiate reboot."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to reboot eero {eero_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reboot eero. Please try again.",
-        )
+    raw_result = await client.reboot_eero(eero_id, network_id=network_id)
+    success = check_success(raw_result)
+    return EeroAction(
+        success=success,
+        eero_id=eero_id,
+        action="reboot",
+        message=(
+            "Reboot initiated. The eero will be back online in a few minutes."
+            if success
+            else "Failed to initiate reboot."
+        ),
+    )
 
 
 @router.post("/{eero_id}/led", response_model=EeroAction)
@@ -460,28 +440,19 @@ async def set_eero_led(
     network_id: str = Depends(get_network_id),
 ) -> EeroAction:
     """Turn the LED on or off for an Eero node."""
-    try:
-        raw_result = await client.set_led(
-            eero_id, enabled=enabled, network_id=network_id
-        )
-        success = check_success(raw_result)
-        action = "led_on" if enabled else "led_off"
-        return EeroAction(
-            success=success,
-            eero_id=eero_id,
-            action=action,
-            message=(
-                f"LED {'turned on' if enabled else 'turned off'}."
-                if success
-                else "Failed to change LED state."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to set LED for eero {eero_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update LED state. Please try again.",
-        )
+    raw_result = await client.set_led(eero_id, enabled=enabled, network_id=network_id)
+    success = check_success(raw_result)
+    action = "led_on" if enabled else "led_off"
+    return EeroAction(
+        success=success,
+        eero_id=eero_id,
+        action=action,
+        message=(
+            f"LED {'turned on' if enabled else 'turned off'}."
+            if success
+            else "Failed to change LED state."
+        ),
+    )
 
 
 @router.put("/{eero_id}/led/brightness", response_model=EeroAction)
@@ -492,24 +463,17 @@ async def set_eero_led_brightness(
     network_id: str = Depends(get_network_id),
 ) -> EeroAction:
     """Set the LED brightness for an Eero node."""
-    try:
-        raw_result = await client.set_led_brightness(
-            eero_id, brightness=brightness, network_id=network_id
-        )
-        success = check_success(raw_result)
-        return EeroAction(
-            success=success,
-            eero_id=eero_id,
-            action="led_brightness",
-            message=(
-                f"LED brightness set to {brightness}%."
-                if success
-                else "Failed to set LED brightness."
-            ),
-        )
-    except EeroException as e:
-        _LOGGER.error(f"Failed to set LED brightness for eero {eero_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update LED brightness. Please try again.",
-        )
+    raw_result = await client.set_led_brightness(
+        eero_id, brightness=brightness, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return EeroAction(
+        success=success,
+        eero_id=eero_id,
+        action="led_brightness",
+        message=(
+            f"LED brightness set to {brightness}%."
+            if success
+            else "Failed to set LED brightness."
+        ),
+    )

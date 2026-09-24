@@ -54,6 +54,7 @@ from ..transformers import (
     normalize_dns,
     normalize_eero,
     normalize_network,
+    normalize_speed_test,
 )
 from .victoria import Sample, VictoriaMetricsClient, VictoriaWriteError
 
@@ -526,11 +527,11 @@ class MetricsCollector:
         if not results:
             return True
 
-        latest = results[0]
-        down = latest.get("down") if isinstance(latest, dict) else None
-        up = latest.get("up") if isinstance(latest, dict) else None
-        download_mbps = down.get("value") if isinstance(down, dict) else None
-        upload_mbps = up.get("value") if isinstance(up, dict) else None
+        latest = (
+            normalize_speed_test(results[0]) if isinstance(results[0], dict) else {}
+        )
+        download_mbps = latest.get("down_mbps")
+        upload_mbps = latest.get("up_mbps")
 
         if download_mbps is not None:
             samples.append(

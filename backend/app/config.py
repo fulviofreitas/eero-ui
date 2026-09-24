@@ -35,6 +35,14 @@ class Settings(BaseModel):
     # Metrics collector
     collection_interval: int = 60  # seconds
 
+    # eero-api SDK tuning (phase-6.0-revamp.md § 3.1, decision 6)
+    sdk_legacy_cookie: bool = False
+    sdk_get_retries: int = 1
+
+    # Experimental writes gate (decision 6a) - unverified / settings-class
+    # SDK writes are hidden behind this flag until a route opts in.
+    experimental_writes: bool = False
+
     class Config:
         """Pydantic config."""
 
@@ -88,6 +96,17 @@ def get_settings() -> Settings:
         collection_interval=max(
             10, int(os.environ.get("EERO_DASHBOARD_COLLECTION_INTERVAL", "60"))
         ),
+        sdk_legacy_cookie=os.environ.get(
+            "EERO_DASHBOARD_SDK_LEGACY_COOKIE", "false"
+        ).lower()
+        == "true",
+        sdk_get_retries=max(
+            0, int(os.environ.get("EERO_DASHBOARD_SDK_GET_RETRIES", "1"))
+        ),
+        experimental_writes=os.environ.get(
+            "EERO_DASHBOARD_EXPERIMENTAL_WRITES", "false"
+        ).lower()
+        == "true",
     )
 
 

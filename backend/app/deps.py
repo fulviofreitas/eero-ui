@@ -1,18 +1,14 @@
 """FastAPI dependencies for the Eero Dashboard."""
 
+import asyncio
 import logging
-
-# Import eero client from parent package
-import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, status
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
-
 from eero import EeroClient
-from eero.exceptions import EeroAuthenticationException
+from eero.api.links import validate_identifier
+from eero.exceptions import EeroAuthenticationException, EeroValidationException
+from fastapi import Depends, HTTPException, status
 
 from .config import settings
 from .transformers import extract_id_from_url, extract_list
@@ -21,6 +17,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # Global client instance (single account mode)
 _client: EeroClient | None = None
+
+# Guards the first construction of the singleton so two concurrent first
+# requests can never build two EeroClient instances (phase-6.0-revamp.md
+# § 3.1).
+_client_lock = asyncio.Lock()
 
 
 async def get_eero_client() -> AsyncGenerator[EeroClient, None]:
@@ -32,17 +33,24 @@ async def get_eero_client() -> AsyncGenerator[EeroClient, None]:
     global _client
 
     if _client is None:
-        # Ensure cookie directory exists
-        cookie_path = Path(settings.cookie_file)
-        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        async with _client_lock:
+            if _client is None:
+                # Ensure cookie directory exists
+                cookie_path = Path(settings.cookie_file)
+                cookie_path.parent.mkdir(parents=True, exist_ok=True)
 
-        _client = EeroClient(
-            cookie_file=settings.cookie_file,
-            use_keyring=False,  # Use file-based storage for dashboard
-            cache_timeout=60,
-        )
-        await _client.__aenter__()
-        _LOGGER.info("EeroClient initialized")
+                new_client = EeroClient(
+                    cookie_file=settings.cookie_file,
+                    use_keyring=False,  # Pinned invariant (§ 1.2b): keeps
+                    # eero-ui on the single-backend FileStorage path, never
+                    # ChainedStorage. Not configurable.
+                    cache_timeout=60,
+                    send_legacy_cookie=settings.sdk_legacy_cookie,
+                    get_retries=settings.sdk_get_retries,
+                )
+                await new_client.__aenter__()
+                _client = new_client
+                _LOGGER.info("EeroClient initialized")
 
     yield _client
 
@@ -53,6 +61,10 @@ async def require_auth(
     """Dependency that requires authentication.
 
     Raises HTTPException 401 if not authenticated.
+
+    Note: this is deliberately the cheap "a token exists on disk" gate.
+    It does not probe the account endpoint - that is ``/auth/status``'s
+    job (see ``routes/auth.py`` and phase-6.0-revamp.md § 4.1).
     """
     if not client.is_authenticated:
         raise HTTPException(
@@ -61,6 +73,22 @@ async def require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return client
+
+
+async def require_experimental_writes() -> None:
+    """Dependency gating unverified / settings-class writes (decision 6a).
+
+    Raises HTTPException 403 unless ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
+    is set. Not yet wired onto any route in WP1 - WP7/WP8 decide per route.
+    """
+    if not settings.experimental_writes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This write is disabled. Set "
+                "EERO_DASHBOARD_EXPERIMENTAL_WRITES=true to enable it."
+            ),
+        )
 
 
 async def get_network_id(
@@ -84,7 +112,13 @@ async def get_network_id(
         if networks:
             net_id = extract_id_from_url(networks[0].get("url"))
             if net_id:
-                return net_id
+                try:
+                    return validate_identifier(net_id)
+                except EeroValidationException:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid network_id.",
+                    )
     except EeroAuthenticationException:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -95,6 +129,17 @@ async def get_network_id(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="No network available. Please specify network_id.",
     )
+
+
+async def clear_client_session() -> None:
+    """Clear the stored credential for the shared EeroClient, if any.
+
+    Used by the global exception handler for ``EeroAuthenticationException``
+    and by ``/auth/status`` on an expired-session probe, so a dead token
+    never lingers on disk once we know it is dead (phase-6.0-revamp.md § 4.1).
+    """
+    if _client is not None:
+        await _client.clear_session_token()
 
 
 async def shutdown_client() -> None:
