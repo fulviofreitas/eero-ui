@@ -19,6 +19,7 @@
 		readThemeColors,
 		onThemeChange
 	} from '$lib/charts/defaults';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	registerCharts();
 
@@ -143,16 +144,19 @@
 	{/if}
 
 	<div class="chart-container">
-		{#if loading}
-			<div class="chart-loading">
-				<span class="loading-spinner"></span>
-			</div>
+		{#if loading && !hasData}
+			<Skeleton variant="card" height="100%" />
 		{:else if !hasData}
 			<div class="chart-empty">
 				<span>No data available</span>
 			</div>
 		{:else}
 			<canvas use:handleCanvas></canvas>
+			{#if loading}
+				<span class="chart-refreshing" role="status" aria-label="Refreshing chart data">
+					<span class="loading-spinner"></span>
+				</span>
+			{/if}
 		{/if}
 	</div>
 </div>
@@ -177,7 +181,6 @@
 		min-height: 200px;
 	}
 
-	.chart-loading,
 	.chart-empty {
 		display: flex;
 		align-items: center;
@@ -185,6 +188,13 @@
 		height: 100%;
 		color: var(--color-text-muted);
 		font-size: 0.875rem;
+	}
+
+	.chart-refreshing {
+		position: absolute;
+		top: var(--space-2);
+		right: var(--space-2);
+		display: inline-flex;
 	}
 
 	canvas {

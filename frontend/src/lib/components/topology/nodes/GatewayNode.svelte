@@ -112,7 +112,7 @@
 		right: -10px;
 		background: var(--color-accent);
 		color: var(--color-on-accent);
-		font-size: 9px;
+		font-size: var(--text-xs);
 		font-weight: 600;
 		padding: 2px 6px;
 		border-radius: var(--radius-sm);
@@ -172,7 +172,7 @@
 	}
 
 	.model-text {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--color-text-muted);
 	}
 
@@ -180,7 +180,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
 	}
 
@@ -191,7 +191,7 @@
 	}
 
 	.node-ip {
-		font-size: 9px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		color: var(--color-text-muted);
 		text-align: center;

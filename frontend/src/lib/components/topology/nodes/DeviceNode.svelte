@@ -143,7 +143,7 @@
 	}
 
 	.device-label {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		font-weight: 500;
 		color: var(--color-text-primary);
 		max-width: 100px;
@@ -153,7 +153,7 @@
 	}
 
 	.device-ip {
-		font-size: 8px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		color: var(--color-text-muted);
 	}
@@ -167,17 +167,17 @@
 	}
 
 	.connection-type {
-		font-size: 10px;
+		font-size: var(--text-xs);
 	}
 
 	.signal {
-		font-size: 8px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		color: var(--color-text-muted);
 	}
 
 	.badge {
-		font-size: 7px;
+		font-size: var(--text-xs);
 		padding: 1px 4px;
 		border-radius: 3px;
 		font-weight: 600;
@@ -196,7 +196,7 @@
 	}
 
 	.manufacturer {
-		font-size: 7px;
+		font-size: var(--text-xs);
 		color: var(--color-text-muted);
 		margin-top: 2px;
 	}

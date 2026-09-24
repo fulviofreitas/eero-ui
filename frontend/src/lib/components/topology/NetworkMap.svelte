@@ -201,16 +201,24 @@
 			<button class="retry-btn" onclick={refresh}>Refresh</button>
 		</div>
 	{:else}
+		<!-- fitViewOptions padding 0.3: `.map-controls` floats absolutely at top:12px over the
+		     canvas and the gateway node auto-layouts top-center, directly under it at the default
+		     0.1 padding. xyflow's fitView padding is uniform (no per-side option); a larger margin
+		     pulls every node away from all four edges, clearing the toolbar without touching the
+		     layout algorithm itself. edgesFocusable=false: edges carry no click/keyboard action, so
+		     they should not be reachable by Tab. -->
 		<SvelteFlow
 			{nodes}
 			{edges}
 			{nodeTypes}
 			fitView
+			fitViewOptions={{ padding: 0.3 }}
 			minZoom={0.2}
 			maxZoom={2}
 			nodesDraggable={!readonly}
 			nodesConnectable={false}
 			elementsSelectable={true}
+			edgesFocusable={false}
 			panOnScroll={true}
 			zoomOnScroll={true}
 			onnodeclick={handleNodeClick}

@@ -9,8 +9,85 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
+import { http, HttpResponse } from 'msw';
 import { devicesStore, deviceFilters, selectionMode, selectedDevices } from '$stores';
 import DeviceList from './DeviceList.svelte';
+import { server } from '../../../../tests/mocks/server';
+
+const DEVICES_FIXTURE = [
+	{
+		id: 'dev-1',
+		url: null,
+		mac: 'AA:BB:CC:DD:EE:01',
+		ip: '192.168.1.100',
+		nickname: 'iPhone',
+		hostname: 'iphone',
+		display_name: 'iPhone',
+		manufacturer: 'Apple',
+		model_name: null,
+		device_type: 'phone',
+		connected: true,
+		wireless: true,
+		blocked: false,
+		paused: false,
+		is_guest: false,
+		connection_type: 'wireless',
+		signal_strength: -50,
+		frequency: '5GHz',
+		connected_to_eero: 'Living Room',
+		last_active: null,
+		profile_id: null,
+		profile_name: null
+	},
+	{
+		id: 'dev-2',
+		url: null,
+		mac: 'AA:BB:CC:DD:EE:02',
+		ip: '192.168.1.101',
+		nickname: 'Laptop',
+		hostname: 'laptop',
+		display_name: 'Laptop',
+		manufacturer: null,
+		model_name: null,
+		device_type: 'computer',
+		connected: true,
+		wireless: false,
+		blocked: false,
+		paused: false,
+		is_guest: false,
+		connection_type: 'wired',
+		signal_strength: null,
+		frequency: null,
+		connected_to_eero: 'Living Room',
+		last_active: null,
+		profile_id: null,
+		profile_name: null
+	},
+	{
+		id: 'dev-3',
+		url: null,
+		mac: 'AA:BB:CC:DD:EE:03',
+		ip: '192.168.1.102',
+		nickname: 'Smart TV',
+		hostname: 'smart-tv',
+		display_name: 'Smart TV',
+		manufacturer: null,
+		model_name: null,
+		device_type: 'tv',
+		connected: false,
+		wireless: true,
+		blocked: false,
+		paused: false,
+		is_guest: false,
+		connection_type: 'wireless',
+		signal_strength: null,
+		frequency: null,
+		connected_to_eero: null,
+		last_active: null,
+		profile_id: null,
+		profile_name: null
+	}
+];
 
 function resetStores() {
 	devicesStore.clear();
@@ -112,5 +189,48 @@ describe('DeviceList', () => {
 	it('still renders the export control once devices have loaded', async () => {
 		await renderLoaded();
 		expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+	});
+
+	// Skeleton-first loading (phase-6.0-revamp.md § 6.1/6.2 Tier 3, WP9): the table shows a
+	// row-shaped skeleton only while there is no data yet, and keeps rendering existing rows
+	// (stale-while-revalidate) while a refresh is in flight.
+	it('shows a skeleton, not an empty table, before the first fetch resolves', async () => {
+		server.use(
+			http.get('/api/devices', async () => {
+				await new Promise((resolve) => setTimeout(resolve, 30));
+				return HttpResponse.json(DEVICES_FIXTURE);
+			})
+		);
+
+		render(DeviceList);
+
+		expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+		expect(screen.queryByRole('table')).toBeNull();
+
+		await waitFor(() => expect(screen.getByText('3 filtered')).toBeInTheDocument());
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+	});
+
+	it('keeps showing existing rows while a manual refresh is in flight', async () => {
+		await renderLoaded();
+		expect(screen.getByText('iPhone')).toBeInTheDocument();
+
+		let resolveRefetch: (() => void) | undefined;
+		server.use(
+			http.get('/api/devices', () => {
+				return new Promise((resolve) => {
+					resolveRefetch = () => resolve(HttpResponse.json(DEVICES_FIXTURE));
+				});
+			})
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+
+		// Stale-while-revalidate: the old rows and their data stay on screen, no skeleton.
+		expect(screen.getByText('iPhone')).toBeInTheDocument();
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+
+		resolveRefetch?.();
+		await waitFor(() => expect(screen.getByText('iPhone')).toBeInTheDocument());
 	});
 });

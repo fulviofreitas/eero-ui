@@ -627,6 +627,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: var(--space-3);
 		padding: var(--space-4);
 		border-bottom: 1px solid var(--color-border-muted);
 	}
@@ -634,6 +636,7 @@
 	.header-left {
 		display: flex;
 		align-items: baseline;
+		flex-wrap: wrap;
 		gap: var(--space-4);
 	}
 
@@ -644,6 +647,7 @@
 
 	.header-right {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
 
@@ -749,13 +753,24 @@
 	}
 
 	/* Row markup rendered by DataTable's `<tr class={rowClass(row)}>` (see DeviceList's
-	   deviceRowClass) — :global() because DataTable, not this component, owns the element. */
-	:global(.device-row.blocked) {
+	   deviceRowClass) — :global() because DataTable, not this component, owns the element.
+
+	   Dimming is applied per-<td> (via DataTable's data-col attribute), not on the <tr> itself:
+	   CSS opacity composites an element and its whole subtree as one group, so a child's own
+	   opacity can never "undo" an ancestor's — a status badge inside an opacity:0.6 row would
+	   always render at 0.6 regardless of its own opacity. Excluding the status cell from the
+	   dimmed selector keeps it legible at a glance for blocked/offline devices. */
+	:global(.device-row.blocked td) {
 		opacity: 0.7;
 	}
 
-	:global(.device-row.disconnected) {
+	:global(.device-row.disconnected td) {
 		opacity: 0.6;
+	}
+
+	:global(.device-row.blocked td[data-col='status']),
+	:global(.device-row.disconnected td[data-col='status']) {
+		opacity: 1;
 	}
 
 	:global(.device-row.selected) {

@@ -153,11 +153,11 @@
 
 	--color-text-primary: #1f2328;
 	--color-text-secondary: #656d76;
-	/* A1 (WP5 a11y fix): #6e7781 - 4.55:1 on --color-bg-primary (#fff), 4.27:1 on
-	   --color-bg-secondary (#f6f8fa). The #fff figure clears WCAG AA (4.5:1); the f6f8fa figure
-	   falls just short (reported honestly here rather than silently rounded up) but still clears
-	   AA-large (3:1) and is a large improvement over the previous 2.85:1/3.04:1. */
-	--color-text-muted: #6e7781;
+	/* WP9 audit: #6e7781 (A1, WP5 a11y fix) measured 4.55:1 on --color-bg-primary (#fff) but only
+	   4.27:1 on --color-bg-secondary (#f6f8fa) - short of WCAG AA (4.5:1) on the second surface,
+	   where this token is used just as often (cards, table rows). #68707a measures 5.02:1 on #fff
+	   and 4.71:1 on #f6f8fa - both clear AA now, verified with a WCAG relative-luminance script. */
+	--color-text-muted: #68707a;
 	--color-text: var(--color-text-primary);
 
 	/* Status Colors - slightly adjusted for light bg */

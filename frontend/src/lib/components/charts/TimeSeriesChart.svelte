@@ -11,6 +11,7 @@
 	import { onDestroy } from 'svelte';
 	import { Chart as ChartJS } from 'chart.js';
 	import { registerCharts, lineChartOptions, onThemeChange } from '$lib/charts/defaults';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	registerCharts();
 
@@ -126,12 +127,9 @@
 </script>
 
 <div class="chart-container">
-	{#if loading}
-		<div class="chart-loading">
-			<span class="loading-spinner"></span>
-			<span>Loading chart data...</span>
-		</div>
-	{:else if error}
+	{#if loading && !hasData}
+		<Skeleton variant="card" height="100%" />
+	{:else if error && !hasData}
 		<div class="chart-error">
 			<span>Error: {error}</span>
 		</div>
@@ -141,6 +139,11 @@
 		</div>
 	{:else}
 		<canvas use:handleCanvas></canvas>
+		{#if loading}
+			<span class="chart-refreshing" role="status" aria-label="Refreshing chart data">
+				<span class="loading-spinner"></span>
+			</span>
+		{/if}
 	{/if}
 </div>
 
@@ -151,7 +154,6 @@
 		width: 100%;
 	}
 
-	.chart-loading,
 	.chart-error,
 	.chart-empty {
 		display: flex;
@@ -165,6 +167,13 @@
 
 	.chart-error {
 		color: var(--color-danger);
+	}
+
+	.chart-refreshing {
+		position: absolute;
+		top: var(--space-2);
+		right: var(--space-2);
+		display: inline-flex;
 	}
 
 	canvas {

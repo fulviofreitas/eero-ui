@@ -173,7 +173,7 @@
 	}
 
 	.model-text {
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--color-text-muted);
 	}
 
@@ -181,7 +181,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 10px;
+		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
 	}
 
@@ -213,7 +213,7 @@
 	}
 
 	.node-ip {
-		font-size: 9px;
+		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		color: var(--color-text-muted);
 		text-align: center;

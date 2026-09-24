@@ -28,6 +28,7 @@
 		validateForm,
 		type DnsFormState
 	} from '$lib/utils/dns-form';
+	import Skeleton from '$components/common/Skeleton.svelte';
 	import DnsProviderPicker from './DnsProviderPicker.svelte';
 
 	interface Props {
@@ -169,7 +170,7 @@
 	<h2>DNS Configuration</h2>
 
 	{#if dnsState.loading && !settings}
-		<p class="text-muted text-sm">Loading DNS settings…</p>
+		<Skeleton variant="text" lines={4} />
 	{:else if dnsState.error && !settings}
 		<p class="text-danger text-sm">{dnsState.error}</p>
 		<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}> Retry </button>

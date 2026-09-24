@@ -69,4 +69,83 @@ describe('eeros page - list view', () => {
 
 		await waitFor(() => expect(screen.getByText('No eero nodes found.')).toBeInTheDocument());
 	});
+
+	// Skeleton-first loading (phase-6.0-revamp.md § 6.1/6.2 Tier 3, WP9).
+	it('shows a table-rows skeleton, not the empty state, before the first fetch resolves', async () => {
+		server.use(
+			http.get('/api/eeros', async () => {
+				await new Promise((resolve) => setTimeout(resolve, 30));
+				return HttpResponse.json([
+					{
+						id: 'eero-1',
+						url: '/eeros/eero-1',
+						serial: 'SERIAL1',
+						mac_address: 'AA:BB:CC:00:00:01',
+						model: 'eero Pro 6E',
+						status: 'green',
+						location: 'Living Room',
+						is_gateway: true,
+						is_primary: true,
+						connected_clients_count: 8,
+						firmware_version: '7.0.0',
+						ip_address: '192.168.1.1',
+						mesh_quality_bars: 4,
+						led_on: true,
+						wired: true
+					}
+				]);
+			})
+		);
+
+		render(Page);
+
+		expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+		expect(screen.queryByText('No eero nodes found.')).toBeNull();
+
+		await waitFor(() => expect(screen.getByText('Living Room')).toBeInTheDocument());
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+	});
+
+	it('keeps showing existing eeros while a manual refresh is in flight', async () => {
+		await renderListView();
+		expect(screen.getByText('Living Room')).toBeInTheDocument();
+
+		let resolveRefetch: (() => void) | undefined;
+		server.use(
+			http.get('/api/eeros', () => {
+				return new Promise((resolve) => {
+					resolveRefetch = () =>
+						resolve(
+							HttpResponse.json([
+								{
+									id: 'eero-1',
+									url: '/eeros/eero-1',
+									serial: 'SERIAL1',
+									mac_address: 'AA:BB:CC:00:00:01',
+									model: 'eero Pro 6E',
+									status: 'green',
+									location: 'Living Room',
+									is_gateway: true,
+									is_primary: true,
+									connected_clients_count: 8,
+									firmware_version: '7.0.0',
+									ip_address: '192.168.1.1',
+									mesh_quality_bars: 4,
+									led_on: true,
+									wired: true
+								}
+							])
+						);
+				});
+			})
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+
+		expect(screen.getByText('Living Room')).toBeInTheDocument();
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+
+		resolveRefetch?.();
+		await waitFor(() => expect(screen.getByText('Living Room')).toBeInTheDocument());
+	});
 });

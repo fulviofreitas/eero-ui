@@ -99,6 +99,12 @@
 		display: flex;
 		gap: var(--space-1);
 		border-bottom: 1px solid var(--color-border);
+		/* Narrow viewports (network page has 5 tabs) scroll horizontally instead of wrapping or
+		   overflowing the container; scroll-snap lands each tab flush against the edge instead of
+		   stopping mid-label. */
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.tabs button {
@@ -109,6 +115,8 @@
 		color: var(--color-text-secondary);
 		font-size: var(--text-base);
 		cursor: pointer;
+		white-space: nowrap;
+		scroll-snap-align: start;
 		transition: color var(--transition-fast);
 	}
 

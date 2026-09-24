@@ -35,6 +35,36 @@
 
 	let initialized = $state(false);
 	let eeroClientVersion: string | null = $state(null);
+	let sidebarToggleEl: HTMLButtonElement | undefined = $state();
+	let sidebarEl: HTMLElement | undefined = $state();
+	let wasSidebarOpen = false;
+
+	function isMobileViewport(): boolean {
+		return typeof window !== 'undefined' && window.innerWidth <= 768;
+	}
+
+	// Mobile-only focus management: moving focus into/out of an overlay sidebar keeps keyboard
+	// users oriented. On desktop the sidebar is a persistent layout element, not an overlay, so
+	// stealing focus on every toggle would be disruptive there.
+	$effect(() => {
+		const open = $sidebarOpen;
+		if (!isMobileViewport()) {
+			wasSidebarOpen = open;
+			return;
+		}
+		if (open && !wasSidebarOpen) {
+			sidebarEl?.querySelector<HTMLElement>('.nav-item')?.focus();
+		} else if (!open && wasSidebarOpen) {
+			sidebarToggleEl?.focus();
+		}
+		wasSidebarOpen = open;
+	});
+
+	function handleWindowKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && $sidebarOpen && isMobileViewport()) {
+			uiStore.closeSidebar();
+		}
+	}
 
 	onMount(async () => {
 		uiStore.initTheme();
@@ -138,6 +168,8 @@
 	/>
 </svelte:head>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 <IconSprite />
 
 {#if !initialized || $isAuthLoading}
@@ -177,7 +209,7 @@
 		{/if}
 
 		<!-- Sidebar -->
-		<aside class="sidebar" class:open={$sidebarOpen}>
+		<aside class="sidebar" class:open={$sidebarOpen} bind:this={sidebarEl}>
 			<div class="sidebar-header">
 				<!-- A14 (WP5 a11y fix): brand mark, not a document heading - the page itself owns its
 				     own <h1> per route. -->
@@ -238,6 +270,7 @@
 					onclick={() => uiStore.toggleSidebar()}
 					aria-label="Toggle navigation"
 					aria-expanded={$sidebarOpen}
+					bind:this={sidebarToggleEl}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

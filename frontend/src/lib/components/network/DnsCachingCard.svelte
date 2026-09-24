@@ -20,6 +20,7 @@
 	import { dnsStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
 	import { buildCachingUpdateRequest } from '$lib/utils/dns-form';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	interface Props {
 		networkId: string;
@@ -129,7 +130,7 @@
 	<h2>DNS Caching</h2>
 
 	{#if dnsState.loading && !settings}
-		<p class="text-muted text-sm">Loading DNS settings…</p>
+		<Skeleton variant="text" lines={2} />
 	{:else if dnsState.error && !settings}
 		<p class="text-danger text-sm">{dnsState.error}</p>
 		<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}> Retry </button>

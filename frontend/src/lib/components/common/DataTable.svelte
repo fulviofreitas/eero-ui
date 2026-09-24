@@ -404,6 +404,7 @@
 							{/if}
 							{#each visibleColumns as col, colIndex (col.key)}
 								<td
+									data-col={col.key}
 									class:align-right={col.align === 'right'}
 									class:align-center={col.align === 'center'}
 									class:sticky-actions={stickyActionsColumn &&
@@ -545,5 +546,15 @@
 		right: 0;
 		background-color: var(--color-bg-primary);
 		z-index: var(--z-dropdown);
+	}
+
+	/* Below --bp-sm (app.css:116) a pinned actions column eats too much of a ~390px viewport and
+	   pushes readable columns (e.g. device IP) off-screen. Drop the pin so the table scrolls as a
+	   normal block and every column stays legible. */
+	@media (max-width: 480px) {
+		.sticky-actions {
+			position: static;
+			right: auto;
+		}
 	}
 </style>

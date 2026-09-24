@@ -12,6 +12,7 @@
 	import { guestPasswordStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
 	import Icon from '$components/common/Icon.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	interface Props {
 		networkId: string;
@@ -121,7 +122,7 @@
 	<h2>Guest Network Password</h2>
 
 	{#if guestState.loading && !status}
-		<p class="text-muted text-sm">Loading…</p>
+		<Skeleton variant="text" lines={2} />
 	{:else if guestState.error && !status}
 		<p class="text-danger text-sm">{guestState.error}</p>
 		<button

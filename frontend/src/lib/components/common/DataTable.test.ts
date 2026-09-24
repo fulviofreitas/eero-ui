@@ -140,6 +140,18 @@ describe('DataTable', () => {
 		expect(screen.queryByRole('table')).toBeNull();
 	});
 
+	it('keeps rendering existing rows during a refresh instead of blanking to a skeleton', () => {
+		// Stale-while-revalidate (phase-6.0-revamp.md § 6.2 Tier 3, WP9): a refresh sets
+		// `loading=true` on a store that still holds its last-fetched rows. The skeleton is only
+		// for the very first, data-less load.
+		render(DataTable, {
+			props: { id: 'test', columns, rows, loading: true, getRowId }
+		});
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		expect(screen.getByRole('table')).toBeInTheDocument();
+		expect(bodyRowNames()).toEqual(['Bravo', 'Alpha']);
+	});
+
 	it('shows an empty state when not loading and there are no rows', () => {
 		render(DataTable, {
 			props: {
