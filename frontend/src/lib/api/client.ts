@@ -960,6 +960,108 @@ export const api = {
 					params: { ...(deleteForwards !== undefined && { delete_forwards: deleteForwards }) },
 					retries: 0
 				}
+			),
+
+		/**
+		 * The network's advanced content-filter allow/block lists (plan §
+		 * 7 WP7, family 10). Premium-gated (Plus/Secure); verified read.
+		 */
+		getContentFilter: (networkId: string) =>
+			fetchWithHandling<import('./types').ContentFilterResponse>(
+				`/networks/${networkId}/content-filter`
+			),
+
+		/**
+		 * Add a domain to the network-wide allow list. Unverified write
+		 * (plan § 5), premium-gated. Never retried.
+		 */
+		allowDomain: (networkId: string, domain: string, addCname?: boolean) =>
+			fetchWithHandling<import('./types').ContentFilterResponse>(
+				`/networks/${networkId}/content-filter/allow`,
+				{
+					method: 'POST',
+					body: { domain, ...(addCname !== undefined && { add_cname: addCname }) },
+					retries: 0
+				}
+			),
+
+		/**
+		 * Remove a domain from the network-wide allow list. Unverified
+		 * write (plan § 5), premium-gated. Never retried.
+		 */
+		unallowDomain: (networkId: string, domain: string) =>
+			fetchWithHandling<import('./types').ContentFilterResponse>(
+				`/networks/${networkId}/content-filter/allow`,
+				{ method: 'DELETE', body: { domain }, retries: 0 }
+			),
+
+		/**
+		 * Add a domain to the network-wide block list. Unverified write
+		 * (plan § 5), premium-gated. Never retried.
+		 */
+		blockDomain: (networkId: string, domain: string) =>
+			fetchWithHandling<import('./types').ContentFilterResponse>(
+				`/networks/${networkId}/content-filter/block`,
+				{ method: 'POST', body: { domain }, retries: 0 }
+			),
+
+		/**
+		 * Remove a domain from the network-wide block list. Unverified
+		 * write (plan § 5), premium-gated. Never retried.
+		 */
+		unblockDomain: (networkId: string, domain: string) =>
+			fetchWithHandling<import('./types').ContentFilterResponse>(
+				`/networks/${networkId}/content-filter/block`,
+				{ method: 'DELETE', body: { domain }, retries: 0 }
+			),
+
+		/**
+		 * Add a domain to the allow list for specific profiles. Unverified
+		 * write (plan § 5), premium-gated. Never retried.
+		 */
+		allowDomainForProfiles: (networkId: string, body: import('./types').DomainForProfilesRequest) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/content-filter/allow-for-profiles`,
+				{ method: 'POST', body, retries: 0 }
+			),
+
+		/**
+		 * Remove a domain from the allow list for specific profiles.
+		 * Unverified write (plan § 5), premium-gated. Never retried.
+		 */
+		unallowDomainForProfiles: (
+			networkId: string,
+			body: import('./types').DomainForProfilesRequest
+		) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/content-filter/allow-for-profiles`,
+				{ method: 'DELETE', body, retries: 0 }
+			),
+
+		/**
+		 * Add a domain to the block list for specific profiles. Unverified
+		 * write (plan § 5), premium-gated. Never retried.
+		 */
+		blockDomainForProfiles: (
+			networkId: string,
+			body: import('./types').DomainBlockForProfilesRequest
+		) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/content-filter/block-for-profiles`,
+				{ method: 'POST', body, retries: 0 }
+			),
+
+		/**
+		 * Remove a domain from the block list for specific profiles.
+		 * Unverified write (plan § 5), premium-gated. Never retried.
+		 */
+		unblockDomainForProfiles: (
+			networkId: string,
+			body: import('./types').DomainBlockForProfilesRequest
+		) =>
+			fetchWithHandling<{ success: boolean }>(
+				`/networks/${networkId}/content-filter/block-for-profiles`,
+				{ method: 'DELETE', body, retries: 0 }
 			)
 	},
 
@@ -1257,7 +1359,91 @@ export const api = {
 				method: 'POST',
 				body,
 				retries: 0
-			})
+			}),
+
+		/**
+		 * A profile's blocked-application policy (plan § 7 WP7, family 10).
+		 * Premium-gated; verified read.
+		 */
+		getBlockedApplications: (profileId: string) =>
+			fetchWithHandling<import('./types').BlockedApplicationsResponse>(
+				`/profiles/${profileId}/blocked-applications`
+			),
+
+		/**
+		 * Set a profile's blocked-application policy. Unverified write
+		 * (plan § 5), premium-gated. Never retried.
+		 */
+		setBlockedApplications: (profileId: string, applications: string[]) =>
+			fetchWithHandling<import('./types').BlockedApplicationsResponse>(
+				`/profiles/${profileId}/blocked-applications`,
+				{ method: 'PUT', body: { applications }, retries: 0 }
+			)
+	},
+
+	// Account profile (plan § 7 WP7, family 9). Every write here is
+	// unverified, non-settings (plan § 5) and never echoes the submitted
+	// value back - the response is always `{success}`.
+	account: {
+		/** Set the account's display name. Gated on experimental writes. Never retried. */
+		setName: (name: string) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/name', {
+				method: 'PUT',
+				body: { name },
+				retries: 0
+			}),
+
+		/** Set the account's marketing-email consent. Gated on experimental writes. Never retried. */
+		setConsents: (marketingEmails: boolean) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/consents', {
+				method: 'PUT',
+				body: { marketing_emails: marketingEmails },
+				retries: 0
+			}),
+
+		/**
+		 * Start an account e-mail change - inactive until confirmed via
+		 * `verifyEmail`. Gated on experimental writes AND account-identity
+		 * writes (403 `account_identity_disabled` when the latter is off).
+		 * Never retried.
+		 */
+		setEmail: (email: string) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/email', {
+				method: 'PUT',
+				body: { email },
+				retries: 0
+			}),
+
+		/** Confirm a pending e-mail change. Same gating as `setEmail`. Never retried. */
+		verifyEmail: (code: string) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/email/verify', {
+				method: 'POST',
+				body: { code },
+				retries: 0
+			}),
+
+		/**
+		 * Start an account phone-number change - inactive until confirmed
+		 * via `verifyPhone`. Same gating as `setEmail`. Never retried.
+		 */
+		setPhone: (phone: string) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/phone', {
+				method: 'PUT',
+				body: { phone },
+				retries: 0
+			}),
+
+		/** Confirm a pending phone-number change. Same gating as `setEmail`. Never retried. */
+		verifyPhone: (code: string) =>
+			fetchWithHandling<import('./types').AccountActionResponse>('/account/phone/verify', {
+				method: 'POST',
+				body: { code },
+				retries: 0
+			}),
+
+		/** The SMS country-code catalogue, for the phone country picker. Verified read. */
+		getSmsCountries: () =>
+			fetchWithHandling<import('./types').SmsCountriesResponse>('/account/sms-countries')
 	}
 };
 

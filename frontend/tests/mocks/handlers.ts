@@ -1229,6 +1229,109 @@ export const handlers = [
 	}),
 
 	// ============================================
+	// Account profile (phase-6.0-revamp.md § 7 WP7, family 9). Default here
+	// simulates both gates open - individual tests override with a 403
+	// `experimental_disabled`/`account_identity_disabled` variant.
+	// ============================================
+	http.put('/api/account/name', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.put('/api/account/consents', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.put('/api/account/email', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.post('/api/account/email/verify', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.put('/api/account/phone', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.post('/api/account/phone/verify', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.get('/api/account/sms-countries', () => {
+		return HttpResponse.json({
+			countries: [{ name: 'United States', dial_code: '+1' }]
+		});
+	}),
+
+	// ============================================
+	// Content filter / blocked applications (phase-6.0-revamp.md § 7 WP7,
+	// family 10). Default here simulates the network as premium and the
+	// experimental-writes gate open - individual tests override with a 402
+	// or 403 `experimental_disabled` variant.
+	// ============================================
+	http.get('/api/networks/:networkId/content-filter', () => {
+		return HttpResponse.json({
+			allowed_list: ['allowed.example.com'],
+			blocked_list: ['blocked.example.com']
+		});
+	}),
+
+	http.post('/api/networks/:networkId/content-filter/allow', async ({ request }) => {
+		const body = (await request.json()) as { domain: string };
+		return HttpResponse.json({
+			allowed_list: ['allowed.example.com', body.domain],
+			blocked_list: ['blocked.example.com']
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/content-filter/allow', () => {
+		return HttpResponse.json({
+			allowed_list: [],
+			blocked_list: ['blocked.example.com']
+		});
+	}),
+
+	http.post('/api/networks/:networkId/content-filter/block', async ({ request }) => {
+		const body = (await request.json()) as { domain: string };
+		return HttpResponse.json({
+			allowed_list: ['allowed.example.com'],
+			blocked_list: ['blocked.example.com', body.domain]
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/content-filter/block', () => {
+		return HttpResponse.json({
+			allowed_list: ['allowed.example.com'],
+			blocked_list: []
+		});
+	}),
+
+	http.post('/api/networks/:networkId/content-filter/allow-for-profiles', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.delete('/api/networks/:networkId/content-filter/allow-for-profiles', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.post('/api/networks/:networkId/content-filter/block-for-profiles', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.delete('/api/networks/:networkId/content-filter/block-for-profiles', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.get('/api/profiles/:profileId/blocked-applications', () => {
+		return HttpResponse.json({ applications: ['com.example.app'] });
+	}),
+
+	http.put('/api/profiles/:profileId/blocked-applications', async ({ request }) => {
+		const body = (await request.json()) as { applications: string[] };
+		return HttpResponse.json({ applications: body.applications });
+	}),
+
+	// ============================================
 	// Health endpoint
 	// ============================================
 	http.get('/api/health', () => {

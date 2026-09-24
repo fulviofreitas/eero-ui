@@ -218,7 +218,41 @@ describe('api client handler coverage', () => {
 				api.profiles.createBedtime('profile-1', {
 					start_time: '22:00',
 					end_time: '07:00'
-				})
+				}),
+			() => api.profiles.getBlockedApplications('profile-1'),
+			() => api.profiles.setBlockedApplications('profile-1', ['com.example.app']),
+			() => api.networks.getContentFilter('network-123'),
+			() => api.networks.allowDomain('network-123', 'example.com'),
+			() => api.networks.unallowDomain('network-123', 'example.com'),
+			() => api.networks.blockDomain('network-123', 'example.com'),
+			() => api.networks.unblockDomain('network-123', 'example.com'),
+			() =>
+				api.networks.allowDomainForProfiles('network-123', {
+					domain: 'example.com',
+					profiles: ['profile-1']
+				}),
+			() =>
+				api.networks.unallowDomainForProfiles('network-123', {
+					domain: 'example.com',
+					profiles: ['profile-1']
+				}),
+			() =>
+				api.networks.blockDomainForProfiles('network-123', {
+					domain: 'example.com',
+					profiles: ['profile-1']
+				}),
+			() =>
+				api.networks.unblockDomainForProfiles('network-123', {
+					domain: 'example.com',
+					profiles: ['profile-1']
+				}),
+			() => api.account.setName('New Name'),
+			() => api.account.setConsents(true),
+			() => api.account.setEmail('user@example.com'),
+			() => api.account.verifyEmail('123456'),
+			() => api.account.setPhone('+15551234567'),
+			() => api.account.verifyPhone('123456'),
+			() => api.account.getSmsCountries()
 		];
 
 		// Every call is allowed to reject (e.g. a fixture returns a shape a
@@ -236,6 +270,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(95);
+		expect(countLeafMethods(api)).toBe(113);
 	});
 });

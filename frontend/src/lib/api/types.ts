@@ -1122,3 +1122,85 @@ export interface ReservationUpdateRequest {
 	description?: string | null;
 	public_static_ip?: string | null;
 }
+
+// ============================================
+// Account profile (phase-6.0-revamp.md § 7 WP7, family 9)
+//
+// Every write here is unverified, non-settings (plan § 5). The name/consents
+// writes are gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`; email/phone and
+// their `/verify` counterparts are gated on THAT flag AND
+// `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` independently (backend/app/
+// routes/account.py) - the frontend surfaces the second gate only via the
+// `account_identity_disabled` `ApiClientError.type` on the response, there is
+// no separate entitlement flag for it (decision: one eero-ui session is the
+// whole eero account, lessons-learned.md).
+// ============================================
+
+/** Response for every account-profile write - never echoes the submitted value. */
+export interface AccountActionResponse {
+	success: boolean;
+}
+
+export interface AccountNameRequest {
+	name: string;
+}
+
+export interface AccountEmailRequest {
+	email: string;
+}
+
+export interface AccountPhoneRequest {
+	phone: string;
+}
+
+export interface VerificationCodeRequest {
+	code: string;
+}
+
+export interface AccountConsentsRequest {
+	marketing_emails: boolean;
+}
+
+/** SMS country-code catalogue element shape is undocumented upstream - kept as a bare record. */
+export interface SmsCountriesResponse {
+	countries: Record<string, unknown>[];
+}
+
+// ============================================
+// Content filter / blocked applications (phase-6.0-revamp.md § 7 WP7, family
+// 10). Premium (Plus/Secure) - a 402 surfaces via
+// `ApiClientError.type === 'premium_required'`. Every write is unverified,
+// non-settings (plan § 5), gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`.
+// List element shapes are undocumented upstream and rendered defensively.
+// ============================================
+
+export interface ContentFilterResponse {
+	allowed_list: unknown[];
+	blocked_list: unknown[];
+}
+
+export interface DomainRequest {
+	domain: string;
+	add_cname?: boolean;
+}
+
+export interface DomainForProfilesRequest {
+	domain: string;
+	profiles: string[];
+	override?: boolean;
+	add_cname?: boolean;
+}
+
+export interface DomainBlockForProfilesRequest {
+	domain: string;
+	profiles: string[];
+	override?: boolean;
+}
+
+export interface BlockedApplicationsResponse {
+	applications: unknown[];
+}
+
+export interface SetBlockedApplicationsRequest {
+	applications: string[];
+}

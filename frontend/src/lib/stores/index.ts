@@ -2,9 +2,12 @@
  * Store exports
  */
 
+export * from './account';
 export * from './auth';
 export * from './backupInternet';
+export * from './blockedApplications';
 export * from './channelUtilization';
+export * from './contentFilter';
 export * from './dataUsage';
 export * from './devices';
 export * from './dns';

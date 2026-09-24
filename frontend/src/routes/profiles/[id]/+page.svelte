@@ -23,6 +23,8 @@
 	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
 	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
 	import ProfileSchedulesCard from '$lib/components/profile/ProfileSchedulesCard.svelte';
+	import ProfileContentFilterCard from '$lib/components/profile/ProfileContentFilterCard.svelte';
+	import ProfileBlockedApplicationsCard from '$lib/components/profile/ProfileBlockedApplicationsCard.svelte';
 	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
 	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
@@ -276,6 +278,12 @@
 
 		{#if profile.id}
 			<ProfileSchedulesCard profileId={profile.id} />
+			<PremiumGate feature="Content filtering">
+				<ProfileContentFilterCard profileId={profile.id} />
+			</PremiumGate>
+			<PremiumGate feature="Blocked applications">
+				<ProfileBlockedApplicationsCard profileId={profile.id} />
+			</PremiumGate>
 		{/if}
 
 		<ProfileRenameModal

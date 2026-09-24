@@ -44,6 +44,7 @@
 	import ForwardsReservationsCard from '$lib/components/network/ForwardsReservationsCard.svelte';
 	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
 	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
+	import ContentFilterCard from '$lib/components/network/ContentFilterCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -301,6 +302,9 @@
 					{#if networkId}
 						<DnsSettingsCard {networkId} />
 						<DnsCachingCard {networkId} />
+						<PremiumGate feature="Content filtering">
+							<ContentFilterCard {networkId} />
+						</PremiumGate>
 					{/if}
 					<PremiumDnsCard {network} />
 				</div>
