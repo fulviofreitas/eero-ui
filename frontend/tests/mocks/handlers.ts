@@ -890,6 +890,74 @@ export const handlers = [
 		});
 	}),
 
+	// Profile schedules (phase-6.0-revamp.md § 7 WP7, family 1). Verified
+	// read (list); every write below is unverified and gated (default here
+	// simulates the gate open - individual tests override with a 403
+	// `experimental_disabled` variant to exercise the gate-off path).
+	http.get('/api/profiles/:profileId/schedules', () => {
+		return HttpResponse.json([]);
+	}),
+
+	http.post('/api/profiles/:profileId/schedules', async ({ request }) => {
+		const body = (await request.json()) as {
+			name: string;
+			days: string[];
+			start: string;
+			end: string;
+			enabled?: boolean;
+		};
+		return HttpResponse.json({
+			id: 'schedule-new',
+			name: body.name,
+			days: body.days,
+			start: body.start,
+			end: body.end,
+			enabled: body.enabled ?? true
+		});
+	}),
+
+	http.put('/api/profiles/:profileId/schedules/:scheduleId', async ({ params, request }) => {
+		const body = (await request.json()) as Partial<{
+			name: string;
+			days: string[];
+			start: string;
+			end: string;
+			enabled: boolean;
+		}>;
+		return HttpResponse.json({
+			id: params.scheduleId,
+			name: body.name ?? 'School nights',
+			days: body.days ?? ['monday'],
+			start: body.start ?? '20:00',
+			end: body.end ?? '07:00',
+			enabled: body.enabled ?? true
+		});
+	}),
+
+	http.delete('/api/profiles/:profileId/schedules/:scheduleId', ({ params }) => {
+		return HttpResponse.json({ success: true, schedule_id: params.scheduleId });
+	}),
+
+	http.delete('/api/profiles/:profileId/schedules', () => {
+		return HttpResponse.json({ success: true, deleted_count: 0 });
+	}),
+
+	http.post('/api/profiles/:profileId/bedtime', async ({ request }) => {
+		const body = (await request.json()) as {
+			start_time: string;
+			end_time: string;
+			days?: string[];
+		};
+		return HttpResponse.json({
+			id: 'bedtime-new',
+			name: 'Bedtime',
+			days: body.days ?? [],
+			start: body.start_time,
+			end: body.end_time,
+			enabled: true
+		});
+	}),
+
 	// ============================================
 	// Health endpoint
 	// ============================================

@@ -742,6 +742,51 @@ export interface NetworkInvitesResponse {
 }
 
 // ============================================
+// Profile schedules (phase-6.0-revamp.md § 7 WP7, family 1)
+//
+// Mirrors backend/app/routes/profiles.py `ScheduleSummary`. Unverified,
+// non-settings writes (§ 5) - create/update/delete/clear/bedtime all sit
+// behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES`; the list itself is a
+// verified read and is never gated.
+// ============================================
+
+export interface ProfileSchedule {
+	id: string | null;
+	name: string | null;
+	days: string[];
+	start: string | null;
+	end: string | null;
+	enabled: boolean;
+}
+
+export interface ScheduleCreateRequest {
+	name: string;
+	days: string[];
+	start: string;
+	end: string;
+	enabled?: boolean;
+}
+
+export interface ScheduleUpdateRequest {
+	name?: string;
+	days?: string[];
+	start?: string;
+	end?: string;
+	enabled?: boolean;
+}
+
+export interface BedtimeCreateRequest {
+	start_time: string;
+	end_time: string;
+	days?: string[];
+}
+
+export interface ClearSchedulesResponse {
+	success: boolean;
+	deleted_count: number;
+}
+
+// ============================================
 // Backup internet (phase-6.0-revamp.md § 7 WP6, deliverable 11)
 //
 // Mirrors backend/app/routes/networks.py:3400-3507. Plus-gated; each field is

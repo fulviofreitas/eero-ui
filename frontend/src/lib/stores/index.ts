@@ -15,6 +15,7 @@ export * from './insights';
 export * from './members';
 export * from './networks';
 export * from './notifications';
+export * from './profileSchedules';
 export * from './securityWan';
 export * from './speedtests';
 export * from './topology';

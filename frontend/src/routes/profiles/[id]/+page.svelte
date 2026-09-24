@@ -22,6 +22,7 @@
 	import ProfileStatusCard from '$lib/components/profile/ProfileStatusCard.svelte';
 	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
 	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
+	import ProfileSchedulesCard from '$lib/components/profile/ProfileSchedulesCard.svelte';
 	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
 	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
@@ -272,6 +273,10 @@
 			onGoToDevice={goToDevice}
 			onRefresh={() => fetchProfile(true)}
 		/>
+
+		{#if profile.id}
+			<ProfileSchedulesCard profileId={profile.id} />
+		{/if}
 
 		<ProfileRenameModal
 			open={showRenameModal}

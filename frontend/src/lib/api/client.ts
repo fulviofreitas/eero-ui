@@ -910,6 +910,66 @@ export const api = {
 					insight_type: params.insightType,
 					...(params.cadence && { cadence: params.cadence })
 				}
+			}),
+
+		/**
+		 * A profile's scheduled pauses (plan § 7 WP7, family 1). Verified read
+		 * - never gated.
+		 */
+		getSchedules: (profileId: string) =>
+			fetchWithHandling<import('./types').ProfileSchedule[]>(`/profiles/${profileId}/schedules`),
+
+		/**
+		 * Create a scheduled pause. Unverified write (plan § 5) - gated on
+		 * `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, 403 `experimental_disabled`
+		 * when off. Never retried.
+		 */
+		createSchedule: (profileId: string, body: import('./types').ScheduleCreateRequest) =>
+			fetchWithHandling<import('./types').ProfileSchedule>(`/profiles/${profileId}/schedules`, {
+				method: 'POST',
+				body,
+				retries: 0
+			}),
+
+		/**
+		 * Update a scheduled pause. Unverified write, read-first server-side -
+		 * `changed: false` is not distinguishable from `true` in the response
+		 * shape (both return the read-back `ProfileSchedule`); the caller
+		 * compares against what it already had if it needs to detect a no-op.
+		 */
+		updateSchedule: (
+			profileId: string,
+			scheduleId: string,
+			body: import('./types').ScheduleUpdateRequest
+		) =>
+			fetchWithHandling<import('./types').ProfileSchedule>(
+				`/profiles/${profileId}/schedules/${scheduleId}`,
+				{ method: 'PUT', body, retries: 0 }
+			),
+
+		/** Delete a single scheduled pause. Unverified write. */
+		deleteSchedule: (profileId: string, scheduleId: string) =>
+			fetchWithHandling<{ success: boolean; schedule_id: string }>(
+				`/profiles/${profileId}/schedules/${scheduleId}`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/** Delete every scheduled pause on a profile. Unverified write. */
+		clearSchedules: (profileId: string) =>
+			fetchWithHandling<import('./types').ClearSchedulesResponse>(
+				`/profiles/${profileId}/schedules`,
+				{ method: 'DELETE', retries: 0 }
+			),
+
+		/**
+		 * Create a bedtime quick-add schedule (built on `create_schedule`
+		 * server-side). Unverified write.
+		 */
+		createBedtime: (profileId: string, body: import('./types').BedtimeCreateRequest) =>
+			fetchWithHandling<import('./types').ProfileSchedule>(`/profiles/${profileId}/bedtime`, {
+				method: 'POST',
+				body,
+				retries: 0
 			})
 	}
 };

@@ -158,6 +158,22 @@ describe('api client handler coverage', () => {
 					start: '2026-01-01T00:00:00Z',
 					end: '2026-01-02T00:00:00Z',
 					insightType: 'blocked'
+				}),
+			() => api.profiles.getSchedules('profile-1'),
+			() =>
+				api.profiles.createSchedule('profile-1', {
+					name: 'School nights',
+					days: ['monday'],
+					start: '20:00',
+					end: '07:00'
+				}),
+			() => api.profiles.updateSchedule('profile-1', 'schedule-1', { enabled: false }),
+			() => api.profiles.deleteSchedule('profile-1', 'schedule-1'),
+			() => api.profiles.clearSchedules('profile-1'),
+			() =>
+				api.profiles.createBedtime('profile-1', {
+					start_time: '22:00',
+					end_time: '07:00'
 				})
 		];
 
@@ -176,6 +192,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(62);
+		expect(countLeafMethods(api)).toBe(68);
 	});
 });
