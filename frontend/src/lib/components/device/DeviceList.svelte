@@ -1,7 +1,11 @@
 <!--
   Device List Component
-  
-  Main device listing with filtering and search.
+
+  Main device listing with filtering and search. Table itself is DataTable
+  (phase-6.0-revamp.md § 6.2 Tier 2) — sort, column visibility, sticky header/actions column and
+  keyboard-accessible `aria-sort` headers all come from there now. This component keeps the
+  field-scoped search, the three filter groups with live counts, bulk selection, and export,
+  which are all orthogonal to how the table itself renders.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -11,100 +15,60 @@
 		filteredDevices,
 		deviceCounts,
 		isDevicesLoading,
-		columnVisibility,
-		toggleColumn as toggleColumnStore,
 		selectionMode,
 		selectedDevices,
 		toggleSelectionMode,
-		selectAllDevices,
 		clearSelection
 	} from '$stores';
-	import type { ColumnVisibility } from '$stores/devices';
+	import type { DeviceSummary } from '$api/types';
 	import { api } from '$api/client';
 	import { uiStore } from '$stores';
+	import DataTable, {
+		type DataTableColumn,
+		type SortDirection
+	} from '$components/common/DataTable.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
 	import DeviceRow from './DeviceRow.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
 	import Icon from '$components/common/Icon.svelte';
+	import StatusBadge from '$components/common/StatusBadge.svelte';
 
 	let refreshing = false;
-	let columnSelectorOpen = false;
 	let profileSelectorOpen = false;
 	let profiles: { id: string; name: string }[] = [];
 	let loadingProfiles = false;
 	let assigningProfile = false;
 
-	// Column definitions - all available columns (Actions is always shown, not in selector)
-	const allColumns: {
-		id: keyof ColumnVisibility;
-		label: string;
-		required: boolean;
-		sortable: boolean;
-		sortKey?: string;
-	}[] = [
-		{ id: 'name', label: 'Device', required: true, sortable: true, sortKey: 'name' },
-		{ id: 'ip', label: 'IP Address', required: false, sortable: true, sortKey: 'ip' },
-		{ id: 'mac', label: 'MAC Address', required: false, sortable: true, sortKey: 'mac' },
-		{ id: 'hostname', label: 'Hostname', required: false, sortable: true, sortKey: 'hostname' },
-		{
-			id: 'manufacturer',
-			label: 'Manufacturer',
-			required: false,
-			sortable: true,
-			sortKey: 'manufacturer'
-		},
-		{
-			id: 'deviceType',
-			label: 'Device Type',
-			required: false,
-			sortable: true,
-			sortKey: 'deviceType'
-		},
-		{
-			id: 'connection',
-			label: 'Connection Type',
-			required: false,
-			sortable: true,
-			sortKey: 'connection'
-		},
-		{ id: 'signal', label: 'Signal Strength', required: false, sortable: true, sortKey: 'signal' },
-		{ id: 'frequency', label: 'Frequency', required: false, sortable: false },
-		{
-			id: 'connectedTo',
-			label: 'Connected To',
-			required: false,
-			sortable: true,
-			sortKey: 'connectedTo'
-		},
-		{ id: 'profile', label: 'Profile', required: false, sortable: true, sortKey: 'profile' },
-		{
-			id: 'lastActive',
-			label: 'Last Active',
-			required: false,
-			sortable: true,
-			sortKey: 'last_active'
-		},
-		{ id: 'status', label: 'Status', required: false, sortable: false }
-	];
+	// Mirrors DataTable's resolved visible-column set (see DataTable's `onVisibleColumnsChange`)
+	// so the name column can suppress its manufacturer sub-label once the Manufacturer column
+	// itself is shown, without DataTable needing to know anything about device-list semantics.
+	let visibleColumnKeys = new Set([
+		'name',
+		'ip',
+		'mac',
+		'connection',
+		'connectedTo',
+		'status',
+		'actions'
+	]);
 
-	function handleToggleColumn(columnId: keyof ColumnVisibility) {
-		const column = allColumns.find((c) => c.id === columnId);
-		if (column?.required) return; // Can't toggle required columns
-		toggleColumnStore(columnId);
-	}
-
-	// Selection mode helpers
 	$: selectedCount = $selectedDevices.size;
-	$: allSelected =
-		$filteredDevices.length > 0 &&
-		$filteredDevices.every((d) => d.id && $selectedDevices.has(d.id));
 
-	function handleSelectAll() {
-		if (allSelected) {
-			clearSelection();
-		} else {
-			const ids = $filteredDevices.map((d) => d.id).filter((id): id is string => !!id);
-			selectAllDevices(ids);
-		}
+	$: hasActiveFilters =
+		!!$deviceFilters.search ||
+		$deviceFilters.status !== 'all' ||
+		$deviceFilters.connectionType !== 'all' ||
+		$deviceFilters.frequency !== 'all';
+
+	function clearFilters() {
+		deviceFilters.set({
+			search: '',
+			status: 'all',
+			connectionType: 'all',
+			frequency: 'all',
+			sortBy: 'name',
+			sortOrder: 'asc'
+		});
 	}
 
 	async function loadProfiles() {
@@ -144,17 +108,6 @@
 
 	onMount(() => {
 		devicesStore.fetch();
-
-		// Close column selector when clicking outside
-		function handleClickOutside(event: MouseEvent) {
-			const target = event.target as HTMLElement;
-			if (!target.closest('.column-selector')) {
-				columnSelectorOpen = false;
-			}
-		}
-
-		document.addEventListener('click', handleClickOutside);
-		return () => document.removeEventListener('click', handleClickOutside);
 	});
 
 	async function handleRefresh() {
@@ -184,14 +137,155 @@
 		deviceFilters.update((f) => ({ ...f, frequency }));
 	}
 
-	function handleSort(sortBy: typeof $deviceFilters.sortBy) {
+	// DataTable's column `key` for the "last active" column is `lastActive` (matches the other
+	// column ids); the filter store's sortBy uses the API field name `last_active`. Translate
+	// both ways rather than renaming one side and drifting from the other.
+	function toFilterSortBy(key: string): typeof $deviceFilters.sortBy {
+		return (key === 'lastActive' ? 'last_active' : key) as typeof $deviceFilters.sortBy;
+	}
+
+	function toColumnKey(sortBy: string): string {
+		return sortBy === 'last_active' ? 'lastActive' : sortBy;
+	}
+
+	function handleSort(key: string | null, direction: SortDirection) {
+		const sortBy = key ? toFilterSortBy(key) : $deviceFilters.sortBy;
 		deviceFilters.update((f) => ({
 			...f,
 			sortBy,
-			sortOrder: f.sortBy === sortBy && f.sortOrder === 'asc' ? 'desc' : 'asc'
+			sortOrder: direction === 'descending' ? 'desc' : 'asc'
 		}));
 	}
+
+	function displayName(device: DeviceSummary): string {
+		return (
+			device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device'
+		);
+	}
+
+	function statusLabel(device: DeviceSummary): string {
+		return device.blocked ? 'blocked' : device.connected ? 'connected' : 'disconnected';
+	}
+
+	function ipSortKey(ip: string | null): string {
+		if (!ip) return '';
+		return ip
+			.split('.')
+			.map((n) => Number(n).toString().padStart(3, '0'))
+			.join('.');
+	}
+
+	function getSignalIcon(strength: number | null): string {
+		if (strength === null) return '━';
+		if (strength >= -50) return '▂▄▆█';
+		if (strength >= -60) return '▂▄▆░';
+		if (strength >= -70) return '▂▄░░';
+		return '▂░░░';
+	}
+
+	function deviceRowClass(device: DeviceSummary): string {
+		const classes = ['device-row'];
+		if (device.blocked) classes.push('blocked');
+		if (!device.connected) classes.push('disconnected');
+		if (device.id && $selectedDevices.has(device.id)) classes.push('selected');
+		return classes.join(' ');
+	}
 </script>
+
+{#snippet nameCell(device: DeviceSummary)}
+	<div class="device-name-wrapper">
+		<span
+			class="status-dot"
+			class:online={device.connected && !device.blocked}
+			class:offline={!device.connected}
+			class:danger={device.blocked}
+		></span>
+		<div class="name-info">
+			{#if device.id}
+				<a href="/devices/{device.id}" class="name device-link">{displayName(device)}</a>
+			{:else}
+				<span class="name">{displayName(device)}</span>
+			{/if}
+			{#if !visibleColumnKeys.has('manufacturer') && device.manufacturer}
+				<span class="manufacturer text-muted text-xs">{device.manufacturer}</span>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+{#snippet ipCell(device: DeviceSummary)}
+	<span class="mono text-sm">{device.ip || '—'}</span>
+{/snippet}
+
+{#snippet macCell(device: DeviceSummary)}
+	<span class="mono text-sm text-muted">{device.mac || '—'}</span>
+{/snippet}
+
+{#snippet hostnameCell(device: DeviceSummary)}
+	<span class="text-sm">{device.hostname || '—'}</span>
+{/snippet}
+
+{#snippet manufacturerCell(device: DeviceSummary)}
+	<span class="text-sm">{device.manufacturer || '—'}</span>
+{/snippet}
+
+{#snippet deviceTypeCell(device: DeviceSummary)}
+	<span class="text-sm">{device.device_type || '—'}</span>
+{/snippet}
+
+{#snippet connectionCell(device: DeviceSummary)}
+	<span class="text-sm">
+		{#if device.connected}
+			<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+			{device.wireless ? 'Wireless' : 'Wired'}
+		{:else}
+			<span class="text-muted">—</span>
+		{/if}
+	</span>
+{/snippet}
+
+{#snippet signalCell(device: DeviceSummary)}
+	{#if device.connected && device.wireless && device.signal_strength}
+		<span class="signal mono" title="{device.signal_strength} dBm">
+			{getSignalIcon(device.signal_strength)}
+			{device.signal_strength} dBm
+		</span>
+	{:else}
+		<span class="text-muted">—</span>
+	{/if}
+{/snippet}
+
+{#snippet frequencyCell(device: DeviceSummary)}
+	<span class="text-sm">
+		{#if device.frequency}
+			<span class="badge badge-neutral">{device.frequency}</span>
+		{:else}
+			<span class="text-muted">—</span>
+		{/if}
+	</span>
+{/snippet}
+
+{#snippet connectedToCell(device: DeviceSummary)}
+	<span class="text-sm">{device.connected_to_eero || '—'}</span>
+{/snippet}
+
+{#snippet profileCell(device: DeviceSummary)}
+	<span class="text-sm">{device.profile_name || '—'}</span>
+{/snippet}
+
+{#snippet lastActiveCell(device: DeviceSummary)}
+	<span class="text-sm text-muted">
+		{device.last_active ? new Date(device.last_active).toLocaleString() : '—'}
+	</span>
+{/snippet}
+
+{#snippet statusCell(device: DeviceSummary)}
+	<StatusBadge status={statusLabel(device)} size="sm" />
+{/snippet}
+
+{#snippet actionsCell(device: DeviceSummary)}
+	<DeviceRow {device} />
+{/snippet}
 
 <div class="device-list-container">
 	<!-- Header -->
@@ -268,38 +362,6 @@
 
 			<!-- Export -->
 			<ExportMenu data={$filteredDevices} filename="devices" disabled={$isDevicesLoading} />
-
-			<!-- Column Selector -->
-			<div class="column-selector">
-				<button
-					class="btn btn-secondary btn-sm"
-					on:click={() => (columnSelectorOpen = !columnSelectorOpen)}
-				>
-					<Icon name="settings" size={14} /> Columns
-				</button>
-				{#if columnSelectorOpen}
-					<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-					<div class="column-dropdown" on:click|stopPropagation>
-						<div class="column-dropdown-header">
-							<span class="text-sm text-muted">Show/Hide Columns</span>
-						</div>
-						{#each allColumns as column}
-							<label class="column-option" class:disabled={column.required}>
-								<input
-									type="checkbox"
-									checked={$columnVisibility[column.id]}
-									disabled={column.required}
-									on:change={() => handleToggleColumn(column.id)}
-								/>
-								<span>{column.label}</span>
-								{#if column.required}
-									<span class="required-badge">Required</span>
-								{/if}
-							</label>
-						{/each}
-					</div>
-				{/if}
-			</div>
 
 			<button
 				class="btn btn-secondary btn-sm"
@@ -432,177 +494,137 @@
 	</div>
 
 	<!-- Table -->
-	<div class="table-wrapper">
-		{#if $isDevicesLoading && $filteredDevices.length === 0}
-			<!-- Loading skeleton -->
-			<div class="loading-container">
-				<span class="loading-spinner"></span>
-				<span>Loading devices...</span>
-			</div>
-		{:else if $filteredDevices.length === 0}
-			<!-- Empty state -->
-			<div class="empty-state">
-				{#if $deviceFilters.search || $deviceFilters.status !== 'all' || $deviceFilters.connectionType !== 'all' || $deviceFilters.frequency !== 'all'}
-					<p>No devices match your filters.</p>
-					<button
-						class="btn btn-secondary btn-sm"
-						on:click={() =>
-							deviceFilters.set({
-								search: '',
-								status: 'all',
-								connectionType: 'all',
-								frequency: 'all',
-								sortBy: 'name',
-								sortOrder: 'asc'
-							})}
-					>
-						Clear filters
-					</button>
-				{:else}
-					<p>No devices found on this network.</p>
-				{/if}
-			</div>
+	<div class="table-section">
+		{#if $filteredDevices.length === 0 && !$isDevicesLoading && hasActiveFilters}
+			<EmptyState title="No devices match your filters.">
+				{#snippet action()}
+					<button class="btn btn-secondary btn-sm" on:click={clearFilters}>Clear filters</button>
+				{/snippet}
+			</EmptyState>
 		{:else}
-			<table class="table device-table">
-				<thead>
-					<tr>
-						<!-- Selection checkbox (only in selection mode) -->
-						{#if $selectionMode}
-							<th class="select-header">
-								<input
-									type="checkbox"
-									checked={allSelected}
-									on:change={handleSelectAll}
-									title="Select all"
-								/>
-							</th>
-						{/if}
-						{#if $columnVisibility.name}
-							<th class="sortable" on:click={() => handleSort('name')}>
-								Device
-								{#if $deviceFilters.sortBy === 'name'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.ip}
-							<th class="sortable" on:click={() => handleSort('ip')}>
-								IP Address
-								{#if $deviceFilters.sortBy === 'ip'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.mac}
-							<th class="sortable" on:click={() => handleSort('mac')}>
-								MAC Address
-								{#if $deviceFilters.sortBy === 'mac'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.hostname}
-							<th class="sortable" on:click={() => handleSort('hostname')}>
-								Hostname
-								{#if $deviceFilters.sortBy === 'hostname'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.manufacturer}
-							<th class="sortable" on:click={() => handleSort('manufacturer')}>
-								Manufacturer
-								{#if $deviceFilters.sortBy === 'manufacturer'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.deviceType}
-							<th class="sortable" on:click={() => handleSort('deviceType')}>
-								Device Type
-								{#if $deviceFilters.sortBy === 'deviceType'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.connection}
-							<th class="sortable" on:click={() => handleSort('connection')}>
-								Connection
-								{#if $deviceFilters.sortBy === 'connection'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.signal}
-							<th class="sortable" on:click={() => handleSort('signal')}>
-								Signal
-								{#if $deviceFilters.sortBy === 'signal'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.frequency}
-							<th>Frequency</th>
-						{/if}
-						{#if $columnVisibility.connectedTo}
-							<th class="sortable" on:click={() => handleSort('connectedTo')}>
-								Connected To
-								{#if $deviceFilters.sortBy === 'connectedTo'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.profile}
-							<th class="sortable" on:click={() => handleSort('profile')}>
-								Profile
-								{#if $deviceFilters.sortBy === 'profile'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.lastActive}
-							<th class="sortable" on:click={() => handleSort('last_active')}>
-								Last Active
-								{#if $deviceFilters.sortBy === 'last_active'}
-									<span class="sort-indicator"
-										>{$deviceFilters.sortOrder === 'asc' ? '↑' : '↓'}</span
-									>
-								{/if}
-							</th>
-						{/if}
-						{#if $columnVisibility.status}
-							<th>Status</th>
-						{/if}
-						<!-- Actions always visible -->
-						<th class="actions-header">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each $filteredDevices as device (device.id || device.mac)}
-						<DeviceRow {device} />
-					{/each}
-				</tbody>
-			</table>
+			<DataTable
+				id="devices"
+				columns={[
+					{
+						key: 'name',
+						header: 'Device',
+						required: true,
+						sortable: true,
+						accessor: (d) => d.display_name ?? '',
+						render: nameCell
+					},
+					{
+						key: 'ip',
+						header: 'IP Address',
+						sortable: true,
+						accessor: (d) => ipSortKey(d.ip),
+						render: ipCell
+					},
+					{
+						key: 'mac',
+						header: 'MAC Address',
+						sortable: true,
+						accessor: (d) => d.mac ?? '',
+						render: macCell
+					},
+					{
+						key: 'hostname',
+						header: 'Hostname',
+						sortable: true,
+						visible: false,
+						accessor: (d) => d.hostname ?? '',
+						render: hostnameCell
+					},
+					{
+						key: 'manufacturer',
+						header: 'Manufacturer',
+						sortable: true,
+						visible: false,
+						accessor: (d) => d.manufacturer ?? '',
+						render: manufacturerCell
+					},
+					{
+						key: 'deviceType',
+						header: 'Device Type',
+						sortable: true,
+						visible: false,
+						accessor: (d) => d.device_type ?? '',
+						render: deviceTypeCell
+					},
+					{
+						key: 'connection',
+						header: 'Connection',
+						sortable: true,
+						accessor: (d) => d.connection_type ?? '',
+						render: connectionCell
+					},
+					{
+						key: 'signal',
+						header: 'Signal',
+						sortable: true,
+						visible: false,
+						accessor: (d) => (d.signal_strength != null ? -d.signal_strength : 100),
+						render: signalCell
+					},
+					{
+						key: 'frequency',
+						header: 'Frequency',
+						sortable: false,
+						visible: false,
+						render: frequencyCell
+					},
+					{
+						key: 'connectedTo',
+						header: 'Connected To',
+						sortable: true,
+						accessor: (d) => d.connected_to_eero ?? '',
+						render: connectedToCell
+					},
+					{
+						key: 'profile',
+						header: 'Profile',
+						sortable: true,
+						visible: false,
+						accessor: (d) => d.profile_name ?? '',
+						render: profileCell
+					},
+					{
+						key: 'lastActive',
+						header: 'Last Active',
+						sortable: true,
+						visible: false,
+						accessor: (d) => d.last_active ?? '',
+						render: lastActiveCell
+					},
+					{
+						key: 'status',
+						header: 'Status',
+						sortable: false,
+						render: statusCell
+					},
+					{
+						key: 'actions',
+						header: 'Actions',
+						required: true,
+						align: 'right',
+						render: actionsCell
+					}
+				] as DataTableColumn<DeviceSummary>[]}
+				rows={$filteredDevices}
+				getRowId={(d) => d.id || d.mac || ''}
+				loading={$isDevicesLoading}
+				emptyTitle="No devices found on this network."
+				sortBy={toColumnKey($deviceFilters.sortBy)}
+				sortDirection={$deviceFilters.sortOrder === 'asc' ? 'ascending' : 'descending'}
+				onSort={handleSort}
+				selectable={$selectionMode}
+				selected={$selectedDevices}
+				onSelectionChange={(s) => selectedDevices.set(s)}
+				stickyHeader
+				stickyActionsColumn
+				rowClass={deviceRowClass}
+				onVisibleColumnsChange={(v) => (visibleColumnKeys = v)}
+			/>
 		{/if}
 	</div>
 </div>
@@ -638,7 +660,6 @@
 		gap: var(--space-2);
 	}
 
-	.column-selector,
 	.profile-selector {
 		position: relative;
 	}
@@ -690,67 +711,6 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-2);
-	}
-
-	.select-header {
-		width: 40px;
-		text-align: center;
-	}
-
-	.select-header input[type='checkbox'] {
-		width: 18px;
-		height: 18px;
-		cursor: pointer;
-		accent-color: var(--color-accent);
-	}
-
-	.column-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: var(--space-1);
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		min-width: 200px;
-		z-index: var(--z-modal);
-	}
-
-	.column-dropdown-header {
-		padding: var(--space-2) var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.column-option {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		cursor: pointer;
-		transition: background-color var(--transition-fast);
-	}
-
-	.column-option:hover {
-		background-color: var(--color-bg-primary);
-	}
-
-	.column-option.disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.column-option input[type='checkbox'] {
-		accent-color: var(--color-accent);
-	}
-
-	.required-badge {
-		margin-left: auto;
-		font-size: 0.625rem;
-		padding: 1px 4px;
-		background: var(--color-bg-tertiary);
-		border-radius: var(--radius-sm);
-		color: var(--color-text-muted);
 	}
 
 	.device-counts {
@@ -844,63 +804,67 @@
 		color: var(--color-text-primary);
 	}
 
-	.table-wrapper {
-		overflow-x: auto;
-		overflow-y: visible;
+	.table-section {
+		padding: var(--space-2) var(--space-4) var(--space-4);
 	}
 
-	.device-table {
-		width: 100%;
-		min-width: max-content;
+	/* Row markup rendered by DataTable's `<tr class={rowClass(row)}>` (see DeviceList's
+	   deviceRowClass) — :global() because DataTable, not this component, owns the element. */
+	:global(.device-row.blocked) {
+		opacity: 0.7;
 	}
 
-	.device-table th {
-		background-color: var(--color-bg-primary);
-		position: sticky;
-		top: 0;
-		z-index: var(--z-base);
+	:global(.device-row.disconnected) {
+		opacity: 0.6;
 	}
 
-	.sortable {
-		cursor: pointer;
-		user-select: none;
+	:global(.device-row.selected) {
+		background-color: var(--color-accent-muted, rgba(59, 130, 246, 0.1));
 	}
 
-	.sortable:hover {
+	:global(.device-row.selected:hover) {
+		background-color: var(--color-accent-muted, rgba(59, 130, 246, 0.15));
+	}
+
+	/* Cell content below is rendered via column `render` snippets declared in this component, so
+	   (unlike the `<tr>` above) it compiles into this component's own scope and needs no
+	   :global() — Svelte scopes a snippet's markup to wherever it's *declared*, not where it's
+	   later `{@render}`-ed from. */
+	.device-name-wrapper {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		min-width: 200px;
+	}
+
+	.name-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.name {
+		font-weight: 500;
+	}
+
+	.device-link {
 		color: var(--color-text-primary);
+		text-decoration: none;
+		transition: color var(--transition-fast);
 	}
 
-	.sort-indicator {
-		margin-left: var(--space-1);
+	.device-link:hover {
+		color: var(--color-accent);
+		text-decoration: underline;
+	}
+
+	.manufacturer {
 		font-size: 0.75rem;
 	}
 
-	.actions-header {
-		width: 60px;
-		text-align: right;
-		position: sticky;
-		right: 0;
-		background-color: var(--color-bg-primary);
-		z-index: var(--z-dropdown);
-	}
-
-	.loading-container {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-12);
-		color: var(--color-text-secondary);
-	}
-
-	.empty-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-12);
-		color: var(--color-text-secondary);
+	.signal {
+		font-size: 0.625rem;
+		letter-spacing: -0.05em;
+		color: var(--color-success);
 	}
 
 	@media (max-width: 768px) {

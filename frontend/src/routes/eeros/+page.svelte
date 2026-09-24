@@ -5,18 +5,36 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { EeroSummary } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
 	import Icon from '$components/common/Icon.svelte';
+	import DataTable, {
+		type DataTableColumn,
+		type SortDirection
+	} from '$components/common/DataTable.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
+	import ErrorState from '$components/common/ErrorState.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	let eeros: EeroSummary[] = [];
 	let loading = true;
 	let error: string | null = null;
 	let viewMode: 'blocks' | 'list' = 'blocks';
 	let lastNetworkId: string | null = null;
+
+	// Default sort is location ascending (house rule - see lessons-learned.md); DataTable is
+	// driven in controlled mode so the header reflects that default instead of only the data.
+	let sortBy: string | null = 'location';
+	let sortDirection: SortDirection = 'ascending';
+
+	function handleSort(key: string | null, direction: SortDirection) {
+		sortBy = key;
+		sortDirection = direction;
+	}
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
@@ -34,7 +52,6 @@
 		error = null;
 		try {
 			const result = await api.eeros.list(refresh);
-			console.log('Eeros API response:', result);
 			// Ensure we have an array, filter out invalid entries, and sort alphabetically by location
 			eeros = Array.isArray(result)
 				? result
@@ -45,7 +62,6 @@
 							return nameA.localeCompare(nameB);
 						})
 				: [];
-			console.log('Eeros after filter and sort:', eeros);
 		} catch (err) {
 			console.error('Failed to load eeros:', err);
 			error = err instanceof Error ? err.message : 'Failed to load eero nodes';
@@ -65,7 +81,58 @@
 	function getEeroKey(eero: EeroSummary, index: number): string {
 		return eero.id || `eero-${index}`;
 	}
+
+	function goToEero(eero: EeroSummary) {
+		if (eero.id) goto(`/eeros/${eero.id}`);
+	}
 </script>
+
+{#snippet locationCell(eero: EeroSummary)}
+	<div class="eero-name-cell">
+		<span class="status-dot" class:online={eero.status === 'green'}></span>
+		<div>
+			<span class="eero-location">{eero.location || eero.model || 'Unknown'}</span>
+			{#if eero.is_gateway}
+				<span class="badge badge-info badge-sm">Gateway</span>
+			{:else}
+				<span class="badge badge-secondary badge-sm">Node</span>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+{#snippet modelCell(eero: EeroSummary)}
+	<span class="text-sm">{eero.model || '—'}</span>
+{/snippet}
+
+{#snippet ipAddressCell(eero: EeroSummary)}
+	<span class="mono text-sm">{eero.ip_address || '—'}</span>
+{/snippet}
+
+{#snippet clientsCell(eero: EeroSummary)}
+	<span class="text-sm">{eero.connected_clients_count ?? 0}</span>
+{/snippet}
+
+{#snippet connectionCell(eero: EeroSummary)}
+	<span class="text-sm">
+		<Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
+		{eero.wired ? 'Wired' : 'Wireless'}
+	</span>
+{/snippet}
+
+{#snippet meshQualityCell(eero: EeroSummary)}
+	{#if !eero.is_gateway && eero.mesh_quality_bars != null}
+		<span class="mesh-quality mono" title="Mesh: {eero.mesh_quality_bars}/5">
+			{getMeshQualityBars(eero.mesh_quality_bars)}
+		</span>
+	{:else}
+		<span class="text-muted">—</span>
+	{/if}
+{/snippet}
+
+{#snippet statusCell(eero: EeroSummary)}
+	<StatusBadge status={eero.status || 'unknown'} size="sm" />
+{/snippet}
 
 <svelte:head>
 	<title>Eeros | Eero Dashboard</title>
@@ -109,19 +176,11 @@
 	</header>
 
 	{#if loading && eeros.length === 0}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading eero nodes...</span>
-		</div>
+		<Skeleton variant="table-rows" rows={4} columns={6} />
 	{:else if error}
-		<div class="error-state">
-			<p class="text-danger">Error: {error}</p>
-			<button class="btn btn-secondary" on:click={() => fetchEeros(true)}> Try Again </button>
-		</div>
+		<ErrorState message={error} onRetry={() => fetchEeros(true)} />
 	{:else if eeros.length === 0}
-		<div class="empty-state">
-			<p>No eero nodes found.</p>
-		</div>
+		<EmptyState icon="eeros" title="No eero nodes found." />
 	{:else if viewMode === 'blocks'}
 		<!-- Block/Card View -->
 		<div class="eero-grid">
@@ -182,54 +241,57 @@
 	{:else}
 		<!-- List View -->
 		<div class="card eeros-list">
-			<table class="eeros-table">
-				<thead>
-					<tr>
-						<th>Eero</th>
-						<th>Model</th>
-						<th>IP Address</th>
-						<th>Clients</th>
-						<th>Connection</th>
-						<th>Status</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each eeros as eero, index (getEeroKey(eero, index))}
-						<tr
-							class="clickable"
-							class:gateway={eero.is_gateway}
-							on:click={() => eero.id && window.location.assign(`/eeros/${eero.id}`)}
-						>
-							<td class="eero-name-cell">
-								<span class="status-dot" class:online={eero.status === 'green'}></span>
-								<div>
-									<span class="eero-location">{eero.location || eero.model || 'Unknown'}</span>
-									{#if eero.is_gateway}
-										<span class="badge badge-info badge-sm">Gateway</span>
-									{:else}
-										<span class="badge badge-secondary badge-sm">Node</span>
-									{/if}
-								</div>
-							</td>
-							<td class="text-sm">{eero.model || '—'}</td>
-							<td class="mono text-sm">{eero.ip_address || '—'}</td>
-							<td class="text-sm">{eero.connected_clients_count ?? 0}</td>
-							<td class="text-sm">
-								<Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
-								{eero.wired ? 'Wired' : 'Wireless'}
-								{#if !eero.is_gateway && eero.mesh_quality_bars != null}
-									<span class="mesh-quality mono" title="Mesh: {eero.mesh_quality_bars}/5">
-										{getMeshQualityBars(eero.mesh_quality_bars)}
-									</span>
-								{/if}
-							</td>
-							<td>
-								<StatusBadge status={eero.status || 'unknown'} size="sm" />
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+			<DataTable
+				id="eeros"
+				columns={[
+					{
+						key: 'location',
+						header: 'Eero',
+						required: true,
+						sortable: true,
+						accessor: (e) => (e.location || e.model || '').toLowerCase(),
+						render: locationCell
+					},
+					{
+						key: 'model',
+						header: 'Model',
+						sortable: true,
+						accessor: (e) => e.model ?? '',
+						render: modelCell
+					},
+					{ key: 'ipAddress', header: 'IP Address', render: ipAddressCell },
+					{
+						key: 'clients',
+						header: 'Clients',
+						sortable: true,
+						accessor: (e) => e.connected_clients_count ?? 0,
+						render: clientsCell
+					},
+					{ key: 'connection', header: 'Connection', render: connectionCell },
+					{
+						key: 'meshQuality',
+						header: 'Mesh Quality',
+						sortable: true,
+						accessor: (e) => e.mesh_quality_bars ?? -1,
+						render: meshQualityCell
+					},
+					{
+						key: 'status',
+						header: 'Status',
+						sortable: true,
+						accessor: (e) => e.status ?? '',
+						render: statusCell
+					}
+				] as DataTableColumn<EeroSummary>[]}
+				rows={eeros}
+				getRowId={(e) => e.id}
+				emptyTitle="No eero nodes found."
+				{sortBy}
+				{sortDirection}
+				onSort={handleSort}
+				onRowClick={goToEero}
+				rowClass={(e) => (e.is_gateway ? 'eero-row gateway' : 'eero-row')}
+			/>
 		</div>
 	{/if}
 </div>
@@ -248,22 +310,6 @@
 
 	.header-left h1 {
 		margin-bottom: var(--space-1);
-	}
-
-	.loading-state,
-	.empty-state,
-	.error-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-12);
-		color: var(--color-text-secondary);
-	}
-
-	.loading-state {
-		flex-direction: row;
 	}
 
 	.eero-grid {
@@ -381,44 +427,14 @@
 		overflow-x: auto;
 	}
 
-	.eeros-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.eeros-table th,
-	.eeros-table td {
-		text-align: left;
-		padding: var(--space-3) var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.eeros-table th {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		font-weight: 600;
-		background: var(--color-bg-primary);
-	}
-
-	.eeros-table tbody tr {
-		transition: background-color 0.15s ease;
-	}
-
-	.eeros-table tbody tr.clickable {
-		cursor: pointer;
-	}
-
-	.eeros-table tbody tr:hover {
-		background: var(--color-bg-tertiary);
-	}
-
-	.eeros-table tbody tr.gateway {
+	/* `<tr class="eero-row gateway">` is DataTable's own element (rowClass hook), so it needs
+	   :global() — everything below is rendered via `render` snippets declared in this file and
+	   is scoped normally. */
+	:global(.eero-row.gateway) {
 		background: rgba(59, 130, 246, 0.05);
 	}
 
-	.eeros-table tbody tr.gateway:hover {
+	:global(.eero-row.gateway:hover) {
 		background: rgba(59, 130, 246, 0.1);
 	}
 

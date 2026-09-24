@@ -13,6 +13,12 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import { getDeviceTypeIcon } from '$lib/deviceIcons';
+	import DataTable, {
+		type DataTableColumn,
+		type SortDirection
+	} from '$components/common/DataTable.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	let profile: ProfileSummary | null = null;
 	let loading = true;
@@ -22,6 +28,20 @@
 	let showRenameModal = false;
 	let renameValue = '';
 	let renaming = false;
+
+	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
+	// in controlled mode so the header reflects that default instead of only the data.
+	let sortBy: string | null = 'name';
+	let sortDirection: SortDirection = 'ascending';
+
+	function handleSort(key: string | null, direction: SortDirection) {
+		sortBy = key;
+		sortDirection = direction;
+	}
+
+	function goToDevice(device: ProfileDevice) {
+		if (device.id) goto(`/devices/${device.id}`);
+	}
 
 	$: profileId = $page.params.id;
 	$: devices = profile?.devices || [];
@@ -41,8 +61,6 @@
 		error = null;
 		try {
 			const result = await api.profiles.get(profileId, refresh);
-			console.log('Profile detail:', result);
-			console.log('Profile devices:', result.devices);
 			profile = result;
 		} catch (err) {
 			console.error('Failed to load profile:', err);
@@ -172,6 +190,52 @@
 		});
 	}
 </script>
+
+{#snippet deviceNameCell(device: ProfileDevice)}
+	<div class="device-name-cell">
+		<span class="device-icon-sm"
+			><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
+		>
+		<div>
+			<span class="device-name">
+				{device.display_name || device.nickname || device.hostname || 'Unknown'}
+			</span>
+			{#if device.manufacturer}
+				<span class="text-xs text-muted">{device.manufacturer}</span>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
+{#snippet deviceIpCell(device: ProfileDevice)}
+	<span class="mono text-sm">{device.ip || '—'}</span>
+{/snippet}
+
+{#snippet deviceStatusCell(device: ProfileDevice)}
+	{#if device.paused}
+		<span class="badge badge-warning">Paused</span>
+	{:else if device.connected}
+		<span class="badge badge-success">Online</span>
+	{:else}
+		<span class="badge badge-muted">Offline</span>
+	{/if}
+{/snippet}
+
+{#snippet deviceConnectionCell(device: ProfileDevice)}
+	<span class="text-sm">
+		<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+		{device.wireless ? 'Wireless' : 'Wired'}
+	</span>
+{/snippet}
+
+{#snippet deviceActionsCell(device: ProfileDevice)}
+	<button
+		class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
+		on:click|stopPropagation={() => handlePauseDevice(device)}
+	>
+		{device.paused ? 'Resume' : 'Pause'}
+	</button>
+{/snippet}
 
 <svelte:head>
 	<title>{profile?.name || 'Profile'} | Eero Dashboard</title>
@@ -313,29 +377,23 @@
 			</div>
 
 			{#if loading && devices.length === 0}
-				<div class="loading-state small">
-					<span class="loading-spinner"></span>
-					<span>Loading devices...</span>
-				</div>
+				<Skeleton variant="table-rows" rows={4} columns={5} />
 			{:else if devices.length === 0}
-				<div class="empty-state card">
-					<p>No devices found for this profile.</p>
-					<p class="text-sm text-muted">
-						{#if profile.device_count > 0}
-							This profile has {profile.device_count} assigned devices, but they may not be in the current
-							device cache.
-							<button
-								class="btn btn-secondary btn-sm"
-								on:click={() => fetchProfile(true)}
-								style="margin-top: var(--space-2);"
-							>
+				<EmptyState title="No devices found for this profile.">
+					{#snippet action()}
+						{#if (profile?.device_count ?? 0) > 0}
+							<p class="text-sm text-muted">
+								This profile has {profile?.device_count} assigned devices, but they may not be in the
+								current device cache.
+							</p>
+							<button class="btn btn-secondary btn-sm" on:click={() => fetchProfile(true)}>
 								Refresh
 							</button>
 						{:else}
-							Assign devices to this profile using the Eero app.
+							<p class="text-sm text-muted">Assign devices to this profile using the Eero app.</p>
 						{/if}
-					</p>
-				</div>
+					{/snippet}
+				</EmptyState>
 			{:else if viewMode === 'blocks'}
 				<!-- Block/Card View -->
 				<div class="devices-grid">
@@ -408,66 +466,60 @@
 			{:else}
 				<!-- List View -->
 				<div class="card devices-list">
-					<table class="devices-table">
-						<thead>
-							<tr>
-								<th>Device</th>
-								<th>IP Address</th>
-								<th>Status</th>
-								<th>Connection</th>
-								<th>Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each devices as device, index (getDeviceKey(device, index))}
-								<tr
-									class:paused={device.paused}
-									class:offline={!device.connected}
-									class:clickable={!!device.id}
-									on:click={() => device.id && goto(`/devices/${device.id}`)}
-								>
-									<td class="device-name-cell">
-										<span class="device-icon-sm"
-											><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
-										>
-										<div>
-											<span class="device-name"
-												>{device.display_name ||
-													device.nickname ||
-													device.hostname ||
-													'Unknown'}</span
-											>
-											{#if device.manufacturer}
-												<span class="text-xs text-muted">{device.manufacturer}</span>
-											{/if}
-										</div>
-									</td>
-									<td class="mono text-sm">{device.ip || '—'}</td>
-									<td>
-										{#if device.paused}
-											<span class="badge badge-warning">Paused</span>
-										{:else if device.connected}
-											<span class="badge badge-success">Online</span>
-										{:else}
-											<span class="badge badge-muted">Offline</span>
-										{/if}
-									</td>
-									<td class="text-sm"
-										><Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
-										{device.wireless ? 'Wireless' : 'Wired'}</td
-									>
-									<td on:click|stopPropagation>
-										<button
-											class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
-											on:click={() => handlePauseDevice(device)}
-										>
-											{device.paused ? 'Resume' : 'Pause'}
-										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+					<DataTable
+						id="profile-devices"
+						columns={[
+							{
+								key: 'name',
+								header: 'Device',
+								required: true,
+								sortable: true,
+								accessor: (d) => (d.display_name || d.nickname || d.hostname || '').toLowerCase(),
+								render: deviceNameCell
+							},
+							{
+								key: 'ip',
+								header: 'IP Address',
+								sortable: true,
+								accessor: (d) => d.ip ?? '',
+								render: deviceIpCell
+							},
+							{
+								key: 'status',
+								header: 'Status',
+								sortable: true,
+								accessor: (d) => (d.paused ? 'paused' : d.connected ? 'online' : 'offline'),
+								render: deviceStatusCell
+							},
+							{
+								key: 'connection',
+								header: 'Connection',
+								sortable: true,
+								accessor: (d) => (d.wireless ? 'wireless' : 'wired'),
+								render: deviceConnectionCell
+							},
+							{
+								key: 'actions',
+								header: 'Actions',
+								required: true,
+								align: 'right',
+								render: deviceActionsCell
+							}
+						] as DataTableColumn<ProfileDevice>[]}
+						rows={devices}
+						getRowId={(d) => d.id || d.mac || ''}
+						emptyTitle="No devices found for this profile."
+						{sortBy}
+						{sortDirection}
+						onSort={handleSort}
+						onRowClick={goToDevice}
+						rowClass={(d) => {
+							const classes = ['profile-device-row'];
+							if (d.paused) classes.push('paused');
+							if (!d.connected) classes.push('offline');
+							return classes.join(' ');
+						}}
+					/>
 				</div>
 			{/if}
 		</section>
@@ -535,8 +587,7 @@
 	}
 
 	.loading-state,
-	.error-state,
-	.empty-state {
+	.error-state {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -549,10 +600,6 @@
 
 	.loading-state {
 		flex-direction: row;
-	}
-
-	.loading-state.small {
-		padding: var(--space-6);
 	}
 
 	.error-actions {
@@ -773,44 +820,14 @@
 		overflow-x: auto;
 	}
 
-	.devices-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.devices-table th,
-	.devices-table td {
-		text-align: left;
-		padding: var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.devices-table th {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		font-weight: 600;
-		background: var(--color-bg-primary);
-	}
-
-	.devices-table tbody tr.clickable {
-		cursor: pointer;
-	}
-
-	.devices-table tbody tr:hover {
-		background: var(--color-bg-primary);
-	}
-
-	.devices-table tbody tr.clickable:hover {
-		background: var(--color-bg-tertiary);
-	}
-
-	.devices-table tbody tr.paused {
+	/* `<tr class="profile-device-row paused offline">` is DataTable's own element (rowClass
+	   hook), so it needs :global() — cell content below is rendered via `render` snippets
+	   declared in this file and is scoped normally. */
+	:global(.profile-device-row.paused) {
 		opacity: 0.7;
 	}
 
-	.devices-table tbody tr.offline {
+	:global(.profile-device-row.offline) {
 		opacity: 0.6;
 	}
 

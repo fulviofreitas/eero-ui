@@ -5,12 +5,20 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { ProfileSummary } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
 	import Icon from '$components/common/Icon.svelte';
+	import DataTable, {
+		type DataTableColumn,
+		type SortDirection
+	} from '$components/common/DataTable.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
+	import ErrorState from '$components/common/ErrorState.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
 	let profiles: ProfileSummary[] = [];
 	let loading = true;
@@ -20,6 +28,20 @@
 	let showCreateModal = false;
 	let newProfileName = '';
 	let creating = false;
+
+	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
+	// in controlled mode so the header reflects that default instead of only the data.
+	let sortBy: string | null = 'name';
+	let sortDirection: SortDirection = 'ascending';
+
+	function handleSort(key: string | null, direction: SortDirection) {
+		sortBy = key;
+		sortDirection = direction;
+	}
+
+	function goToProfile(profile: ProfileSummary) {
+		if (profile.id) goto(`/profiles/${profile.id}`);
+	}
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
@@ -37,7 +59,6 @@
 		error = null;
 		try {
 			const result = await api.profiles.list(refresh);
-			console.log('Profiles API response:', result);
 			// Ensure we have an array and sort alphabetically by name
 			profiles = Array.isArray(result)
 				? result.sort((a, b) => {
@@ -77,6 +98,25 @@
 		}
 	}
 </script>
+
+{#snippet profileCell(profile: ProfileSummary)}
+	<div class="profile-name-cell">
+		<span class="profile-icon-sm"><Icon name="person" size={14} /></span>
+		<span class="profile-name">{profile.name || 'Unknown Profile'}</span>
+	</div>
+{/snippet}
+
+{#snippet devicesCell(profile: ProfileSummary)}
+	<span class="text-sm">{profile.device_count ?? 0}</span>
+{/snippet}
+
+{#snippet statusCell(profile: ProfileSummary)}
+	{#if profile.paused}
+		<span class="badge badge-warning">⏸ Paused</span>
+	{:else}
+		<span class="badge badge-success"><Icon name="check" size={12} /> Active</span>
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>Profiles | Eero Dashboard</title>
@@ -123,22 +163,15 @@
 	</header>
 
 	{#if loading && profiles.length === 0}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading profiles...</span>
-		</div>
+		<Skeleton variant="table-rows" rows={4} columns={3} />
 	{:else if error}
-		<div class="error-state">
-			<p class="text-danger">Error: {error}</p>
-			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)}> Try Again </button>
-		</div>
+		<ErrorState message={error} onRetry={() => fetchProfiles(true)} />
 	{:else if profiles.length === 0}
-		<div class="empty-state card">
-			<p>No profiles found.</p>
-			<p class="text-sm text-muted">
-				Profiles are created in the Eero app and can be used to group devices for parental controls.
-			</p>
-		</div>
+		<EmptyState
+			icon="person"
+			title="No profiles found."
+			description="Profiles are created in the Eero app and can be used to group devices for parental controls."
+		/>
 	{:else if viewMode === 'blocks'}
 		<!-- Block/Card View -->
 		<div class="profiles-grid">
@@ -167,37 +200,41 @@
 	{:else}
 		<!-- List View -->
 		<div class="card profiles-list">
-			<table class="profiles-table">
-				<thead>
-					<tr>
-						<th>Profile</th>
-						<th>Devices</th>
-						<th>Status</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each profiles as profile, index (getProfileKey(profile, index))}
-						<tr
-							class:paused={profile.paused}
-							class="clickable"
-							on:click={() => profile.id && window.location.assign(`/profiles/${profile.id}`)}
-						>
-							<td class="profile-name-cell">
-								<span class="profile-icon-sm"><Icon name="person" size={14} /></span>
-								<span class="profile-name">{profile.name || 'Unknown Profile'}</span>
-							</td>
-							<td class="text-sm">{profile.device_count ?? 0}</td>
-							<td>
-								{#if profile.paused}
-									<span class="badge badge-warning">⏸ Paused</span>
-								{:else}
-									<span class="badge badge-success"><Icon name="check" size={12} /> Active</span>
-								{/if}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+			<DataTable
+				id="profiles"
+				columns={[
+					{
+						key: 'name',
+						header: 'Profile',
+						required: true,
+						sortable: true,
+						accessor: (p) => (p.name || '').toLowerCase(),
+						render: profileCell
+					},
+					{
+						key: 'devices',
+						header: 'Devices',
+						sortable: true,
+						accessor: (p) => p.device_count ?? 0,
+						render: devicesCell
+					},
+					{
+						key: 'status',
+						header: 'Status',
+						sortable: true,
+						accessor: (p) => (p.paused ? 'paused' : 'active'),
+						render: statusCell
+					}
+				] as DataTableColumn<ProfileSummary>[]}
+				rows={profiles}
+				getRowId={(p) => p.id || p.name || ''}
+				emptyTitle="No profiles found."
+				{sortBy}
+				{sortDirection}
+				onSort={handleSort}
+				onRowClick={goToProfile}
+				rowClass={(p) => (p.paused ? 'profile-row paused' : 'profile-row')}
+			/>
 		</div>
 	{/if}
 
@@ -259,23 +296,6 @@
 
 	.header-left h1 {
 		margin-bottom: var(--space-1);
-	}
-
-	.loading-state,
-	.empty-state,
-	.error-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-12);
-		color: var(--color-text-secondary);
-		text-align: center;
-	}
-
-	.loading-state {
-		flex-direction: row;
 	}
 
 	.profiles-grid {
@@ -405,40 +425,10 @@
 		overflow-x: auto;
 	}
 
-	.profiles-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.profiles-table th,
-	.profiles-table td {
-		text-align: left;
-		padding: var(--space-3) var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.profiles-table th {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		font-weight: 600;
-		background: var(--color-bg-primary);
-	}
-
-	.profiles-table tbody tr {
-		transition: background-color 0.15s ease;
-	}
-
-	.profiles-table tbody tr.clickable {
-		cursor: pointer;
-	}
-
-	.profiles-table tbody tr:hover {
-		background: var(--color-bg-tertiary);
-	}
-
-	.profiles-table tbody tr.paused {
+	/* `<tr class="profile-row paused">` is DataTable's own element (rowClass hook), so it needs
+	   :global() — the cell content below is rendered via `render` snippets declared in this
+	   file and is scoped normally. */
+	:global(.profile-row.paused) {
 		opacity: 0.8;
 	}
 

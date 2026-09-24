@@ -219,4 +219,60 @@ describe('DataTable', () => {
 		const lastCall = onSelectionChange.mock.calls.at(-1)?.[0] as Set<string>;
 		expect([...lastCall].sort()).toEqual(['1', '2', '3']);
 	});
+
+	it('applies rowClass to each row and re-evaluates it on rerender', async () => {
+		const rowClass = vi.fn((r: unknown) => ((r as Row).name === 'Bravo' ? 'is-bravo' : undefined));
+		const { rerender } = render(DataTable, {
+			props: { id: 'test', columns, rows, getRowId, rowClass }
+		});
+
+		const bravoRow = screen.getByText('Bravo').closest('tr');
+		const alphaRow = screen.getByText('Alpha').closest('tr');
+		expect(bravoRow).toHaveClass('is-bravo');
+		expect(alphaRow).not.toHaveClass('is-bravo');
+
+		await rerender({ id: 'test', columns, rows, getRowId, rowClass: () => 'always' });
+		expect(screen.getByText('Bravo').closest('tr')).toHaveClass('always');
+		expect(screen.getByText('Alpha').closest('tr')).toHaveClass('always');
+	});
+
+	it('reports the resolved visible-column set via onVisibleColumnsChange, including on mount', async () => {
+		const onVisibleColumnsChange = vi.fn();
+		render(DataTable, {
+			props: { id: 'visible-test', columns, rows, getRowId, onVisibleColumnsChange }
+		});
+
+		expect(onVisibleColumnsChange).toHaveBeenCalledWith(new Set(['name', 'ip', 'status']));
+
+		onVisibleColumnsChange.mockClear();
+		await fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+		await fireEvent.click(screen.getByLabelText('IP'));
+
+		expect(onVisibleColumnsChange).toHaveBeenCalledWith(new Set(['name', 'status']));
+	});
+
+	it('activates onRowClick on click and on Enter/Space, and marks the row role=button', async () => {
+		const onRowClick = vi.fn();
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId, onRowClick } });
+
+		const bravoRow = screen.getByText('Bravo').closest('tr')!;
+		expect(bravoRow).toHaveAttribute('role', 'button');
+		expect(bravoRow).toHaveAttribute('tabindex', '0');
+
+		await fireEvent.click(bravoRow);
+		expect(onRowClick).toHaveBeenCalledWith(rows[0]);
+
+		await fireEvent.keyDown(bravoRow, { key: 'Enter' });
+		expect(onRowClick).toHaveBeenCalledTimes(2);
+
+		await fireEvent.keyDown(bravoRow, { key: 'a' });
+		expect(onRowClick).toHaveBeenCalledTimes(2);
+	});
+
+	it('rows have no role/tabindex when onRowClick is not supplied', () => {
+		render(DataTable, { props: { id: 'test', columns, rows, getRowId } });
+		const bravoRow = screen.getByText('Bravo').closest('tr')!;
+		expect(bravoRow).not.toHaveAttribute('role');
+		expect(bravoRow).not.toHaveAttribute('tabindex');
+	});
 });

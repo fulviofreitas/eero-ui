@@ -16,6 +16,15 @@
   handing back the already-sorted rows and the resolved visible columns. This is the seam WP9
   will use to slot in a virtual-scrolling body without changing this component's public API
   (§ 11 Q5 — no virtual-list dependency is added in this WP).
+
+  Two more caller hooks, added for WP3's DeviceList migration and kept generic:
+  - `rowClass(row)`: DataTable owns the default `<tr>`, so this is the only way for a caller to
+    apply row-state classes (blocked/offline/selected dimming, etc.) — only consulted when `body`
+    is not supplied; style the returned classes with `:global(...)` in the caller.
+  - `onVisibleColumnsChange(visible)`: fires whenever the resolved visible-column set changes
+    (including on mount). Column visibility is otherwise private to DataTable; this lets a caller
+    mirror it, e.g. to suppress a value shown as a fallback sub-label elsewhere once its own
+    column is visible.
 -->
 <script module lang="ts">
 	import type { Snippet } from 'svelte';
@@ -65,6 +74,27 @@
 		showColumnToggle?: boolean;
 		skeletonRows?: number;
 		body?: Snippet<[{ rows: T[]; columns: DataTableColumn<T>[] }]>;
+		/**
+		 * Per-row class string, e.g. for status-based dimming/highlighting (blocked, offline,
+		 * selected). DataTable owns the `<tr>` in its default body, so callers have no other way
+		 * to reach it. Only consulted when `body` is not supplied. Return value is applied as-is
+		 * to `class` — compose your own classes and style them with `:global(...)` in the caller.
+		 */
+		rowClass?: (row: T) => string | undefined;
+		/**
+		 * Whole-row activation (e.g. navigate to a detail page), replacing the mouse-only
+		 * `<tr on:click>` pattern in the pre-DataTable eeros/profiles tables. Unlike that pattern,
+		 * this is keyboard-accessible: the row gets `role="button"`, `tabindex="0"` and an
+		 * Enter/Space handler for free. Only consulted when `body` is not supplied.
+		 */
+		onRowClick?: (row: T) => void;
+		/**
+		 * Fired whenever the resolved visible-column set changes (including on mount). Column
+		 * visibility is otherwise private to DataTable; this lets a caller mirror it — e.g. to
+		 * avoid showing a value both in its own column and as a fallback sub-label elsewhere when
+		 * that column is already visible (see DeviceList's name column).
+		 */
+		onVisibleColumnsChange?: (visible: Set<string>) => void;
 	}
 
 	let {
@@ -85,8 +115,18 @@
 		stickyActionsColumn = false,
 		showColumnToggle = true,
 		skeletonRows = 5,
-		body
+		body,
+		rowClass,
+		onRowClick,
+		onVisibleColumnsChange
 	}: Props = $props();
+
+	function handleRowKeydown(event: KeyboardEvent, row: T) {
+		if (!onRowClick) return;
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		event.preventDefault();
+		onRowClick(row);
+	}
 
 	const storageKey = $derived(`datatable:${id}:columns`);
 
@@ -125,6 +165,10 @@
 
 	const visibleColumns = $derived(columns.filter((c) => columnVisibility[c.key] !== false));
 	const optionalColumns = $derived(columns.filter((c) => !c.required));
+
+	$effect(() => {
+		onVisibleColumnsChange?.(new Set(visibleColumns.map((c) => c.key)));
+	});
 
 	// --- Sort ---------------------------------------------------------------
 
@@ -334,7 +378,13 @@
 			{:else}
 				<tbody>
 					{#each sortedRows as row, index (getRowId(row))}
-						<tr>
+						<tr
+							class={rowClass?.(row)}
+							role={onRowClick ? 'button' : undefined}
+							tabindex={onRowClick ? 0 : undefined}
+							onclick={onRowClick ? () => onRowClick(row) : undefined}
+							onkeydown={onRowClick ? (e) => handleRowKeydown(e, row) : undefined}
+						>
 							{#if selectable}
 								<td class="select-col">
 									<input
@@ -424,6 +474,13 @@
 	.data-table {
 		width: 100%;
 		min-width: max-content;
+	}
+
+	/* `.table` (app.css) already gives every DataTable its th/td padding and row hover; the
+	   `<table class="table data-table">` below just opts in. Only the pointer affordance for
+	   onRowClick rows is DataTable-specific. */
+	.data-table tbody tr[role='button'] {
+		cursor: pointer;
 	}
 
 	.data-table thead.sticky th {
