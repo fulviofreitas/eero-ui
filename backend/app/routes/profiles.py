@@ -15,11 +15,14 @@ from ..deps import (
     validate_request_path_ids,
 )
 from ..transformers import (
+    InvalidIdentifierError,
     check_success,
     extract_data,
     extract_id_from_url,
     extract_list,
+    is_unsafe_short_text,
     normalize_profile,
+    validate_path_id,
 )
 from .auth import limiter
 from .networks import InsightsResponse, normalize_insights, validate_insight_params
@@ -516,6 +519,35 @@ _TIME_RE = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 _SCHEDULE_NAME_MAX_LEN = 64
 
 
+def _validate_id_list(
+    values: list[str], field_name: str, *, max_items: int = 100
+) -> None:
+    """Cap a caller-supplied list of identifiers and validate each entry.
+
+    Security review, 2026-09-24 (L2): mirrors ``routes/networks.py``'s
+    helper of the same name - bounds every list body this backend forwards
+    unchanged (here, ``applications``) so a caller cannot submit an
+    unbounded list, and rejects any entry that is not a well-formed bare
+    identifier before it reaches the SDK.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    if len(values) > max_items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must have at most {max_items} entries.",
+        )
+    for entry in values:
+        try:
+            validate_path_id(entry)
+        except InvalidIdentifierError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"{field_name} entries must be valid identifiers.",
+            )
+
+
 def _validate_schedule_days(days: list[str]) -> None:
     if not days:
         raise HTTPException(
@@ -538,10 +570,17 @@ def _validate_schedule_time(value: str, field_name: str) -> None:
 
 
 def _validate_schedule_name(name: str) -> None:
-    if not name or len(name) > _SCHEDULE_NAME_MAX_LEN:
+    """Reject an empty, oversized, or control-character-carrying schedule
+    name (security review, 2026-09-24, L2: aligned with the
+    ``is_unsafe_short_text`` contract already used for power-saving
+    schedule/subnet names in ``routes/networks.py``)."""
+    if not name or is_unsafe_short_text(name, max_bytes=_SCHEDULE_NAME_MAX_LEN):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"name must be 1-{_SCHEDULE_NAME_MAX_LEN} characters.",
+            detail=(
+                f"name must be 1-{_SCHEDULE_NAME_MAX_LEN} bytes, no control "
+                "characters."
+            ),
         )
 
 
@@ -883,6 +922,7 @@ async def set_profile_blocked_applications_route(
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7); premium-gated.
     Never retried on failure.
     """
+    _validate_id_list(body.applications, "applications")
     raw_result = await client.set_profile_blocked_applications(
         profile_id, body.applications, network_id=network_id
     )

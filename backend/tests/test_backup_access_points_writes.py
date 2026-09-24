@@ -157,6 +157,20 @@ class TestReorderBackupAccessPoints:
         )
         authenticated_client.update_backup_access_point.assert_not_called()
 
+    async def test_oversized_order_rejected_before_sdk_call(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """L2: order is capped at 100 entries."""
+        authenticated_client.rearrange_backup_access_points = AsyncMock()
+
+        response = await auth_client.put(
+            "/api/networks/net-1/backup-access-points/order",
+            json={"order": [f"ap-{i}" for i in range(101)]},
+        )
+
+        assert response.status_code == 422
+        authenticated_client.rearrange_backup_access_points.assert_not_called()
+
 
 class TestDiscoverBackupSsids:
     async def test_disabled_by_default_returns_403(
@@ -186,7 +200,59 @@ class TestDiscoverBackupSsids:
         )
 
         assert response.status_code == 200
-        assert response.json()["ssids"] == [{"ssid": "neighbor-net"}]
+        assert response.json()["ssids"] == [
+            {
+                "ssid": "neighbor-net",
+                "uuid": None,
+                "status": None,
+                "connectivity": None,
+                "signal": None,
+                "timestamp": None,
+            }
+        ]
+
+    async def test_unknown_and_sensitive_keys_dropped(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """L3: the upstream shape is unfixtured - allowlisted fields pass
+        through, everything else (including a PSK-shaped key) is dropped."""
+        authenticated_client.start_backup_ssid_discovery = AsyncMock(
+            return_value=make_raw_response({})
+        )
+        authenticated_client.discover_backup_ssids = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "ssids": [
+                        {
+                            "ssid": "neighbor-net",
+                            "uuid": "uuid-1",
+                            "status": "detected",
+                            "psk": "should-never-appear",
+                            "unexpected_field": "dropped",
+                        }
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.post(
+            "/api/networks/net-1/backup-access-points/discover"
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ssids"] == [
+            {
+                "ssid": "neighbor-net",
+                "uuid": "uuid-1",
+                "status": "detected",
+                "connectivity": None,
+                "signal": None,
+                "timestamp": None,
+            }
+        ]
+        assert "psk" not in response.text
+        assert "should-never-appear" not in response.text
 
 
 class TestBackupConnectivityCheck:
@@ -206,7 +272,9 @@ class TestBackupConnectivityCheck:
         self, auth_client, authenticated_client, experimental_writes_enabled
     ):
         authenticated_client.backup_connectivity_check = AsyncMock(
-            return_value=make_raw_response({"connected": True})
+            return_value=make_raw_response(
+                {"status": "connected", "ssid": "backup-net"}
+            )
         )
 
         response = await auth_client.post(
@@ -214,4 +282,24 @@ class TestBackupConnectivityCheck:
         )
 
         assert response.status_code == 200
-        assert response.json()["connected"] is True
+        assert response.json()["status"] == "connected"
+        assert response.json()["ssid"] == "backup-net"
+
+    async def test_unknown_key_dropped_from_response(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """L3: the upstream shape is unfixtured - an unrecognised key must
+        be dropped, never forwarded raw to the frontend."""
+        authenticated_client.backup_connectivity_check = AsyncMock(
+            return_value=make_raw_response(
+                {"status": "connected", "psk": "should-never-appear"}
+            )
+        )
+
+        response = await auth_client.post(
+            "/api/networks/net-1/backup-access-points/check"
+        )
+
+        assert response.status_code == 200
+        assert "psk" not in response.text
+        assert "should-never-appear" not in response.text

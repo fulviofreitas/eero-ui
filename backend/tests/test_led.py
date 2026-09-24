@@ -73,13 +73,68 @@ class TestEeroConnections:
 
     async def test_returns_connections(self, auth_client, authenticated_client):
         authenticated_client.get_connections = AsyncMock(
-            return_value=make_raw_response({"connections": [{"mac": "aa:bb"}]})
+            return_value=make_raw_response(
+                {
+                    "connections": [
+                        {
+                            "url": "/2.2/eeros/eero-1/connections/dev-1",
+                            "mac": "aa:bb:cc:dd:ee:ff",
+                            "ip": "192.168.1.50",
+                            "nickname": "Laptop",
+                            "connectivity": {"signal": -55, "frequency": 5180},
+                            "last_active": "2026-09-24T00:00:00Z",
+                        }
+                    ]
+                }
+            )
         )
 
         response = await auth_client.get("/api/eeros/eero-1/connections")
 
         assert response.status_code == 200
-        assert response.json() == {"connections": [{"mac": "aa:bb"}]}
+        assert response.json() == {
+            "connections": [
+                {
+                    "id": "dev-1",
+                    "url": "/2.2/eeros/eero-1/connections/dev-1",
+                    "mac": "aa:bb:cc:dd:ee:ff",
+                    "ip": "192.168.1.50",
+                    "nickname": "Laptop",
+                    "hostname": None,
+                    "display_name": "Laptop",
+                    "connection_type": None,
+                    "band": "5GHz",
+                    "signal": -55,
+                    "last_active": "2026-09-24T00:00:00Z",
+                }
+            ]
+        }
         authenticated_client.get_connections.assert_called_once_with(
             "eero-1", network_id="network-123"
         )
+
+    async def test_unknown_and_sensitive_keys_dropped(
+        self, auth_client, authenticated_client
+    ):
+        """L3: the upstream shape is unfixtured - allowlisted fields pass
+        through, everything else (including a PSK-shaped key) is dropped."""
+        authenticated_client.get_connections = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "connections": [
+                        {
+                            "mac": "aa:bb:cc:dd:ee:ff",
+                            "network_key": "should-never-appear",
+                            "unexpected_field": "dropped",
+                        }
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/eeros/eero-1/connections")
+
+        assert response.status_code == 200
+        assert "network_key" not in response.text
+        assert "should-never-appear" not in response.text
+        assert "unexpected_field" not in response.text

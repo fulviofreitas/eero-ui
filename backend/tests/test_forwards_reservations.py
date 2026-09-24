@@ -139,6 +139,45 @@ class TestCreateForward:
 
         assert response.status_code == 422
 
+    async def test_public_ip_rejected_before_sdk_call(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """L2: a forward's ip names a LAN client, so a public address is
+        rejected."""
+        authenticated_client.create_forward = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/networks/net-1/forwards",
+            json={
+                "client_port": 8080,
+                "gateway_port": 80,
+                "ip": "8.8.8.8",
+                "protocol": "tcp",
+            },
+        )
+
+        assert response.status_code == 422
+        authenticated_client.create_forward.assert_not_called()
+
+    async def test_control_char_in_description_rejected(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        authenticated_client.create_forward = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/networks/net-1/forwards",
+            json={
+                "client_port": 8080,
+                "gateway_port": 80,
+                "ip": "192.168.1.50",
+                "protocol": "tcp",
+                "description": "hello\x00world",
+            },
+        )
+
+        assert response.status_code == 422
+        authenticated_client.create_forward.assert_not_called()
+
 
 class TestDeleteForward:
     async def test_disabled_by_default_returns_403(
@@ -237,6 +276,39 @@ class TestCreateReservation:
         response = await auth_client.post(
             "/api/networks/net-1/reservations",
             json={"ip": "192.168.1.100", "mac": "not-a-mac"},
+        )
+
+        assert response.status_code == 422
+        authenticated_client.create_reservation.assert_not_called()
+
+    async def test_public_ip_rejected_before_sdk_call(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        """L2: a reservation's ip names a LAN client, so a public address
+        is rejected (public_static_ip is unaffected - it is intentionally
+        public)."""
+        authenticated_client.create_reservation = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/networks/net-1/reservations",
+            json={"ip": "8.8.8.8", "mac": "aa:bb:cc:dd:ee:ff"},
+        )
+
+        assert response.status_code == 422
+        authenticated_client.create_reservation.assert_not_called()
+
+    async def test_control_char_in_description_rejected(
+        self, auth_client, authenticated_client, experimental_writes_enabled
+    ):
+        authenticated_client.create_reservation = AsyncMock()
+
+        response = await auth_client.post(
+            "/api/networks/net-1/reservations",
+            json={
+                "ip": "192.168.1.100",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "description": "hello\x00world",
+            },
         )
 
         assert response.status_code == 422

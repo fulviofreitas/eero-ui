@@ -19,6 +19,7 @@ from ..deps import (
 from ..transformers import (
     check_success,
     extract_data,
+    extract_id_from_url,
     extract_list,
     is_unsafe_short_text,
     normalize_eero,
@@ -607,10 +608,79 @@ async def set_eero_led_brightness(
     )
 
 
+class EeroConnection(BaseModel):
+    """One client connection reported by an eero's own ``connections`` link.
+
+    Security review, 2026-09-24 (L3): the upstream response shape is
+    unfixtured - no eero-api test fixture covers ``get_connections``'s
+    response body (SDK docstring: "Raw API response"). Fields below are
+    the allowlisted subset this backend expects, taken from the same
+    concepts ``normalize_device``/``normalize_eero`` already expose for a
+    connected client (id/url, mac, ip, nickname/hostname/display_name,
+    connection type, band, signal, last-seen), since a connection entry
+    describes a client attached to this eero. ``extra="ignore"`` drops
+    anything unexpected, and ``strip_sensitive_keys`` is applied to the
+    raw entry as a second layer before these fields are read off it.
+    """
+
+    id: str | None = None
+    url: str | None = None
+    mac: str | None = None
+    ip: str | None = None
+    nickname: str | None = None
+    hostname: str | None = None
+    display_name: str | None = None
+    connection_type: str | None = None
+    band: str | None = None
+    signal: Any = None
+    last_active: str | None = None
+
+    class Config:
+        extra = "ignore"
+
+
+def _normalize_eero_connection(raw: dict[str, Any]) -> EeroConnection:
+    connectivity = raw.get("connectivity")
+    connectivity = connectivity if isinstance(connectivity, dict) else {}
+
+    band = None
+    frequency_mhz = connectivity.get("frequency")
+    if isinstance(frequency_mhz, (int, float)):
+        # Same thresholds as normalize_device (IEEE/FCC band boundaries).
+        if frequency_mhz >= 5925:
+            band = "6GHz"
+        elif frequency_mhz > 4000:
+            band = "5GHz"
+        else:
+            band = "2.4GHz"
+
+    signal = connectivity.get("signal") if connectivity else raw.get("signal")
+
+    connection_type = raw.get("connection_type")
+    if connection_type is None and "wireless" in raw:
+        connection_type = "wireless" if raw.get("wireless") else "wired"
+
+    return EeroConnection(
+        id=extract_id_from_url(raw.get("url")),
+        url=raw.get("url"),
+        mac=raw.get("mac"),
+        ip=raw.get("ip"),
+        nickname=raw.get("nickname"),
+        hostname=raw.get("hostname"),
+        display_name=raw.get("display_name")
+        or raw.get("nickname")
+        or raw.get("hostname"),
+        connection_type=connection_type,
+        band=band,
+        signal=signal,
+        last_active=raw.get("last_active"),
+    )
+
+
 class EeroConnectionsResponse(BaseModel):
     """An eero's client connections."""
 
-    connections: list[dict[str, Any]] = []
+    connections: list[EeroConnection] = []
 
 
 @router.get("/{eero_id}/connections", response_model=EeroConnectionsResponse)
@@ -621,8 +691,14 @@ async def get_eero_connections(
 ) -> EeroConnectionsResponse:
     """Get an eero's client connections. Verified read."""
     raw = await client.get_connections(eero_id, network_id=network_id)
-    connections = strip_sensitive_keys(extract_list(raw, "connections"))
-    return EeroConnectionsResponse(connections=connections)
+    connections = extract_list(raw, "connections")
+    return EeroConnectionsResponse(
+        connections=[
+            _normalize_eero_connection(strip_sensitive_keys(c))
+            for c in connections
+            if isinstance(c, dict)
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------

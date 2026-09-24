@@ -4406,6 +4406,7 @@ async def reorder_backup_access_points(
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7). Never retried on
     failure.
     """
+    _validate_id_list(body.order, "order")
     raw_result = await client.rearrange_backup_access_points(
         body.order, network_id=network_id
     )
@@ -4475,10 +4476,38 @@ async def delete_backup_access_point_route(
     return {"success": check_success(raw_result)}
 
 
+class DiscoveredBackupSsid(BaseModel):
+    """One SSID reported by backup-AP discovery or a connectivity check.
+
+    Security review, 2026-09-24 (L3): the upstream shape of
+    ``discover_backup_ssids``'s ``ssids`` entries and of
+    ``backup_connectivity_check``'s response is unfixtured - eero-api ships
+    no test fixture for either call. Fields below mirror the allowlist
+    already used for a configured ``BackupAccessPoint`` above (``ssid``,
+    ``uuid``, ``connectivity``/``status``), since both describe the same
+    underlying backup-Wi-Fi-AP concept, plus ``signal`` and ``timestamp``
+    if present. ``extra="ignore"`` drops anything unexpected, and
+    ``strip_sensitive_keys`` is applied to the raw entry as a second layer
+    before these fields are read off it, so an unrecognised or
+    credential-shaped key from either call is dropped rather than
+    forwarded to the frontend.
+    """
+
+    ssid: str | None = None
+    uuid: str | None = None
+    status: str | None = None
+    connectivity: Any = None
+    signal: Any = None
+    timestamp: str | None = None
+
+    class Config:
+        extra = "ignore"
+
+
 class BackupSsidDiscoveryResponse(BaseModel):
     """Discovered backup SSIDs, allowlisted (never a password/PSK)."""
 
-    ssids: list[dict[str, Any]] = []
+    ssids: list[DiscoveredBackupSsid] = []
 
 
 @router.post(
@@ -4499,12 +4528,19 @@ async def discover_backup_ssids_route(
     """
     await client.start_backup_ssid_discovery(network_id=network_id)
     raw = await client.discover_backup_ssids(network_id=network_id)
-    ssids = strip_sensitive_keys(extract_list(raw, "ssids"))
-    return BackupSsidDiscoveryResponse(ssids=ssids)
+    ssids = extract_list(raw, "ssids")
+    return BackupSsidDiscoveryResponse(
+        ssids=[
+            DiscoveredBackupSsid(**strip_sensitive_keys(s))
+            for s in ssids
+            if isinstance(s, dict)
+        ]
+    )
 
 
 @router.post(
     "/{network_id}/backup-access-points/check",
+    response_model=DiscoveredBackupSsid,
     dependencies=[Depends(require_experimental_writes)],
 )
 @limiter.shared_limit("10/minute", scope="experimental_writes")
@@ -4512,14 +4548,15 @@ async def backup_connectivity_check_route(
     request: Request,
     network_id: str,
     client: EeroClient = Depends(require_auth),
-) -> dict[str, Any]:
+) -> DiscoveredBackupSsid:
     """Run a backup-connectivity check.
 
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7). Never retried on
-    failure.
+    failure. Response allowlisted per ``DiscoveredBackupSsid`` above.
     """
     raw = await client.backup_connectivity_check(network_id=network_id)
-    return strip_sensitive_keys(extract_data(raw))
+    data = strip_sensitive_keys(extract_data(raw))
+    return DiscoveredBackupSsid(**data)
 
 
 # ---------------------------------------------------------------------------
@@ -4607,6 +4644,77 @@ def _validate_ip_literal(value: str, field_name: str) -> None:
         )
 
 
+def _validate_private_ipv4(value: str, field_name: str) -> None:
+    """Reject a value that is not a private IPv4 literal.
+
+    Security review, 2026-09-24 (L2): a forward/reservation ``ip`` names a
+    LAN client on THIS network - it can never legitimately be a public
+    address or an IPv6 literal, unlike ``public_static_ip`` on a
+    reservation, which is intentionally public and is not run through this
+    check.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    try:
+        address = ipaddress.IPv4Address(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be a valid private IPv4 address.",
+        )
+    if not address.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be a valid private IPv4 address.",
+        )
+
+
+def _validate_short_description(value: str | None, field_name: str) -> None:
+    """Reject an oversized or control-character-carrying description.
+
+    Security review, 2026-09-24 (L2): shares the 64-byte/no-control-chars
+    contract already used for schedule/subnet names via
+    ``is_unsafe_short_text``.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    if value is not None and is_unsafe_short_text(value, max_bytes=64):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must be at most 64 bytes, no control characters.",
+        )
+
+
+def _validate_id_list(
+    values: list[str], field_name: str, *, max_items: int = 100
+) -> None:
+    """Cap a caller-supplied list of identifiers and validate each entry.
+
+    Security review, 2026-09-24 (L2): bounds every list body this backend
+    forwards unchanged (``profiles``, ``applications``, ``order``) so a
+    caller cannot submit an unbounded list, and rejects any entry that is
+    not a well-formed bare identifier before it reaches the SDK.
+
+    Raises:
+        HTTPException: 422, static detail naming only the field.
+    """
+    if len(values) > max_items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} must have at most {max_items} entries.",
+        )
+    for entry in values:
+        try:
+            validate_path_id(entry)
+        except InvalidIdentifierError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"{field_name} entries must be valid identifiers.",
+            )
+
+
 class ForwardsResponse(BaseModel):
     """The network's configured port forwards."""
 
@@ -4646,7 +4754,8 @@ async def create_forward_route(
     """
     _validate_port(body.client_port, "client_port")
     _validate_port(body.gateway_port, "gateway_port")
-    _validate_ip_literal(body.ip, "ip")
+    _validate_private_ipv4(body.ip, "ip")
+    _validate_short_description(body.description, "description")
     forward_data = {
         "client_port": body.client_port,
         "gateway_port": body.gateway_port,
@@ -4682,7 +4791,9 @@ async def update_forward_route(
     if body.gateway_port is not None:
         _validate_port(body.gateway_port, "gateway_port")
     if body.ip is not None:
-        _validate_ip_literal(body.ip, "ip")
+        _validate_private_ipv4(body.ip, "ip")
+    if body.description is not None:
+        _validate_short_description(body.description, "description")
     forward_data = {k: v for k, v in body.model_dump().items() if v is not None}
     raw_result = await client.update_forward(
         forward_id, forward_data, network_id=network_id
@@ -4796,7 +4907,7 @@ async def create_reservation_route(
     Unverified write (phase-6.0-revamp.md § 5, § 7 WP7). Never retried on
     failure.
     """
-    _validate_ip_literal(body.ip, "ip")
+    _validate_private_ipv4(body.ip, "ip")
     if not is_valid_mac(body.mac.lower()):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -4804,6 +4915,7 @@ async def create_reservation_route(
         )
     if body.public_static_ip is not None:
         _validate_ip_literal(body.public_static_ip, "public_static_ip")
+    _validate_short_description(body.description, "description")
     reservation_data = {
         "ip": body.ip,
         "mac": body.mac.lower(),
@@ -4835,7 +4947,7 @@ async def update_reservation_route(
     failure.
     """
     if body.ip is not None:
-        _validate_ip_literal(body.ip, "ip")
+        _validate_private_ipv4(body.ip, "ip")
     if body.mac is not None and not is_valid_mac(body.mac.lower()):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -4843,6 +4955,8 @@ async def update_reservation_route(
         )
     if body.public_static_ip is not None:
         _validate_ip_literal(body.public_static_ip, "public_static_ip")
+    if body.description is not None:
+        _validate_short_description(body.description, "description")
     reservation_data = {k: v for k, v in body.model_dump().items() if v is not None}
     raw_result = await client.update_reservation(
         reservation_id, reservation_data, network_id=network_id
@@ -4885,15 +4999,65 @@ _HOSTNAME_RE = re.compile(
     r"(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+"
 )
 
+# DNS wire-format ceiling (RFC 1035 § 3.1) - security review, 2026-09-24 (L1).
+_DOMAIN_MAX_LEN = 253
+
 
 def _validate_domain(domain: str) -> str:
+    """Validate a content-filter domain and normalize it to punycode.
+
+    Security review, 2026-09-24 (L1): rejects anything over the DNS
+    wire-format length ceiling, any value that is itself an IP address
+    literal (an IP is never a valid content-filter domain and this API
+    forwards unrecognised shapes as no-ops - see
+    ``error-documentation.md`` "Never Trust a 200..."), and any value that
+    cannot be represented in IDNA/punycode. A non-ASCII (IDN) domain is
+    accepted and forwarded ASCII-encoded (punycode) rather than as raw
+    Unicode: the eero cloud API's content-filter endpoints, like DNS
+    itself, operate on wire-format hostnames, and forwarding raw UTF-8
+    bytes for a hostname field risks exactly the kind of silent no-op this
+    backend has already hit once with DNS (see
+    ``error-documentation.md``) - punycode is the form actually valid on
+    the wire.
+    """
     candidate = domain.strip().lower()
-    if "://" in candidate or "/" in candidate or not _HOSTNAME_RE.fullmatch(candidate):
+    if "://" in candidate or "/" in candidate:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="domain must be a bare hostname (no scheme or path).",
         )
-    return candidate
+    if len(candidate) > _DOMAIN_MAX_LEN:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"domain must be at most {_DOMAIN_MAX_LEN} characters.",
+        )
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        pass
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="domain must not be an IP address literal.",
+        )
+    try:
+        ascii_candidate = candidate.encode("idna").decode("ascii")
+    except UnicodeError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="domain could not be encoded to IDNA (punycode).",
+        )
+    if len(ascii_candidate) > _DOMAIN_MAX_LEN:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"domain must be at most {_DOMAIN_MAX_LEN} characters.",
+        )
+    if not _HOSTNAME_RE.fullmatch(ascii_candidate):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="domain must be a bare hostname (no scheme or path).",
+        )
+    return ascii_candidate
 
 
 class ContentFilterResponse(BaseModel):
@@ -5072,6 +5236,7 @@ async def allow_domain_for_profiles_route(
     Never retried on failure.
     """
     domain = _validate_domain(body.domain)
+    _validate_id_list(body.profiles, "profiles")
     raw_result = await client.allow_domain_for_profiles(
         domain,
         network_id=network_id,
@@ -5099,6 +5264,7 @@ async def unallow_domain_for_profiles_route(
     Never retried on failure.
     """
     domain = _validate_domain(body.domain)
+    _validate_id_list(body.profiles, "profiles")
     raw_result = await client.allow_domain_for_profiles(
         domain,
         network_id=network_id,
@@ -5137,6 +5303,7 @@ async def block_domain_for_profiles_route(
     Never retried on failure.
     """
     domain = _validate_domain(body.domain)
+    _validate_id_list(body.profiles, "profiles")
     raw_result = await client.block_domain_for_profiles(
         domain, network_id=network_id, profiles=body.profiles, override=body.override
     )
@@ -5160,6 +5327,7 @@ async def unblock_domain_for_profiles_route(
     Never retried on failure.
     """
     domain = _validate_domain(body.domain)
+    _validate_id_list(body.profiles, "profiles")
     raw_result = await client.block_domain_for_profiles(
         domain,
         network_id=network_id,
