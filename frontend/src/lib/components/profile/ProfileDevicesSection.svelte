@@ -51,9 +51,14 @@
 			><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
 		>
 		<div>
-			<span class="device-name">
+			<!--
+				R2 (WP5 reviewer fix): the row itself has no onRowClick/role="button" any more
+				(a nested interactive element inside an interactive row is invalid a11y). The device
+				name is the click target instead, as a real button.
+			-->
+			<button type="button" class="device-name-link" onclick={() => onGoToDevice(device)}>
 				{device.display_name || device.nickname || device.hostname || 'Unknown'}
-			</span>
+			</button>
 			{#if device.manufacturer}
 				<span class="text-xs text-muted">{device.manufacturer}</span>
 			{/if}
@@ -253,7 +258,6 @@
 				{sortBy}
 				{sortDirection}
 				onSort={handleSort}
-				onRowClick={onGoToDevice}
 				rowClass={(d) => {
 					const classes = ['profile-device-row'];
 					if (d.paused) classes.push('paused');
@@ -411,12 +415,17 @@
 
 	/* `<tr class="profile-device-row paused offline">` is DataTable's own element (rowClass
 	   hook), so it needs :global() - cell content above is rendered via `render` snippets
-	   declared in this file and is scoped normally. */
-	:global(.profile-device-row.paused) {
+	   declared in this file and is scoped normally.
+
+	   A7 (WP5 a11y fix): dim the row's non-text cells only, not the status badge itself - a
+	   dimmed badge combines with its already-thin light-mode contrast margin (see A8) to become
+	   unreadable. Excluding the `status` column keeps the badge at full opacity while still
+	   visually de-emphasizing the rest of the row. */
+	:global(.profile-device-row.paused td:not(:has(.badge))) {
 		opacity: 0.7;
 	}
 
-	:global(.profile-device-row.offline) {
+	:global(.profile-device-row.offline td:not(:has(.badge))) {
 		opacity: 0.6;
 	}
 
@@ -426,6 +435,23 @@
 		gap: var(--space-2);
 	}
 
+	.device-name-link {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		font-weight: 500;
+		color: var(--color-text-primary);
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.device-name-link:hover,
+	.device-name-link:focus-visible {
+		color: var(--color-accent);
+		text-decoration: underline;
+	}
+
 	.device-icon-sm {
 		font-size: 1.25rem;
 	}
@@ -433,10 +459,6 @@
 	.device-name-cell div {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.device-name {
-		font-weight: 500;
 	}
 
 	.btn-xs {

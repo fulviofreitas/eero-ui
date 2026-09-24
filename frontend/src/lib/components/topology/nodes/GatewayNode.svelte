@@ -111,7 +111,7 @@
 		top: -10px;
 		right: -10px;
 		background: var(--color-accent);
-		color: #ffffff;
+		color: var(--color-on-accent);
 		font-size: 9px;
 		font-weight: 600;
 		padding: 2px 6px;

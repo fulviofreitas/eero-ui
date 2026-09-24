@@ -226,7 +226,11 @@
 	// --- Selection -----------------------------------------------------------
 
 	let internalSelected: Set<string> = $state(new Set());
-	let lastClickedIndex: number | null = null;
+	// Row ID, not positional index: sortedRows is re-derived on every filter/sort change, so a
+	// remembered index would silently point at a different row (or nothing) after that. Resolving
+	// both endpoints from the *current* sortedRows at click time keeps the range correct even when
+	// the set of visible rows has changed between the two shift-clicks.
+	let lastClickedId: string | null = null;
 
 	const activeSelected = $derived(selected !== undefined ? selected : internalSelected);
 	const allSelected = $derived(
@@ -242,9 +246,12 @@
 		const rid = getRowId(row);
 		const next = new SvelteSet(activeSelected);
 
-		if (shiftKey && lastClickedIndex !== null) {
+		const lastIndex =
+			lastClickedId !== null ? sortedRows.findIndex((r) => getRowId(r) === lastClickedId) : -1;
+
+		if (shiftKey && lastIndex !== -1) {
 			const shouldSelect = !next.has(rid);
-			const [start, end] = [Math.min(lastClickedIndex, index), Math.max(lastClickedIndex, index)];
+			const [start, end] = [Math.min(lastIndex, index), Math.max(lastIndex, index)];
 			for (let i = start; i <= end; i++) {
 				const id = getRowId(sortedRows[i]);
 				if (shouldSelect) next.add(id);
@@ -256,7 +263,7 @@
 			next.add(rid);
 		}
 
-		lastClickedIndex = index;
+		lastClickedId = rid;
 		commitSelection(next);
 	}
 

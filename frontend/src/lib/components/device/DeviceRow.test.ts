@@ -1,10 +1,12 @@
 /**
- * Tests for DeviceRow.svelte's action menu (plan § 5, § 8.2):
+ * Tests for DeviceRow.svelte's action menu (plan § 5, § 8.2, WP5 A6):
  * - Block is pessimistic and unverified: the confirm dialog it queues via
  *   `uiStore.confirm()` carries wording that says so, so an operator isn't
  *   left assuming the write is as trustworthy as unblock/rename.
  * - Unblock and rename do NOT go through a confirm dialog at all (Verified,
  *   § 5 - safe for the existing optimistic pattern).
+ * - The menu is now the Dropdown primitive: aria-haspopup/expanded on the
+ *   trigger, Escape closes and refocuses the trigger, no mouseleave-only close.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -72,6 +74,22 @@ describe('DeviceRow action menu', () => {
 		// Give any (incorrect) confirm() call a tick to land before asserting its absence.
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(get(uiStore).confirmDialog).toBeNull();
+	});
+
+	it('exposes aria-haspopup/aria-expanded on the trigger and closes on Escape, refocusing it', async () => {
+		render(DeviceRow, { props: { device: makeDevice({ blocked: false }) } });
+		const trigger = screen.getByRole('button', { name: 'Device actions' });
+
+		expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+		expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+		await fireEvent.click(trigger);
+		expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		await waitFor(() => expect(screen.getByRole('menuitem', { name: /Rename/ })).toHaveFocus());
+
+		await fireEvent.keyDown(screen.getByRole('menuitem', { name: /Rename/ }), { key: 'Escape' });
+		expect(screen.queryByRole('menu')).toBeNull();
+		expect(trigger).toHaveFocus();
 	});
 
 	it('shows Block for an unblocked device and Unblock for a blocked one', async () => {

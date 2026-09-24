@@ -150,6 +150,8 @@
 		{@render children?.()}
 	</main>
 {:else}
+	<!-- A14 (WP5 a11y fix): skip link to main content, ahead of the sidebar in DOM/tab order. -->
+	<a href="#main-content" class="skip-link">Skip to main content</a>
 	<!-- Main app layout -->
 	<div class="app-layout" class:sidebar-open={$sidebarOpen}>
 		<!-- Sidebar overlay (mobile) -->
@@ -160,19 +162,24 @@
 		<!-- Sidebar -->
 		<aside class="sidebar" class:open={$sidebarOpen}>
 			<div class="sidebar-header">
-				<h1 class="logo">
+				<!-- A14 (WP5 a11y fix): brand mark, not a document heading - the page itself owns its
+				     own <h1> per route. -->
+				<div class="logo">
 					<img src="/logo.png" alt="eero" class="logo-img" />
 					<span class="logo-text">eero</span>
-				</h1>
+				</div>
 			</div>
 
 			<nav class="sidebar-nav">
 				{#each navItems as item}
+					{@const isActive =
+						$page.url.pathname === item.path ||
+						(item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
 					<a
 						href={item.path}
 						class="nav-item"
-						class:active={$page.url.pathname === item.path ||
-							(item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
+						class:active={isActive}
+						aria-current={isActive ? 'page' : undefined}
 					>
 						<span class="nav-icon"><Icon name={item.icon} size={18} /></span>
 						<span class="nav-label">{item.label}</span>
@@ -225,6 +232,7 @@
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
+						aria-hidden="true"
 					>
 						<line x1="3" y1="6" x2="21" y2="6"></line>
 						<line x1="3" y1="12" x2="21" y2="12"></line>
@@ -263,6 +271,7 @@
 								></span>
 								<select
 									class="network-select"
+									aria-label="Network"
 									onchange={(e) => handleNetworkChange(e.currentTarget.value)}
 								>
 									{#each $networksStore.networks as network (network.id)}
@@ -277,7 +286,7 @@
 				</div>
 			</div>
 
-			<div class="page-content">
+			<div class="page-content" id="main-content" tabindex="-1">
 				{@render children?.()}
 			</div>
 		</main>
@@ -289,6 +298,24 @@
 <ConfirmDialog />
 
 <style>
+	/* A14 (WP5 a11y fix): visually hidden until focused (keyboard Tab from page load), then
+	   pinned to the top so it's never obscured by the sidebar/top-bar. */
+	.skip-link {
+		position: absolute;
+		left: -9999px;
+		top: 0;
+		z-index: var(--z-toast);
+		padding: var(--space-2) var(--space-4);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		border-radius: var(--radius-md);
+	}
+
+	.skip-link:focus-visible {
+		left: var(--space-4);
+		top: var(--space-4);
+	}
+
 	.loading-screen {
 		display: flex;
 		align-items: center;
@@ -385,9 +412,12 @@
 		color: var(--color-text-primary);
 	}
 
+	/* A8 (WP5 a11y fix): the tint's alpha was 0.15 (plus a dead duplicate solid-accent
+	   declaration overridden by it). Composited over the light theme's --color-bg-secondary,
+	   --color-accent text on that tint measured 4.33:1 (below AA 4.5:1); 0.08 measures 4.56:1 in
+	   light and improves dark theme's already-passing 5.31:1 to 6.05:1. */
 	.nav-item.active {
-		background-color: var(--color-accent);
-		background-color: rgba(88, 166, 255, 0.15);
+		background-color: rgba(88, 166, 255, 0.08);
 		color: var(--color-accent);
 	}
 

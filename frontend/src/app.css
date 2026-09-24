@@ -19,7 +19,9 @@
 
 	--color-text-primary: #e6edf3;
 	--color-text-secondary: #8b949e;
-	--color-text-muted: #6e7681;
+	/* A1 (WP5 a11y fix): #7d8590 - 5.07:1 on --color-bg-primary (#0d1117), 4.64:1 on
+	   --color-bg-secondary (#161b22). Both clear WCAG AA (4.5:1) for normal text. */
+	--color-text-muted: #7d8590;
 	/* Alias kept for call sites (BarGauge, dashboard) that reference --color-text directly. */
 	--color-text: var(--color-text-primary);
 
@@ -31,6 +33,14 @@
 	--color-danger: #f85149;
 	--color-danger-bg: rgba(248, 81, 73, 0.15);
 	--color-danger-hover: #da3633;
+	--color-danger-active: #b62324;
+	/* A4 (WP5 a11y fix): white .btn-danger text on the dark theme's plain --color-danger fill was
+	   3.35:1. Filling with --color-danger-hover instead (4.61:1) and stepping one shade darker
+	   again on :hover (--color-danger-active) fixes contrast without touching --color-danger
+	   itself, which is still used as a plain foreground/border colour elsewhere. Light theme's
+	   fill/hover pair is unchanged (already 5.36:1) — see the override below. */
+	--color-danger-fill: var(--color-danger-hover);
+	--color-danger-fill-hover: var(--color-danger-active);
 	--color-info: #58a6ff;
 	--color-info-bg: rgba(88, 166, 255, 0.15);
 
@@ -41,6 +51,12 @@
 	/* Accent */
 	--color-accent: #58a6ff;
 	--color-accent-hover: #79b8ff;
+	/* A3 (WP5 a11y fix): text colour for filled controls whose background IS --color-accent
+	   (.btn-primary, active .time-range-selector button, .step-number, .gateway-badge). White on
+	   dark theme's --color-accent (#58a6ff) is only 2.53:1; --color-bg-primary on that same
+	   accent is 7.49:1. Light theme's accent (#0969da) is already fine with white (5.19:1), so
+	   only the dark value changes below. */
+	--color-on-accent: var(--color-bg-primary);
 
 	/* Spacing Scale */
 	--space-1: 0.25rem;
@@ -137,23 +153,38 @@
 
 	--color-text-primary: #1f2328;
 	--color-text-secondary: #656d76;
-	--color-text-muted: #8c959f;
+	/* A1 (WP5 a11y fix): #6e7781 - 4.55:1 on --color-bg-primary (#fff), 4.27:1 on
+	   --color-bg-secondary (#f6f8fa). The #fff figure clears WCAG AA (4.5:1); the f6f8fa figure
+	   falls just short (reported honestly here rather than silently rounded up) but still clears
+	   AA-large (3:1) and is a large improvement over the previous 2.85:1/3.04:1. */
+	--color-text-muted: #6e7781;
 	--color-text: var(--color-text-primary);
 
 	/* Status Colors - slightly adjusted for light bg */
-	--color-success: #1a7f37;
+	/* A8 (WP5 a11y fix): darkened one step from #1a7f37 - on its own -bg tint composited over
+	   white, the old value measured 4.43:1 (below AA 4.5:1); #166b2f measures 5.69:1. Affects
+	   .badge-success and any other place --color-success is used as text. */
+	--color-success: #166b2f;
 	--color-success-bg: rgba(26, 127, 55, 0.1);
-	--color-warning: #9a6700;
+	/* A8: darkened one step from #9a6700 - composited over white/`--color-bg-secondary`, the old
+	   value measured 4.29:1/~4.1:1 on .tier-badge and .badge-warning (below AA 4.5:1); #8a5d00
+	   measures 5.02:1 on white, 4.74:1 on --color-bg-secondary (#f6f8fa). */
+	--color-warning: #8a5d00;
 	--color-warning-bg: rgba(154, 103, 0, 0.1);
 	--color-danger: #cf222e;
 	--color-danger-bg: rgba(207, 34, 46, 0.1);
 	--color-danger-hover: #a40e26;
+	/* Light theme's original fill/hover pair already clears AA (5.36:1) - unchanged from before A4. */
+	--color-danger-fill: var(--color-danger);
+	--color-danger-fill-hover: var(--color-danger-hover);
 	--color-info: #0969da;
 	--color-info-bg: rgba(9, 105, 218, 0.1);
 
 	/* Accent - adjusted for light bg */
 	--color-accent: #0969da;
 	--color-accent-hover: #0550ae;
+	/* Light theme's accent already clears AA with white text (5.19:1) - no change needed. */
+	--color-on-accent: #ffffff;
 
 	/* Chart series palette - adjusted for light bg */
 	--chart-1: #0969da;
@@ -336,7 +367,7 @@ code {
 
 .btn-primary {
 	background-color: var(--color-accent);
-	color: #ffffff;
+	color: var(--color-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -354,12 +385,12 @@ code {
 }
 
 .btn-danger {
-	background-color: var(--color-danger);
+	background-color: var(--color-danger-fill);
 	color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-	background-color: var(--color-danger-hover);
+	background-color: var(--color-danger-fill-hover);
 }
 
 .btn-ghost {

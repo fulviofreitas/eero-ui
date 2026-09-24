@@ -135,8 +135,9 @@
 	<!-- Controls bar -->
 	<div class="map-controls">
 		<div class="control-group">
-			<label class="control-label">Layout:</label>
+			<label class="control-label" for="topology-layout-select">Layout:</label>
 			<select
+				id="topology-layout-select"
 				class="control-select"
 				value={$layoutOptionsStore.layoutType}
 				onchange={handleLayoutChange}
@@ -149,8 +150,9 @@
 		</div>
 
 		<div class="control-group">
-			<label class="control-label">Detail:</label>
+			<label class="control-label" for="topology-detail-select">Detail:</label>
 			<select
+				id="topology-detail-select"
 				class="control-select"
 				value={$layoutOptionsStore.detailLevel}
 				onchange={handleDetailChange}

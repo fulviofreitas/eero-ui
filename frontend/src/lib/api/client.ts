@@ -186,6 +186,10 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 		method,
 		headers: {
 			'Content-Type': 'application/json',
+			// The backend rejects every POST/PUT/PATCH/DELETE under /api without this header
+			// (403, type "csrf") - sent on every request (not just writes) for simplicity, and
+			// placed before `...headers` so a caller can still override it if it ever needs to.
+			'X-Requested-With': 'eero-ui',
 			...headers
 		},
 		signal: controller.signal,

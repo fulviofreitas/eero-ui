@@ -6,8 +6,26 @@
 <script lang="ts">
 	import { confirmDialog, uiStore } from '$stores';
 	import { fade, scale } from 'svelte/transition';
+	import { trapFocus } from '$lib/utils/focusTrap';
 
 	let loading = $state(false);
+
+	// A5 (WP5 a11y fix): restore focus to the opener on close, keyed off `$confirmDialog` itself
+	// rather than this element unmounting - unmount only happens after the close `transition:`
+	// outro finishes, which is both a visible delay and unreliable in jsdom (no real Web
+	// Animations timing). See focusTrap.ts for the corresponding note on why the trap action
+	// itself does not handle this.
+	// `$effect.pre` (runs before the DOM update that mounts the dialog and its `trapFocus`
+	// action) so the opener is captured before that action's own initial-focus steals it.
+	let openerEl: HTMLElement | null = null;
+	$effect.pre(() => {
+		if ($confirmDialog) {
+			openerEl = document.activeElement as HTMLElement | null;
+		} else if (openerEl) {
+			openerEl.focus();
+			openerEl = null;
+		}
+	});
 
 	async function handleConfirm() {
 		if (!$confirmDialog) return;
@@ -37,7 +55,9 @@
 {#if $confirmDialog}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={handleCancel}>
-		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+		<!-- A5 (WP5 a11y fix): role="dialog" below satisfies a11y_no_static_element_interactions,
+		     and Escape is handled globally via svelte:window - the pre-existing svelte-ignore for
+		     both rules on this element is no longer needed and was removed once lint confirmed it. -->
 		<div
 			class="modal"
 			transition:scale={{ duration: 150, start: 0.95 }}
@@ -45,6 +65,8 @@
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"
+			tabindex="-1"
+			use:trapFocus
 		>
 			<h2 id="confirm-title" class="modal-title">
 				{$confirmDialog.title}

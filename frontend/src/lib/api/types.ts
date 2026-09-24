@@ -532,7 +532,11 @@ export type ApiErrorType =
 	| 'feature_unavailable'
 	| 'experimental_disabled'
 	/** 409 from `POST /networks/{id}/speedtest` - a test is already running on this network. */
-	| 'speedtest_in_progress';
+	| 'speedtest_in_progress'
+	/** 403 from any write missing the `X-Requested-With: eero-ui` header (see client.ts). */
+	| 'csrf'
+	/** 403 - the account's identity (login/verify) cannot be changed right now. */
+	| 'account_identity_disabled';
 
 export interface ApiError {
 	detail: string;

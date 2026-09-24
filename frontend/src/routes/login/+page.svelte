@@ -78,7 +78,9 @@
 					We sent a verification code to your email or phone. Enter it below to continue.
 				</p>
 
+				<label class="input-label" for="login-code">Verification code</label>
 				<input
+					id="login-code"
 					type="text"
 					class="input code-input"
 					placeholder="Enter 6-digit code"
@@ -113,7 +115,9 @@
 					<span>Enter your email or phone</span>
 				</div>
 
+				<label class="input-label" for="login-identifier">Email or phone number</label>
 				<input
+					id="login-identifier"
 					type="text"
 					class="input"
 					placeholder="Email or phone number"
@@ -213,6 +217,16 @@
 		gap: var(--space-4);
 	}
 
+	/* A10 (WP5 a11y fix): the identifier/code inputs previously had a placeholder as their only
+	   affordance, which isn't a programmatic label. Tightened against its input via negative
+	   margin so it doesn't inherit the form's full inter-field gap. */
+	.input-label {
+		display: block;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		margin-bottom: calc(var(--space-2) - var(--space-4));
+	}
+
 	.step-indicator {
 		display: flex;
 		align-items: center;
@@ -228,7 +242,7 @@
 		width: 24px;
 		height: 24px;
 		background-color: var(--color-accent);
-		color: #ffffff;
+		color: var(--color-on-accent);
 		border-radius: 50%;
 		font-size: 0.75rem;
 		font-weight: 600;

@@ -57,12 +57,13 @@ async function importPage() {
 	return (await import('./+page.svelte')).default;
 }
 
-// The devices table is row-clickable (`onRowClick`), which gives every body `<tr>` an explicit
-// `role="button"` for keyboard accessibility - that overrides its implicit `row` role, so body
-// rows must be read via `querySelector` rather than `getAllByRole('row')`.
+// R2 (WP5 reviewer fix): the row no longer carries `onRowClick`/`role="button"` - a nested
+// <button> (the device-name link) inside an interactive row is invalid a11y. Body rows are
+// still read via `querySelector` (not `getAllByRole('row')`) purely because that's simplest
+// given the existing helper shape, not because of any residual role override.
 function bodyRowFirstCellText() {
 	return Array.from(screen.getByRole('table').querySelectorAll('tbody tr')).map((row) =>
-		row.querySelector('.device-name')?.textContent?.trim()
+		row.querySelector('.device-name-link')?.textContent?.trim()
 	);
 }
 

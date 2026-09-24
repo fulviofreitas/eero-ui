@@ -21,7 +21,10 @@
 
 	let { tabs, value, onChange, label = 'Tabs' }: Props = $props();
 
-	let tabRefs: (HTMLButtonElement | null)[] = [];
+	// R3 (WP5 reviewer fix): must be reactive state, not a plain array - `bind:this` writes to it
+	// on every mount/each-block change, and non-reactive writes to a `bind:this` target trigger
+	// Svelte's `binding_property_non_reactive` warning.
+	let tabRefs: (HTMLButtonElement | null)[] = $state([]);
 
 	function enabledIndexes(): number[] {
 		return tabs.reduce<number[]>((acc, t, i) => {

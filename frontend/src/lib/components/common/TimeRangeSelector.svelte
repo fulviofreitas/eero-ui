@@ -60,7 +60,7 @@
 
 	.time-range-selector button.active {
 		background: var(--color-accent);
-		color: white;
+		color: var(--color-on-accent);
 		border-color: var(--color-accent);
 	}
 </style>

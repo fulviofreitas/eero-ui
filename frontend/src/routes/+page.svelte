@@ -24,6 +24,7 @@
 	import SpeedTestCard from '$lib/components/dashboard/SpeedTestCard.svelte';
 	import DeviceInsightsSection from '$lib/components/dashboard/DeviceInsightsSection.svelte';
 	import EeroHealthSection from '$lib/components/dashboard/EeroHealthSection.svelte';
+	import { seriesColor, withAlpha } from '$lib/charts/defaults';
 
 	let network: NetworkDetail | null = $state(null);
 	let eeros: EeroSummary[] = $state([]);
@@ -114,14 +115,16 @@
 	let totalProfileDevices = $derived(profiles.reduce((sum, p) => sum + p.device_count, 0));
 	let pausedProfiles = $derived(profiles.filter((p) => p.paused).length);
 	// Computed values for charts
+	// A9 (WP5 a11y fix): pull from the shared `--chart-1`..`--chart-6` series palette
+	// (lib/charts/defaults.ts) instead of a hardcoded rgba() list unrelated to either theme.
 	let connectionTypeData = $derived([
-		{ label: 'Wireless', value: $deviceCounts.wireless, color: 'rgba(99, 102, 241, 0.8)' },
-		{ label: 'Wired', value: $deviceCounts.wired, color: 'rgba(251, 146, 60, 0.8)' }
+		{ label: 'Wireless', value: $deviceCounts.wireless, color: withAlpha(seriesColor(0), 0.8) },
+		{ label: 'Wired', value: $deviceCounts.wired, color: withAlpha(seriesColor(2), 0.8) }
 	]);
 	let wifiBandData = $derived([
-		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: 'rgba(34, 197, 94, 0.8)' },
-		{ label: '5 GHz', value: $deviceCounts.freq5, color: 'rgba(168, 85, 247, 0.8)' },
-		{ label: '6 GHz', value: $deviceCounts.freq6, color: 'rgba(59, 130, 246, 0.8)' }
+		{ label: '2.4 GHz', value: $deviceCounts.freq24, color: withAlpha(seriesColor(1), 0.8) },
+		{ label: '5 GHz', value: $deviceCounts.freq5, color: withAlpha(seriesColor(4), 0.8) },
+		{ label: '6 GHz', value: $deviceCounts.freq6, color: withAlpha(seriesColor(0), 0.8) }
 	]);
 	let clientsPerEeroData = $derived(
 		eeros.map((eero, index) => ({

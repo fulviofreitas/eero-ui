@@ -16,7 +16,7 @@
   - Closes on outside click AND Escape — never on `mouseleave`.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
 	import type { IconName } from '$lib/icons/paths';
 
@@ -34,9 +34,16 @@
 		items: DropdownItem[];
 		align?: 'left' | 'right';
 		disabled?: boolean;
+		/** Overrides the trigger button's class (default: text-label button + chevron). */
+		triggerClass?: string;
+		/**
+		 * Custom trigger content, e.g. an icon-only button (see DeviceRow's "Device actions" menu).
+		 * `label` still supplies the accessible name via `aria-label` in that case.
+		 */
+		trigger?: Snippet<[{ open: boolean }]>;
 	}
 
-	let { label, items, align = 'right', disabled = false }: Props = $props();
+	let { label, items, align = 'right', disabled = false, triggerClass, trigger }: Props = $props();
 
 	let open = $state(false);
 	let activeIndex = $state(-1);
@@ -161,15 +168,20 @@
 	<button
 		type="button"
 		bind:this={triggerEl}
-		class="btn btn-secondary btn-sm dropdown-trigger"
+		class={triggerClass ?? 'btn btn-secondary btn-sm dropdown-trigger'}
 		aria-haspopup="menu"
 		aria-expanded={open}
+		aria-label={trigger ? label : undefined}
 		{disabled}
 		onclick={toggleMenu}
 		onkeydown={handleTriggerKeydown}
 	>
-		{label}
-		<Icon name="chevron-down" size={14} />
+		{#if trigger}
+			{@render trigger({ open })}
+		{:else}
+			{label}
+			<Icon name="chevron-down" size={14} />
+		{/if}
 	</button>
 	{#if open}
 		<div

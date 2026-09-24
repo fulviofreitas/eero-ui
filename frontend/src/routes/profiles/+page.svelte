@@ -19,6 +19,7 @@
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Modal from '$components/common/Modal.svelte';
 
 	let profiles: ProfileSummary[] = $state([]);
 	let loading = $state(true);
@@ -239,53 +240,40 @@
 		</div>
 	{/if}
 
-	{#if showCreateModal}
-		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-		<div class="modal-backdrop" onclick={() => (showCreateModal = false)}>
-			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-			<div class="modal-card card" onclick={(e) => e.stopPropagation()}>
-				<h2>New Profile</h2>
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						handleCreateProfile();
-					}}
+	<Modal open={showCreateModal} title="New Profile" onClose={() => (showCreateModal = false)}>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleCreateProfile();
+			}}
+		>
+			<label class="modal-label" for="new-profile-name">Profile name</label>
+			<input
+				id="new-profile-name"
+				class="modal-input"
+				type="text"
+				bind:value={newProfileName}
+				placeholder="e.g. Kids"
+				disabled={creating}
+			/>
+			<div class="modal-actions">
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={() => (showCreateModal = false)}
+					disabled={creating}
 				>
-					<label class="modal-label" for="new-profile-name">Profile name</label>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						id="new-profile-name"
-						class="modal-input"
-						type="text"
-						bind:value={newProfileName}
-						placeholder="e.g. Kids"
-						disabled={creating}
-						autofocus
-					/>
-					<div class="modal-actions">
-						<button
-							type="button"
-							class="btn btn-secondary"
-							onclick={() => (showCreateModal = false)}
-							disabled={creating}
-						>
-							Cancel
-						</button>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							disabled={creating || !newProfileName.trim()}
-						>
-							{#if creating}
-								<span class="loading-spinner"></span>
-							{/if}
-							Create
-						</button>
-					</div>
-				</form>
+					Cancel
+				</button>
+				<button type="submit" class="btn btn-primary" disabled={creating || !newProfileName.trim()}>
+					{#if creating}
+						<span class="loading-spinner"></span>
+					{/if}
+					Create
+				</button>
 			</div>
-		</div>
-	{/if}
+		</form>
+	</Modal>
 </div>
 
 <style>
@@ -462,30 +450,8 @@
 		color: var(--color-bg-primary);
 	}
 
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: var(--z-modal);
-	}
-
-	.modal-card {
-		width: 100%;
-		max-width: 400px;
-		padding: var(--space-6);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.modal-card h2 {
-		margin: 0;
-		font-size: 1.125rem;
-	}
-
+	/* Backdrop/card chrome now lives in the Modal primitive (R4, WP5); this file only styles the
+	   form content rendered inside it. */
 	.modal-label {
 		display: block;
 		font-size: 0.875rem;

@@ -220,6 +220,87 @@ describe('DataTable', () => {
 		expect([...lastCall].sort()).toEqual(['1', '2', '3']);
 	});
 
+	it('resolves shift-click range from current sortedRows, not a stale positional index, when rows change between clicks', async () => {
+		const fourRows: Row[] = [
+			{ id: '1', name: 'A', ip: '10.0.0.1' },
+			{ id: '2', name: 'B', ip: '10.0.0.2' },
+			{ id: '3', name: 'C', ip: '10.0.0.3' },
+			{ id: '4', name: 'D', ip: '10.0.0.4' }
+		];
+		const onSelectionChange = vi.fn();
+		const { rerender } = render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows: fourRows,
+				getRowId,
+				selectable: true,
+				onSelectionChange
+			}
+		});
+
+		// Click row id=1 while it's at index 0.
+		await fireEvent.click(screen.getByLabelText('Select row 1'));
+
+		// Filter out row id=2, so row id=1 is still at index 0 but row id=4 is now at index 2
+		// (was index 3). A stale index-based range would resolve against the old positions.
+		const filteredRows = fourRows.filter((r) => r.id !== '2');
+		await rerender({
+			id: 'test',
+			columns,
+			rows: filteredRows,
+			getRowId,
+			selectable: true,
+			onSelectionChange
+		});
+
+		await fireEvent.click(screen.getByLabelText('Select row 4'), { shiftKey: true });
+
+		const lastCall = onSelectionChange.mock.calls.at(-1)?.[0] as Set<string>;
+		// Range should cover only the currently visible rows between id=1 and id=4: 1, 3, 4.
+		// Row id=2 must never appear since it was filtered out before the shift-click.
+		expect([...lastCall].sort()).toEqual(['1', '3', '4']);
+	});
+
+	it('resets the shift-click anchor when the last-clicked row is no longer present', async () => {
+		const threeRows: Row[] = [
+			{ id: '1', name: 'A', ip: '10.0.0.1' },
+			{ id: '2', name: 'B', ip: '10.0.0.2' },
+			{ id: '3', name: 'C', ip: '10.0.0.3' }
+		];
+		const onSelectionChange = vi.fn();
+		const { rerender } = render(DataTable, {
+			props: {
+				id: 'test',
+				columns,
+				rows: threeRows,
+				getRowId,
+				selectable: true,
+				onSelectionChange
+			}
+		});
+
+		await fireEvent.click(screen.getByLabelText('Select row 1'));
+
+		// Row id=1 (the anchor) is removed entirely.
+		const withoutAnchor = threeRows.filter((r) => r.id !== '1');
+		await rerender({
+			id: 'test',
+			columns,
+			rows: withoutAnchor,
+			getRowId,
+			selectable: true,
+			onSelectionChange
+		});
+
+		await fireEvent.click(screen.getByLabelText('Select row 3'), { shiftKey: true });
+
+		const lastCall = onSelectionChange.mock.calls.at(-1)?.[0] as Set<string>;
+		// No valid anchor (row 1 was removed): shift-click degrades to a plain toggle of the
+		// clicked row, leaving the pre-existing selection (row 1) untouched.
+		expect([...lastCall].sort()).toEqual(['1', '3']);
+	});
+
 	it('applies rowClass to each row and re-evaluates it on rerender', async () => {
 		const rowClass = vi.fn((r: unknown) => ((r as Row).name === 'Bravo' ? 'is-bravo' : undefined));
 		const { rerender } = render(DataTable, {

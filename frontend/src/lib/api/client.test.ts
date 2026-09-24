@@ -432,4 +432,41 @@ describe('api client', () => {
 			expect(calls).toBe(3);
 		});
 	});
+
+	// Coordinator directive (WP5): the backend now rejects every write under /api without this
+	// header (403, type "csrf") - asserted on both a GET and a write so a future change to the
+	// default-headers block can't silently scope it to one verb.
+	describe('X-Requested-With header', () => {
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		it('is sent on a GET', async () => {
+			server.use(http.get('/api/networks', () => HttpResponse.json([])));
+			const fetchSpy = vi.spyOn(global, 'fetch');
+
+			await api.networks.list();
+
+			expect(fetchSpy).toHaveBeenCalled();
+			const [, init] = fetchSpy.mock.calls[0];
+			const headers = new Headers(init?.headers);
+			expect(headers.get('X-Requested-With')).toBe('eero-ui');
+		});
+
+		it('is sent on a write', async () => {
+			server.use(
+				http.post('/api/networks/:networkId/set-preferred', () =>
+					HttpResponse.json({ success: true })
+				)
+			);
+			const fetchSpy = vi.spyOn(global, 'fetch');
+
+			await api.networks.setPreferred('network-123');
+
+			expect(fetchSpy).toHaveBeenCalled();
+			const [, init] = fetchSpy.mock.calls[0];
+			const headers = new Headers(init?.headers);
+			expect(headers.get('X-Requested-With')).toBe('eero-ui');
+		});
+	});
 });

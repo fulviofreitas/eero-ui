@@ -1,14 +1,8 @@
 /**
- * Tests for ConfirmDialog.svelte (plan § 8.2).
+ * Tests for ConfirmDialog.svelte (plan § 8.2, WP5 A5).
  *
- * `details[]` rendering and Escape-to-cancel are implemented today and
- * covered as real assertions. Focus trap and focus restore are NOT
- * implemented yet - ConfirmDialog.svelte has no `tabindex` on its dialog
- * `<div>` and no focus-management logic at all (WP9 / Tier 3 scope per plan
- * § 6.2: "Native `<dialog>` with focus trap and focus restore"). Those two
- * are written as `it.todo` with the reason rather than skipped silently, so
- * this file stops being a false green the moment WP9 lands the real
- * behaviour and someone runs `grep -r 'it.todo' ConfirmDialog.test.ts`.
+ * `details[]` rendering, Escape-to-cancel, and focus trap/restore (via the shared
+ * `trapFocus` action - see focusTrap.ts) are all covered as real assertions.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -124,19 +118,46 @@ describe('ConfirmDialog', () => {
 		expect(confirmed).toBe(true);
 	});
 
-	// PRODUCT BUG: not implemented. ConfirmDialog.svelte's dialog <div> carries
-	// no tabindex and no focus-management effect, so focus stays wherever it
-	// was on the page (typically the trigger button) instead of moving into
-	// the dialog. WP9 / Tier 3 (plan § 6.2) is scoped to fix this with a
-	// native <dialog> element.
-	it.todo(
-		'focus moves into the dialog when it opens (blocked on WP9 - ConfirmDialog has no focus-management logic yet)'
-	);
+	it('focus moves into the dialog when it opens', async () => {
+		render(ConfirmDialog);
+		const trigger = document.createElement('button');
+		trigger.textContent = 'Open';
+		document.body.appendChild(trigger);
+		trigger.focus();
+		expect(trigger).toHaveFocus();
 
-	// PRODUCT BUG: not implemented, same root cause as above - there is no
-	// code path that remembers `document.activeElement` before opening or
-	// restores it on close.
-	it.todo(
-		'focus restores to the triggering element when the dialog closes (blocked on WP9 - same gap as focus trap)'
-	);
+		uiStore.confirm({
+			title: 'Delete Profile',
+			message: 'This cannot be undone.',
+			onConfirm: async () => {}
+		});
+
+		await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+		// First focusable inside the dialog is the Cancel button.
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+
+		trigger.remove();
+	});
+
+	it('focus restores to the triggering element when the dialog closes', async () => {
+		render(ConfirmDialog);
+		const trigger = document.createElement('button');
+		trigger.textContent = 'Open';
+		document.body.appendChild(trigger);
+		trigger.focus();
+
+		uiStore.confirm({
+			title: 'Delete Profile',
+			message: 'This cannot be undone.',
+			onConfirm: async () => {}
+		});
+
+		await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+		await waitFor(() => expect(get(uiStore).confirmDialog).toBeNull());
+		await waitFor(() => expect(trigger).toHaveFocus());
+
+		trigger.remove();
+	});
 });

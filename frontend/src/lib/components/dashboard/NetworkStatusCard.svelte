@@ -209,16 +209,18 @@
 		gap: var(--space-1);
 	}
 
+	/* A2 (WP5 a11y fix): `--color-primary` was never defined, so this fell back to a transparent
+	   background - white text on the light theme's near-white card came out at 1.06:1. Using the
+	   theme's own token pair fixes both themes at once. */
 	.feature-badge {
 		font-size: 0.625rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 		padding: 3px 8px;
-		background: var(--color-primary);
-		color: white;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-primary);
 		border-radius: var(--radius-full);
-		opacity: 0.9;
 	}
 
 	.stat-header {
