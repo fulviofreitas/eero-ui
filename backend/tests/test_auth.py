@@ -22,7 +22,7 @@ class TestAuthStatus:
     """Tests for GET /api/auth/status."""
 
     async def test_status_unauthenticated(self, async_client, mock_eero_client):
-        """Returns authenticated=false when not logged in."""
+        """Returns authenticated=false, reason='none' when not logged in."""
         mock_eero_client.is_authenticated = False
 
         response = await async_client.get("/api/auth/status")
@@ -30,7 +30,36 @@ class TestAuthStatus:
         assert response.status_code == 200
         data = response.json()
         assert data["authenticated"] is False
+        assert data["reason"] == "none"
         assert data["preferred_network_id"] is None
+
+    async def test_status_expired_session_clears_token(
+        self, auth_client, authenticated_client
+    ):
+        """An EeroAuthenticationException from the probe reports reason='expired'
+        and clears the stored token (phase-6.0-revamp.md § 4.1).
+
+        ``clear_client_session()`` acts on the module-level EeroClient
+        singleton in ``app.deps``, not the dependency-overridden fixture, so
+        the singleton is pointed at the fixture for the duration of the test.
+        """
+        from app import deps
+
+        authenticated_client.get_account = AsyncMock(
+            side_effect=EeroAuthenticationException("session dead")
+        )
+        authenticated_client.clear_session_token = AsyncMock()
+        deps._client = authenticated_client
+        try:
+            response = await auth_client.get("/api/auth/status")
+        finally:
+            deps._client = None
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["authenticated"] is False
+        assert data["reason"] == "expired"
+        authenticated_client.clear_session_token.assert_awaited_once()
 
     async def test_status_authenticated(self, auth_client, authenticated_client):
         """Returns user info when authenticated."""
@@ -201,3 +230,5 @@ class TestHealthCheck:
         data = response.json()
         assert data["status"] == "healthy"
         assert "version" in data
+        # decision 6a: the frontend hides gated controls from this flag.
+        assert data["experimental_writes"] is False

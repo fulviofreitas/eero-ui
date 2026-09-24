@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..deps import get_eero_client
+from ..deps import clear_client_session, get_eero_client
 from ..transformers import check_success, extract_data, extract_id_from_url
 
 router = APIRouter()
@@ -35,6 +35,7 @@ class AuthStatusResponse(BaseModel):
     """Response for auth status endpoint."""
 
     authenticated: bool
+    reason: str | None = None
     preferred_network_id: str | None = None
     user_email: str | None = None
     user_name: str | None = None
@@ -63,15 +64,31 @@ class VerifyResponse(BaseModel):
 async def get_auth_status(
     client: EeroClient = Depends(get_eero_client),
 ) -> AuthStatusResponse:
-    """Check current authentication status."""
+    """Check current authentication status.
+
+    ``is_authenticated`` means only "a token is on disk" as of eero-api v8
+    (phase-6.0-revamp.md § 4.1) - it does not verify the token still works.
+    This route keeps the ``get_account()`` probe to distinguish a live
+    session from a dead one, and reports which case it saw via ``reason``:
+
+    - ``"none"``: no token at all.
+    - ``"expired"``: a token exists but the cloud rejected it; the token is
+      cleared here so a later call to this route reports ``authenticated:
+      false`` too, instead of looping.
+    - ``None``: authenticated with a working session (or the probe failed
+      for a reason other than authentication, e.g. a transient network
+      error - today's "authenticated but no account info" behaviour).
+    """
     user_email = None
     user_name = None
     user_phone = None
     user_role = None
     account_id = None
     premium_status = None
+    authenticated = client.is_authenticated
+    reason: str | None = None if authenticated else "none"
 
-    if client.is_authenticated:
+    if authenticated:
         try:
             raw_account = await client.get_account()
             account = extract_data(raw_account)
@@ -93,11 +110,17 @@ async def get_auth_status(
 
             # Log minimal info - avoid PII in logs
             _LOGGER.debug(f"Auth status check: authenticated, account_id={account_id}")
+        except EeroAuthenticationException:
+            _LOGGER.info("Auth status check: session expired, clearing stored token")
+            await clear_client_session()
+            authenticated = False
+            reason = "expired"
         except Exception as e:
             _LOGGER.warning(f"Failed to get account info: {e}")
 
     return AuthStatusResponse(
-        authenticated=client.is_authenticated,
+        authenticated=authenticated,
+        reason=reason,
         preferred_network_id=client.preferred_network_id,
         user_email=user_email,
         user_name=user_name,
