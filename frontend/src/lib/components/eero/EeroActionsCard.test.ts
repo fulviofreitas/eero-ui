@@ -1,8 +1,30 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
+import { http, HttpResponse } from 'msw';
 import EeroActionsCard from './EeroActionsCard.svelte';
+import { entitlementsStore } from '$stores/entitlements';
+import { server } from '../../../../tests/mocks/server';
+
+function mockEntitlements(experimentalWrites: boolean) {
+	server.use(
+		http.get('/api/networks/:networkId/entitlements', () =>
+			HttpResponse.json({
+				features: [],
+				upsell_features: [],
+				is_premium: null,
+				premium_status: null,
+				capabilities: [],
+				experimental_writes: experimentalWrites
+			})
+		)
+	);
+}
 
 describe('EeroActionsCard', () => {
+	beforeEach(() => {
+		entitlementsStore.clear();
+	});
+
 	it('shows "Turn LED Off" when the LED is on', () => {
 		render(EeroActionsCard, {
 			props: { ledOn: true, loading: false, onToggleLed: () => {}, onReboot: () => {} }
@@ -77,6 +99,77 @@ describe('EeroActionsCard', () => {
 				}
 			});
 			expect(screen.getByRole('slider')).toBeDisabled();
+		});
+	});
+
+	describe('location rename (phase-6.0-revamp.md § 7 WP7 follow-up (c))', () => {
+		it('is not rendered when onSetLocation is not supplied', () => {
+			render(EeroActionsCard, {
+				props: { ledOn: true, loading: false, onToggleLed: () => {}, onReboot: () => {} }
+			});
+			expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+		});
+
+		it('hides the rename control when the experimental-writes gate is off', async () => {
+			mockEntitlements(false);
+			await entitlementsStore.fetch('network-123');
+
+			render(EeroActionsCard, {
+				props: {
+					ledOn: true,
+					loading: false,
+					location: 'Living Room',
+					onToggleLed: () => {},
+					onReboot: () => {},
+					onSetLocation: () => {}
+				}
+			});
+
+			expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+			expect(screen.getByRole('note')).toBeInTheDocument();
+		});
+
+		it('shows the rename control and calls onSetLocation with the trimmed value', async () => {
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+			const onSetLocation = vi.fn();
+
+			render(EeroActionsCard, {
+				props: {
+					ledOn: true,
+					loading: false,
+					location: 'Living Room',
+					onToggleLed: () => {},
+					onReboot: () => {},
+					onSetLocation
+				}
+			});
+
+			const input = screen.getByLabelText('Location') as HTMLInputElement;
+			expect(input.value).toBe('Living Room');
+
+			await fireEvent.input(input, { target: { value: '  Kitchen  ' } });
+			await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+
+			expect(onSetLocation).toHaveBeenCalledWith('Kitchen');
+		});
+
+		it('disables the Rename button when the input is empty', async () => {
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+
+			render(EeroActionsCard, {
+				props: {
+					ledOn: true,
+					loading: false,
+					location: '',
+					onToggleLed: () => {},
+					onReboot: () => {},
+					onSetLocation: () => {}
+				}
+			});
+
+			expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
 		});
 	});
 });

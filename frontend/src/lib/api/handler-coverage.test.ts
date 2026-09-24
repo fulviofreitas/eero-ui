@@ -127,6 +127,14 @@ describe('api client handler coverage', () => {
 			() => api.networks.getAdvanced('network-123'),
 			() => api.networks.getNotifications('network-123'),
 			() => api.networks.getNotificationHistory('network-123'),
+			() => api.networks.updateNotificationSettings('network-123', { device_connected: true }),
+			() => api.networks.markNotificationsRead('network-123'),
+			() => api.networks.updateDdns('network-123', true),
+			() => api.networks.updateBackupInternet('network-123', true),
+			() => api.networks.createInvite('network-123', 'admin'),
+			() => api.networks.updateInvite('network-123', 'invite-1', 'New nickname'),
+			() => api.networks.deleteInvite('network-123', 'invite-1'),
+			() => api.networks.cancelPendingAdmin('network-123'),
 			() => api.devices.list(),
 			() => api.devices.get('dev-1'),
 			() => api.devices.block('dev-1'),
@@ -139,6 +147,7 @@ describe('api client handler coverage', () => {
 			() => api.eeros.setLed('eero-1', true),
 			() => api.eeros.setLedBrightness('eero-1', 80),
 			() => api.eeros.getConnections('eero-1'),
+			() => api.eeros.setLocation('eero-1', 'Living Room'),
 			() =>
 				api.devices.getInsights('dev-1', {
 					start: '2026-01-01T00:00:00Z',
@@ -192,6 +201,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(68);
+		expect(countLeafMethods(api)).toBe(77);
 	});
 });

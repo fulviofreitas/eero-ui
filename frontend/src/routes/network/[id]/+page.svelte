@@ -44,6 +44,7 @@
 	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
 	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
+	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	let network: NetworkDetail | null = $state(null);
 	let loading = $state(true);
@@ -251,9 +252,11 @@
 				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)} disabled={loading}>
 					<Icon name="refresh" size={14} /> Refresh
 				</button>
-				<button class="btn btn-secondary" onclick={openRenameNetworkModal} disabled={loading}>
-					<Icon name="edit" size={14} /> Rename
-				</button>
+				<ExperimentalGate>
+					<button class="btn btn-secondary" onclick={openRenameNetworkModal} disabled={loading}>
+						<Icon name="edit" size={14} /> Rename
+					</button>
+				</ExperimentalGate>
 			{/snippet}
 		</DetailHeader>
 

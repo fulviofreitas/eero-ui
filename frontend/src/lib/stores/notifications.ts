@@ -8,9 +8,14 @@
  * pagination mirrors `events.ts`'s cursor pattern: the last-loaded history
  * entry's own timestamp field is passed as the next page's cursor.
  *
- * Editing `settings` (`PUT /networks/{id}/notifications`) is gated behind
- * `EERO_DASHBOARD_EXPERIMENTAL_WRITES` and lands in WP7 - this store only
- * reads.
+ * Editing `settings` (`PUT /networks/{id}/notifications`) and marking
+ * notifications read (`POST .../notifications/mark-read`) are unverified,
+ * non-settings writes (phase-6.0-revamp.md § 7 WP7, family 3, plan § 5):
+ * pessimistic, gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES` server-side,
+ * never retried (`client.ts` passes `retries: 0`), re-read on success. The
+ * settings write's own response carries no top-level `changed` flag (unlike
+ * `updateDdns`/`updateBackupInternet`) - `updateSettings` below detects a
+ * no-op by comparing the requested keys against what it already had.
  */
 
 import { writable } from 'svelte/store';
@@ -22,9 +27,23 @@ interface NotificationsState {
 	history: Record<string, unknown>[];
 	loading: boolean;
 	loadingMore: boolean;
+	/** True while a settings write or mark-read is in flight - pessimistic, shared per network. */
+	applying: boolean;
 	error: string | null;
 	/** `false` once a page comes back with no timestamp to page further on. */
 	hasMore: boolean;
+	/**
+	 * Incremented after every `updateSettings` attempt (success or failure).
+	 * A checkbox's native DOM `checked` state flips on click before the
+	 * confirm/write round trip resolves; if the requested value turns out to
+	 * equal what the store already had (a no-op, or a failed write that
+	 * left `settings` unchanged), a plain `checked={enabled}` binding never
+	 * re-assigns the DOM property, leaving the checkbox visually wrong. The
+	 * card includes this counter in its `{#each}` key to force a fresh
+	 * `<input>` after every attempt, regardless of whether the value itself
+	 * changed.
+	 */
+	revision: number;
 }
 
 const initialState: NotificationsState = {
@@ -33,8 +52,10 @@ const initialState: NotificationsState = {
 	history: [],
 	loading: false,
 	loadingMore: false,
+	applying: false,
 	error: null,
-	hasMore: true
+	hasMore: true,
+	revision: 0
 };
 
 /** Best-effort extraction of a history entry's own timestamp field, mirroring `events.ts`. */
@@ -102,6 +123,44 @@ function createNotificationsStore() {
 					loadingMore: false,
 					error: error instanceof Error ? error.message : 'Failed to load older notifications'
 				}));
+			}
+		},
+
+		/**
+		 * Update the network's notification settings. Pessimistic - sends the
+		 * full settings map (read-first from the store, merged with the
+		 * caller's change) and applies the read-back on success. Returns
+		 * `true` when any requested key actually differed from what the
+		 * store already had, `false` for a no-op.
+		 */
+		async updateSettings(networkId: string, settings: Record<string, boolean>): Promise<boolean> {
+			let previous: Record<string, boolean> = {};
+			update((s) => {
+				previous = s.settings;
+				return { ...s, applying: true, error: null };
+			});
+			try {
+				const result = await api.networks.updateNotificationSettings(networkId, settings);
+				const changed = Object.entries(settings).some(([key, value]) => previous[key] !== value);
+				update((s) => ({
+					...s,
+					settings: result.settings,
+					hasUnread: result.has_unread ?? s.hasUnread
+				}));
+				return changed;
+			} finally {
+				update((s) => ({ ...s, applying: false, revision: s.revision + 1 }));
+			}
+		},
+
+		/** Mark the network's notifications read. Pessimistic - clears `hasUnread` on success. */
+		async markRead(networkId: string): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.markNotificationsRead(networkId);
+				update((s) => ({ ...s, hasUnread: false }));
+			} finally {
+				update((s) => ({ ...s, applying: false }));
 			}
 		},
 

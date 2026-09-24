@@ -6,20 +6,25 @@
   /networks/{id}/backup-internet`) and configured backup Wi-Fi access points
   (`/backup-access-points`). Plus-gated - wrapped in `<PremiumGate>` by the
   caller, with the same internal `premiumRequired` fallback `DataUsageCard`
-  uses in case entitlements are stale. Read-only; `cellular_usage`/
-  `cellular_events` are unfixtured upstream and rendered defensively via
-  `GenericRecordList`.
+  uses in case entitlements are stale. `cellular_usage`/`cellular_events` are
+  unfixtured upstream and rendered defensively via `GenericRecordList`.
+
+  Write control (phase-6.0-revamp.md § 7 WP7, family 11): the enable/disable
+  toggle on the Status section is an unverified, non-settings write (plan §
+  5) - pessimistic, gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, every
+  write goes through a `ConfirmDialog` naming "not verified end-to-end".
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { BackupAccessPoint } from '$api/types';
-	import { backupInternetStore } from '$stores/backupInternet';
+	import { backupInternetStore, uiStore } from '$stores';
 	import Card from '$components/common/Card.svelte';
 	import DataTable, { type DataTableColumn } from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import GenericRecordList from '$components/common/GenericRecordList.svelte';
 	import Icon from '$components/common/Icon.svelte';
+	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	interface Props {
 		networkId: string;
@@ -69,6 +74,30 @@
 	}
 
 	onMount(load);
+
+	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
+
+	function requestToggleEnabled() {
+		const nextEnabled = !state.status?.enabled;
+		uiStore.confirm({
+			title: 'Update Backup Internet',
+			message: `${nextEnabled ? 'Enable' : 'Disable'} backup internet (cellular failover)?`,
+			details: [NOT_VERIFIED_DETAIL],
+			confirmText: nextEnabled ? 'Enable' : 'Disable',
+			onConfirm: async () => {
+				try {
+					const changed = await backupInternetStore.updateEnabled(networkId, nextEnabled);
+					if (!changed) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					uiStore.success('Backup internet setting updated');
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to update backup internet');
+				}
+			}
+		});
+	}
 </script>
 
 <Card title="Backup Internet">
@@ -89,9 +118,20 @@
 	{:else}
 		<section class="backup-section">
 			<h4>Status</h4>
-			<span class="badge {state.status?.enabled ? 'badge-success' : 'badge-neutral'}">
-				{state.status?.enabled ? 'Enabled' : 'Disabled'}
-			</span>
+			<div class="badge-row-actions">
+				<span class="badge {state.status?.enabled ? 'badge-success' : 'badge-neutral'}">
+					{state.status?.enabled ? 'Enabled' : 'Disabled'}
+				</span>
+				<ExperimentalGate>
+					<button
+						class="btn btn-secondary btn-sm"
+						onclick={requestToggleEnabled}
+						disabled={state.applying}
+					>
+						{state.status?.enabled ? 'Disable' : 'Enable'}
+					</button>
+				</ExperimentalGate>
+			</div>
 		</section>
 
 		<section class="backup-section">
@@ -141,6 +181,12 @@
 		letter-spacing: 0.05em;
 		color: var(--color-text-secondary);
 		margin: 0 0 var(--space-2);
+	}
+
+	.badge-row-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
 	}
 
 	.premium-note {

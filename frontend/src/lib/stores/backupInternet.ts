@@ -9,6 +9,11 @@
  *
  * Plus-gated: a 402 from either call is recorded as `premiumRequired` rather
  * than `error`, matching `dataUsage.ts`/`insights.ts`.
+ *
+ * The enable/disable toggle (phase-6.0-revamp.md § 7 WP7, family 11) is an
+ * unverified, non-settings write (plan § 5): pessimistic, gated on
+ * `EERO_DASHBOARD_EXPERIMENTAL_WRITES` server-side, never retried
+ * (`client.ts` passes `retries: 0`), re-fetches this store on success.
  */
 
 import { writable } from 'svelte/store';
@@ -19,6 +24,8 @@ interface BackupInternetState {
 	status: BackupInternetStatus | null;
 	accessPoints: BackupAccessPoint[];
 	loading: boolean;
+	/** True while the enable/disable write is in flight - pessimistic, shared per network. */
+	applying: boolean;
 	error: string | null;
 	premiumRequired: boolean;
 }
@@ -27,6 +34,7 @@ const initialState: BackupInternetState = {
 	status: null,
 	accessPoints: [],
 	loading: false,
+	applying: false,
 	error: null,
 	premiumRequired: false
 };
@@ -60,6 +68,22 @@ function createBackupInternetStore() {
 					loading: false,
 					error: error instanceof Error ? error.message : 'Failed to load backup internet'
 				}));
+			}
+		},
+
+		/**
+		 * Enable/disable backup internet (cellular failover). Pessimistic -
+		 * re-fetches the store on success. Returns the backend's own
+		 * `changed` flag (`false` means the no-op guard skipped the write).
+		 */
+		async updateEnabled(networkId: string, enabled: boolean): Promise<boolean> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await api.networks.updateBackupInternet(networkId, enabled);
+				await this.fetch(networkId);
+				return result.changed;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
 			}
 		},
 

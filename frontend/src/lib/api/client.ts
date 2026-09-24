@@ -714,7 +714,87 @@ export const api = {
 						...(params.timestamp && { timestamp: params.timestamp })
 					}
 				}
-			)
+			),
+
+		/**
+		 * Update the network's notification settings (plan § 7 WP7, family
+		 * 3). Unverified write - gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`,
+		 * 403 `experimental_disabled` when off. Never retried. The caller
+		 * always sends the full settings map, read-first from the store.
+		 */
+		updateNotificationSettings: (networkId: string, settings: Record<string, boolean>) =>
+			fetchWithHandling<import('./types').NetworkNotificationsResponse>(
+				`/networks/${networkId}/notifications`,
+				{ method: 'PUT', body: { settings }, retries: 0 }
+			),
+
+		/** Mark the network's notifications read (plan § 7 WP7, family 3). Unverified write. */
+		markNotificationsRead: (networkId: string) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/notifications/mark-read`, {
+				method: 'POST',
+				retries: 0
+			}),
+
+		/**
+		 * Enable/disable dynamic DNS (plan § 7 WP7, family 4). Unverified
+		 * write, read-first with a skip-when-unchanged no-op guard
+		 * server-side (`changed: false`). Never retried.
+		 */
+		updateDdns: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').DdnsUpdateResultResponse>(`/networks/${networkId}/ddns`, {
+				method: 'PUT',
+				body: { enabled },
+				retries: 0
+			}),
+
+		/**
+		 * Enable/disable backup internet (cellular failover) (plan § 7 WP7,
+		 * family 11). Unverified write, Plus-gated, read-first with a
+		 * skip-when-unchanged no-op guard server-side. Never retried.
+		 */
+		updateBackupInternet: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').BackupInternetToggleResponse>(
+				`/networks/${networkId}/backup-internet`,
+				{ method: 'PUT', body: { enabled }, retries: 0 }
+			),
+
+		/**
+		 * Create an invite for the network (plan § 7 WP7, family 2).
+		 * Unverified write - the response deliberately carries no id or
+		 * join-credential URL; re-list `getInvites` to discover the new
+		 * invite. Never retried.
+		 */
+		createInvite: (networkId: string, role: import('./types').InviteCreateRequest['role']) =>
+			fetchWithHandling<import('./types').InviteCreateResponse>(`/networks/${networkId}/invites`, {
+				method: 'POST',
+				body: { role },
+				retries: 0
+			}),
+
+		/** Rename a pending invite (plan § 7 WP7, family 2). Unverified write. */
+		updateInvite: (networkId: string, inviteId: string, nickname: string) =>
+			fetchWithHandling<import('./types').NetworkInvite>(
+				`/networks/${networkId}/invites/${inviteId}`,
+				{ method: 'PUT', body: { nickname }, retries: 0 }
+			),
+
+		/** Cancel a pending invite (plan § 7 WP7, family 2). Unverified write. */
+		deleteInvite: (networkId: string, inviteId: string) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/invites/${inviteId}`, {
+				method: 'DELETE',
+				retries: 0
+			}),
+
+		/**
+		 * Cancel every pending admin-promotion invite for the network (plan
+		 * § 7 WP7, family 2). Unverified write; network-scoped, no member id
+		 * required. Never retried.
+		 */
+		cancelPendingAdmin: (networkId: string) =>
+			fetchWithHandling<{ success: boolean }>(`/networks/${networkId}/pending-admin/cancel`, {
+				method: 'POST',
+				retries: 0
+			})
 	},
 
 	// Devices
@@ -836,7 +916,21 @@ export const api = {
 
 		/** An eero's client connections (plan § 7 WP6, deliverable 5). Verified read. */
 		getConnections: (eeroId: string) =>
-			fetchWithHandling<import('./types').EeroConnectionsResponse>(`/eeros/${eeroId}/connections`)
+			fetchWithHandling<import('./types').EeroConnectionsResponse>(`/eeros/${eeroId}/connections`),
+
+		/**
+		 * Set the descriptive location label for an eero (plan § 7 WP7
+		 * follow-up (c)). Unverified write - the SDK's own docstring says
+		 * `set_location` "has not been confirmed against a live network".
+		 * Read-first with a skip-when-unchanged no-op guard server-side
+		 * (`changed: false`). Never retried.
+		 */
+		setLocation: (eeroId: string, location: string) =>
+			fetchWithHandling<import('./types').LocationUpdateResponse>(`/eeros/${eeroId}/location`, {
+				method: 'PUT',
+				body: { location },
+				retries: 0
+			})
 	},
 
 	// Profiles

@@ -7,6 +7,12 @@
  * - a 5xx is recorded as error
  * - loadMore appends older history using the last entry's timestamp as cursor
  * - clear resets to the initial state
+ * - updateSettings (phase-6.0-revamp.md § 7 WP7, family 3) sends the full
+ *   settings map and applies the read-back; detects a no-op by comparing
+ *   requested keys against what it already had (the backend response
+ *   carries no top-level `changed` flag for this route)
+ * - markRead clears `hasUnread` on success
+ * - a 403 experimental_disabled response surfaces as a rejected promise
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -88,5 +94,58 @@ describe('notificationsStore', () => {
 		const state = get(notificationsStore);
 		expect(state.history).toEqual([]);
 		expect(state.hasMore).toBe(true);
+	});
+
+	describe('updateSettings', () => {
+		it('returns true and applies the read-back when a requested key differs', async () => {
+			await notificationsStore.fetch('network-123');
+
+			const changed = await notificationsStore.updateSettings('network-123', {
+				device_connected: true,
+				device_disconnected: true
+			});
+
+			expect(changed).toBe(true);
+			expect(get(notificationsStore).settings.device_disconnected).toBe(true);
+			expect(get(notificationsStore).applying).toBe(false);
+		});
+
+		it('returns false when every requested key already matched', async () => {
+			await notificationsStore.fetch('network-123');
+
+			const changed = await notificationsStore.updateSettings('network-123', {
+				device_connected: true
+			});
+
+			expect(changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/notifications', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(
+				notificationsStore.updateSettings('network-123', { device_connected: false })
+			).rejects.toThrow('Experimental writes are disabled.');
+			expect(get(notificationsStore).applying).toBe(false);
+		});
+	});
+
+	describe('markRead', () => {
+		it('clears hasUnread on success', async () => {
+			await notificationsStore.fetch('network-123');
+			expect(get(notificationsStore).hasUnread).toBe(true);
+
+			await notificationsStore.markRead('network-123');
+
+			expect(get(notificationsStore).hasUnread).toBe(false);
+			expect(get(notificationsStore).applying).toBe(false);
+		});
 	});
 });

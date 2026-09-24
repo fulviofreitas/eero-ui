@@ -536,6 +536,22 @@ export interface EeroConnectionsResponse {
 	connections: Record<string, unknown>[];
 }
 
+/**
+ * Eero location rename (phase-6.0-revamp.md § 7 WP7 follow-up (c)).
+ * Unverified, non-settings write (§ 5) - the SDK's own docstring says
+ * `set_location` "has not been confirmed against a live network". Read-first
+ * with a skip-when-unchanged no-op guard server-side (`changed: false`).
+ */
+export interface LocationUpdateRequest {
+	location: string;
+}
+
+export interface LocationUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	location: string | null;
+}
+
 // ============================================
 // Profiles
 // ============================================
@@ -741,6 +757,27 @@ export interface NetworkInvitesResponse {
 	partial: boolean;
 }
 
+// ---- Members / invites writes (phase-6.0-revamp.md § 7 WP7, family 2) ----
+// Unverified, non-settings writes (§ 5). `promote_member`/`remove_admin`
+// are NOT wired to any control this pass - `NetworkMember` (above) carries
+// no id (allowlisted server-side to name/role/status only), so there is no
+// non-secret handle to promote/demote a specific member by. `createInvite`/
+// `updateInvite`/`deleteInvite`/`cancelPendingAdmin` need no such id (invites
+// carry their own `id`; cancel-pending-admin is network-scoped).
+
+export interface InviteCreateRequest {
+	role: 'owner' | 'admin';
+}
+
+export interface InviteCreateResponse {
+	success: boolean;
+	role: string | null;
+}
+
+export interface InviteUpdateRequest {
+	nickname: string;
+}
+
 // ============================================
 // Profile schedules (phase-6.0-revamp.md § 7 WP7, family 1)
 //
@@ -797,6 +834,17 @@ export interface BackupInternetStatus {
 	enabled: boolean | null;
 	cellular_usage: Record<string, unknown> | null;
 	cellular_events: Record<string, unknown>[] | null;
+}
+
+/**
+ * Backup-internet toggle (phase-6.0-revamp.md § 7 WP7, family 11).
+ * Unverified, non-settings write (§ 5), Plus-gated; read-first with a
+ * skip-when-unchanged no-op guard server-side (`changed: false`).
+ */
+export interface BackupInternetToggleResponse {
+	success: boolean;
+	changed: boolean;
+	enabled: boolean | null;
 }
 
 export interface BackupAccessPoint {
@@ -857,6 +905,22 @@ export interface AdvancedNetworkSettings {
 	ddns: unknown;
 }
 
+/**
+ * DDNS toggle (phase-6.0-revamp.md § 7 WP7, family 4). Unverified,
+ * non-settings write (§ 5); no dedicated getter exists, so the backend's
+ * no-op guard reads the network envelope's own `ddns` field - same
+ * `changed: false` shape as `BackupInternetToggleResponse`.
+ */
+export interface DdnsUpdateRequest {
+	enabled: boolean;
+}
+
+export interface DdnsUpdateResultResponse {
+	success: boolean;
+	changed: boolean;
+	ddns: unknown;
+}
+
 // ============================================
 // Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
 //
@@ -872,4 +936,17 @@ export interface NetworkNotificationsResponse {
 
 export interface NotificationHistoryResponse {
 	history: Record<string, unknown>[];
+}
+
+/**
+ * Notification settings write (phase-6.0-revamp.md § 7 WP7, family 3).
+ * Unverified, non-settings write (§ 5); the backend validates every key in
+ * `settings` against the network's *current* setting keys and merges rather
+ * than replacing wholesale - callers always send the full map read-first
+ * from the store. Unlike `DdnsUpdateResultResponse`/`BackupInternetToggleResponse`,
+ * this response carries no top-level `changed` flag; the caller detects a
+ * no-op by comparing the requested keys against what it already had.
+ */
+export interface NotificationSettingsUpdateRequest {
+	settings: Record<string, boolean>;
 }

@@ -6,6 +6,9 @@
  * - fetch loads security/subnets/multistaticip/advanced together
  * - a transport failure on any one call records error
  * - clear resets to the initial state
+ * - updateDdns (phase-6.0-revamp.md § 7 WP7, family 4) re-fetches on success
+ *   and returns the backend's own `changed` flag
+ * - a 403 experimental_disabled response surfaces as a rejected promise
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -54,5 +57,45 @@ describe('securityWanStore', () => {
 		const state = get(securityWanStore);
 		expect(state.security).toBeNull();
 		expect(state.subnets).toBeNull();
+	});
+
+	describe('updateDdns', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			await securityWanStore.fetch('network-123');
+
+			const changed = await securityWanStore.updateDdns('network-123', true);
+
+			expect(changed).toBe(true);
+			expect(get(securityWanStore).applying).toBe(false);
+			expect(get(securityWanStore).advanced).not.toBeNull();
+		});
+
+		it('returns false (no-op) when the backend reports changed:false', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/ddns', () =>
+					HttpResponse.json({ success: true, changed: false, ddns: { enabled: false } })
+				)
+			);
+
+			const changed = await securityWanStore.updateDdns('network-123', false);
+
+			expect(changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/ddns', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(securityWanStore.updateDdns('network-123', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+			expect(get(securityWanStore).applying).toBe(false);
+		});
 	});
 });

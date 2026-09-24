@@ -7,6 +7,9 @@
  * - a 402 is recorded as premiumRequired rather than error
  * - a 5xx is recorded as error
  * - clear resets to the initial state
+ * - updateEnabled (phase-6.0-revamp.md § 7 WP7, family 11) re-fetches on
+ *   success and returns the backend's own `changed` flag
+ * - a 403 experimental_disabled response surfaces as a rejected promise
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -68,5 +71,45 @@ describe('backupInternetStore', () => {
 		const state = get(backupInternetStore);
 		expect(state.accessPoints).toEqual([]);
 		expect(state.status).toBeNull();
+	});
+
+	describe('updateEnabled', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			await backupInternetStore.fetch('network-123');
+
+			const changed = await backupInternetStore.updateEnabled('network-123', false);
+
+			expect(changed).toBe(true);
+			expect(get(backupInternetStore).applying).toBe(false);
+			expect(get(backupInternetStore).status).not.toBeNull();
+		});
+
+		it('returns false (no-op) when the backend reports changed:false', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/backup-internet', () =>
+					HttpResponse.json({ success: true, changed: false, enabled: true })
+				)
+			);
+
+			const changed = await backupInternetStore.updateEnabled('network-123', true);
+
+			expect(changed).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled response as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/backup-internet', () =>
+					HttpResponse.json(
+						{ detail: 'Experimental writes are disabled.', type: 'experimental_disabled' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(backupInternetStore.updateEnabled('network-123', true)).rejects.toThrow(
+				'Experimental writes are disabled.'
+			);
+			expect(get(backupInternetStore).applying).toBe(false);
+		});
 	});
 });

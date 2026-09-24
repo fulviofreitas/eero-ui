@@ -10,6 +10,15 @@
  * Each of the three calls fails soft server-side to `partial: true` on a 403
  * rather than throwing, so the three loads are tracked as one `fetch()` and
  * only a genuine transport/auth failure sets `error`.
+ *
+ * Invite/admin writes (phase-6.0-revamp.md § 7 WP7, family 2) are unverified,
+ * non-settings writes (plan § 5): pessimistic, gated on
+ * `EERO_DASHBOARD_EXPERIMENTAL_WRITES` server-side, never retried
+ * (`client.ts` passes `retries: 0`), re-list on success. `promoteMember`/
+ * `removeAdmin` are NOT implemented here - `NetworkMember` carries no id
+ * (allowlisted server-side to name/role/status only), so there is no
+ * non-secret handle for the frontend to promote/demote a specific member
+ * by; that is a contract gap, not an oversight (see the ledger).
  */
 
 import { writable } from 'svelte/store';
@@ -25,6 +34,8 @@ interface MembersState {
 	invites: NetworkInvite[];
 	invitesPartial: boolean;
 	loading: boolean;
+	/** True while any invite/admin write is in flight - pessimistic, shared per network. */
+	applying: boolean;
 	error: string | null;
 }
 
@@ -37,6 +48,7 @@ const initialState: MembersState = {
 	invites: [],
 	invitesPartial: false,
 	loading: false,
+	applying: false,
 	error: null
 };
 
@@ -71,6 +83,50 @@ function createMembersStore() {
 					loading: false,
 					error: error instanceof Error ? error.message : 'Failed to load members'
 				}));
+			}
+		},
+
+		/** Create an invite for the network. Pessimistic - re-lists on success. */
+		async createInvite(networkId: string, role: 'owner' | 'admin'): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.createInvite(networkId, role);
+				await this.fetch(networkId);
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Rename a pending invite. Pessimistic - re-lists on success. */
+		async updateInvite(networkId: string, inviteId: string, nickname: string): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.updateInvite(networkId, inviteId, nickname);
+				await this.fetch(networkId);
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Cancel a pending invite. Pessimistic - re-lists on success. */
+		async deleteInvite(networkId: string, inviteId: string): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.deleteInvite(networkId, inviteId);
+				await this.fetch(networkId);
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Cancel every pending admin-promotion invite. Pessimistic - re-lists on success. */
+		async cancelPendingAdmin(networkId: string): Promise<void> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				await api.networks.cancelPendingAdmin(networkId);
+				await this.fetch(networkId);
+			} finally {
+				update((s) => ({ ...s, applying: false }));
 			}
 		},
 

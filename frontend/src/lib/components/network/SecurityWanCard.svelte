@@ -10,18 +10,26 @@
   Each section carries a stable `data-family` attribute and a named
   `*Controls` snippet prop - the seam WP8's settings-class write controls
   attach to, one family at a time, without touching this component's layout.
+
+  The WAN section additionally owns its own DDNS toggle (phase-6.0-revamp.md
+  § 7 WP7, family 4) - an unverified, non-settings write (plan § 5), built
+  directly into this card rather than routed through the `wanControls` seam
+  (that seam is reserved for WP8's settings-class controls). Pessimistic,
+  gated on `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, every write goes through a
+  `ConfirmDialog` naming "not verified end-to-end".
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { DataTableColumn } from '$components/common/DataTable.svelte';
-	import { securityWanStore } from '$stores/securityWan';
+	import { securityWanStore, uiStore } from '$stores';
 	import Card from '$components/common/Card.svelte';
 	import DataTable from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import InfoRow from '$components/common/InfoRow.svelte';
+	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	interface Props {
 		networkId: string;
@@ -90,6 +98,34 @@
 	}
 
 	onMount(load);
+
+	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
+
+	let ddnsEnabled = $derived(
+		Boolean(state.advanced?.ddns && (state.advanced.ddns as { enabled?: unknown }).enabled)
+	);
+
+	function requestToggleDdns() {
+		const nextEnabled = !ddnsEnabled;
+		uiStore.confirm({
+			title: 'Update Dynamic DNS',
+			message: `${nextEnabled ? 'Enable' : 'Disable'} dynamic DNS for this network?`,
+			details: [NOT_VERIFIED_DETAIL],
+			confirmText: nextEnabled ? 'Enable' : 'Disable',
+			onConfirm: async () => {
+				try {
+					const changed = await securityWanStore.updateDdns(networkId, nextEnabled);
+					if (!changed) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					uiStore.success('Dynamic DNS setting updated');
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to update dynamic DNS');
+				}
+			}
+		});
+	}
 </script>
 
 <Card title="Security & WAN">
@@ -199,6 +235,15 @@
 				/>
 			{/if}
 			<InfoRow label="Dynamic DNS" value={summarize(state.advanced?.ddns)} mono />
+			<ExperimentalGate>
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={requestToggleDdns}
+					disabled={state.applying}
+				>
+					{ddnsEnabled ? 'Disable Dynamic DNS' : 'Enable Dynamic DNS'}
+				</button>
+			</ExperimentalGate>
 			{#if wanControls}
 				<div class="section-controls">{@render wanControls()}</div>
 			{/if}

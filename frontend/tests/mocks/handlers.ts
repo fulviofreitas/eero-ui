@@ -415,6 +415,34 @@ export const handlers = [
 		});
 	}),
 
+	// Members/invites writes (phase-6.0-revamp.md § 7 WP7, family 2). Default
+	// here simulates the gate open - individual tests override with a 403
+	// `experimental_disabled` variant to exercise the gate-off path.
+	http.post('/api/networks/:networkId/invites', async ({ request }) => {
+		const body = (await request.json()) as { role: string };
+		return HttpResponse.json({ success: true, role: body.role }, { status: 201 });
+	}),
+
+	http.put('/api/networks/:networkId/invites/:inviteId', async ({ params, request }) => {
+		const body = (await request.json()) as { nickname: string };
+		return HttpResponse.json({
+			id: params.inviteId,
+			role: 'admin',
+			status: 'pending',
+			created: '2026-01-01T00:00:00Z',
+			expires: '2026-02-01T00:00:00Z',
+			nickname: body.nickname
+		});
+	}),
+
+	http.delete('/api/networks/:networkId/invites/:inviteId', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
+	http.post('/api/networks/:networkId/pending-admin/cancel', () => {
+		return HttpResponse.json({ success: true });
+	}),
+
 	// ============================================
 	// Backup internet (phase-6.0-revamp.md § 7 WP6, deliverable 11)
 	// ============================================
@@ -424,6 +452,12 @@ export const handlers = [
 			cellular_usage: { used_bytes: 1000, limit_bytes: 5000 },
 			cellular_events: [{ timestamp: '2026-01-01T00:00:00Z', type: 'failover_started' }]
 		});
+	}),
+
+	// Backup-internet toggle (phase-6.0-revamp.md § 7 WP7, family 11).
+	http.put('/api/networks/:networkId/backup-internet', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({ success: true, changed: true, enabled: body.enabled });
 	}),
 
 	http.get('/api/networks/:networkId/backup-access-points', () => {
@@ -478,6 +512,14 @@ export const handlers = [
 		});
 	}),
 
+	// DDNS toggle (phase-6.0-revamp.md § 7 WP7, family 4). Default here
+	// simulates the gate open and a real change - individual tests override
+	// with a 403 `experimental_disabled` or `changed: false` variant.
+	http.put('/api/networks/:networkId/ddns', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({ success: true, changed: true, ddns: { enabled: body.enabled } });
+	}),
+
 	// ============================================
 	// Notifications (phase-6.0-revamp.md § 7 WP6, deliverable 13)
 	// ============================================
@@ -495,6 +537,18 @@ export const handlers = [
 				{ timestamp: '2026-01-01T00:00:00Z', message: 'Software updated' }
 			]
 		});
+	}),
+
+	// Notification settings/mark-read writes (phase-6.0-revamp.md § 7 WP7,
+	// family 3). Default here simulates the gate open - individual tests
+	// override with a 403 `experimental_disabled` variant.
+	http.put('/api/networks/:networkId/notifications', async ({ request }) => {
+		const body = (await request.json()) as { settings: Record<string, boolean> };
+		return HttpResponse.json({ settings: body.settings, has_unread: true });
+	}),
+
+	http.post('/api/networks/:networkId/notifications/mark-read', () => {
+		return HttpResponse.json({ success: true });
 	}),
 
 	// ============================================
@@ -778,6 +832,14 @@ export const handlers = [
 			message: 'LED brightness set to 80%.',
 			led_brightness: 80
 		});
+	}),
+
+	// Location rename (phase-6.0-revamp.md § 7 WP7 follow-up (c)). Default
+	// here simulates the gate open and a real change - individual tests
+	// override with a 403 `experimental_disabled` or `changed: false` variant.
+	http.put('/api/eeros/:eeroId/location', async ({ request }) => {
+		const body = (await request.json()) as { location: string };
+		return HttpResponse.json({ success: true, changed: true, location: body.location });
 	}),
 
 	http.get('/api/eeros/:eeroId/connections', () => {

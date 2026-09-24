@@ -161,6 +161,43 @@
 		if (ledBrightnessTimer) clearTimeout(ledBrightnessTimer);
 	});
 
+	/**
+	 * Rename the eero's descriptive location label (phase-6.0-revamp.md § 7
+	 * WP7 follow-up (c)). Unverified write (plan § 5) - pessimistic, behind
+	 * a `ConfirmDialog` naming "not verified end-to-end". Updates this
+	 * page's own `eero` state on success; there is no dedicated eeros-list
+	 * store to sync (the eeros list route fetches directly via `api.eeros.list`).
+	 */
+	function handleSetLocation(location: string) {
+		if (!eero?.id) return;
+		const eeroId = eero.id;
+
+		uiStore.confirm({
+			title: 'Rename Eero',
+			message: `Rename this eero to "${location}"?`,
+			details: ['This action is not verified end-to-end against the eero cloud.'],
+			confirmText: 'Rename',
+			onConfirm: async () => {
+				actionLoading = true;
+				try {
+					const result = await api.eeros.setLocation(eeroId, location);
+					if (!result.changed) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					if (eero) {
+						eero = { ...eero, location: result.location ?? location };
+					}
+					uiStore.success(`Eero renamed to "${result.location ?? location}"`);
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to rename eero');
+				} finally {
+					actionLoading = false;
+				}
+			}
+		});
+	}
+
 	// React to network changes
 	$effect(() => {
 		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
@@ -220,10 +257,12 @@
 			<EeroActionsCard
 				ledOn={eero.led_on}
 				ledBrightness={eero.led_brightness}
+				location={eero.location}
 				loading={actionLoading}
 				onToggleLed={handleToggleLed}
 				onReboot={handleReboot}
 				onSetLedBrightness={handleSetLedBrightness}
+				onSetLocation={handleSetLocation}
 			/>
 			<EeroConnectionsCard eeroId={eero.id} />
 			{#if $selectedNetworkId}
