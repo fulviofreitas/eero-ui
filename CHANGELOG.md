@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.0.0](https://github.com/fulviofreitas/eero-ui/compare/v5.3.4...v6.0.0) (2026-09-25)
+
+### ⚠ BREAKING CHANGES
+
+* **app:** the Prometheus exporter is no longer embedded; eero-ui collects its metrics itself and writes them to VictoriaMetrics, and EERO_EXPORTER_SESSION_PATH and EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED are removed
+* **app:** the /metrics endpoint is removed with no replacement; eero-ui is no longer a Prometheus scrape target, and nothing inside the container is scraped
+* **app:** metrics beyond the eight the dashboard uses are no longer collected; run ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0 alongside and point your own Prometheus at it
+* **app:** /api/metrics/* now requires an authenticated session; the raw PromQL passthrough endpoints and two unused metrics routes are removed
+* **app:** requires eero-api >= 8.0.3; session transport, auth encodings and the credential record changed upstream
+* **app:** POST /api/networks/{id}/speedtest returns 202 and the result is read from GET /api/networks/{id}/speedtests; SpeedTestResult has a single normalised shape
+* **app:** device block and unblock resolve the device MAC server-side; a device without a known MAC is rejected with 422
+* **app:** eero-api errors map to 401/402/403/409/422/429/502/503 instead of a blanket 500; GET /api/auth/status gains reason
+* **app:** settings-class writes require confirmation and may restart every eero; unverified writes are hidden unless EERO_DASHBOARD_EXPERIMENTAL_WRITES=true
+* **app:** every POST/PUT/PATCH/DELETE under /api requires the header X-Requested-With: eero-ui
+* **app:** account e-mail and phone changes additionally require EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES=true
+
+### ✨ Features
+
+* **app:** eero-ui 6.0 revamp ([f7edab2](https://github.com/fulviofreitas/eero-ui/commit/f7edab26a654616effc727634a0eb1262bf45d6f))
+
 ## [5.3.4](https://github.com/fulviofreitas/eero-ui/compare/v5.3.3...v5.3.4) (2026-09-11)
 
 ### 🐛 Bug Fixes
