@@ -177,36 +177,37 @@ def _mac_from_blacklist_entry(entry: Any) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-async def _snapshot(
-    network_id: str,
-    cookie_file: str,
-    victoria_url: str | None,
+async def _fetch_snapshot_raw(client: EeroClient, network_id: str) -> dict[str, Any]:
+    """Issue every read call for one snapshot and extract each envelope."""
+    raw_network_env = await client.get_network(network_id, refresh_cache=True)
+    raw_eeros_env = await client.get_eeros(network_id, refresh_cache=True)
+    raw_guest_env = await client.get_guest_network(network_id)
+    raw_speedtests_env = await client.get_speed_tests(network_id, limit=1)
+    raw_blacklist_env = await client.get_blacklist(network_id)
+    raw_profiles_env = await client.get_profiles(network_id, refresh_cache=True)
+    raw_devices_env = await client.get_devices(network_id, refresh_cache=True)
+    raw_dns_env = await client.get_dns_settings(network_id)
+
+    return {
+        "network": extract_data(raw_network_env),
+        "eeros": extract_list(raw_eeros_env, "eeros"),
+        "guest": extract_data(raw_guest_env),
+        "speedtests": extract_list(raw_speedtests_env, "speedtest"),
+        "blacklist": extract_list(raw_blacklist_env, "blacklist"),
+        "profiles": extract_list(raw_profiles_env, "profiles"),
+        "devices": extract_list(raw_devices_env, "devices"),
+        "dns": extract_data(raw_dns_env),
+    }
+
+
+def _derive_guest_settings(
+    network_raw: dict[str, Any], guest_raw: dict[str, Any]
 ) -> dict[str, Any]:
-    async with EeroClient(cookie_file=cookie_file, use_keyring=False) as client:
-        raw_network_env = await client.get_network(network_id, refresh_cache=True)
-        network_raw = extract_data(raw_network_env)
+    """Resolve guest-network enabled/name/password-set from both sources.
 
-        raw_eeros_env = await client.get_eeros(network_id, refresh_cache=True)
-        eeros_raw = extract_list(raw_eeros_env, "eeros")
-
-        raw_guest_env = await client.get_guest_network(network_id)
-        guest_raw = extract_data(raw_guest_env)
-
-        raw_speedtests_env = await client.get_speed_tests(network_id, limit=1)
-        speedtests_raw = extract_list(raw_speedtests_env, "speedtest")
-
-        raw_blacklist_env = await client.get_blacklist(network_id)
-        blacklist_raw = extract_list(raw_blacklist_env, "blacklist")
-
-        raw_profiles_env = await client.get_profiles(network_id, refresh_cache=True)
-        profiles_raw = extract_list(raw_profiles_env, "profiles")
-
-        raw_devices_env = await client.get_devices(network_id, refresh_cache=True)
-        devices_raw = extract_list(raw_devices_env, "devices")
-
-        raw_dns_env = await client.get_dns_settings(network_id)
-        dns_raw = extract_data(raw_dns_env)
-
+    Prefers the dedicated ``get_guest_network()`` read where present — it is
+    the authoritative source for this resource.
+    """
     guest_network_nested = network_raw.get("guest_network")
     if isinstance(guest_network_nested, dict):
         guest_enabled = bool(guest_network_nested.get("enabled"))
@@ -214,13 +215,19 @@ async def _snapshot(
     else:
         guest_enabled = bool(network_raw.get("guest_network_enabled"))
         guest_name = network_raw.get("guest_network_name")
-    # Prefer the dedicated get_guest_network() read where present — it is
-    # the authoritative source for this resource.
     if guest_raw:
         guest_enabled = bool(guest_raw.get("enabled", guest_enabled))
         guest_name = guest_raw.get("name", guest_name)
     guest_password_set = bool(guest_raw.get("password")) if guest_raw else None
+    return {
+        "guest_network_enabled": guest_enabled,
+        "guest_network_name": guest_name,
+        "guest_password_set": guest_password_set,
+    }
 
+
+def _derive_dns_summary(dns_raw: dict[str, Any]) -> dict[str, Any]:
+    """Build the snapshot's ``network.dns`` sub-dict from a DNS envelope."""
     dns_section = dns_raw.get("dns")
     if not isinstance(dns_section, dict):
         dns_section = {}
@@ -234,11 +241,23 @@ async def _snapshot(
     if not isinstance(ipv4_custom, dict):
         ipv4_custom = {}
 
-    latest_speed_test = speedtests_raw[0] if speedtests_raw else {}
-    speed_test_timestamp = None
-    if isinstance(latest_speed_test, dict):
-        speed_test_timestamp = latest_speed_test.get("date")
+    return {
+        "ipv4_mode": dns_section.get("mode"),
+        "ipv4_servers": _normalize_ip_list(ipv4_custom.get("ips"), family=4),
+        "ipv6_mode": name_servers.get("mode"),
+        "ipv6_servers": _normalize_ip_list(name_servers.get("custom"), family=6),
+        "caching": dns_section.get("caching"),
+    }
 
+
+def _latest_speed_test_timestamp(speedtests_raw: list[Any]) -> Any:
+    latest_speed_test = speedtests_raw[0] if speedtests_raw else {}
+    if isinstance(latest_speed_test, dict):
+        return latest_speed_test.get("date")
+    return None
+
+
+def _build_eeros_dict(eeros_raw: list[Any]) -> dict[str, Any]:
     eeros: dict[str, Any] = {}
     for raw in eeros_raw:
         if not isinstance(raw, dict):
@@ -253,7 +272,10 @@ async def _snapshot(
             "led_brightness": raw.get("led_brightness"),
             "last_reboot": raw.get("last_reboot"),
         }
+    return eeros
 
+
+def _build_profiles_dict(profiles_raw: list[Any]) -> dict[str, Any]:
     profiles: dict[str, Any] = {}
     for raw in profiles_raw:
         if not isinstance(raw, dict):
@@ -276,7 +298,10 @@ async def _snapshot(
             "paused": raw.get("paused"),
             "device_ids": device_ids,
         }
+    return profiles
 
+
+def _build_devices_dict(devices_raw: list[Any]) -> dict[str, Any]:
     devices: dict[str, Any] = {}
     for raw in devices_raw:
         if not isinstance(raw, dict):
@@ -288,9 +313,27 @@ async def _snapshot(
             "mac": raw.get("mac"),
             "nickname": raw.get("nickname"),
         }
+    return devices
 
+
+async def _snapshot(
+    network_id: str,
+    cookie_file: str,
+    victoria_url: str | None,
+) -> dict[str, Any]:
+    async with EeroClient(cookie_file=cookie_file, use_keyring=False) as client:
+        raw = await _fetch_snapshot_raw(client, network_id)
+
+    network_raw = raw["network"]
+    guest_settings = _derive_guest_settings(network_raw, raw["guest"])
+    dns_summary = _derive_dns_summary(raw["dns"])
+    speed_test_timestamp = _latest_speed_test_timestamp(raw["speedtests"])
+
+    eeros = _build_eeros_dict(raw["eeros"])
+    profiles = _build_profiles_dict(raw["profiles"])
+    devices = _build_devices_dict(raw["devices"])
     blacklist_macs = sorted(
-        {mac for mac in (_mac_from_blacklist_entry(e) for e in blacklist_raw) if mac}
+        {mac for mac in (_mac_from_blacklist_entry(e) for e in raw["blacklist"]) if mac}
     )
 
     victoria_data = None
@@ -302,20 +345,10 @@ async def _snapshot(
         "network_id": network_id,
         "network": {
             "name": network_raw.get("name"),
-            "guest_network_enabled": guest_enabled,
-            "guest_network_name": guest_name,
-            "guest_password_set": guest_password_set,
+            **guest_settings,
             "last_reboot": network_raw.get("last_reboot"),
             "speed_test_latest_timestamp": speed_test_timestamp,
-            "dns": {
-                "ipv4_mode": dns_section.get("mode"),
-                "ipv4_servers": _normalize_ip_list(ipv4_custom.get("ips"), family=4),
-                "ipv6_mode": name_servers.get("mode"),
-                "ipv6_servers": _normalize_ip_list(
-                    name_servers.get("custom"), family=6
-                ),
-                "caching": dns_section.get("caching"),
-            },
+            "dns": dns_summary,
         },
         "eeros": eeros,
         "blacklist": blacklist_macs,
@@ -371,7 +404,7 @@ def _query_victoria(
                 for item in resp.json().get("data", {}).get("result", []):
                     value = item.get("value", [None, None])[1]
                     result["eero_eero_last_reboot_timestamp_seconds"][eero_id] = value
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         # Deliberate fail-safe: this read-only check is best-effort; report and continue.
         result["error"] = str(exc)
     return result
@@ -531,21 +564,24 @@ def _is_reboot_path(path: str) -> bool:
     return bool(REBOOT_PATTERN.match(path))
 
 
-def cmd_diff(args: argparse.Namespace) -> int:
-    before_path = Path(args.before)
-    after_path = Path(args.after)
-    before = json.loads(before_path.read_text())
-    after = json.loads(after_path.read_text())
-
-    all_changes = [
+def _compute_diff_changes(before: Any, after: Any) -> list[Change]:
+    """Diff two snapshots and drop paths this tool deliberately ignores."""
+    return [
         c
         for c in _diff(before, after)
         if not any(c.path.startswith(prefix) for prefix in IGNORED_PATH_PREFIXES)
     ]
 
-    reboot_changes = [c for c in all_changes if _is_reboot_path(c.path)]
-    reboot_detected = bool(reboot_changes)
 
+def _print_diff_report(
+    before: dict[str, Any],
+    before_path: Path,
+    after_path: Path,
+    all_changes: list[Change],
+    reboot_changes: list[Change],
+    reboot_detected: bool,
+) -> None:
+    """Print the network header, the full change list and the reboot verdict."""
     print(f"Live verification diff: {before_path.name} -> {after_path.name}")
     print(f"Network: {before.get('network_id')}")
     print()
@@ -565,21 +601,11 @@ def cmd_diff(args: argparse.Namespace) -> int:
         )
     )
 
-    if args.step is None:
-        # No step specified: report only, no pass/fail exit code.
-        return 0
 
-    spec = STEPS.get(args.step)
-    if spec is None:
-        print(f"error: unknown --step {args.step} (valid range: 1-10)", file=sys.stderr)
-        return 2
-
-    print()
-    print(f"--- Step {spec.number}: {spec.description} ---")
-
-    expected_matches = [c for c in all_changes if spec.pattern.match(c.path)]
-    unexpected_changes = [c for c in all_changes if not spec.pattern.match(c.path)]
-
+def _check_match_count_failures(
+    spec: StepSpec, expected_matches: list[Change], unexpected_changes: list[Change]
+) -> list[str]:
+    """Check the three "did the right fields (and only those) change" rules."""
     failures: list[str] = []
 
     if unexpected_changes:
@@ -600,6 +626,14 @@ def cmd_diff(args: argparse.Namespace) -> int:
             f"got {len(expected_matches)}: {', '.join(c.path for c in expected_matches)}"
         )
 
+    return failures
+
+
+def _check_forbidden_pattern_failures(
+    spec: StepSpec, all_changes: list[Change]
+) -> list[str]:
+    """Check that none of the step's forbidden fields changed."""
+    failures: list[str] = []
     for forbidden in spec.forbidden_patterns:
         forbidden_hits = [c for c in all_changes if forbidden.match(c.path)]
         if forbidden_hits:
@@ -607,12 +641,60 @@ def cmd_diff(args: argparse.Namespace) -> int:
                 "forbidden field changed for this step: "
                 + ", ".join(c.path for c in forbidden_hits)
             )
+    return failures
+
+
+def _evaluate_step(
+    spec: StepSpec, all_changes: list[Change], reboot_detected: bool
+) -> tuple[list[Change], list[str]]:
+    """Check one step's expectations against the observed changes.
+
+    Returns:
+        The changes matching the step's own field pattern, and a list of
+        human-readable failure reasons (empty means the step passed).
+    """
+    expected_matches = [c for c in all_changes if spec.pattern.match(c.path)]
+    unexpected_changes = [c for c in all_changes if not spec.pattern.match(c.path)]
+
+    failures = _check_match_count_failures(spec, expected_matches, unexpected_changes)
+    failures += _check_forbidden_pattern_failures(spec, all_changes)
 
     if reboot_detected != spec.expect_reboot:
         failures.append(
             f"reboot verdict mismatch: expected reboot={spec.expect_reboot}, "
             f"observed reboot={reboot_detected}"
         )
+
+    return expected_matches, failures
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    before_path = Path(args.before)
+    after_path = Path(args.after)
+    before = json.loads(before_path.read_text())
+    after = json.loads(after_path.read_text())
+
+    all_changes = _compute_diff_changes(before, after)
+    reboot_changes = [c for c in all_changes if _is_reboot_path(c.path)]
+    reboot_detected = bool(reboot_changes)
+
+    _print_diff_report(
+        before, before_path, after_path, all_changes, reboot_changes, reboot_detected
+    )
+
+    if args.step is None:
+        # No step specified: report only, no pass/fail exit code.
+        return 0
+
+    spec = STEPS.get(args.step)
+    if spec is None:
+        print(f"error: unknown --step {args.step} (valid range: 1-10)", file=sys.stderr)
+        return 2
+
+    print()
+    print(f"--- Step {spec.number}: {spec.description} ---")
+
+    expected_matches, failures = _evaluate_step(spec, all_changes, reboot_detected)
 
     print(f"Expected-field changes: {len(expected_matches)}")
     for change in expected_matches:

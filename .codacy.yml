@@ -42,9 +42,7 @@ engines:
   # unresolved, in app/ as well as tests/. Type checking is not part of this
   # repository's toolchain; ruff + the test suite are.
   prospector:
-    exclude_paths:
-      - "backend/**"
-      - "scripts/**"
+    enabled: false
 
   # Opengrep's Python rules flag `assert` in test modules and its JavaScript
   # audit rules flag the test-only helpers that read source files from disk
@@ -54,6 +52,7 @@ engines:
     exclude_paths:
       - "backend/tests/**"
       - "frontend/tests/**"
+      - "frontend/src/*.test.ts"
       - "frontend/src/**/*.test.ts"
 
   # Test modules scale with the API surface they cover. scripts/ holds
@@ -65,6 +64,7 @@ engines:
       - "backend/tests/**"
       - "scripts/**"
       - "frontend/tests/**"
+      - "frontend/src/*.test.ts"
       - "frontend/src/**/*.test.ts"
 
   # Codacy's default ESLint profile is not this repository's flat config
@@ -74,4 +74,5 @@ engines:
     exclude_paths:
       - "commitlint.config.js"
       - "frontend/tests/**"
+      - "frontend/src/*.test.ts"
       - "frontend/src/**/*.test.ts"

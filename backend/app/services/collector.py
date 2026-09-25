@@ -256,6 +256,7 @@ class MetricsCollector:
             or any individual network's collection failed; True otherwise.
         """
         # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+        # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
         if not client.is_authenticated:
             return False
 
@@ -422,6 +423,21 @@ class MetricsCollector:
             )
         )
 
+        self._append_device_signal_samples(
+            network_id, device_id, device, samples, now_ms
+        )
+
+        return connected
+
+    @staticmethod
+    def _append_device_signal_samples(
+        network_id: str,
+        device_id: str,
+        device: dict[str, Any],
+        samples: list[Sample],
+        now_ms: int,
+    ) -> None:
+        """Append the optional signal-strength and connection-score samples."""
         signal_strength = device.get("signal_strength")
         if signal_strength is not None:
             samples.append(
@@ -457,8 +473,6 @@ class MetricsCollector:
                     },
                 )
             )
-
-        return connected
 
     async def _collect_eeros(
         self, client: EeroClient, network_id: str, samples: list[Sample], now_ms: int

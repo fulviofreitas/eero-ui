@@ -85,9 +85,9 @@ async def get_auth_status(
     user_role = None
     account_id = None
     premium_status = None
-    authenticated = (
-        client.is_authenticated
-    )  # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+    # is_authenticated is a property on EeroClient, not a method.
+    # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+    authenticated = client.is_authenticated
     reason: str | None = None if authenticated else "none"
 
     if authenticated:

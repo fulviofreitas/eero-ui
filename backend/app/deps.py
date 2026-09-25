@@ -71,9 +71,9 @@ async def require_auth(
     It does not probe the account endpoint - that is ``/auth/status``'s
     job (see ``routes/auth.py`` and phase-6.0-revamp.md § 4.1).
     """
-    if (
-        not client.is_authenticated
-    ):  # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+    # is_authenticated is a property on EeroClient, not a method.
+    # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+    if not client.is_authenticated:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in first.",

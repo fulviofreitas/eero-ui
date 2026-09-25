@@ -162,8 +162,7 @@ fi
 echo "Starting FastAPI on port 8000..."
 cd /app/backend || { echo "ERROR: /app/backend not found" >&2; exit 1; }
 # shellcheck disable=SC2086  # UVICORN_CMD is an intentional word-split override point for the dry-run harness
-# nosemgrep: bash.lang.correctness.unquoted-expansion.unquoted-variable-expansion-in-command
-$UVICORN_CMD > >(sed 's/^/[api] /') 2>&1 &
+$UVICORN_CMD > >(sed 's/^/[api] /') 2>&1 & # nosemgrep: bash.lang.correctness.unquoted-expansion.unquoted-variable-expansion-in-command
 API_PID=$!
 cd /app || { echo "ERROR: /app not found" >&2; exit 1; }
 

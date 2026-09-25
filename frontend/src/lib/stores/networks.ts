@@ -351,10 +351,9 @@ function createNetworksStore() {
 			const { signal } = options;
 			const token = Symbol('speedtest-run');
 			currentSpeedTestRuns.set(networkId, token);
-			// nosemgrep: javascript_timing_rule-possible-timing-attacks, rules_lgpl_javascript_crypto_rule-node-timing-attack
 			// Reference equality on a run-scoped Symbol used for reentrancy bookkeeping, not a
 			// secret/token comparison - there is nothing here for a timing side-channel to leak.
-			const isCurrent = () => currentSpeedTestRuns.get(networkId) === token;
+			const isCurrent = () => currentSpeedTestRuns.get(networkId) === token; // nosemgrep: javascript_timing_rule-possible-timing-attacks, rules_lgpl_javascript_crypto_rule-node-timing-attack
 
 			if (signal?.aborted) {
 				throw speedTestAbortedError();
