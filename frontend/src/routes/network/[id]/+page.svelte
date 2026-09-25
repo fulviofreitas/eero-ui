@@ -331,22 +331,22 @@
 					<div class="advanced-full">
 						<SecurityWanCard {networkId}>
 							{#snippet networkControls()}
-								<NetworkSettingsControls {networkId} />
+								<NetworkSettingsControls {networkId} silent />
 							{/snippet}
 							{#snippet wifiSecurityControls()}
-								<WifiSecurityControls {networkId} />
+								<WifiSecurityControls {networkId} silent />
 							{/snippet}
 							{#snippet powerThreadControls()}
-								<PowerSavingControls {networkId} />
+								<PowerSavingControls {networkId} silent />
 							{/snippet}
 							{#snippet subnetsControls()}
-								<SubnetsControls {networkId} />
+								<SubnetsControls {networkId} silent />
 							{/snippet}
 							{#snippet wanControls()}
-								<WanControls {networkId} />
+								<WanControls {networkId} silent />
 							{/snippet}
 							{#snippet updatesControls()}
-								<UpdatesControls {networkId} />
+								<UpdatesControls {networkId} silent />
 							{/snippet}
 						</SecurityWanCard>
 						<PowerSavingSchedulesCard {networkId} />

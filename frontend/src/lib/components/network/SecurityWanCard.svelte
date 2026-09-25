@@ -28,6 +28,8 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { DataTableColumn } from '$components/common/DataTable.svelte';
 	import { securityWanStore, uiStore } from '$stores';
+	import { experimentalWrites } from '$lib/stores/entitlements';
+	import { formatDate, formatUptime } from '$lib/utils/eero-format';
 	import Card from '$components/common/Card.svelte';
 	import DataTable from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';

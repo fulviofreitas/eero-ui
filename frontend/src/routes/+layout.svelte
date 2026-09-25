@@ -360,29 +360,10 @@
 					{/if}
 				</div>
 
-				<!-- Network + Sign out (right, stacked) -->
+				<!-- Network selector, search, status, theme and sign-out - one right-aligned,
+				     vertically-centred row (bug-fix follow-up: these used to be split across three
+				     stacked rows in `.top-bar-right`). Wraps only below --bp-sm. -->
 				<div class="top-bar-right">
-					<div class="signout-row">
-						<button
-							class="command-palette-btn"
-							onclick={() => (commandPaletteOpen = true)}
-							title="Search (⌘K)"
-						>
-							<Icon name="search" size={14} />
-							Search
-							<kbd class="command-palette-kbd" aria-hidden="true">⌘K</kbd>
-						</button>
-						<span class="status-dot online"></span>
-						<button class="signout-btn" onclick={handleLogout} title="Sign out"> Sign out </button>
-					</div>
-					<button
-						class="theme-toggle-btn"
-						onclick={() => uiStore.toggleTheme()}
-						title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-						aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-					>
-						<Icon name={$theme === 'dark' ? 'sun' : 'moon'} size={14} />
-					</button>
 					{#if $networksStore.networks.length > 0}
 						<div class="network-row">
 							<div class="network-bar-inner">
@@ -402,6 +383,25 @@
 							</div>
 						</div>
 					{/if}
+					<button
+						class="command-palette-btn"
+						onclick={() => (commandPaletteOpen = true)}
+						title="Search (⌘K)"
+					>
+						<Icon name="search" size={14} />
+						Search
+						<kbd class="command-palette-kbd" aria-hidden="true">⌘K</kbd>
+					</button>
+					<span class="status-dot online"></span>
+					<button
+						class="theme-toggle-btn"
+						onclick={() => uiStore.toggleTheme()}
+						title={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+						aria-label={$theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+					>
+						<Icon name={$theme === 'dark' ? 'sun' : 'moon'} size={14} />
+					</button>
+					<button class="signout-btn" onclick={handleLogout} title="Sign out"> Sign out </button>
 				</div>
 			</div>
 
@@ -696,17 +696,23 @@
 		text-transform: capitalize;
 	}
 
+	/* One right-aligned, vertically-centred row (bug-fix follow-up: network selector, search,
+	   status dot, theme toggle and sign-out used to be split across three stacked rows here). */
 	.top-bar-right {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: var(--space-1);
+		flex-direction: row;
+		flex-wrap: nowrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: var(--space-2);
 	}
 
-	.signout-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
+	/* Wrap only below --bp-sm (app.css:148, 480px) - above that, the row stays on one line. */
+	@media (max-width: 480px) {
+		.top-bar-right {
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
 	}
 
 	.theme-toggle-btn {
