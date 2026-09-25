@@ -34,7 +34,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -198,6 +198,35 @@ class MetricsCollector:
         finally:
             await agen.aclose()
 
+    async def _safe_fetch(
+        self, awaitable: Awaitable[Any], action: str
+    ) -> tuple[Any, bool]:
+        """Await one client call, logging and counting on failure.
+
+        Every per-resource fetch (networks, devices, eeros, speed tests, DNS
+        settings) needs the same "log at WARNING, count the error, and let
+        the cycle continue" handling -- shared here rather than repeated in
+        each ``_collect_*`` method.
+
+        Returns:
+            ``(result, True)`` on success; ``(None, False)`` if the call
+            raised (the reason or "unknown" has already been counted).
+        """
+        try:
+            return await awaitable, True
+        except EeroException as exc:
+            reason = _reason_for_exception(exc)
+            _LOGGER.warning("Metrics collector failed to %s: %s", action, reason)
+            self._count_error(reason)
+            return None, False
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
+            _LOGGER.warning(
+                "Metrics collector failed to %s (unexpected)", action, exc_info=True
+            )
+            self._count_error("unknown")
+            return None, False
+
     async def run_cycle(self) -> None:
         """Run a single collection cycle and write its samples to VictoriaMetrics.
 
@@ -259,20 +288,10 @@ class MetricsCollector:
         if not client.is_authenticated:
             return False
 
-        try:
-            raw_networks = await client.get_networks()
-        except EeroException as exc:
-            reason = _reason_for_exception(exc)
-            _LOGGER.warning("Metrics collector failed to list networks: %s", reason)
-            self._count_error(reason)
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Deliberate fail-safe: one unexpected error must not abort the cycle.
-            _LOGGER.warning(
-                "Metrics collector failed to list networks (unexpected)",
-                exc_info=True,
-            )
-            self._count_error("unknown")
+        raw_networks, ok = await self._safe_fetch(
+            client.get_networks(), "list networks"
+        )
+        if not ok:
             return False
 
         cycle_ok = True
@@ -348,19 +367,10 @@ class MetricsCollector:
         Returns:
             True on success, False if the underlying fetch failed.
         """
-        try:
-            raw_devices = await client.get_devices(network_id=network_id)
-        except EeroException as exc:
-            reason = _reason_for_exception(exc)
-            _LOGGER.warning("Metrics collector failed to list devices: %s", reason)
-            self._count_error(reason)
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Deliberate fail-safe: one unexpected error must not abort the cycle.
-            _LOGGER.warning(
-                "Metrics collector failed to list devices (unexpected)", exc_info=True
-            )
-            self._count_error("unknown")
+        raw_devices, ok = await self._safe_fetch(
+            client.get_devices(network_id=network_id), "list devices"
+        )
+        if not ok:
             return False
 
         raw_device_list = extract_list(raw_devices, "devices")
@@ -481,19 +491,10 @@ class MetricsCollector:
         Returns:
             True on success, False if the underlying fetch failed.
         """
-        try:
-            raw_eeros = await client.get_eeros(network_id=network_id)
-        except EeroException as exc:
-            reason = _reason_for_exception(exc)
-            _LOGGER.warning("Metrics collector failed to list eeros: %s", reason)
-            self._count_error(reason)
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Deliberate fail-safe: one unexpected error must not abort the cycle.
-            _LOGGER.warning(
-                "Metrics collector failed to list eeros (unexpected)", exc_info=True
-            )
-            self._count_error("unknown")
+        raw_eeros, ok = await self._safe_fetch(
+            client.get_eeros(network_id=network_id), "list eeros"
+        )
+        if not ok:
             return False
 
         for raw_eero in extract_list(raw_eeros, "eeros"):
@@ -564,22 +565,10 @@ class MetricsCollector:
             True on success (including "no speed tests yet"), False if the
             underlying fetch failed.
         """
-        try:
-            raw_speed_tests = await client.get_speed_tests(
-                network_id=network_id, limit=1
-            )
-        except EeroException as exc:
-            reason = _reason_for_exception(exc)
-            _LOGGER.warning("Metrics collector failed to get speed tests: %s", reason)
-            self._count_error(reason)
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Deliberate fail-safe: one unexpected error must not abort the cycle.
-            _LOGGER.warning(
-                "Metrics collector failed to get speed tests (unexpected)",
-                exc_info=True,
-            )
-            self._count_error("unknown")
+        raw_speed_tests, ok = await self._safe_fetch(
+            client.get_speed_tests(network_id=network_id, limit=1), "get speed tests"
+        )
+        if not ok:
             return False
 
         results = extract_list(raw_speed_tests, "speedtest")
@@ -622,20 +611,10 @@ class MetricsCollector:
         Returns:
             True on success, False if the underlying fetch failed.
         """
-        try:
-            raw_dns = await client.get_dns_settings(network_id=network_id)
-        except EeroException as exc:
-            reason = _reason_for_exception(exc)
-            _LOGGER.warning("Metrics collector failed to get DNS settings: %s", reason)
-            self._count_error(reason)
-            return False
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Deliberate fail-safe: one unexpected error must not abort the cycle.
-            _LOGGER.warning(
-                "Metrics collector failed to get DNS settings (unexpected)",
-                exc_info=True,
-            )
-            self._count_error("unknown")
+        raw_dns, ok = await self._safe_fetch(
+            client.get_dns_settings(network_id=network_id), "get DNS settings"
+        )
+        if not ok:
             return False
 
         dns = normalize_dns(extract_data(raw_dns))

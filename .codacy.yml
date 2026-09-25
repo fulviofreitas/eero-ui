@@ -41,8 +41,12 @@ engines:
   # `import fastapi` / `import pydantic` / `import eero` is reported as
   # unresolved, in app/ as well as tests/. Type checking is not part of this
   # repository's toolchain; ruff + the test suite are.
+  # `enabled: false` is not honoured by Codacy for this engine (it ran on every
+  # file instead), so the exclusion is by path.
   prospector:
-    enabled: false
+    exclude_paths:
+      - "backend/**"
+      - "scripts/**"
 
   # Opengrep's Python rules flag `assert` in test modules and its JavaScript
   # audit rules flag the test-only helpers that read source files from disk

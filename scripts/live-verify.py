@@ -366,6 +366,7 @@ def _query_victoria(
     Read-only instant queries against VictoriaMetrics' Prometheus-compatible
     ``/api/v1/query`` endpoint. Never writes.
     """
+    # nosemgrep: python.lang.correctness.common-mistakes.is-comparison-string.identical-is-comparison
     if httpx is None:
         return {"error": "httpx not installed; skipped"}
 
