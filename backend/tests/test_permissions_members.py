@@ -40,6 +40,48 @@ class TestPermissions:
         assert data["partial"] is True
         assert data["permissions"] == {}
 
+    async def test_non_bool_permission_values_dropped_not_500(
+        self, auth_client, authenticated_client
+    ):
+        """A real envelope may send a non-bool permission value (e.g. a
+        nested object or a free-text string). It must be dropped, never
+        raise a response-validation 500."""
+        authenticated_client.get_permissions = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "permissions": {
+                        "network.admin_invites": True,
+                        "network.weird": ["nested", "list"],
+                        "network.other": "not-a-bool-token",
+                    },
+                    "role": "OWNER",
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/permissions")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["permissions"] == {"network.admin_invites": True}
+        assert data["partial"] is True
+
+    async def test_role_nested_under_user_recovered(
+        self, auth_client, authenticated_client
+    ):
+        """``role`` may be nested under ``user`` instead of top-level."""
+        authenticated_client.get_permissions = AsyncMock(
+            return_value=make_raw_response(
+                {"permissions": {}, "user": {"role": "ADMIN"}}
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/permissions")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "ADMIN"
+
 
 class TestMembers:
     """Tests for GET /api/networks/{network_id}/members."""
@@ -70,6 +112,101 @@ class TestMembers:
 
         assert response.status_code == 200
         assert response.json() == {"members": [], "partial": True}
+
+    async def test_name_as_structured_object_is_stringified(
+        self, auth_client, authenticated_client
+    ):
+        """A real member envelope may send ``name`` as a structured
+        object (eero-api tests/conftest.py ``sample_account_response``)
+        rather than a bare string - this must never 500."""
+        authenticated_client.get_members = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "members": [
+                        {
+                            "name": {"first": "Ada", "last": "Lovelace"},
+                            "role": "OWNER",
+                        }
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/members")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["members"] == [
+            {"name": "Ada Lovelace", "role": "OWNER", "status": None}
+        ]
+        assert data["partial"] is False
+
+    async def test_role_nested_under_user_and_non_string_status(
+        self, auth_client, authenticated_client
+    ):
+        """``role`` may be nested under ``user``; ``status`` may arrive as
+        a non-string scalar (e.g. a timestamp)."""
+        authenticated_client.get_members = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "members": [
+                        {
+                            "user_name": "bob",
+                            "user": {"role": "ADMIN"},
+                            "status": 1700000000,
+                        }
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/members")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["members"] == [
+            {"name": "bob", "role": "ADMIN", "status": "1700000000"}
+        ]
+        assert data["partial"] is False
+
+    async def test_dict_keyed_by_id_shape_recovered(
+        self, auth_client, authenticated_client
+    ):
+        """``get_members`` may return a dict keyed by member id instead
+        of ``{"members": [...]}``."""
+        authenticated_client.get_members = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "member_1": {"user_name": "alice", "role": "OWNER"},
+                    "member_2": {"user_name": "bob", "role": "ADMIN"},
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/members")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["partial"] is False
+        assert {m["name"] for m in data["members"]} == {"alice", "bob"}
+
+    async def test_non_dict_member_entries_dropped_not_500(
+        self, auth_client, authenticated_client
+    ):
+        """A stray non-dict entry in the members list must be dropped,
+        not raised on."""
+        authenticated_client.get_members = AsyncMock(
+            return_value=make_raw_response(
+                {"members": [{"user_name": "alice"}, "unexpected-string", None]}
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/members")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["members"] == [{"name": "alice", "role": None, "status": None}]
+        assert data["partial"] is True
 
 
 class TestInvites:
@@ -123,3 +260,99 @@ class TestInvites:
 
         assert response.status_code == 200
         assert response.json() == {"invites": [], "partial": True}
+
+    async def test_non_string_timestamps_coerced_not_500(
+        self, auth_client, authenticated_client
+    ):
+        """A real invite envelope may send ``created``/``expires`` as an
+        epoch timestamp (int) rather than an ISO-8601 string."""
+        authenticated_client.get_invites = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "invites": [
+                        {
+                            "url": "/2.2/networks/net-1/invites/inv-2",
+                            "invite_role": "admin",
+                            "created": 1700000000,
+                            "expires": 1700003600,
+                        }
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/invites")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["invites"] == [
+            {
+                "id": "inv-2",
+                "role": "admin",
+                "status": None,
+                "created": "1700000000",
+                "expires": "1700003600",
+            }
+        ]
+        assert data["partial"] is False
+
+    async def test_dict_keyed_by_id_shape_recovered(
+        self, auth_client, authenticated_client
+    ):
+        """``get_invites`` may return a dict keyed by invite id instead
+        of ``{"invites": [...]}``."""
+        authenticated_client.get_invites = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "inv-1": {
+                        "url": "/2.2/networks/net-1/invites/inv-1",
+                        "invite_role": "admin",
+                    },
+                    "inv-2": {
+                        "url": "/2.2/networks/net-1/invites/inv-2",
+                        "invite_role": "owner",
+                    },
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/invites")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["partial"] is False
+        assert {i["id"] for i in data["invites"]} == {"inv-1", "inv-2"}
+
+    async def test_non_dict_invite_entries_dropped_not_500(
+        self, auth_client, authenticated_client
+    ):
+        """A stray non-dict entry in the invites list must be dropped,
+        not raised on."""
+        authenticated_client.get_invites = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "invites": [
+                        {
+                            "url": "/2.2/networks/net-1/invites/inv-3",
+                            "invite_role": "admin",
+                        },
+                        42,
+                    ]
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/invites")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["invites"] == [
+            {
+                "id": "inv-3",
+                "role": "admin",
+                "status": None,
+                "created": None,
+                "expires": None,
+            }
+        ]
+        assert data["partial"] is True

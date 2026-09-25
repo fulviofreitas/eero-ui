@@ -3,18 +3,27 @@
 
   Extracted from the `.info-row` pattern duplicated across 9 files. A label/value pair, with
   an optional monospace value (IPs, MACs, IDs) and an optional copy-to-clipboard action.
+
+  Bug-fix follow-up (maintainer screenshot, 2026-09-25): several callers were
+  passing `JSON.stringify(...)` for raw-envelope-passthrough object/array
+  values, rendering a wall of JSON. `value` now accepts `unknown`; an
+  object or array falls back to `NestedValue` instead of being stringified.
+  `copyable` still copies the original value's string form.
 -->
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import NestedValue from './NestedValue.svelte';
 
 	interface Props {
 		label: string;
-		value: string | number;
+		value: unknown;
 		mono?: boolean;
 		copyable?: boolean;
 	}
 
 	let { label, value, mono = false, copyable = false }: Props = $props();
+
+	let isNested = $derived(typeof value === 'object' && value !== null);
 
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -34,7 +43,13 @@
 <div class="info-row">
 	<span class="info-label">{label}</span>
 	<span class="info-value-wrapper">
-		<span class="info-value" class:mono>{value}</span>
+		<span class="info-value" class:mono>
+			{#if isNested}
+				<NestedValue {value} />
+			{:else}
+				{value === null || value === undefined || value === '' ? '–' : value}
+			{/if}
+		</span>
 		{#if copyable}
 			<button
 				type="button"

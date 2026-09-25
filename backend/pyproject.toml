@@ -68,7 +68,6 @@ include = ["app*"]
 profile = "black"
 
 [tool.ruff]
-required-version = "6.0.0"
 
 [tool.ruff.lint]
 ignore = [

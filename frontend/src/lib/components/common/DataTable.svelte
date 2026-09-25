@@ -294,10 +294,19 @@
 	// --- Column menu: outside click + Escape close (never mouseleave-only) -------------------
 
 	let columnMenuEl: HTMLDivElement | undefined = $state();
+	let columnToggleEl: HTMLDivElement | undefined = $state();
 
-	function handleWindowClick(event: MouseEvent) {
-		if (!columnMenuOpen || !columnMenuEl) return;
-		if (!columnMenuEl.contains(event.target as Node)) columnMenuOpen = false;
+	// Bug-fix follow-up (6.0.0): Svelte 5 flushes DOM updates synchronously at the end of the
+	// button's click handler, so by the time this listener ran for the SAME click the menu
+	// already existed and the click target (the toggle button) was outside it - the menu closed
+	// in the very event that opened it. jsdom did not reproduce this, real browsers did. Treat
+	// the whole `.column-toggle` wrapper (button + menu) as "inside", and listen on pointerdown
+	// so a click that starts outside closes the menu before any inner button fires.
+	function handleWindowClick(event: Event) {
+		if (!columnMenuOpen) return;
+		const target = event.target as Node | null;
+		if (target && columnToggleEl?.contains(target)) return;
+		columnMenuOpen = false;
 	}
 
 	function handleWindowKeydown(event: KeyboardEvent) {
@@ -305,10 +314,10 @@
 	}
 
 	onMount(() => {
-		document.addEventListener('click', handleWindowClick);
+		document.addEventListener('pointerdown', handleWindowClick);
 		document.addEventListener('keydown', handleWindowKeydown);
 		return () => {
-			document.removeEventListener('click', handleWindowClick);
+			document.removeEventListener('pointerdown', handleWindowClick);
 			document.removeEventListener('keydown', handleWindowKeydown);
 		};
 	});
@@ -316,7 +325,7 @@
 
 <div class="data-table-toolbar">
 	{#if showColumnToggle && optionalColumns.length > 0}
-		<div class="column-toggle">
+		<div class="column-toggle" bind:this={columnToggleEl}>
 			<button
 				type="button"
 				class="btn btn-secondary btn-sm"

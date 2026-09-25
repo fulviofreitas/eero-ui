@@ -21,9 +21,11 @@
 
 	interface Props {
 		networkId: string;
+		/** Suppress this control's own "disabled by operator" note - the parent card renders one summary note instead. */
+		silent?: boolean;
 	}
 
-	let { networkId }: Props = $props();
+	let { networkId, silent = false }: Props = $props();
 
 	let wanState = $derived($securityWanStore);
 
@@ -143,7 +145,7 @@
 	}
 </script>
 
-<ExperimentalGate>
+<ExperimentalGate {silent}>
 	<div class="wan-controls">
 		<div class="control-group">
 			<span class="control-label">Multi-Static-IP</span>

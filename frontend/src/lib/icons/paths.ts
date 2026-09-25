@@ -14,9 +14,14 @@
 export const ICON_PATHS: Record<string, string> = {
 	// Navigation
 	dashboard: 'M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z',
-	network: 'M12 2v6M5 20h14M7 20v-4a5 5 0 0 1 10 0v4M12 8a3 3 0 1 0 0 0z',
+	// Globe: outer circle + equator line + vertical meridian ellipse (bug-fix follow-up: the
+	// previous path's "dot" was a zero-length arc, i.e. an invisible point, not a circle).
+	network: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M3 12h18M8 12a4 9 0 1 0 8 0a4 9 0 1 0 -8 0',
 	devices: 'M4 5h16v11H4zM2 19h20M9 19v-3M15 19v-3',
-	eeros: 'M12 3a9 9 0 0 1 9 9M12 7a5 5 0 0 1 5 5M12 11a1 1 0 0 1 1 1M12 12v9',
+	// Router/mesh node: rounded body + two short antenna lines (bug-fix follow-up: the previous
+	// path was a set of concentric signal arcs, easily misread given the surrounding icon set).
+	eeros:
+		'M7 11h10a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2zM9 11v-3M15 11v-3',
 	profiles:
 		'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 21v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1M17 11a3 3 0 1 0-1.2-5.75M21 21v-1a4.5 4.5 0 0 0-3-4.24',
 	topology:
