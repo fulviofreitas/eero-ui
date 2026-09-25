@@ -21,7 +21,7 @@
 
 	let { networkId }: Props = $props();
 
-	let state = $derived($eventsStore);
+	let cardState = $derived($eventsStore);
 
 	function load() {
 		eventsStore.fetch(networkId);
@@ -35,30 +35,34 @@
 </script>
 
 <Card title="Events">
-	{#if state.loading && state.events.length === 0}
+	{#if cardState.loading && cardState.events.length === 0}
 		<Skeleton variant="table-rows" rows={5} columns={3} />
-	{:else if state.unavailable}
+	{:else if cardState.unavailable}
 		<p class="text-muted text-sm">Events are not available on this network right now.</p>
-	{:else if state.error && state.events.length === 0}
-		<ErrorState message={state.error} onRetry={load} />
+	{:else if cardState.error && cardState.events.length === 0}
+		<ErrorState message={cardState.error} onRetry={load} />
 	{:else}
 		<GenericRecordList
-			records={state.events}
+			records={cardState.events}
 			emptyTitle="No events"
 			emptyDescription="No app events have been recorded yet."
 			recordLabel={(_r, i) => `Event ${i + 1}`}
 		/>
-		{#if state.error}
-			<ErrorState message={state.error} onRetry={loadMore} retryLabel="Try loading older again" />
-		{:else if state.hasMore && state.events.length > 0}
+		{#if cardState.error}
+			<ErrorState
+				message={cardState.error}
+				onRetry={loadMore}
+				retryLabel="Try loading older again"
+			/>
+		{:else if cardState.hasMore && cardState.events.length > 0}
 			<div class="load-more">
 				<button
 					type="button"
 					class="btn btn-secondary btn-sm"
 					onclick={loadMore}
-					disabled={state.loadingMore}
+					disabled={cardState.loadingMore}
 				>
-					{state.loadingMore ? 'Loading…' : 'Load older'}
+					{cardState.loadingMore ? 'Loading…' : 'Load older'}
 				</button>
 			</div>
 		{/if}

@@ -53,7 +53,9 @@
 			</button>
 		</div>
 		{#if loading}
-			<p class="text-muted text-sm">Running… {elapsedSeconds}s (this can take up to 90 seconds)</p>
+			<p class="text-muted text-sm" role="status">
+				Running… {elapsedSeconds}s (this can take up to 90 seconds)
+			</p>
 			<progress
 				class="speed-test-progress"
 				max={90}

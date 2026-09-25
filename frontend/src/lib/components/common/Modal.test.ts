@@ -35,4 +35,13 @@ describe('Modal', () => {
 		await fireEvent.keyDown(window, { key: 'Escape' });
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	it('renders a visible close button that calls onClose', async () => {
+		const onClose = vi.fn();
+		render(Modal, {
+			props: { open: true, title: 'Rename', onClose, children: textSnippet('<p>x</p>') }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onClose).toHaveBeenCalled();
+	});
 });

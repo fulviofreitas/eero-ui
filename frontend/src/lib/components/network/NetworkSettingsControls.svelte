@@ -38,11 +38,7 @@
 	];
 
 	let sqmEnabled = $derived(Boolean(wanState.security?.sqm));
-	let natEnabled = $derived(
-		Boolean(
-			(wanState.advanced as unknown as { nat_port_randomization?: unknown })?.nat_port_randomization
-		)
-	);
+	let natEnabled = $derived(Boolean(wanState.advanced?.nat_port_randomization));
 	let connectionMode = $derived(
 		(wanState.advanced?.connection_mode as 'BRIDGE' | 'NAT' | null) ?? null
 	);

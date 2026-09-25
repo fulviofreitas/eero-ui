@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
 	import type { SpeedTestResult } from '$api/types';
+	import Icon from '$components/common/Icon.svelte';
 
 	interface Props {
 		speedTest: SpeedTestResult | null;
@@ -38,7 +39,7 @@
 				<span class="loading-spinner"></span>
 				Running...
 			{:else}
-				▶ Run Test
+				<Icon name="play" size={12} /> Run Test
 			{/if}
 		</button>
 	</div>

@@ -237,9 +237,9 @@
 					{#if actionLoading}
 						<span class="loading-spinner"></span>
 					{:else if profile!.paused}
-						▶ Resume Internet
+						<Icon name="play" size={14} /> Resume Internet
 					{:else}
-						⏸ Pause Internet
+						<Icon name="pause" size={14} /> Pause Internet
 					{/if}
 				</button>
 			{/snippet}

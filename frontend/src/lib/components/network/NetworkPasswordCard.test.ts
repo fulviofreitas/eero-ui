@@ -123,6 +123,34 @@ describe('NetworkPasswordCard', () => {
 		expect(deleteCalls).toBe(1);
 	});
 
+	it('S3: input is type=password by default, auto-reveals after Generate, and toggles back', async () => {
+		render(NetworkPasswordCard, { props: { networkId: 'network-123' } });
+		const input = screen.getByPlaceholderText(/new password/i) as HTMLInputElement;
+		expect(input.type).toBe('password');
+		expect(input.autocomplete).toBe('new-password');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+		expect(input.type).toBe('text');
+
+		const toggle = screen.getByRole('button', { name: /hide password/i });
+		expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		await fireEvent.click(toggle);
+		expect(input.type).toBe('password');
+	});
+
+	it('S3: clears the password field when the Set confirmation is cancelled', async () => {
+		render(NetworkPasswordCard, { props: { networkId: 'network-123' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+		const input = screen.getByPlaceholderText(/new password/i) as HTMLInputElement;
+		expect(input.value).toHaveLength(16);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Set Password' }));
+		const dialog = get(confirmDialog);
+		dialog!.onCancel?.();
+
+		await waitFor(() => expect(input.value).toBe(''));
+	});
+
 	it('surfaces a 422 validation response inline on Set', async () => {
 		render(NetworkPasswordCard, { props: { networkId: 'network-123' } });
 		server.use(

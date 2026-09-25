@@ -39,10 +39,7 @@
 			null
 	);
 
-	let mloMode = $derived(
-		((wanState.advanced as unknown as { mlo_mode?: string })?.mlo_mode as
-			'disabled' | 'single' | 'multi' | null) ?? null
-	);
+	let mloMode = $derived(wanState.advanced?.mlo_mode ?? null);
 
 	function requestWpa3Band(band: '2_4_ghz' | '5_ghz', mode: Wpa3BandMode) {
 		const current = band === '2_4_ghz' ? wpa3PerBand?.band_2_4_ghz : wpa3PerBand?.band_5_ghz;
@@ -158,14 +155,8 @@
 	let fastTransitionEnabled = $derived(
 		Boolean((wanState.security?.fast_transition as { enabled?: unknown } | null)?.enabled)
 	);
-	let passpointEnabled = $derived(
-		Boolean((wanState.security as unknown as { passpoint?: unknown })?.passpoint)
-	);
-	let proxiedNodesEnabled = $derived(
-		Boolean(
-			(wanState.advanced as unknown as { proxied_nodes_enabled?: unknown })?.proxied_nodes_enabled
-		)
-	);
+	let passpointEnabled = $derived(Boolean(wanState.security?.passpoint));
+	let proxiedNodesEnabled = $derived(Boolean(wanState.advanced?.proxied_nodes_enabled));
 </script>
 
 <ExperimentalGate>

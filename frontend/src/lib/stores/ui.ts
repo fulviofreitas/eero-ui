@@ -31,6 +31,12 @@ interface ConfirmDialog {
 	cancelText?: string;
 	danger?: boolean;
 	onConfirm: () => void | Promise<void>;
+	/**
+	 * S3: called when the dialog is dismissed without confirming (Cancel button, Escape, or
+	 * clicking the backdrop) - lets callers clear sensitive local state (e.g. a generated
+	 * password sitting in a form field) on every exit path, not only on confirm.
+	 */
+	onCancel?: () => void;
 }
 
 interface UIState {

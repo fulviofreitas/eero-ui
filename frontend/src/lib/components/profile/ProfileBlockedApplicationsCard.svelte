@@ -119,6 +119,7 @@
 					bind:value={newAppValue}
 					disabled={cardState.applying}
 					placeholder="Application identifier"
+					aria-label="Application identifier"
 				/>
 				<button
 					type="submit"

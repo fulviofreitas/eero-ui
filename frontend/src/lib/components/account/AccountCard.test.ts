@@ -133,7 +133,7 @@ describe('AccountCard', () => {
 			const emailInput = screen.getByPlaceholderText('New e-mail address');
 			const emailForm = emailInput.closest('form') as HTMLElement;
 			await fireEvent.input(emailInput, { target: { value: 'new@example.com' } });
-			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change' }));
+			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change e-mail' }));
 
 			const dialog = get(confirmDialog);
 			expect(dialog!.details).toContain(
@@ -163,7 +163,7 @@ describe('AccountCard', () => {
 			const emailInput = screen.getByPlaceholderText('New e-mail address');
 			const emailForm = emailInput.closest('form') as HTMLElement;
 			await fireEvent.input(emailInput, { target: { value: 'new@example.com' } });
-			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change' }));
+			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change e-mail' }));
 
 			const dialog = get(confirmDialog);
 			await dialog!.onConfirm();
@@ -186,7 +186,7 @@ describe('AccountCard', () => {
 			const emailInput = screen.getByPlaceholderText('New e-mail address');
 			const emailForm = emailInput.closest('form') as HTMLElement;
 			await fireEvent.input(emailInput, { target: { value: 'new@example.com' } });
-			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change' }));
+			await fireEvent.click(within(emailForm).getByRole('button', { name: 'Change e-mail' }));
 
 			const dialog = get(confirmDialog);
 			await dialog!.onConfirm();

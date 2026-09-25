@@ -9,7 +9,7 @@
   settings map (read-first from the store) via `PUT /networks/{id}/
   notifications`; "Mark all read" hits `/notifications/mark-read`. Both
   unverified, non-settings writes (plan § 5) - the toggle is gated on
-  `EERO_DASHBOARD_EXPERIMENTAL_WRITES` via its own `disabled` state (kept as
+  `EERO_DASHBOARD_EXPERIMENTAL_WRITES` via its own `disabled` cardState (kept as
   a visible-but-disabled checkbox rather than removed entirely, matching this
   card's original read-only design), and "Mark all read" is wrapped in
   `ExperimentalGate`. Every write goes through a `ConfirmDialog` naming
@@ -32,8 +32,8 @@
 
 	let { networkId }: Props = $props();
 
-	let state = $derived($notificationsStore);
-	let settingsEntries = $derived(Object.entries(state.settings));
+	let cardState = $derived($notificationsStore);
+	let settingsEntries = $derived(Object.entries(cardState.settings));
 
 	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
 
@@ -56,7 +56,7 @@
 			onConfirm: async () => {
 				try {
 					const changed = await notificationsStore.updateSettings(networkId, {
-						...state.settings,
+						...cardState.settings,
 						[key]: nextValue
 					});
 					if (!changed) {
@@ -90,23 +90,23 @@
 </script>
 
 <Card title="Notifications">
-	{#if state.loading && settingsEntries.length === 0 && state.history.length === 0}
+	{#if cardState.loading && settingsEntries.length === 0 && cardState.history.length === 0}
 		<Skeleton variant="table-rows" rows={4} columns={2} />
-	{:else if state.error && state.history.length === 0 && settingsEntries.length === 0}
-		<ErrorState message={state.error} onRetry={load} />
+	{:else if cardState.error && cardState.history.length === 0 && settingsEntries.length === 0}
+		<ErrorState message={cardState.error} onRetry={load} />
 	{:else}
 		<section class="notifications-section">
 			<div class="badge-row">
 				<h4 class="section-title">Unread</h4>
 				<div class="badge-row-actions">
-					<span class="badge {state.hasUnread ? 'badge-warning' : 'badge-neutral'}">
-						{state.hasUnread ? 'Unread notifications' : 'All caught up'}
+					<span class="badge {cardState.hasUnread ? 'badge-warning' : 'badge-neutral'}">
+						{cardState.hasUnread ? 'Unread notifications' : 'All caught up'}
 					</span>
 					<ExperimentalGate>
 						<button
 							class="btn btn-secondary btn-sm"
 							onclick={requestMarkRead}
-							disabled={state.applying || !state.hasUnread}
+							disabled={cardState.applying || !cardState.hasUnread}
 						>
 							Mark All Read
 						</button>
@@ -127,14 +127,14 @@
 				<p class="text-muted text-sm">No notification settings available.</p>
 			{:else}
 				<ul class="settings-list">
-					{#each settingsEntries as [key, enabled] (key + ':' + state.revision)}
+					{#each settingsEntries as [key, enabled] (key + ':' + cardState.revision)}
 						<li class="settings-row">
 							<label class="settings-label" for={`notif-${key}`}>{key}</label>
 							<input
 								id={`notif-${key}`}
 								type="checkbox"
 								checked={enabled}
-								disabled={!$experimentalWrites || state.applying}
+								disabled={!$experimentalWrites || cardState.applying}
 								onchange={() => requestToggleSetting(key, !enabled)}
 							/>
 						</li>
@@ -146,21 +146,25 @@
 		<section class="notifications-section">
 			<h4 class="section-title">History</h4>
 			<GenericRecordList
-				records={state.history}
+				records={cardState.history}
 				emptyTitle="No notification history"
 				recordLabel={(_r, i) => `Notification ${i + 1}`}
 			/>
-			{#if state.error}
-				<ErrorState message={state.error} onRetry={loadMore} retryLabel="Try loading older again" />
-			{:else if state.hasMore && state.history.length > 0}
+			{#if cardState.error}
+				<ErrorState
+					message={cardState.error}
+					onRetry={loadMore}
+					retryLabel="Try loading older again"
+				/>
+			{:else if cardState.hasMore && cardState.history.length > 0}
 				<div class="load-more">
 					<button
 						type="button"
 						class="btn btn-secondary btn-sm"
 						onclick={loadMore}
-						disabled={state.loadingMore}
+						disabled={cardState.loadingMore}
 					>
-						{state.loadingMore ? 'Loading…' : 'Load older'}
+						{cardState.loadingMore ? 'Loading…' : 'Load older'}
 					</button>
 				</div>
 			{/if}

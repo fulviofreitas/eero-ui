@@ -56,6 +56,33 @@ describe('GuestPasswordCard', () => {
 		expect(input.value).toHaveLength(16);
 	});
 
+	it('S3: input is type=password by default and auto-reveals after Generate', async () => {
+		await renderLoaded(false);
+		const input = screen.getByPlaceholderText(/new password/i) as HTMLInputElement;
+		expect(input.type).toBe('password');
+		expect(input.autocomplete).toBe('new-password');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+		expect(input.type).toBe('text');
+		expect(screen.getByRole('button', { name: /hide password/i })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+	});
+
+	it('S3: clears the password field when the Set confirmation is cancelled', async () => {
+		await renderLoaded(false);
+		await fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+		const input = screen.getByPlaceholderText(/new password/i) as HTMLInputElement;
+		expect(input.value).toHaveLength(16);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Set Password' }));
+		const dialog = get(confirmDialog);
+		dialog!.onCancel?.();
+
+		await waitFor(() => expect(input.value).toBe(''));
+	});
+
 	it('does not fire a PUT until the confirmation is acknowledged', async () => {
 		await renderLoaded(false);
 

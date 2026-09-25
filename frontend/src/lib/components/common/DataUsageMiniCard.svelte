@@ -39,11 +39,11 @@
 
 	const slotKey = $derived(`${entity}:${entityId}`);
 	const usage = $derived(dataUsageFor(slotKey));
-	let state = $derived($usage);
+	let cardState = $derived($usage);
 
 	const timeSeries = $derived.by(() => {
-		if (!state.data) return null;
-		return deriveTimeSeries(state.data.values);
+		if (!cardState.data) return null;
+		return deriveTimeSeries(cardState.data.values);
 	});
 
 	const chartDatasets = $derived.by(() => {
@@ -66,7 +66,7 @@
 		];
 	});
 
-	function load(range: DataUsageRange = state.range) {
+	function load(range: DataUsageRange = cardState.range) {
 		if (entity === 'device') dataUsageStore.fetchDevice(networkId, entityId, range);
 		else if (entity === 'eero') dataUsageStore.fetchEero(networkId, entityId, range);
 		else dataUsageStore.fetchProfile(networkId, entityId, range);
@@ -79,10 +79,10 @@
 
 <Card {title}>
 	{#snippet actions()}
-		<TimeRangeSelector options={rangeOptions} value={state.range} onChange={(r) => load(r)} />
+		<TimeRangeSelector options={rangeOptions} value={cardState.range} onChange={(r) => load(r)} />
 	{/snippet}
 
-	{#if state.premiumRequired}
+	{#if cardState.premiumRequired}
 		<div class="premium-note" role="note">
 			<span class="premium-note-icon"><Icon name="lock" size={20} /></span>
 			<div>
@@ -92,27 +92,27 @@
 				</p>
 			</div>
 		</div>
-	{:else if state.error}
-		<ErrorState message={state.error} onRetry={() => load()} />
-	{:else if state.loading && !state.data}
+	{:else if cardState.error}
+		<ErrorState message={cardState.error} onRetry={() => load()} />
+	{:else if cardState.loading && !cardState.data}
 		<Skeleton variant="card" height="200px" />
 	{:else}
 		<div class="totals">
 			<div class="total">
 				<span class="total-label text-muted">Download</span>
-				<span class="total-value">{formatBytes(state.data?.download_bytes)}</span>
+				<span class="total-value">{formatBytes(cardState.data?.download_bytes)}</span>
 			</div>
 			<div class="total">
 				<span class="total-label text-muted">Upload</span>
-				<span class="total-value">{formatBytes(state.data?.upload_bytes)}</span>
+				<span class="total-value">{formatBytes(cardState.data?.upload_bytes)}</span>
 			</div>
 		</div>
 
 		{#if timeSeries}
-			<TimeSeriesChart datasets={chartDatasets} loading={state.loading} />
-		{:else if state.data && state.data.values.length > 0}
+			<TimeSeriesChart datasets={chartDatasets} loading={cardState.loading} />
+		{:else if cardState.data && cardState.data.values.length > 0}
 			<GenericRecordList
-				records={state.data.values}
+				records={cardState.data.values}
 				emptyTitle="No usage data"
 				recordLabel={(_r, i) => `Entry ${i + 1}`}
 			/>

@@ -96,7 +96,10 @@ export const ICON_PATHS: Record<string, string> = {
 	'arrow-left': 'M19 12H5M12 19l-7-7 7-7',
 	inbox: 'M3 12h4l2 4h6l2-4h4M5 5h14l2 7v7H3v-7z',
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
-	search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35'
+	search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+	// A9 (WP9 a11y fix): replaces bare ▶/⏸ glyphs inside button labels.
+	play: 'M6 4l14 8-14 8z',
+	pause: 'M6 4h4v16H6zM14 4h4v16h-4z'
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

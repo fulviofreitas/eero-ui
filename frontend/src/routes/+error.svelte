@@ -17,7 +17,13 @@
 </svelte:head>
 
 <div class="error-page">
-	<ErrorState message="{$page.status}: {message}" />
+	<div>
+		<h1 class="sr-only">Error {$page.status}</h1>
+		<ErrorState message="{$page.status}: {message}" />
+		<p class="error-back">
+			<a href="/">Back to dashboard</a>
+		</p>
+	</div>
 </div>
 
 <style>
@@ -26,5 +32,10 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 60vh;
+	}
+
+	.error-back {
+		text-align: center;
+		margin-top: var(--space-4);
 	}
 </style>

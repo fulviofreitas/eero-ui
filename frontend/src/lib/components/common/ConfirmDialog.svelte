@@ -40,6 +40,7 @@
 	}
 
 	function handleCancel() {
+		$confirmDialog?.onCancel?.();
 		uiStore.closeConfirm();
 	}
 

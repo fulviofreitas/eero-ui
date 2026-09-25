@@ -33,6 +33,7 @@
 	const GENERATOR_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
 
 	let password = $state('');
+	let showPassword = $state(false);
 	let openAcknowledged = $state(false);
 	let submitError: string | null = $state(null);
 	let lastNote: string | null = $state(null);
@@ -62,6 +63,9 @@
 	function handleGenerate() {
 		password = generatePassword();
 		submitError = null;
+		// S3: a generated password is useless if the operator can't read it to hand it out -
+		// reveal it automatically rather than requiring a separate toggle click.
+		showPassword = true;
 	}
 
 	function requestSetPassword() {
@@ -75,8 +79,16 @@
 			],
 			confirmText: 'Set Password',
 			danger: true,
-			onConfirm: submitSetPassword
+			onConfirm: submitSetPassword,
+			onCancel: clearPasswordField
 		});
+	}
+
+	// S3: clear the local password value on every exit from the confirm flow - cancel, error, or
+	// success - so it never lingers in memory/DOM longer than necessary.
+	function clearPasswordField() {
+		password = '';
+		showPassword = false;
 	}
 
 	function requestClearPassword() {
@@ -100,7 +112,6 @@
 		lastNote = null;
 		try {
 			const result = await networkPasswordStore.setPassword(networkId, password);
-			password = '';
 			lastNote = result.disconnects_clients
 				? 'Clients will reconnect using the new password.'
 				: null;
@@ -111,6 +122,8 @@
 				return;
 			}
 			uiStore.error(error instanceof Error ? error.message : 'Failed to set network password');
+		} finally {
+			clearPasswordField();
 		}
 	}
 
@@ -137,12 +150,21 @@
 		<label for="network-password-input" class="sr-only">New network password</label>
 		<input
 			id="network-password-input"
-			type="text"
+			type={showPassword ? 'text' : 'password'}
 			placeholder="New password (8-63 characters)"
 			bind:value={password}
 			disabled={passwordState.applying}
-			autocomplete="off"
+			autocomplete="new-password"
 		/>
+		<button
+			type="button"
+			class="btn btn-secondary btn-sm"
+			aria-pressed={showPassword}
+			aria-label={showPassword ? 'Hide password' : 'Show password'}
+			onclick={() => (showPassword = !showPassword)}
+		>
+			{showPassword ? 'Hide' : 'Show'}
+		</button>
 		<button
 			type="button"
 			class="btn btn-secondary btn-sm"

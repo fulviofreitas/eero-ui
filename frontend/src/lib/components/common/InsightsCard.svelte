@@ -49,10 +49,12 @@
 	// it whenever either prop changes, then auto-subscribe to whichever instance
 	// is current.
 	let store = $derived(insightsFor(scope, id));
-	let state = $derived($store);
+	let cardState = $derived($store);
 
 	const activeSeries = $derived(
-		state.series.find((s) => s.insight_type === state.insightType) ?? state.series[0] ?? null
+		cardState.series.find((s) => s.insight_type === cardState.insightType) ??
+			cardState.series[0] ??
+			null
 	);
 
 	const chartDatasets = $derived.by(() => {
@@ -62,7 +64,8 @@
 			.map((v) => ({ x: Date.parse(v.time!), y: v.value! }));
 		return [
 			{
-				label: insightTabs.find((t) => t.id === state.insightType)?.label ?? state.insightType,
+				label:
+					insightTabs.find((t) => t.id === cardState.insightType)?.label ?? cardState.insightType,
 				data: points,
 				borderColor: seriesColor(1),
 				backgroundColor: withAlpha(seriesColor(1), 0.15),
@@ -71,7 +74,10 @@
 		];
 	});
 
-	function load(range: InsightRange = state.range, insightType: InsightType = state.insightType) {
+	function load(
+		range: InsightRange = cardState.range,
+		insightType: InsightType = cardState.insightType
+	) {
 		insightsStore.fetch(scope, id, { range, insightType });
 	}
 
@@ -82,18 +88,23 @@
 
 <Card title="Insights">
 	{#snippet actions()}
-		<TimeRangeSelector options={rangeOptions} value={state.range} onChange={(r) => load(r)} />
+		<TimeRangeSelector options={rangeOptions} value={cardState.range} onChange={(r) => load(r)} />
 	{/snippet}
 
 	<Tabs
 		tabs={insightTabs}
-		value={state.insightType}
-		onChange={(t) => load(state.range, t as InsightType)}
+		value={cardState.insightType}
+		onChange={(t) => load(cardState.range, t as InsightType)}
 		label="Insight type"
 	/>
 
-	<div class="insights-body">
-		{#if state.premiumRequired}
+	<div
+		class="insights-body"
+		role="tabpanel"
+		id="tabpanel-{cardState.insightType}"
+		aria-labelledby="tab-{cardState.insightType}"
+	>
+		{#if cardState.premiumRequired}
 			<div class="premium-note" role="note">
 				<span class="premium-note-icon"><Icon name="lock" size={20} /></span>
 				<div>
@@ -103,9 +114,9 @@
 					</p>
 				</div>
 			</div>
-		{:else if state.error}
-			<ErrorState message={state.error} onRetry={() => load()} />
-		{:else if state.loading && state.series.length === 0}
+		{:else if cardState.error}
+			<ErrorState message={cardState.error} onRetry={() => load()} />
+		{:else if cardState.loading && cardState.series.length === 0}
 			<Skeleton variant="card" height="220px" />
 		{:else if !activeSeries || activeSeries.values.length === 0}
 			<EmptyState
@@ -118,7 +129,7 @@
 					Total: <strong>{activeSeries.sum.toLocaleString()}</strong>
 				</p>
 			{/if}
-			<TimeSeriesChart datasets={chartDatasets} loading={state.loading} />
+			<TimeSeriesChart datasets={chartDatasets} loading={cardState.loading} />
 		{/if}
 	</div>
 </Card>

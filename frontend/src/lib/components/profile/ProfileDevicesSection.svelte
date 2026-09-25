@@ -203,7 +203,8 @@
 								onPauseDevice(device);
 							}}
 						>
-							{device.paused ? '▶ Resume' : '⏸ Pause'}
+							<Icon name={device.paused ? 'play' : 'pause'} size={12} />
+							{device.paused ? 'Resume' : 'Pause'}
 						</button>
 					</div>
 				</a>

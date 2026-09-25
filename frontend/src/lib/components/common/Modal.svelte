@@ -78,6 +78,28 @@
 		>
 			<h2 id={titleId}>{title}</h2>
 			{@render children()}
+			<!-- Deliberately placed after `children()` in DOM order (but positioned top-right via
+			     CSS): `trapFocus` moves initial focus to the first focusable descendant, which must
+			     stay whatever the caller's own form puts first (e.g. the name field), not this
+			     button - Tab from there still reaches it, and Shift+Tab wraps to it as the trap's
+			     last element. -->
+			<button type="button" class="modal-close" aria-label="Close" onclick={onClose}>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="14"
+					height="14"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
 		</div>
 	</div>
 {/if}
@@ -94,6 +116,7 @@
 	}
 
 	.modal-card {
+		position: relative;
 		width: 100%;
 		max-width: 400px;
 		padding: var(--space-6);
@@ -104,10 +127,41 @@
 
 	.modal-card h2 {
 		margin: 0;
+		padding-right: var(--space-6);
 		font-size: 1.125rem;
 	}
 
 	.modal-card-lg {
 		max-width: 560px;
+	}
+
+	/* A4/A7: 24x24 minimum target, visible focus ring. Positioned absolutely (see the template
+	   comment above) so it never becomes the first focusable descendant that `trapFocus` moves
+	   initial focus to. */
+	.modal-close {
+		position: absolute;
+		top: var(--space-4);
+		right: var(--space-4);
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		background: none;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--color-text-muted);
+		cursor: pointer;
+	}
+
+	.modal-close:hover {
+		color: var(--color-text-primary);
+		background: var(--color-bg-tertiary);
+	}
+
+	.modal-close:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 </style>

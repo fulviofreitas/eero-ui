@@ -61,6 +61,7 @@
 	let openNetworkForm = $state(false);
 	let wanAccessForm = $state(true);
 	let passwordForm = $state('');
+	let showPassword = $state(false);
 	let rateLimitForm = $state<string>('');
 
 	let seededForType: string | null = null;
@@ -74,11 +75,20 @@
 			rateLimitForm =
 				typeof subnet?.rate_limit_pct === 'number' ? String(subnet.rate_limit_pct) : '';
 			passwordForm = '';
+			showPassword = false;
 			seededForType = selectedType;
 		}
 	});
 
 	let submitError: string | null = $state(null);
+
+	// S3: clear the local password value on every exit from the confirm flow - cancel, error,
+	// changed:false, or success - so a typed subnet password never lingers in memory/DOM longer
+	// than necessary.
+	function clearPasswordField() {
+		passwordForm = '';
+		showPassword = false;
+	}
 
 	function requestSave() {
 		if (!selectedType) return;
@@ -110,7 +120,6 @@
 						uiStore.info('Subnet is already set to that value.');
 						return;
 					}
-					passwordForm = '';
 					uiStore.success('Subnet settings applied. Your network is restarting.');
 				} catch (error) {
 					if (error instanceof ApiClientError) {
@@ -118,8 +127,11 @@
 						return;
 					}
 					uiStore.error(error instanceof Error ? error.message : 'Failed to update subnet');
+				} finally {
+					clearPasswordField();
 				}
-			}
+			},
+			onCancel: clearPasswordField
 		});
 	}
 
@@ -202,15 +214,26 @@
 					<label class="control-label" for="subnet-password-{networkId}">
 						New password (leave blank to keep current)
 					</label>
-					<input
-						id="subnet-password-{networkId}"
-						class="input mono"
-						type="text"
-						placeholder="8-63 printable ASCII characters"
-						bind:value={passwordForm}
-						disabled={wanState.applying}
-						autocomplete="off"
-					/>
+					<div class="password-input-row">
+						<input
+							id="subnet-password-{networkId}"
+							class="input mono"
+							type={showPassword ? 'text' : 'password'}
+							placeholder="8-63 printable ASCII characters"
+							bind:value={passwordForm}
+							disabled={wanState.applying}
+							autocomplete="new-password"
+						/>
+						<button
+							type="button"
+							class="btn btn-secondary btn-sm"
+							aria-pressed={showPassword}
+							aria-label={showPassword ? 'Hide password' : 'Show password'}
+							onclick={() => (showPassword = !showPassword)}
+						>
+							{showPassword ? 'Hide' : 'Show'}
+						</button>
+					</div>
 				</div>
 
 				<div class="control-group">
@@ -276,6 +299,16 @@
 		gap: var(--space-3);
 		flex-wrap: wrap;
 		align-items: center;
+	}
+
+	.password-input-row {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.password-input-row input {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.checkbox-inline {

@@ -154,4 +154,48 @@ describe('CommandPalette', () => {
 	// routes/layout-command-palette.test.ts - CommandPalette's own `open` is `$bindable` with no
 	// bound parent in this file's plain `render()` calls, which isn't representative of how it's
 	// actually mounted (+layout.svelte always binds it).
+
+	describe('S2: recents persist only {id, group}', () => {
+		it('persists just id/group to localStorage, not label/href, and rebuilds them on next open', async () => {
+			await renderOpen();
+			const input = screen.getByRole('combobox');
+
+			await fireEvent.input(input, { target: { value: 'lap' } });
+			await waitFor(() => expect(screen.getByText('Laptop')).toBeInTheDocument());
+			await fireEvent.click(screen.getByText('Laptop'));
+
+			expect(gotoMock).toHaveBeenCalledWith(expect.stringMatching(/^\/devices\//));
+
+			const stored = JSON.parse(localStorage.getItem('commandPalette:recent') ?? '[]');
+			expect(stored).toEqual([{ id: expect.stringContaining('device:'), group: 'Devices' }]);
+			expect(stored[0]).not.toHaveProperty('href');
+			expect(stored[0]).not.toHaveProperty('label');
+		});
+
+		it('drops a stale recent whose entity id no longer exists in the live stores', async () => {
+			localStorage.setItem(
+				'commandPalette:recent',
+				JSON.stringify([{ id: 'device:does-not-exist', group: 'Devices' }])
+			);
+
+			await renderOpen();
+
+			expect(screen.queryByText('Recent')).toBeNull();
+		});
+
+		it('ignores a legacy stored shape that still carries a raw href', async () => {
+			localStorage.setItem(
+				'commandPalette:recent',
+				JSON.stringify([
+					{ id: 'device:legacy', group: 'Devices', label: 'Old Label', href: '/devices/legacy' }
+				])
+			);
+
+			await renderOpen();
+
+			// The legacy id isn't in the live store either, so it's dropped like any other stale
+			// entry - proving the component never trusts the persisted href/label.
+			expect(screen.queryByText('Old Label')).toBeNull();
+		});
+	});
 });

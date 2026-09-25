@@ -48,6 +48,24 @@ describe('InsightsCard', () => {
 		await waitFor(() => expect(screen.getByText('99')).toBeInTheDocument());
 	});
 
+	it('A2: the content region is a tabpanel whose aria-controls/aria-labelledby resolve to the active tab', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/insights', () =>
+				HttpResponse.json({ series: [{ insight_type: 'blocked', sum: 1, values: [] }] })
+			)
+		);
+
+		render(InsightsCard, { props: { scope: 'network', id: 'network-123' } });
+
+		const tab = await screen.findByRole('tab', { name: 'Blocked' });
+		const panel = screen.getByRole('tabpanel');
+
+		expect(tab).toHaveAttribute('id', 'tab-blocked');
+		expect(tab).toHaveAttribute('aria-controls', 'tabpanel-blocked');
+		expect(panel).toHaveAttribute('id', 'tabpanel-blocked');
+		expect(panel).toHaveAttribute('aria-labelledby', 'tab-blocked');
+	});
+
 	it('re-fetches with the new range when the selector changes', async () => {
 		const seenCadences: string[] = [];
 		server.use(

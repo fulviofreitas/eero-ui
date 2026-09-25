@@ -121,6 +121,57 @@ describe('SubnetsControls', () => {
 		expect(receivedBody!.subnet_type).toBe('iot');
 	});
 
+	it('S3: password field is type=password with a show/hide toggle, and clears on changed:false', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SubnetsControls, { props: { networkId: 'network-123' } });
+		await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'iot' } });
+
+		const input = screen.getByLabelText(/new password/i) as HTMLInputElement;
+		expect(input.type).toBe('password');
+		expect(input.autocomplete).toBe('new-password');
+
+		await fireEvent.input(input, { target: { value: 'super-secret-1' } });
+		const toggle = screen.getByRole('button', { name: /show password/i });
+		await fireEvent.click(toggle);
+		expect(input.type).toBe('text');
+
+		server.use(
+			http.put('/api/networks/:networkId/subnets', () =>
+				HttpResponse.json({
+					success: true,
+					changed: false,
+					reboot_expected: true,
+					subnet: { subnet_type: 'iot' }
+				})
+			)
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Save Subnet' }));
+		const dialog = get(confirmDialog);
+		await dialog!.onConfirm();
+
+		await waitFor(() => expect(input.value).toBe(''));
+	});
+
+	it('S3: clears the password field when the save confirmation is cancelled', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SubnetsControls, { props: { networkId: 'network-123' } });
+		await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'iot' } });
+
+		const input = screen.getByLabelText(/new password/i) as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: 'super-secret-1' } });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Save Subnet' }));
+		const dialog = get(confirmDialog);
+		dialog!.onCancel?.();
+
+		await waitFor(() => expect(input.value).toBe(''));
+	});
+
 	it('shows an info toast, not a success toast, when the backend reports changed:false', async () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');

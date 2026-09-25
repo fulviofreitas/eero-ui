@@ -31,8 +31,8 @@
 		{ value: '50', label: '50' }
 	];
 
-	let state = $derived($speedTestHistoryStore);
-	let results = $derived(state.results);
+	let cardState = $derived($speedTestHistoryStore);
+	let results = $derived(cardState.results);
 
 	const columns: DataTableColumn<SpeedTestResult>[] = [
 		{
@@ -99,7 +99,7 @@
 		];
 	});
 
-	function load(limit: SpeedTestHistoryLimit = state.limit) {
+	function load(limit: SpeedTestHistoryLimit = cardState.limit) {
 		speedTestHistoryStore.fetch(networkId, limit);
 	}
 
@@ -128,19 +128,19 @@
 	{#snippet actions()}
 		<TimeRangeSelector
 			options={limitOptions}
-			value={String(state.limit)}
+			value={String(cardState.limit)}
 			onChange={(limit) => load(Number(limit) as SpeedTestHistoryLimit)}
 			label="Number of results"
 		/>
 	{/snippet}
 
-	{#if state.error && results.length === 0}
-		<ErrorState message={state.error} onRetry={() => load()} />
+	{#if cardState.error && results.length === 0}
+		<ErrorState message={cardState.error} onRetry={() => load()} />
 	{:else}
 		<TimeSeriesChart
 			datasets={chartDatasets}
 			yAxisLabel="Mbps"
-			loading={state.loading && results.length === 0}
+			loading={cardState.loading && results.length === 0}
 		/>
 		<div class="speedtest-history-table">
 			<DataTable
@@ -148,7 +148,7 @@
 				{columns}
 				rows={results}
 				{getRowId}
-				loading={state.loading}
+				loading={cardState.loading}
 				emptyTitle="No speed test history"
 				emptyDescription="Run a speed test to start building history."
 				showColumnToggle={false}

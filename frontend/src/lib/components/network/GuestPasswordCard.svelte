@@ -27,6 +27,7 @@
 	const GENERATOR_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
 
 	let password = $state('');
+	let showPassword = $state(false);
 	let submitError: string | null = $state(null);
 
 	let guestState = $derived($guestPasswordStore);
@@ -60,6 +61,14 @@
 	function handleGenerate() {
 		password = generatePassword();
 		submitError = null;
+		// S3: reveal a freshly generated password automatically so it can be read/copied.
+		showPassword = true;
+	}
+
+	// S3: clear the local password value on every exit from the confirm flow.
+	function clearPasswordField() {
+		password = '';
+		showPassword = false;
 	}
 
 	function requestSetPassword() {
@@ -73,7 +82,8 @@
 			],
 			confirmText: 'Set Password',
 			danger: true,
-			onConfirm: submitSetPassword
+			onConfirm: submitSetPassword,
+			onCancel: clearPasswordField
 		});
 	}
 
@@ -96,7 +106,6 @@
 		submitError = null;
 		try {
 			await guestPasswordStore.setPassword(networkId, password);
-			password = '';
 			uiStore.success('Guest network password set.');
 		} catch (error) {
 			if (error instanceof ApiClientError && error.status === 422) {
@@ -104,6 +113,8 @@
 				return;
 			}
 			uiStore.error(error instanceof Error ? error.message : 'Failed to set guest password');
+		} finally {
+			clearPasswordField();
 		}
 	}
 
@@ -142,12 +153,21 @@
 			<label for="guest-password-input" class="sr-only">New guest password</label>
 			<input
 				id="guest-password-input"
-				type="text"
+				type={showPassword ? 'text' : 'password'}
 				placeholder="New password (8-63 characters)"
 				bind:value={password}
 				disabled={guestState.applying}
-				autocomplete="off"
+				autocomplete="new-password"
 			/>
+			<button
+				type="button"
+				class="btn btn-secondary btn-sm"
+				aria-pressed={showPassword}
+				aria-label={showPassword ? 'Hide password' : 'Show password'}
+				onclick={() => (showPassword = !showPassword)}
+			>
+				{showPassword ? 'Hide' : 'Show'}
+			</button>
 			<button
 				type="button"
 				class="btn btn-secondary btn-sm"

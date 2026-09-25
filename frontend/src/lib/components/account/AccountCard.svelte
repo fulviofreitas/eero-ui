@@ -214,6 +214,7 @@
 					bind:value={nameValue}
 					disabled={writeState.applying}
 					placeholder="Display name"
+					aria-label="Display name"
 					maxlength={64}
 				/>
 				<button
@@ -283,11 +284,13 @@
 						bind:value={emailValue}
 						disabled={writeState.applying}
 						placeholder="New e-mail address"
+						aria-label="New e-mail address"
 					/>
 					<button
 						type="submit"
 						class="btn btn-primary btn-sm"
 						disabled={writeState.applying || !emailValue.trim()}
+						aria-label="Change e-mail"
 					>
 						Change
 					</button>
@@ -334,6 +337,7 @@
 							bind:value={selectedDialCode}
 							onchange={applyDialCode}
 							disabled={writeState.applying}
+							aria-label="Country"
 						>
 							<option value="">Country…</option>
 							{#each writeState.smsCountries as country, i (i)}
@@ -349,11 +353,13 @@
 						bind:value={phoneValue}
 						disabled={writeState.applying}
 						placeholder="New phone number"
+						aria-label="New phone number"
 					/>
 					<button
 						type="submit"
 						class="btn btn-primary btn-sm"
 						disabled={writeState.applying || !phoneValue.trim()}
+						aria-label="Change phone number"
 					>
 						Change
 					</button>

@@ -56,7 +56,7 @@
 		wanControls
 	}: Props = $props();
 
-	let state = $derived($securityWanStore);
+	let cardState = $derived($securityWanStore);
 
 	function boolLabel(value: boolean | null | undefined): string {
 		if (value === null || value === undefined) return '—';
@@ -78,7 +78,7 @@
 	type SubnetRow = { fields: Record<string, unknown>; index: number };
 
 	const subnetRows = $derived.by((): SubnetRow[] =>
-		(state.subnets?.subnets ?? []).map((fields, index) => ({ fields, index }))
+		(cardState.subnets?.subnets ?? []).map((fields, index) => ({ fields, index }))
 	);
 
 	const subnetColumns = $derived.by((): DataTableColumn<SubnetRow>[] => {
@@ -106,10 +106,10 @@
 	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
 
 	let ddnsEnabled = $derived(
-		Boolean(state.advanced?.ddns && (state.advanced.ddns as { enabled?: unknown }).enabled)
+		Boolean(cardState.advanced?.ddns && (cardState.advanced.ddns as { enabled?: unknown }).enabled)
 	);
 
-	let threadEnabled = $derived(Boolean(state.security?.thread?.enabled));
+	let threadEnabled = $derived(Boolean(cardState.security?.thread?.enabled));
 
 	function requestToggleThread() {
 		const nextEnabled = !threadEnabled;
@@ -180,27 +180,31 @@
 </script>
 
 <Card title="Security & WAN">
-	{#if state.loading && !state.security}
+	{#if cardState.loading && !cardState.security}
 		<Skeleton variant="table-rows" rows={6} columns={2} />
-	{:else if state.error}
-		<ErrorState message={state.error} onRetry={load} />
+	{:else if cardState.error}
+		<ErrorState message={cardState.error} onRetry={load} />
 	{:else}
 		<section class="security-section" data-family="wifi-security">
 			<h4>Wi-Fi Security</h4>
 			<div class="badge-row">
 				<span class="text-muted text-sm">WPA3</span>
-				<span class="badge {boolBadgeClass(state.security?.wpa3)}">
-					{boolLabel(state.security?.wpa3)}
+				<span class="badge {boolBadgeClass(cardState.security?.wpa3)}">
+					{boolLabel(cardState.security?.wpa3)}
 				</span>
 			</div>
 			<div class="badge-row">
 				<span class="text-muted text-sm">Band Steering</span>
-				<span class="badge {boolBadgeClass(state.security?.band_steering)}">
-					{boolLabel(state.security?.band_steering)}
+				<span class="badge {boolBadgeClass(cardState.security?.band_steering)}">
+					{boolLabel(cardState.security?.band_steering)}
 				</span>
 			</div>
-			<InfoRow label="WPA3 per band" value={summarize(state.security?.wpa3_per_band)} mono />
-			<InfoRow label="Fast transition" value={summarize(state.security?.fast_transition)} mono />
+			<InfoRow label="WPA3 per band" value={summarize(cardState.security?.wpa3_per_band)} mono />
+			<InfoRow
+				label="Fast transition"
+				value={summarize(cardState.security?.fast_transition)}
+				mono
+			/>
 			{#if wifiSecurityControls}
 				<div class="section-controls">{@render wifiSecurityControls()}</div>
 			{/if}
@@ -210,19 +214,19 @@
 			<h4>Network</h4>
 			<div class="badge-row">
 				<span class="text-muted text-sm">UPnP</span>
-				<span class="badge {boolBadgeClass(state.security?.upnp)}">
-					{boolLabel(state.security?.upnp)}
+				<span class="badge {boolBadgeClass(cardState.security?.upnp)}">
+					{boolLabel(cardState.security?.upnp)}
 				</span>
 			</div>
 			<div class="badge-row">
 				<span class="text-muted text-sm">SQM</span>
-				<span class="badge {boolBadgeClass(state.security?.sqm)}">
-					{boolLabel(state.security?.sqm)}
+				<span class="badge {boolBadgeClass(cardState.security?.sqm)}">
+					{boolLabel(cardState.security?.sqm)}
 				</span>
 			</div>
-			<InfoRow label="IPv6" value={summarize(state.security?.ipv6)} mono />
-			<InfoRow label="Connection mode" value={state.advanced?.connection_mode ?? '—'} mono />
-			<InfoRow label="DHCP" value={summarize(state.advanced?.dhcp)} mono />
+			<InfoRow label="IPv6" value={summarize(cardState.security?.ipv6)} mono />
+			<InfoRow label="Connection mode" value={cardState.advanced?.connection_mode ?? '—'} mono />
+			<InfoRow label="DHCP" value={summarize(cardState.advanced?.dhcp)} mono />
 			{#if networkControls}
 				<div class="section-controls">{@render networkControls()}</div>
 			{/if}
@@ -230,31 +234,31 @@
 
 		<section class="security-section" data-family="power-thread">
 			<h4>Power &amp; Thread</h4>
-			<InfoRow label="Power saving" value={summarize(state.advanced?.power_saving)} mono />
+			<InfoRow label="Power saving" value={summarize(cardState.advanced?.power_saving)} mono />
 			<div class="badge-row">
 				<span class="text-muted text-sm">Thread</span>
-				<span class="badge {boolBadgeClass(state.security?.thread?.enabled)}">
-					{boolLabel(state.security?.thread?.enabled)}
+				<span class="badge {boolBadgeClass(cardState.security?.thread?.enabled)}">
+					{boolLabel(cardState.security?.thread?.enabled)}
 				</span>
 			</div>
-			{#if state.security?.thread}
-				<InfoRow label="Thread network name" value={state.security.thread.name ?? '—'} mono />
-				<InfoRow label="Thread channel" value={state.security.thread.channel ?? '—'} />
-				<InfoRow label="Thread PAN ID" value={state.security.thread.pan_id ?? '—'} mono />
+			{#if cardState.security?.thread}
+				<InfoRow label="Thread network name" value={cardState.security.thread.name ?? '—'} mono />
+				<InfoRow label="Thread channel" value={cardState.security.thread.channel ?? '—'} />
+				<InfoRow label="Thread PAN ID" value={cardState.security.thread.pan_id ?? '—'} mono />
 			{/if}
 			<ExperimentalGate>
 				<div class="thread-buttons">
 					<button
 						class="btn btn-secondary btn-sm"
 						onclick={requestToggleThread}
-						disabled={state.applying}
+						disabled={cardState.applying}
 					>
 						{threadEnabled ? 'Disable Thread' : 'Enable Thread'}
 					</button>
 					<button
 						class="btn btn-danger btn-sm"
 						onclick={requestRegenerateThreadCredentials}
-						disabled={state.applying}
+						disabled={cardState.applying}
 					>
 						Regenerate Credentials
 					</button>
@@ -267,7 +271,7 @@
 
 		<section class="security-section" data-family="updates">
 			<h4>Updates</h4>
-			<InfoRow label="Updates" value={summarize(state.security?.updates)} mono />
+			<InfoRow label="Updates" value={summarize(cardState.security?.updates)} mono />
 			{#if updatesControls}
 				<div class="section-controls">{@render updatesControls()}</div>
 			{/if}
@@ -292,23 +296,25 @@
 			<h4>WAN</h4>
 			<div class="badge-row">
 				<span class="text-muted text-sm">Multi-static-IP</span>
-				<span class="badge {state.multistaticip?.configured ? 'badge-success' : 'badge-neutral'}">
-					{state.multistaticip?.configured ? 'Configured' : 'Not configured'}
+				<span
+					class="badge {cardState.multistaticip?.configured ? 'badge-success' : 'badge-neutral'}"
+				>
+					{cardState.multistaticip?.configured ? 'Configured' : 'Not configured'}
 				</span>
 			</div>
-			{#if state.multistaticip?.configured}
+			{#if cardState.multistaticip?.configured}
 				<InfoRow
 					label="Multi-static-IP config"
-					value={summarize(state.multistaticip.config)}
+					value={summarize(cardState.multistaticip.config)}
 					mono
 				/>
 			{/if}
-			<InfoRow label="Dynamic DNS" value={summarize(state.advanced?.ddns)} mono />
+			<InfoRow label="Dynamic DNS" value={summarize(cardState.advanced?.ddns)} mono />
 			<ExperimentalGate>
 				<button
 					class="btn btn-secondary btn-sm"
 					onclick={requestToggleDdns}
-					disabled={state.applying}
+					disabled={cardState.applying}
 				>
 					{ddnsEnabled ? 'Disable Dynamic DNS' : 'Enable Dynamic DNS'}
 				</button>

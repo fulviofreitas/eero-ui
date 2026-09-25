@@ -555,6 +555,7 @@
 					type="text"
 					class="input search-input"
 					placeholder="Search devices... (try: ip=10.0.5, device=phone, mac=AA:BB)"
+					aria-label="Search devices"
 					value={$deviceFilters.search}
 					oninput={handleSearch}
 				/>

@@ -16,6 +16,7 @@
 		networksStore,
 		selectedNetwork,
 		devicesStore,
+		DEVICE_FILTERS_STORAGE_KEY,
 		entitlementsStore,
 		userEmail,
 		userName,
@@ -71,6 +72,10 @@
 			uiStore.closeSidebar();
 		}
 
+		// The command palette and shortcuts help are authenticated-only surfaces (S1): they search
+		// account data (devices/eeros/profiles/networks) that must not be reachable from /login.
+		if (!$isAuthenticated) return;
+
 		// ⌘K / Ctrl+K always opens the command palette, even while typing elsewhere - it IS the
 		// modifier combo the "ignore while typing" rule carves out an exception for.
 		if (isCommandPaletteShortcut(event)) {
@@ -86,6 +91,32 @@
 			shortcutsHelpOpen = true;
 		}
 	}
+
+	// S1: on logout AND on a 401-driven `auth:unauthorized` transition, drop every cache that
+	// holds account data so a subsequent login (possibly to a different account, on a shared
+	// machine) never sees a stale previous session's devices/networks/entitlements or search
+	// history. The command palette's own in-memory eero/profile caches are covered by unmounting
+	// it below rather than by this function - there is no store to clear.
+	function resetSessionState(): void {
+		devicesStore.clear();
+		networksStore.clear();
+		entitlementsStore.clear();
+		if (typeof localStorage !== 'undefined') {
+			localStorage.removeItem('commandPalette:recent');
+			localStorage.removeItem(DEVICE_FILTERS_STORAGE_KEY);
+		}
+	}
+
+	let wasAuthenticated = false;
+	$effect(() => {
+		const authed = $isAuthenticated;
+		if (wasAuthenticated && !authed) {
+			resetSessionState();
+			commandPaletteOpen = false;
+			shortcutsHelpOpen = false;
+		}
+		wasAuthenticated = authed;
+	});
 
 	onMount(async () => {
 		uiStore.initTheme();
@@ -181,8 +212,7 @@
 	});
 
 	async function handleLogout() {
-		networksStore.clear();
-		entitlementsStore.clear();
+		resetSessionState();
 		await authStore.logout();
 		goto('/login');
 	}
@@ -340,7 +370,7 @@
 						>
 							<Icon name="search" size={14} />
 							Search
-							<kbd class="command-palette-kbd">⌘K</kbd>
+							<kbd class="command-palette-kbd" aria-hidden="true">⌘K</kbd>
 						</button>
 						<span class="status-dot online"></span>
 						<button class="signout-btn" onclick={handleLogout} title="Sign out"> Sign out </button>
@@ -385,8 +415,12 @@
 <!-- Global components -->
 <Toast />
 <ConfirmDialog />
-<CommandPalette bind:open={commandPaletteOpen} />
-<ShortcutsHelp bind:open={shortcutsHelpOpen} />
+<!-- S1: authenticated-only - both search account data, so neither should exist (let alone be
+     reachable via ⌘K/"?") once the session ends. -->
+{#if $isAuthenticated}
+	<CommandPalette bind:open={commandPaletteOpen} />
+	<ShortcutsHelp bind:open={shortcutsHelpOpen} />
+{/if}
 
 <style>
 	/* A14 (WP5 a11y fix): visually hidden until focused (keyboard Tab from page load), then
@@ -640,8 +674,11 @@
 		font-weight: 500;
 	}
 
+	/* A5 (WP9 a11y fix): --color-text-muted on --color-bg-tertiary measured 4.08:1 (dark) /
+	   4.30:1 (light) - below AA 4.5:1. --color-text-secondary measures 4.95:1 (dark) / ~4.50:1
+	   (light). */
 	.account-role {
-		color: var(--color-text-muted);
+		color: var(--color-text-secondary);
 		padding: 2px 8px;
 		background: var(--color-bg-tertiary);
 		border-radius: 10px;
@@ -725,6 +762,7 @@
 		color: var(--color-accent);
 	}
 
+	/* A5: same --color-text-muted-on-tertiary contrast fix as .account-role above. */
 	.command-palette-kbd {
 		font-family: var(--font-mono);
 		font-size: 0.625rem;
@@ -732,6 +770,7 @@
 		border-radius: var(--radius-sm);
 		background: var(--color-bg-tertiary);
 		border: 1px solid var(--color-border-muted);
+		color: var(--color-text-secondary);
 	}
 
 	.signout-btn {

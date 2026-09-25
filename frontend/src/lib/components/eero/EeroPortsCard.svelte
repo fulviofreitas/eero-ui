@@ -123,6 +123,7 @@
 							<select
 								bind:value={selectedAction[portKey(port.port_name, i)]}
 								disabled={applyingPort === portKey(port.port_name, i)}
+								aria-label="Port action for {port.port_name || `port ${i + 1}`}"
 							>
 								{#each PORT_ACTIONS as action (action)}
 									<option value={action}>{PORT_ACTION_LABELS[action]}</option>

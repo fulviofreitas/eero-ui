@@ -162,6 +162,7 @@
 						bind:value={allowDomainValue}
 						disabled={cardState.applying}
 						placeholder="example.com"
+						aria-label="Domain to allow"
 					/>
 					<button
 						type="submit"
@@ -204,6 +205,7 @@
 						bind:value={blockDomainValue}
 						disabled={cardState.applying}
 						placeholder="example.com"
+						aria-label="Domain to block"
 					/>
 					<button
 						type="submit"

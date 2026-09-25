@@ -107,8 +107,15 @@
 	}
 
 	.toast-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* A7: 24x24 minimum touch/click target. */
+		min-width: 24px;
+		min-height: 24px;
 		background: none;
 		border: none;
+		border-radius: var(--radius-sm);
 		color: var(--color-text-muted);
 		cursor: pointer;
 		font-size: 1.25rem;
@@ -119,5 +126,9 @@
 
 	.toast-close:hover {
 		color: var(--color-text-primary);
+	}
+
+	.toast-close:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 </style>

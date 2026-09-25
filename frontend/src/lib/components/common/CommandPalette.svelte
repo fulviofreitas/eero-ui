@@ -33,6 +33,14 @@
 		fields: string[];
 	}
 
+	/** S2: only the id/group are persisted - label/href are always rebuilt from live store data
+	    when the palette opens, so a stale recent never shows (or links to) data that changed or
+	    disappeared since it was recorded. */
+	interface RecentEntry {
+		id: string;
+		group: PaletteItem['group'];
+	}
+
 	interface Props {
 		open: boolean;
 	}
@@ -44,25 +52,35 @@
 	const MAX_PER_GROUP = 8;
 	const GROUP_ORDER: PaletteItem['group'][] = ['Devices', 'Eeros', 'Profiles', 'Networks'];
 
-	function loadRecents(): PaletteItem[] {
+	function loadRecents(): RecentEntry[] {
 		if (typeof localStorage === 'undefined') return [];
 		try {
 			const stored = localStorage.getItem(RECENTS_KEY);
 			if (!stored) return [];
 			const parsed = JSON.parse(stored);
-			return Array.isArray(parsed) ? parsed : [];
+			if (!Array.isArray(parsed)) return [];
+			// Defensive: entries from an older build stored the full PaletteItem shape (including
+			// `href`) - keep only id/group going forward regardless of what's on disk.
+			return parsed
+				.filter(
+					(r): r is RecentEntry => r && typeof r.id === 'string' && typeof r.group === 'string'
+				)
+				.map((r) => ({ id: r.id, group: r.group }));
 		} catch {
 			return [];
 		}
 	}
 
-	let recents: PaletteItem[] = $state(loadRecents());
+	let recentEntries: RecentEntry[] = $state(loadRecents());
 
 	function rememberRecent(item: PaletteItem) {
-		recents = [item, ...recents.filter((r) => r.id !== item.id)].slice(0, MAX_RECENTS);
+		recentEntries = [
+			{ id: item.id, group: item.group },
+			...recentEntries.filter((r) => r.id !== item.id)
+		].slice(0, MAX_RECENTS);
 		if (typeof localStorage === 'undefined') return;
 		try {
-			localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
+			localStorage.setItem(RECENTS_KEY, JSON.stringify(recentEntries));
 		} catch {
 			// Storage can be unavailable (private mode quota, etc.) - recents just won't persist.
 		}
@@ -161,6 +179,14 @@
 
 	const allItems = $derived([...deviceItems, ...eeroItems, ...profileItems, ...networkItems]);
 
+	// S2: rebuild each recent's label/href from the live store data by id - never trust the
+	// persisted copy. An id whose source item no longer exists (device removed, etc.) is dropped
+	// silently rather than shown with stale data or a dead link.
+	const recents = $derived.by<PaletteItem[]>(() => {
+		const byId = new Map(allItems.map((item) => [item.id, item]));
+		return recentEntries.map((r) => byId.get(r.id)).filter((item): item is PaletteItem => !!item);
+	});
+
 	/** Case-insensitive prefix (2) > substring (1) > no match (-1). Best field wins. */
 	function scoreItem(item: PaletteItem, q: string): number {
 		let best = -1;
@@ -203,6 +229,14 @@
 	});
 
 	const flatItems = $derived(groups.flatMap((g) => g.items));
+
+	// A4: keep the highlighted row in view as arrow keys move it past the visible scroll window.
+	// `scrollIntoView` doesn't exist in jsdom (test environment), so guard its presence.
+	$effect(() => {
+		const activeItem = flatItems[activeIndex];
+		if (!activeItem) return;
+		document.getElementById(activeItem.id)?.scrollIntoView?.({ block: 'nearest' });
+	});
 
 	// Reset the highlighted row whenever the query itself changes (a fresh result set should
 	// highlight its first row) - depends only on `query`, a plain $state string, so it can never
@@ -262,6 +296,7 @@
 				aria-controls="cp-listbox"
 				aria-autocomplete="list"
 				aria-activedescendant={flatItems[activeIndex] ? flatItems[activeIndex].id : undefined}
+				aria-label="Search"
 				placeholder="Search devices, eeros, profiles, networks…"
 				class="input cp-input"
 				onkeydown={handleInputKeydown}
@@ -291,8 +326,15 @@
 								aria-selected={index === activeIndex}
 								class="cp-option"
 								class:active={index === activeIndex}
+								tabindex="-1"
 								onmouseenter={() => (activeIndex = index)}
 								onclick={() => activate(item)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										activate(item);
+									}
+								}}
 							>
 								<span class="cp-option-label">{item.label}</span>
 								{#if item.sublabel}
