@@ -66,6 +66,16 @@
 	--color-info: #58a6ff;
 	--color-info-bg: rgba(88, 166, 255, 0.15);
 
+	/* A6 (badge contrast fix): dedicated text colours for .badge-danger/.badge-info scoped to the
+	   badge component only (not the shared --color-danger/--color-info tokens, which are also used
+	   as plain foreground/border colours elsewhere and already clear AA there). Verified with a
+	   WCAG relative-luminance script compositing each badge's tinted background over the card
+	   surface (--color-bg-secondary). Dark badge-danger's default #f85149 measured 4.35:1 (below
+	   AA); #f85a53 (lightened, same hue) measures 4.59:1. Dark badge-info already clears AA
+	   (5.32:1) with the plain --color-info value, so no override is needed here. */
+	--badge-danger-text: #f85a53;
+	--badge-info-text: var(--color-info);
+
 	/* Premium/plus accent - reuses the warning hue per Q4 (no design pass; no new palette) */
 	--color-premium: var(--color-warning);
 	--color-premium-bg: var(--color-warning-bg);
@@ -201,6 +211,13 @@
 	--color-danger-fill-hover: var(--color-danger-hover);
 	--color-info: #0969da;
 	--color-info-bg: rgba(9, 105, 218, 0.1);
+
+	/* A6 (badge contrast fix): light-theme overrides for the badge-only text tokens declared above.
+	   .badge-danger's default #cf222e measured 4.30:1 on its tinted background composited over
+	   --color-bg-secondary (#f6f8fa); #c6212c (darkened, same hue) measures 4.61:1. .badge-info's
+	   default #0969da measured 4.25:1; #0964d0 measures 4.57:1. Both keep the existing hue. */
+	--badge-danger-text: #c6212c;
+	--badge-info-text: #0964d0;
 
 	/* Accent - adjusted for light bg */
 	--color-accent: #0969da;
@@ -480,12 +497,12 @@ code {
 
 .badge-danger {
 	background-color: var(--color-danger-bg);
-	color: var(--color-danger);
+	color: var(--badge-danger-text);
 }
 
 .badge-info {
 	background-color: var(--color-info-bg);
-	color: var(--color-info);
+	color: var(--badge-info-text);
 }
 
 .badge-secondary {

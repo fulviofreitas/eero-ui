@@ -45,4 +45,12 @@ describe('PieChart', () => {
 
 		expect(screen.queryByRole('status', { name: 'Refreshing chart data' })).toBeNull();
 	});
+
+	it('exposes the chart data to assistive tech via an aria-label on the canvas (A8)', () => {
+		render(PieChart, { props: { title: 'Connection Type', data, loading: false } });
+
+		expect(
+			screen.getByRole('img', { name: 'Connection Type: Wireless 10, Wired 5' })
+		).toBeInTheDocument();
+	});
 });

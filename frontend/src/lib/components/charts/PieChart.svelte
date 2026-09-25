@@ -51,6 +51,13 @@
 	const hasData = $derived(data.length > 0 && data.some((d) => d.value > 0));
 	const total = $derived(data.reduce((sum, d) => sum + d.value, 0));
 
+	// A8: accessible label for the canvas, since Chart.js draws to a <canvas> with no text content
+	// for assistive tech to read. Built from the same data driving the chart, so it stays in sync.
+	const ariaLabel = $derived.by(() => {
+		if (!hasData) return `${title}: no data`;
+		return `${title}: ${data.map((d) => `${d.label} ${d.value}`).join(', ')}`;
+	});
+
 	function createChart(canvas: HTMLCanvasElement) {
 		if (chart) {
 			chart.destroy();
@@ -151,7 +158,11 @@
 				<span>No data available</span>
 			</div>
 		{:else}
-			<canvas use:handleCanvas></canvas>
+			<!-- A8: canvas has no implicit role; role="img" + aria-label is the documented MDN
+			     pattern for giving a <canvas> chart an accessible name. Svelte's a11y check flags
+			     it as a noninteractive-role-on-non-interactive-element false positive. -->
+			<!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+			<canvas use:handleCanvas role="img" aria-label={ariaLabel}></canvas>
 			{#if loading}
 				<span class="chart-refreshing" role="status" aria-label="Refreshing chart data">
 					<span class="loading-spinner"></span>

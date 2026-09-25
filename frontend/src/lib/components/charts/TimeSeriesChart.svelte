@@ -49,6 +49,28 @@
 
 	const hasData = $derived(datasets.length > 0 && datasets.some((ds) => ds.data.length > 0));
 
+	// A8: accessible label for the canvas, since Chart.js draws to a <canvas> with no text content
+	// for assistive tech to read. Reports the most recent point across all datasets (the value an
+	// operator glancing at the chart cares about most).
+	function getLatestPoint(ds: Dataset[]): DataPoint | null {
+		let latest: DataPoint | null = null;
+		for (const dataset of ds) {
+			for (const point of dataset.data) {
+				if (!latest || point.x > latest.x) {
+					latest = point;
+				}
+			}
+		}
+		return latest;
+	}
+
+	const ariaLabel = $derived.by(() => {
+		const latest = getLatestPoint(datasets);
+		if (!latest) return `${title}: no data`;
+		const time = new Date(latest.x).toLocaleTimeString();
+		return `${title}: latest ${latest.y} at ${time}`;
+	});
+
 	// Deep clone datasets to avoid Svelte 5 reactivity conflicts with Chart.js
 	// Chart.js uses Object.defineProperty which conflicts with $state proxies
 	function cloneDatasets() {
@@ -138,7 +160,11 @@
 			<span>No data available for the selected time range</span>
 		</div>
 	{:else}
-		<canvas use:handleCanvas></canvas>
+		<!-- A8: canvas has no implicit role; role="img" + aria-label is the documented MDN
+		     pattern for giving a <canvas> chart an accessible name. Svelte's a11y check flags
+		     it as a noninteractive-role-on-non-interactive-element false positive. -->
+		<!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+		<canvas use:handleCanvas role="img" aria-label={ariaLabel}></canvas>
 		{#if loading}
 			<span class="chart-refreshing" role="status" aria-label="Refreshing chart data">
 				<span class="loading-spinner"></span>
