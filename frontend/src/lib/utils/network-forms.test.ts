@@ -4,7 +4,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { isPrivateIpv4, isValidIpLiteral, isValidMac, isValidPort } from './network-forms';
+import {
+	isPrivateIpv4,
+	isValidContentFilterDomain,
+	isValidIpLiteral,
+	isValidMac,
+	isValidPort
+} from './network-forms';
 
 describe('isValidPort', () => {
 	it('accepts integers in 1-65535', () => {
@@ -68,5 +74,69 @@ describe('isValidIpLiteral', () => {
 	it('rejects malformed input', () => {
 		expect(isValidIpLiteral('not-an-ip')).toBe(false);
 		expect(isValidIpLiteral('')).toBe(false);
+	});
+});
+
+describe('isValidContentFilterDomain', () => {
+	it('accepts a plain hostname', () => {
+		expect(isValidContentFilterDomain('example.com')).toBe(true);
+	});
+
+	it('accepts a hostname with hyphenated and multiple labels', () => {
+		expect(isValidContentFilterDomain('sub-domain.example.co.uk')).toBe(true);
+	});
+
+	it('is case-insensitive and trims whitespace', () => {
+		expect(isValidContentFilterDomain('  Example.COM  ')).toBe(true);
+	});
+
+	it('rejects a bare label with no dot', () => {
+		expect(isValidContentFilterDomain('localhost')).toBe(false);
+	});
+
+	it('rejects a scheme or path', () => {
+		expect(isValidContentFilterDomain('https://example.com')).toBe(false);
+		expect(isValidContentFilterDomain('example.com/path')).toBe(false);
+	});
+
+	it('rejects a label starting or ending with a hyphen', () => {
+		expect(isValidContentFilterDomain('-example.com')).toBe(false);
+		expect(isValidContentFilterDomain('example-.com')).toBe(false);
+	});
+
+	it('rejects an empty label (consecutive dots)', () => {
+		expect(isValidContentFilterDomain('example..com')).toBe(false);
+	});
+
+	it('rejects an IP address literal', () => {
+		expect(isValidContentFilterDomain('8.8.8.8')).toBe(false);
+		expect(isValidContentFilterDomain('2001:db8::1')).toBe(false);
+	});
+
+	it('rejects a hostname over 253 characters', () => {
+		const label = 'a'.repeat(63);
+		const tooLong = Array(5).fill(label).join('.') + '.com';
+		expect(tooLong.length).toBeGreaterThan(253);
+		expect(isValidContentFilterDomain(tooLong)).toBe(false);
+	});
+
+	it('rejects empty input', () => {
+		expect(isValidContentFilterDomain('')).toBe(false);
+		expect(isValidContentFilterDomain('   ')).toBe(false);
+	});
+
+	it('completes fast on a pathological 5,000-character input (ReDoS guard)', () => {
+		// Shaped to defeat catastrophic backtracking in the old
+		// `^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$` regex: a long run of
+		// hyphen-heavy characters with no terminating dot, forcing repeated backtracking attempts
+		// on the old pattern before it could fail. The label-by-label implementation must reject
+		// this (well over the 253-char ceiling) in well under a second.
+		const pathological = 'a-'.repeat(2500);
+		const start = performance.now();
+		const result = isValidContentFilterDomain(pathological);
+		const elapsedMs = performance.now() - start;
+
+		expect(result).toBe(false);
+		expect(elapsedMs).toBeLessThan(200);
 	});
 });

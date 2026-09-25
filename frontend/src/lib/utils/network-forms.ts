@@ -48,7 +48,12 @@ export function isValidIpLiteral(value: string): boolean {
 }
 
 const DOMAIN_MAX_LEN = 253;
-const HOSTNAME_RE = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$/;
+/**
+ * Matches a single DNS label (no leading/trailing hyphen, 1-63 chars). Linear-time - no nested
+ * quantifiers or lookaround, unlike the backtracking whole-hostname regex this replaced (Codacy:
+ * ReDoS-prone `^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$`).
+ */
+const LABEL_RE = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
 
 /**
  * A content-filter domain (phase-6.0-revamp.md § 7 WP7, family 10). Mirrors
@@ -56,11 +61,18 @@ const HOSTNAME_RE = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<
  * scheme or path, at most 253 characters (DNS wire-format ceiling), not an
  * IP address literal. Does not attempt IDNA/punycode conversion client-side
  * - the backend re-validates and normalizes authoritatively.
+ *
+ * Validated label-by-label (rather than with a single whole-string regex) so that malicious
+ * input cannot trigger catastrophic backtracking - each label is checked against a small,
+ * non-backtracking regex, so cost stays linear in the input length.
  */
 export function isValidContentFilterDomain(value: string): boolean {
 	const candidate = value.trim().toLowerCase();
 	if (!candidate || candidate.includes('://') || candidate.includes('/')) return false;
 	if (candidate.length > DOMAIN_MAX_LEN) return false;
 	if (isValidIpv4(candidate) || isValidIpLiteral(candidate)) return false;
-	return HOSTNAME_RE.test(candidate);
+
+	const labels = candidate.split('.');
+	if (labels.length < 2) return false;
+	return labels.every((label) => LABEL_RE.test(label));
 }

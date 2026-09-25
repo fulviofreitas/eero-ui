@@ -129,6 +129,90 @@ function createNetworksStore() {
 		});
 	}
 
+	/**
+	 * POST the speed test start and resolve the server's `started_at` as epoch millis. On
+	 * failure, records the error on the store (if this run is still current) and rethrows.
+	 */
+	async function startSpeedTest(networkId: string, isCurrent: () => boolean): Promise<number> {
+		try {
+			const start = await api.networks.speedTest(networkId);
+			const startedAtMs = Date.parse(start.started_at);
+			// Defensive only - the backend contract guarantees `started_at`.
+			return Number.isNaN(startedAtMs) ? Date.now() : startedAtMs;
+		} catch (error) {
+			if (isCurrent()) {
+				const message = error instanceof Error ? error.message : 'Failed to start speed test';
+				patchSpeedTestState(networkId, {
+					running: false,
+					elapsedSeconds: 0,
+					result: null,
+					error: message
+				});
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * One iteration of the speed-test poll loop: checks for cancellation/supersession, updates
+	 * elapsed time, times out past `POLL_TIMEOUT_MS`, waits `POLL_INTERVAL_MS`, then fetches the
+	 * latest result. Returns the result once one lands at/after `startedAtMs`, or `null` to keep
+	 * polling.
+	 */
+	async function pollSpeedTestOnce(
+		networkId: string,
+		startedAtMs: number,
+		isCurrent: () => boolean,
+		signal?: AbortSignal
+	): Promise<SpeedTestResult | null> {
+		if (signal?.aborted) {
+			if (isCurrent()) patchSpeedTestState(networkId, { running: false });
+			throw speedTestAbortedError();
+		}
+		if (!isCurrent()) throw speedTestSupersededError();
+
+		const elapsedMs = Date.now() - startedAtMs;
+		patchSpeedTestState(networkId, { elapsedSeconds: Math.max(0, Math.floor(elapsedMs / 1000)) });
+
+		if (elapsedMs >= POLL_TIMEOUT_MS) {
+			const message = 'Speed test timed out waiting for a result.';
+			if (isCurrent()) patchSpeedTestState(networkId, { running: false, error: message });
+			throw new Error(message);
+		}
+
+		try {
+			await delay(POLL_INTERVAL_MS, signal);
+		} catch (error) {
+			if (isCurrent()) patchSpeedTestState(networkId, { running: false });
+			throw error;
+		}
+
+		if (!isCurrent()) throw speedTestSupersededError();
+
+		let history: SpeedTestResult[];
+		try {
+			history = await api.networks.speedTestHistory(networkId, { limit: 1 });
+		} catch {
+			// Transient read failure while polling - keep waiting for the next tick rather than
+			// failing the whole test.
+			return null;
+		}
+
+		if (!isCurrent()) throw speedTestSupersededError();
+
+		const latest = history[0] ?? null;
+		if (latest && resultTime(latest) >= startedAtMs) {
+			patchSpeedTestState(networkId, {
+				running: false,
+				elapsedSeconds: Math.floor((Date.now() - startedAtMs) / 1000),
+				result: latest,
+				error: null
+			});
+			return latest;
+		}
+		return null;
+	}
+
 	return {
 		subscribe,
 
@@ -267,6 +351,9 @@ function createNetworksStore() {
 			const { signal } = options;
 			const token = Symbol('speedtest-run');
 			currentSpeedTestRuns.set(networkId, token);
+			// nosemgrep: javascript_timing_rule-possible-timing-attacks, rules_lgpl_javascript_crypto_rule-node-timing-attack
+			// Reference equality on a run-scoped Symbol used for reentrancy bookkeeping, not a
+			// secret/token comparison - there is nothing here for a timing side-channel to leak.
 			const isCurrent = () => currentSpeedTestRuns.get(networkId) === token;
 
 			if (signal?.aborted) {
@@ -280,87 +367,11 @@ function createNetworksStore() {
 				error: null
 			});
 
-			let startedAtMs: number;
-			try {
-				const start = await api.networks.speedTest(networkId);
-				startedAtMs = Date.parse(start.started_at);
-				if (Number.isNaN(startedAtMs)) {
-					// Defensive only - the backend contract guarantees `started_at`.
-					startedAtMs = Date.now();
-				}
-			} catch (error) {
-				if (isCurrent()) {
-					const message = error instanceof Error ? error.message : 'Failed to start speed test';
-					patchSpeedTestState(networkId, {
-						running: false,
-						elapsedSeconds: 0,
-						result: null,
-						error: message
-					});
-				}
-				throw error;
-			}
+			const startedAtMs = await startSpeedTest(networkId, isCurrent);
 
 			while (true) {
-				if (signal?.aborted) {
-					if (isCurrent()) {
-						patchSpeedTestState(networkId, { running: false });
-					}
-					throw speedTestAbortedError();
-				}
-				if (!isCurrent()) {
-					throw speedTestSupersededError();
-				}
-
-				const elapsedMs = Date.now() - startedAtMs;
-				patchSpeedTestState(networkId, {
-					elapsedSeconds: Math.max(0, Math.floor(elapsedMs / 1000))
-				});
-
-				if (elapsedMs >= POLL_TIMEOUT_MS) {
-					const message = 'Speed test timed out waiting for a result.';
-					if (isCurrent()) {
-						patchSpeedTestState(networkId, { running: false, error: message });
-					}
-					throw new Error(message);
-				}
-
-				try {
-					await delay(POLL_INTERVAL_MS, signal);
-				} catch (error) {
-					if (isCurrent()) {
-						patchSpeedTestState(networkId, { running: false });
-					}
-					throw error;
-				}
-
-				if (!isCurrent()) {
-					throw speedTestSupersededError();
-				}
-
-				let history: SpeedTestResult[];
-				try {
-					history = await api.networks.speedTestHistory(networkId, { limit: 1 });
-				} catch {
-					// Transient read failure while polling - keep waiting for the
-					// next tick rather than failing the whole test.
-					continue;
-				}
-
-				if (!isCurrent()) {
-					throw speedTestSupersededError();
-				}
-
-				const latest = history[0] ?? null;
-				if (latest && resultTime(latest) >= startedAtMs) {
-					patchSpeedTestState(networkId, {
-						running: false,
-						elapsedSeconds: Math.floor((Date.now() - startedAtMs) / 1000),
-						result: latest,
-						error: null
-					});
-					return latest;
-				}
+				const result = await pollSpeedTestOnce(networkId, startedAtMs, isCurrent, signal);
+				if (result) return result;
 			}
 		},
 

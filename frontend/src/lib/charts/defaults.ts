@@ -131,6 +131,61 @@ export function withAlpha(color: string, alpha: number): string {
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** The `plugins` block shared by every line/time-series chart, theme-aware. */
+function lineChartPlugins(
+	title: string,
+	valueSuffix: string,
+	colors: ThemeColors
+): ChartOptions<'line'>['plugins'] {
+	return {
+		legend: {
+			position: 'top',
+			labels: { color: colors.text }
+		},
+		title: {
+			display: !!title,
+			text: title,
+			color: colors.text
+		},
+		tooltip: {
+			backgroundColor: colors.surface,
+			borderColor: colors.border,
+			borderWidth: 1,
+			titleColor: colors.text,
+			bodyColor: colors.text,
+			callbacks: {
+				label: (context) => {
+					const value = context.parsed.y;
+					if (value === null || value === undefined) return '';
+					return `${context.dataset.label}: ${value.toFixed(2)} ${valueSuffix}`.trim();
+				}
+			}
+		}
+	};
+}
+
+/** The `scales` block shared by every line/time-series chart, theme-aware. */
+function lineChartScales(yAxisLabel: string, colors: ThemeColors): ChartOptions<'line'>['scales'] {
+	return {
+		x: {
+			type: 'time',
+			time: {
+				tooltipFormat: 'PPpp',
+				displayFormats: { hour: 'HH:mm', day: 'MMM d' }
+			},
+			title: { display: true, text: 'Time', color: colors.text },
+			grid: { color: colors.grid },
+			ticks: { color: colors.text }
+		},
+		y: {
+			beginAtZero: true,
+			title: { display: !!yAxisLabel, text: yAxisLabel, color: colors.text },
+			grid: { color: colors.grid },
+			ticks: { color: colors.text }
+		}
+	};
+}
+
 /** Base options shared by every line/time-series chart, theme-aware. */
 export function lineChartOptions(
 	opts: {
@@ -147,49 +202,8 @@ export function lineChartOptions(
 		responsive: true,
 		maintainAspectRatio: false,
 		interaction: { mode: 'index', intersect: false },
-		plugins: {
-			legend: {
-				position: 'top',
-				labels: { color: colors.text }
-			},
-			title: {
-				display: !!title,
-				text: title,
-				color: colors.text
-			},
-			tooltip: {
-				backgroundColor: colors.surface,
-				borderColor: colors.border,
-				borderWidth: 1,
-				titleColor: colors.text,
-				bodyColor: colors.text,
-				callbacks: {
-					label: (context) => {
-						const value = context.parsed.y;
-						if (value === null || value === undefined) return '';
-						return `${context.dataset.label}: ${value.toFixed(2)} ${valueSuffix}`.trim();
-					}
-				}
-			}
-		},
-		scales: {
-			x: {
-				type: 'time',
-				time: {
-					tooltipFormat: 'PPpp',
-					displayFormats: { hour: 'HH:mm', day: 'MMM d' }
-				},
-				title: { display: true, text: 'Time', color: colors.text },
-				grid: { color: colors.grid },
-				ticks: { color: colors.text }
-			},
-			y: {
-				beginAtZero: true,
-				title: { display: !!yAxisLabel, text: yAxisLabel, color: colors.text },
-				grid: { color: colors.grid },
-				ticks: { color: colors.text }
-			}
-		}
+		plugins: lineChartPlugins(title, valueSuffix, colors),
+		scales: lineChartScales(yAxisLabel, colors)
 	};
 }
 
