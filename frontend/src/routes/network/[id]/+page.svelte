@@ -14,7 +14,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { NetworkDetail } from '$api/types';
-	import { uiStore, networksStore, speedTestFor } from '$stores';
+	import { uiStore, networksStore, speedTestFor, speedTestHistoryStore } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
@@ -71,6 +71,13 @@
 	let networkId = $derived($page.params.id);
 	let speedTestProgress = $derived(speedTestFor(networkId ?? ''));
 
+	// Bug-fix follow-up (6.0.0): best available result for the Speed Test card - the poll
+	// result of a run on this page, else the network detail's own value, else the latest
+	// history entry (the Diagnostics tab's history card shares the same store).
+	let effectiveSpeedTest = $derived(
+		$speedTestProgress.result ?? network?.speed_test ?? $speedTestHistoryStore.results[0] ?? null
+	);
+
 	const tabs = [
 		{ id: 'overview', label: 'Overview' },
 		{ id: 'wifi', label: 'Wi-Fi & Guest' },
@@ -102,6 +109,7 @@
 		try {
 			const result = await api.networks.get(networkId, refresh);
 			network = result;
+			void speedTestHistoryStore.fetch(networkId, 10);
 		} catch (err) {
 			console.error('Failed to load network:', err);
 			error = err instanceof Error ? err.message : 'Failed to load network details';
@@ -131,6 +139,7 @@
 			if (network) {
 				network = { ...network, speed_test: result };
 			}
+			void speedTestHistoryStore.fetch(networkId, 10);
 		} catch (err) {
 			// A deliberate cancel (unmount, or superseded by a newer run for
 			// this network) is not a user-facing failure.
@@ -363,7 +372,7 @@
 					aria-labelledby="tab-diagnostics"
 				>
 					<NetworkSpeedTestCard
-						speedTest={network.speed_test}
+						speedTest={effectiveSpeedTest}
 						loading={speedTestLoading}
 						elapsedSeconds={$speedTestProgress.elapsedSeconds}
 						error={$speedTestProgress.error}

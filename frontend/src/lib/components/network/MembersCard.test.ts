@@ -112,8 +112,7 @@ describe('MembersCard', () => {
 		// resolves - same real-time cost as the "every source fails" retry
 		// test above, hence the same extended timeout.
 		await waitFor(
-			() =>
-				expect(screen.getByText('Some data unavailable for this account.')).toBeInTheDocument(),
+			() => expect(screen.getByText('Some data unavailable for this account.')).toBeInTheDocument(),
 			{ timeout: 5000 }
 		);
 		expect(screen.queryByRole('alert')).not.toBeInTheDocument();

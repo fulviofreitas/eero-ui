@@ -19,7 +19,8 @@
 		uiStore,
 		selectedNetworkId,
 		networksStore,
-		speedTestFor
+		speedTestFor,
+		speedTestHistoryStore
 	} from '$stores';
 	import PageHeader from '$components/common/PageHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
@@ -45,6 +46,13 @@
 	// non-nullable instead of needing a `speedTestProgress ? ... : ...` guard at each read.
 	let speedTestProgress = $derived.by(() => speedTestFor(network?.id ?? '__no-network__'));
 
+	// Bug-fix follow-up (6.0.0): the best available result for the Speed Test card - the
+	// poll result of a run on this page, else the network detail's own value, else the latest
+	// history entry (loaded alongside the network so a reload shows the last test too).
+	let effectiveSpeedTest = $derived(
+		$speedTestProgress.result ?? network?.speed_test ?? $speedTestHistoryStore.results[0] ?? null
+	);
+
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
 		await Promise.all([loadNetworkData(), devicesStore.fetch()]);
@@ -62,6 +70,10 @@
 				networkId = networks[0]?.id ?? null;
 			}
 			if (!networkId) return;
+
+			// Speed-test history is fetched alongside so the Speed Test card can show the last
+			// result even when the network detail carries none (bug-fix follow-up, 6.0.0).
+			void speedTestHistoryStore.fetch(networkId, 10);
 
 			// WP9 perf (plan § 6.1): these three reads are independent of each other (eeros/
 			// profiles are scoped server-side to the already-selected network, not to the
@@ -121,6 +133,7 @@
 			const result = await networksStore.runSpeedTest(network.id, { signal: controller.signal });
 			network = { ...network, speed_test: result };
 			uiStore.success('Speed test completed!');
+			void speedTestHistoryStore.fetch(network.id, 10);
 		} catch (error) {
 			const isAbort = error instanceof Error && error.name === 'AbortError';
 			const isSuperseded = error instanceof Error && error.message.includes('superseded');
@@ -237,6 +250,7 @@
 
 		<SpeedTestCard
 			{network}
+			speedTest={effectiveSpeedTest}
 			loading={speedTestLoading}
 			elapsedSeconds={$speedTestProgress.elapsedSeconds}
 			error={$speedTestProgress.error}
