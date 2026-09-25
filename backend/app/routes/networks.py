@@ -3546,6 +3546,10 @@ class SecuritySettingsResponse(BaseModel):
     sqm: bool | None = None
     thread: ThreadSummary | None = None
     updates: dict[str, Any] | None = None
+    # No dedicated getter exists (sdk-surface-map-v8.0.3.md WP8); read from
+    # the network envelope's own ``passpoint`` field, same source as the
+    # no-op guard in ``update_passpoint``. None when the key is absent.
+    passpoint: bool | None = None
 
 
 @router.get("/{network_id}/security", response_model=SecuritySettingsResponse)
@@ -3612,6 +3616,19 @@ async def get_network_security(
     except EeroException as e:
         _LOGGER.debug("Updates unavailable for %s: %s", network_id, e)
 
+    try:
+        raw_network = extract_data(await client.get_network(network_id))
+        raw_passpoint = raw_network.get("passpoint")
+        result["passpoint"] = (
+            coerce_bool(raw_passpoint, field_name="passpoint")
+            if raw_passpoint is not None
+            else None
+        )
+    except _PROPAGATE_FIRST:
+        raise
+    except EeroException as e:
+        _LOGGER.debug("Passpoint unavailable for %s: %s", network_id, e)
+
     return SecuritySettingsResponse(**result)
 
 
@@ -3669,6 +3686,18 @@ class AdvancedNetworkSettings(BaseModel):
     connection_mode: str | None = None
     power_saving: Any = None
     ddns: Any = None
+    # Read straight off the raw network envelope, same source as the no-op
+    # guard in ``update_nat_port_randomization``/``update_mlo_mode``. None
+    # when the key is absent (documented gap, sdk-surface-map-v8.0.3.md
+    # WP8).
+    nat_port_randomization: bool | None = None
+    mlo_mode: Literal["disabled", "single", "multi"] | None = None
+    # No dedicated getter and no reliable envelope key exist for this field:
+    # the network envelope's own ``proxied_nodes`` key is a *list* of eeros
+    # (an unrelated field), not this boolean setting - the same gap
+    # documented in ``update_proxied_nodes``. Always None until the SDK
+    # exposes a real source.
+    proxied_nodes_enabled: bool | None = None
 
 
 @router.get("/{network_id}/advanced", response_model=AdvancedNetworkSettings)
@@ -3676,19 +3705,36 @@ async def get_network_advanced(
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> AdvancedNetworkSettings:
-    """Get DHCP, connection mode, power saving and DDNS.
+    """Get DHCP, connection mode, power saving, DDNS, NAT port randomization
+    and MLO mode.
 
     These live only on the network envelope (sdk-surface-map-v8.0.3.md
-    WP6: "ABSENT - read from the network envelope"), so this reads
-    ``get_network`` rather than a dedicated endpoint.
+    WP6/WP8: "ABSENT - read from the network envelope"), so this reads
+    ``get_network`` rather than a dedicated endpoint. ``proxied_nodes_enabled``
+    has no reliable source and is always ``None`` (see class docstring).
     """
-    raw = await client.get_network(network_id)
-    network = normalize_network(extract_data(raw))
+    raw_network = extract_data(await client.get_network(network_id))
+    network = normalize_network(raw_network)
+
+    raw_nat = raw_network.get("nat_port_randomization")
+    nat_port_randomization = (
+        coerce_bool(raw_nat, field_name="nat_port_randomization")
+        if raw_nat is not None
+        else None
+    )
+
+    mlo_mode = raw_network.get("mlo_mode")
+    if mlo_mode not in ("disabled", "single", "multi"):
+        mlo_mode = None
+
     return AdvancedNetworkSettings(
         dhcp=normalize_dhcp(network.get("dhcp")),
         connection_mode=network.get("connection_mode"),
         power_saving=network.get("power_saving"),
         ddns=network.get("ddns"),
+        nat_port_randomization=nat_port_randomization,
+        mlo_mode=mlo_mode,
+        proxied_nodes_enabled=None,
     )
 
 

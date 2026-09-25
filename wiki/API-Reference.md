@@ -55,10 +55,10 @@ Conventions that apply to every route below:
 | `GET` | `/api/networks/{network_id}/invites` | `InvitesResponse` | |
 | `GET` | `/api/networks/{network_id}/backup-internet` | `BackupInternetResponse` | status, cellular usage and events |
 | `GET` | `/api/networks/{network_id}/backup-access-points` | `BackupAccessPointsResponse` | |
-| `GET` | `/api/networks/{network_id}/security` | `SecuritySettingsResponse` | WPA3, band steering, UPnP, IPv6, per-band WPA3 |
+| `GET` | `/api/networks/{network_id}/security` | `SecuritySettingsResponse` | WPA3, band steering, UPnP, IPv6, per-band WPA3, Passpoint |
 | `GET` | `/api/networks/{network_id}/subnets` | `SubnetsResponse` | |
 | `GET` | `/api/networks/{network_id}/multistaticip` | `MultiStaticIpResponse` | `404` from the cloud is reported as no config |
-| `GET` | `/api/networks/{network_id}/advanced` | `AdvancedNetworkSettings` | DHCP, connection mode, power saving, DDNS |
+| `GET` | `/api/networks/{network_id}/advanced` | `AdvancedNetworkSettings` | DHCP, connection mode, power saving, DDNS, NAT port randomization, MLO mode (`proxied_nodes_enabled` always `null` - no reliable source) |
 | `GET` | `/api/networks/{network_id}/power-saving/schedules` | `PowerSavingSchedulesResponse` | |
 | `GET` | `/api/networks/{network_id}/notifications` | `NotificationsResponse` | settings and unread flag |
 | `GET` | `/api/networks/{network_id}/notifications/history` | `NotificationHistoryResponse` | `400` bad paging |

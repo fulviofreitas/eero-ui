@@ -61,6 +61,7 @@ class TestNetworkSecurity:
             "get_sqm_settings",
             "get_thread",
             "get_updates",
+            "get_network",
         ):
             setattr(
                 authenticated_client,
@@ -84,8 +85,39 @@ class TestNetworkSecurity:
                 "sqm",
                 "thread",
                 "updates",
+                "passpoint",
             )
         )
+
+    async def test_passpoint_present_in_envelope(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_security_settings = AsyncMock(
+            return_value=make_raw_response({})
+        )
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response({"passpoint": True})
+        )
+
+        response = await auth_client.get("/api/networks/net-1/security")
+
+        assert response.status_code == 200
+        assert response.json()["passpoint"] is True
+
+    async def test_passpoint_absent_from_envelope(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_security_settings = AsyncMock(
+            return_value=make_raw_response({})
+        )
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response({"name": "Home"})
+        )
+
+        response = await auth_client.get("/api/networks/net-1/security")
+
+        assert response.status_code == 200
+        assert response.json()["passpoint"] is None
 
 
 class TestSubnets:
@@ -156,3 +188,46 @@ class TestAdvancedSettings:
         assert data["power_saving"] is True
         assert data["ddns"] == {"enabled": False}
         assert data["dhcp"]["starting_address"] == "10.0.0.10"
+        assert data["nat_port_randomization"] is None
+        assert data["mlo_mode"] is None
+        assert data["proxied_nodes_enabled"] is None
+
+    async def test_nat_port_randomization_and_mlo_mode_present(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "url": "/2.2/networks/net-1",
+                    "name": "Home",
+                    "nat_port_randomization": True,
+                    "mlo_mode": "multi",
+                }
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/advanced")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["nat_port_randomization"] is True
+        assert data["mlo_mode"] == "multi"
+        # No reliable source exists for this field (the envelope's
+        # ``proxied_nodes`` key is an unrelated list of eeros) - always None.
+        assert data["proxied_nodes_enabled"] is None
+
+    async def test_nat_port_randomization_and_mlo_mode_absent(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response(
+                {"url": "/2.2/networks/net-1", "name": "Home"}
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/advanced")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["nat_port_randomization"] is None
+        assert data["mlo_mode"] is None
