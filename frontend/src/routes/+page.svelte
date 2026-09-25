@@ -34,7 +34,7 @@
 	import EeroHealthSection from '$lib/components/dashboard/EeroHealthSection.svelte';
 	import { seriesColor, withAlpha } from '$lib/charts/defaults';
 
-	let network: NetworkDetail | null = $state(null);
+	let network = $state<NetworkDetail | null>(null);
 	let eeros: EeroSummary[] = $state([]);
 	let profiles: ProfileSummary[] = $state([]);
 	let loading = $state(true);

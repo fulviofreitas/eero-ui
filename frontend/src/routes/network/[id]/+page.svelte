@@ -56,7 +56,7 @@
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
-	let network: NetworkDetail | null = $state(null);
+	let network = $state<NetworkDetail | null>(null);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let speedTestLoading = $state(false);
