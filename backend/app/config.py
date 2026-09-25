@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class Settings(BaseModel):
@@ -32,16 +32,27 @@ class Settings(BaseModel):
     # VictoriaMetrics (embedded time-series database)
     victoria_metrics_url: str = "http://127.0.0.1:8428"
 
-    # Exporter session path (shared with eero-prometheus-exporter)
-    exporter_session_path: str = "/data/session/exporter-session.json"
+    # Metrics collector
+    collection_interval: int = 60  # seconds
 
-    # Optional: expose /metrics externally for Prometheus scraping
-    metrics_endpoint_enabled: bool = False
+    # eero-api SDK tuning (phase-6.0-revamp.md § 3.1, decision 6)
+    sdk_legacy_cookie: bool = False
+    sdk_get_retries: int = 1
 
-    class Config:
-        """Pydantic config."""
+    # Experimental writes gate (decision 6a) - unverified / settings-class
+    # SDK writes are hidden behind this flag until a route opts in.
+    experimental_writes: bool = False
 
-        env_prefix = "EERO_DASHBOARD_"
+    # Account-identity writes gate (SECURITY-SME finding, 2026-09-24):
+    # PUT /account/email, PUT /account/phone and their /verify counterparts
+    # change the credential eero uses to identify and recover the account.
+    # ``experimental_writes`` alone is not a strong enough gate for that -
+    # any operator who turns it on for, say, the DHCP screen would also
+    # silently expose account takeover-adjacent writes. This is a second,
+    # independent flag; both must be on for those four routes.
+    account_identity_writes: bool = False
+
+    model_config = ConfigDict(env_prefix="EERO_DASHBOARD_")
 
 
 def get_settings() -> Settings:
@@ -88,13 +99,25 @@ def get_settings() -> Settings:
         victoria_metrics_url=os.environ.get(
             "EERO_DASHBOARD_VICTORIA_METRICS_URL", "http://127.0.0.1:8428"
         ),
-        # Exporter session path (shared with eero-prometheus-exporter)
-        exporter_session_path=os.environ.get(
-            "EERO_EXPORTER_SESSION_PATH", "/data/session/exporter-session.json"
+        collection_interval=max(
+            10, int(os.environ.get("EERO_DASHBOARD_COLLECTION_INTERVAL", "60"))
         ),
-        # Optional: expose /metrics externally
-        metrics_endpoint_enabled=os.environ.get(
-            "EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED", "false"
+        sdk_legacy_cookie=os.environ.get(
+            "EERO_DASHBOARD_SDK_LEGACY_COOKIE", "false"
+        ).lower()
+        == "true",
+        # Clamped 0-3 (security review, 2026-09-24): an unbounded retry
+        # count from the environment could amplify load against the eero
+        # cloud API on every GET failure.
+        sdk_get_retries=min(
+            3, max(0, int(os.environ.get("EERO_DASHBOARD_SDK_GET_RETRIES", "1")))
+        ),
+        experimental_writes=os.environ.get(
+            "EERO_DASHBOARD_EXPERIMENTAL_WRITES", "false"
+        ).lower()
+        == "true",
+        account_identity_writes=os.environ.get(
+            "EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES", "false"
         ).lower()
         == "true",
     )

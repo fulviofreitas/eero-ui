@@ -7,7 +7,7 @@ the Eero Cloud API returns fields in unexpected shapes.
 
 from unittest.mock import AsyncMock
 
-from eero.exceptions import EeroException
+from eero.exceptions import EeroNotFoundException
 
 
 def make_raw_response(data, code: int = 200):
@@ -155,14 +155,15 @@ class TestGetEero:
         assert data["serial"] == "SN-EERO-1"
 
     async def test_get_eero_not_found(self, auth_client, authenticated_client):
-        """An SDK error maps to a 404 response."""
+        """EeroNotFoundException maps to a 404 response (phase-6.0-revamp.md § 3.4)."""
         authenticated_client.get_eero = AsyncMock(
-            side_effect=EeroException("not found")
+            side_effect=EeroNotFoundException("eero", "missing")
         )
 
         response = await auth_client.get("/api/eeros/missing")
 
         assert response.status_code == 404
+        assert response.json()["detail"] == "Eero not found."
 
     async def test_get_eero_requires_auth(self, async_client, mock_eero_client):
         """Unauthenticated requests are rejected."""

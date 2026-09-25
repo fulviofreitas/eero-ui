@@ -12,8 +12,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "slowapi>=0.1.9",
     "httpx>=0.28.0",
-    "eero-api>=6.0.0,<7.0.0",
-    "eero-prometheus-exporter>=3.18.7,<4.0.0",
+    "eero-api>=8.0.3,<9.0.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +28,15 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-v --tb=short"
+filterwarnings = [
+    # slowapi (our rate limiter dependency) calls the stdlib's deprecated
+    # asyncio.iscoroutinefunction internally (slowapi/extension.py:717);
+    # fires once per rate-limited route per request (~84x/run). Nothing
+    # in this repo calls it -- it is entirely inside slowapi's own code,
+    # so there is no call site here to fix. Narrowly scoped to slowapi's
+    # module so it can't hide a future DeprecationWarning of ours.
+    "ignore:'asyncio.iscoroutinefunction' is deprecated.*:DeprecationWarning:slowapi.extension",
+]
 
 [tool.coverage.run]
 source = ["app"]
@@ -58,6 +66,9 @@ include = ["app*"]
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff]
+required-version = ">=0.14"
 
 [tool.ruff.lint]
 ignore = [

@@ -1,0 +1,30 @@
+# Prospector configuration, read by Codacy's Prospector engine.
+#
+# Prospector runs in Codacy's container without this project's dependencies
+# installed, so its bundled pyright reports every `import fastapi` /
+# `import pydantic` / `import eero` as unresolved, and its bundled bandit
+# duplicates the standalone Bandit engine (which is already scoped by
+# .codacy.yml). Local CI is the source of truth: ruff, black and isort on
+# backend/ (pyproject.toml) and pytest on backend/tests.
+#
+# Keep pylint/pyflakes/mccabe/dodgy from Prospector; drop the two tools that
+# cannot work in that environment, and skip test modules whose bare `assert`
+# is required by pytest.
+
+strictness: medium
+test-warnings: false
+doc-warnings: false
+
+ignore-paths:
+  - backend/tests
+  - scripts
+  - graphify-out
+
+bandit:
+  run: false
+
+pyright:
+  run: false
+
+mypy:
+  run: false

@@ -4,15 +4,19 @@ These tests verify that data extraction and normalization works correctly
 with the raw API response format from eero-api v2.0+.
 """
 
+import pytest
+
 from app.transformers import (
     check_success,
     extract_data,
     extract_id_from_url,
     extract_list,
     normalize_device,
+    normalize_dns,
     normalize_eero,
     normalize_network,
     normalize_profile,
+    normalize_speed_test,
     normalize_status,
 )
 
@@ -116,6 +120,52 @@ class TestExtractIdFromUrl:
         """Should return None for empty input."""
         assert extract_id_from_url(None) is None
         assert extract_id_from_url("") is None
+
+
+class TestExtractIdFromUrlIdentifierGuard:
+    """extract_id_from_url output must be rejected by validate_identifier
+    when it is not a single, safe path segment (phase-6.0-revamp.md § 3.2,
+    § 2.5). extract_id_from_url() itself does no validation - it is the
+    caller's job (deps.get_network_id, routes/metrics.py) to run the result
+    through eero.api.links.validate_identifier before using it in a path or
+    a PromQL selector. These tests document exactly which extracted values
+    that guard must reject.
+    """
+
+    def test_rejects_query_string(self):
+        """A URL whose last segment carries a query string is rejected."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        extracted = extract_id_from_url("/2.2/networks/123?evil=1")
+        assert extracted == "123?evil=1"
+        with pytest.raises(EeroValidationException):
+            validate_identifier(extracted)
+
+    def test_rejects_dot_dot_traversal(self):
+        """A URL segment containing '..' is rejected even if regex-shaped."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        extracted = extract_id_from_url("/2.2/networks/..-evil")
+        assert extracted == "..-evil"
+        with pytest.raises(EeroValidationException):
+            validate_identifier(extracted)
+
+    def test_rejects_embedded_slash(self):
+        """A value containing an unescaped slash is rejected."""
+        from eero.api.links import validate_identifier
+        from eero.exceptions import EeroValidationException
+
+        with pytest.raises(EeroValidationException):
+            validate_identifier("abc/def")
+
+    def test_accepts_a_well_formed_id(self):
+        """A normal, single-segment id extracted from a URL is accepted."""
+        from eero.api.links import validate_identifier
+
+        extracted = extract_id_from_url("/2.2/networks/net-123_abc.def:1")
+        assert validate_identifier(extracted) == extracted
 
 
 class TestNormalizeStatus:
@@ -421,6 +471,121 @@ class TestNormalizeProfile:
         assert result["device_count"] == 1
 
 
+class TestNormalizeDns:
+    """Tests for normalize_dns function."""
+
+    def test_normalizes_full_shape(self):
+        """Should normalize both address families, caching and providers."""
+        raw_network = {
+            "dns": {
+                "mode": "custom",
+                "custom": {"ips": ["1.1.1.1", "1.0.0.1"]},
+                "parent": {"ips": ["8.8.8.8"]},
+                "caching": True,
+                "default_test_servers": [
+                    {
+                        "name": "Cloudflare",
+                        "ipv4": ["1.1.1.1", "1.0.0.1"],
+                        "ipv6": ["2606:4700:4700::1111", "2606:4700:4700::1001"],
+                    }
+                ],
+            },
+            "ipv6": {
+                "name_servers": {
+                    "mode": "custom",
+                    "custom": ["2606:4700:4700:0:0:0:0:1111"],
+                }
+            },
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"] == {"mode": "custom", "servers": ["1.1.1.1", "1.0.0.1"]}
+        # Fully-expanded IPv6 from the API is compressed on read.
+        assert result["ipv6"] == {
+            "mode": "custom",
+            "servers": ["2606:4700:4700::1111"],
+        }
+        assert result["caching"] is True
+        assert result["parent_ips"] == ["8.8.8.8"]
+        assert result["providers"] == [
+            {
+                "name": "Cloudflare",
+                "ipv4": ["1.1.1.1", "1.0.0.1"],
+                "ipv6": ["2606:4700:4700::1111", "2606:4700:4700::1001"],
+            }
+        ]
+
+    def test_tolerates_missing_dns_key(self):
+        """A network payload without a dns key should yield defaults."""
+        result = normalize_dns({})
+
+        assert result["ipv4"] == {"mode": "automatic", "servers": []}
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+        assert result["caching"] is False
+        assert result["parent_ips"] == []
+        assert result["providers"] == []
+
+    def test_tolerates_dns_none(self):
+        """A network payload with dns=None should yield defaults, not raise."""
+        result = normalize_dns({"dns": None})
+
+        assert result["ipv4"] == {"mode": "automatic", "servers": []}
+        assert result["caching"] is False
+
+    def test_tolerates_missing_ipv6_key(self):
+        """A network payload with no ipv6 key at all should not raise."""
+        raw_network = {
+            "dns": {"mode": "custom", "custom": {"ips": ["1.1.1.1"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"] == {"mode": "custom", "servers": ["1.1.1.1"]}
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+
+    def test_tolerates_ipv6_container_not_a_dict(self):
+        """A malformed ipv6 value should be ignored rather than raise."""
+        result = normalize_dns({"ipv6": "not-a-dict"})
+
+        assert result["ipv6"] == {"mode": "automatic", "servers": []}
+
+    def test_skips_unparseable_ip_entries(self):
+        """Unparseable entries in a server list are dropped, not raised."""
+        raw_network = {
+            "dns": {"mode": "custom", "custom": {"ips": ["1.1.1.1", "not-an-ip"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["servers"] == ["1.1.1.1"]
+
+    def test_filters_entries_by_family(self):
+        """An IPv6 literal in the ipv4 custom list is filtered out on read."""
+        raw_network = {
+            "dns": {
+                "mode": "custom",
+                "custom": {"ips": ["1.1.1.1", "2606:4700:4700::1111"]},
+            },
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["servers"] == ["1.1.1.1"]
+
+    def test_defaults_missing_mode_to_automatic(self):
+        """A missing mode field defaults to automatic for both families."""
+        raw_network = {
+            "dns": {"custom": {"ips": ["1.1.1.1"]}},
+            "ipv6": {"name_servers": {"custom": ["2606:4700:4700::1111"]}},
+        }
+
+        result = normalize_dns(raw_network)
+
+        assert result["ipv4"]["mode"] == "automatic"
+        assert result["ipv6"]["mode"] == "automatic"
+
+
 class TestCheckSuccess:
     """Tests for check_success function."""
 
@@ -442,3 +607,56 @@ class TestCheckSuccess:
     def test_failure_with_none(self):
         """Should return False for None."""
         assert check_success(None) is False
+
+
+class TestNormalizeSpeedTest:
+    """Tests for normalize_speed_test: the shape shared by
+    routes/networks.py's speedtest history route and services/collector.py
+    (phase-6.0-revamp.md § 3.3, § 8.1)."""
+
+    def test_full_entry_extracts_all_fields(self):
+        """down/up nested values, latency and date all surface at top level."""
+        raw = {
+            "down": {"value": 250.5},
+            "up": {"value": 20.1},
+            "latency": 12.3,
+            "date": "2026-01-01T00:00:00Z",
+        }
+
+        result = normalize_speed_test(raw)
+
+        assert result == {
+            "down_mbps": 250.5,
+            "up_mbps": 20.1,
+            "latency_ms": 12.3,
+            "date": "2026-01-01T00:00:00Z",
+        }
+
+    def test_missing_down_and_up_yield_none(self):
+        """An entry with neither down nor up still normalizes cleanly."""
+        result = normalize_speed_test({"date": "2026-01-01T00:00:00Z"})
+
+        assert result["down_mbps"] is None
+        assert result["up_mbps"] is None
+        assert result["latency_ms"] is None
+        assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_non_dict_down_or_up_does_not_raise(self):
+        """A malformed (non-dict) down/up value is treated as absent, not
+        as an AttributeError from calling .get() on it."""
+        result = normalize_speed_test({"down": "not-a-dict", "up": None})
+
+        assert result["down_mbps"] is None
+        assert result["up_mbps"] is None
+
+    def test_non_dict_input_does_not_raise(self):
+        """A completely malformed entry (not even a dict) normalizes to
+        all-None rather than raising."""
+        result = normalize_speed_test("not-a-dict")
+
+        assert result == {
+            "down_mbps": None,
+            "up_mbps": None,
+            "latency_ms": None,
+            "date": None,
+        }

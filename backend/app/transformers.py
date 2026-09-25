@@ -6,9 +6,214 @@ As of eero-api v2.0.0, all responses are raw JSON in the format:
 This module provides extraction and normalization functions.
 """
 
+import ipaddress
+import re
+import unicodedata
+from datetime import UTC, datetime
 from typing import Any
 
 from ._coercion import coerce_bool, coerce_int, coerce_numeric
+
+# Shared identifier/format validators (phase-6.0-revamp.md WP6): kept here
+# alongside ``is_unsafe_short_text`` since they are reused across
+# ``routes/networks.py``, ``routes/devices.py``, ``routes/profiles.py`` and
+# ``routes/eeros.py`` for query/body validation before any SDK call.
+_MAC_RE = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
+_DEVICE_TYPE_RE = re.compile(r"[a-z0-9_]{1,40}")
+
+# Identifier guard (security review, 2026-09-24): shared by every route that
+# interpolates a caller-supplied id into a URL path or PromQL selector.
+# Originally local to routes/metrics.py; moved here so routes/networks.py,
+# routes/profiles.py, routes/eeros.py and routes/devices.py share one
+# implementation. fullmatch (not match + "$") is deliberate: "$" in a Python
+# regex matches just before a trailing "\n" as well as at the true end of
+# string, so re.match(..., "$") would accept "abc\n" (delivered as
+# "abc%0A"). eero-api 8.0.3's own eero.api.links._validate_identifier has
+# the same "$" weakness, so the SDK's own validator is a second, redundant
+# layer, not the primary defense.
+_IDENTIFIER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
+
+try:
+    from eero.api.links import validate_identifier as _sdk_validate_identifier
+except ImportError:  # pragma: no cover - defensive only; present since 8.0.1
+    _sdk_validate_identifier = None
+
+
+class InvalidIdentifierError(ValueError):
+    """Raised by ``validate_path_id`` when a caller-supplied id is malformed.
+
+    Routes catch this and re-raise as ``HTTPException(400)`` - kept as a
+    plain ``ValueError`` subclass (rather than raising ``HTTPException``
+    directly from this module) so ``transformers.py`` stays framework-free.
+    """
+
+
+def validate_path_id(value: str) -> str:
+    """Validate a bare identifier before it is placed in a URL path or a
+    PromQL label selector.
+
+    Args:
+        value: The caller-supplied identifier.
+
+    Returns:
+        ``value`` unchanged, once validated.
+
+    Raises:
+        InvalidIdentifierError: If ``value`` is empty, contains ``..``, or
+            does not match the allowed identifier grammar.
+    """
+    if not value or ".." in value or not _IDENTIFIER_RE.fullmatch(value):
+        raise InvalidIdentifierError(value)
+    if _sdk_validate_identifier is not None:
+        try:
+            _sdk_validate_identifier(value)
+        except Exception as exc:  # eero.exceptions.EeroValidationException
+            raise InvalidIdentifierError(value) from exc
+    return value
+
+
+# Recursively stripped from every passthrough (undocumented-shape) API
+# response before it reaches the client (security review, 2026-09-24;
+# widened by SECURITY-SME finding, 2026-09-24). Credential-shaped keys the
+# eero cloud API is not contractually forbidden from including in one of
+# these payloads. ``key``/``credential`` are broad on their own - e.g. a
+# scan result's "channel" or a connection's "network_key" - so
+# ``_SENSITIVE_KEY_ALLOWLIST`` exempts specific, verified-safe key names
+# rather than narrowing the pattern itself.
+_SENSITIVE_KEY_RE = re.compile(
+    r"(pass|psk|secret|token|key|credential|invite_(url|code)|^code$|^pin$)",
+    re.IGNORECASE,
+)
+
+# Key names that would otherwise match ``_SENSITIVE_KEY_RE`` (via "key") but
+# are verified-safe structural/label fields in eero-api v8.0.3 responses,
+# not credential material. Exact-match only (not substring), so this never
+# widens the hole for anything like "network_key" or "api_key".
+#
+# - "key": the entitlement-feature list element's own identifier field
+#   (``get_entitlement_features``' ``data.features`` entries look like
+#   ``{"key": "eero_plus"}`` - sdk-surface-map-v8.0.3.md WP6; confirmed by
+#   test_entitlements.py::test_returns_all_sources_combined), not a
+#   cryptographic key.
+_SENSITIVE_KEY_ALLOWLIST: frozenset[str] = frozenset({"key"})
+
+
+def strip_sensitive_keys(value: Any) -> Any:
+    """Recursively remove credential-shaped keys from a raw API payload.
+
+    Applied to every "pass the raw dict/list through unchanged" response in
+    this backend - undocumented shapes from eero-api v8.0.3 may carry a
+    password, PSK, secret, token, credential, verification code/PIN, or
+    join-credential URL that must never reach the frontend. Matching is
+    case-insensitive and substring-based (``re.search``), so
+    ``guest_password``, ``ssid_psk``, ``network_key`` and ``invite_url``
+    are all caught; ``_SENSITIVE_KEY_ALLOWLIST`` exempts specific key names
+    known not to carry credential material.
+
+    Args:
+        value: A raw dict, list, or scalar from an API response.
+
+    Returns:
+        A deep copy of ``value`` with any dict key matching the sensitive
+        pattern (and not allowlisted) removed. Non-dict/list values are
+        returned unchanged.
+    """
+    if isinstance(value, dict):
+        return {
+            k: strip_sensitive_keys(v)
+            for k, v in value.items()
+            if str(k).lower() in _SENSITIVE_KEY_ALLOWLIST
+            or not _SENSITIVE_KEY_RE.search(str(k))
+        }
+    if isinstance(value, list):
+        return [strip_sensitive_keys(item) for item in value]
+    return value
+
+
+def is_valid_mac(value: str) -> bool:
+    """Check whether ``value`` is a lowercase colon-separated MAC address."""
+    return bool(_MAC_RE.fullmatch(value))
+
+
+def is_valid_device_type(value: str) -> bool:
+    """Conservative allowlist for ``set_device_type``.
+
+    eero-api v8.0.3 ships no device-type catalogue
+    (sdk-surface-map-v8.0.3.md WP6: "ABSENT in SDK"), so this accepts any
+    lowercase snake_case token up to 40 characters rather than a fixed
+    enum built from unverified sources.
+    """
+    return bool(_DEVICE_TYPE_RE.fullmatch(value))
+
+
+def is_valid_iso8601(value: str) -> bool:
+    """Check whether ``value`` parses as an ISO-8601 datetime (Z accepted)."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    """Treat a naive datetime as UTC so naive/aware comparisons never raise.
+
+    ``datetime.fromisoformat`` returns a naive ``datetime`` for an input
+    with no offset (e.g. ``"2026-09-24T00:00:00"``, as opposed to one
+    ending in ``Z`` or ``+00:00``). Comparing that directly against an
+    aware datetime raises ``TypeError`` (security review, 2026-09-24) -
+    surfacing as an unhandled 500 on a route that compares two
+    caller-supplied timestamps. Assume UTC for a naive value, matching this
+    codebase's convention everywhere else (``datetime.now(UTC)``).
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def parse_iso8601(value: str) -> datetime:
+    """Parse an ISO-8601 timestamp to an aware ``datetime`` (UTC if naive).
+
+    Callers must validate with ``is_valid_iso8601`` first; this raises
+    ``ValueError`` on a malformed value like ``datetime.fromisoformat``.
+    """
+    return _as_aware_utc(datetime.fromisoformat(value))
+
+
+def has_control_or_format_chars(value: str) -> bool:
+    """Check whether ``value`` contains a Unicode control or format character.
+
+    Shared by ``routes/networks.py`` (network name) and ``routes/devices.py``
+    (device nickname) - security review finding, 2026-09-24. Unicode
+    category ``Cc`` (control, e.g. NUL, CR, LF, ESC) and ``Cf`` (format,
+    e.g. zero-width joiners, bidi overrides, BOM) cover the characters that
+    can corrupt terminal/log output or spoof direction-sensitive UI text
+    without being visually obvious in a text box.
+
+    Args:
+        value: The candidate text.
+
+    Returns:
+        True if any character falls in the ``Cc``/``Cf`` categories.
+    """
+    return any(unicodedata.category(ch) in ("Cc", "Cf") for ch in value)
+
+
+def is_unsafe_short_text(value: str, *, max_bytes: int) -> bool:
+    """Check a short user-supplied text field for control/formatting chars
+    or a byte length over ``max_bytes``.
+
+    Args:
+        value: The candidate text, already stripped of leading/trailing
+            whitespace by the caller.
+        max_bytes: Maximum allowed UTF-8-encoded length.
+
+    Returns:
+        True if the value is unsafe (either check fails).
+    """
+    if has_control_or_format_chars(value):
+        return True
+    return len(value.encode()) > max_bytes
 
 
 def _as_str_list(value: Any) -> list[str] | None:
@@ -269,6 +474,7 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
         "created_at": raw.get("created_at"),
         "geo_ip": raw.get("geo_ip"),
         "dns": raw.get("dns"),
+        "ipv6": raw.get("ipv6"),
         "premium_dns": raw.get("premium_dns"),
         "updates": raw.get("updates"),
         "ddns": raw.get("ddns"),
@@ -600,6 +806,29 @@ def normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a single raw speed-test result to a consistent shape.
+
+    Shared by ``routes/networks.py`` and ``services/collector.py`` so both
+    consumers of ``get_speed_tests`` agree on where ``down``/``up``/``date``
+    live (phase-6.0-revamp.md § 3.3, § 8.1).
+
+    Args:
+        raw: One entry from ``get_speed_tests``' result list.
+
+    Returns:
+        A dict with ``down_mbps``, ``up_mbps``, ``latency_ms`` and ``date``.
+    """
+    down = raw.get("down") if isinstance(raw, dict) else None
+    up = raw.get("up") if isinstance(raw, dict) else None
+    return {
+        "down_mbps": down.get("value") if isinstance(down, dict) else None,
+        "up_mbps": up.get("value") if isinstance(up, dict) else None,
+        "latency_ms": raw.get("latency") if isinstance(raw, dict) else None,
+        "date": raw.get("date") if isinstance(raw, dict) else None,
+    }
+
+
 def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
     """Normalize DHCP data to frontend-expected format.
 
@@ -642,6 +871,106 @@ def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
         return result
 
     return None
+
+
+def _normalize_ip_list(value: Any, family: int | None = None) -> list[str]:
+    """Coerce a raw value into a list of normalised (compressed) IP strings.
+
+    Un-parseable entries are skipped rather than raised, since this is used
+    exclusively on read paths where tolerance matters more than strictness.
+
+    Args:
+        value: Raw value from the API response (expected to be a list).
+        family: If given (4 or 6), entries of the other family are skipped.
+
+    Returns:
+        A list of normalised IP address strings.
+    """
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            continue
+        try:
+            address = ipaddress.ip_address(entry.strip())
+        except ValueError:
+            continue
+        if family is not None and address.version != family:
+            continue
+        result.append(str(address))
+    return result
+
+
+def normalize_dns(raw_network: dict[str, Any]) -> dict[str, Any]:
+    """Normalize DNS settings from a raw network response.
+
+    The Eero API stores IPv4 and IPv6 DNS configuration as two independent,
+    asymmetrically-shaped objects on the network resource:
+
+        data.dns.mode                  "custom" | "automatic"
+        data.dns.custom.ips            [...]
+        data.dns.parent.ips            [...]              (ISP upstream, read-only)
+        data.dns.caching               bool
+        data.dns.default_test_servers  [{name, ipv4, ipv6}, ...]
+        data.ipv6.name_servers.mode    "custom" | "automatic"
+        data.ipv6.name_servers.custom  [...]
+
+    IPv6 addresses are stored fully expanded by the API (e.g.
+    ``2606:4700:4700:0:0:0:0:1111``); this function normalises every address
+    through ``ipaddress`` so servers are always emitted in compressed form.
+
+    Args:
+        raw_network: Raw network data (not yet extracted/normalized).
+
+    Returns:
+        Normalized DNS dictionary matching the shared frontend/backend contract.
+    """
+    dns = raw_network.get("dns")
+    if not isinstance(dns, dict):
+        dns = {}
+
+    ipv6_container = raw_network.get("ipv6")
+    if not isinstance(ipv6_container, dict):
+        ipv6_container = {}
+    name_servers = ipv6_container.get("name_servers")
+    if not isinstance(name_servers, dict):
+        name_servers = {}
+
+    ipv4_custom = dns.get("custom")
+    if not isinstance(ipv4_custom, dict):
+        ipv4_custom = {}
+    ipv4_servers = _normalize_ip_list(ipv4_custom.get("ips"), family=4)
+
+    ipv6_servers = _normalize_ip_list(name_servers.get("custom"), family=6)
+
+    parent = dns.get("parent")
+    if not isinstance(parent, dict):
+        parent = {}
+    parent_ips = _normalize_ip_list(parent.get("ips"))
+
+    providers: list[dict[str, Any]] = []
+    for entry in dns.get("default_test_servers") or []:
+        if not isinstance(entry, dict):
+            continue
+        providers.append(
+            {
+                "name": entry.get("name"),
+                "ipv4": _normalize_ip_list(entry.get("ipv4"), family=4),
+                "ipv6": _normalize_ip_list(entry.get("ipv6"), family=6),
+            }
+        )
+
+    ipv4_mode = dns.get("mode") or "automatic"
+    ipv6_mode = name_servers.get("mode") or "automatic"
+
+    return {
+        "ipv4": {"mode": ipv4_mode, "servers": ipv4_servers},
+        "ipv6": {"mode": ipv6_mode, "servers": ipv6_servers},
+        "caching": bool(coerce_bool(dns.get("caching"))),
+        "parent_ips": parent_ips,
+        "providers": providers,
+    }
 
 
 def check_success(raw_response: Any) -> bool:

@@ -4,13 +4,21 @@
   Displays status with colored indicator.
 -->
 <script lang="ts">
-	export let status:
-		'online' | 'offline' | 'connected' | 'disconnected' | 'blocked' | 'paused' | 'warning' | string;
-	export let showDot: boolean = true;
-	export let size: 'sm' | 'md' = 'md';
+	interface Props {
+		status:
+			| 'online'
+			| 'offline'
+			| 'connected'
+			| 'disconnected'
+			| 'blocked'
+			| 'paused'
+			| 'warning'
+			| string;
+		showDot?: boolean;
+		size?: 'sm' | 'md';
+	}
 
-	$: statusClass = getStatusClass(status);
-	$: label = getLabel(status);
+	let { status, showDot = true, size = 'md' }: Props = $props();
 
 	function getStatusClass(s: string): string {
 		const normalized = s.toLowerCase();
@@ -28,6 +36,8 @@
 		if (normalized === 'yellow') return 'Warning';
 		return s.charAt(0).toUpperCase() + s.slice(1);
 	}
+	let statusClass = $derived(getStatusClass(status));
+	let label = $derived(getLabel(status));
 </script>
 
 <span class="badge badge-{statusClass} {size === 'sm' ? 'badge-sm' : ''}">

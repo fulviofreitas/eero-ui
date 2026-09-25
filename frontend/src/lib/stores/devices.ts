@@ -5,7 +5,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { api } from '$api/client';
+import { api, ApiClientError } from '$api/client';
 import type { DeviceSummary } from '$api/types';
 
 // ============================================
@@ -58,6 +58,100 @@ const initialFilters: DeviceFilters = {
 	sortBy: 'name',
 	sortOrder: 'asc'
 };
+
+/** Default filter state, exported for callers (DeviceList's URL/localStorage fallback chain) that need it without importing the whole store. */
+export const defaultDeviceFilters: DeviceFilters = initialFilters;
+export type { DeviceFilters };
+
+/**
+ * URL-encoded filters (WP9 § 6.2 Tier 3 "URL-encoded, debounced, persisted filters").
+ *
+ * Query keys are short and stable (`q`/`status`/`conn`/`band`/`sort`/`dir`) rather than mirroring
+ * the store's own field names 1:1, so the URL stays a shareable/bookmarkable link rather than an
+ * internal implementation detail leaking into it.
+ */
+export const DEVICE_FILTERS_STORAGE_KEY = 'eero-ui:device-filters';
+const DEVICE_FILTER_QUERY_KEYS = ['q', 'status', 'conn', 'band', 'sort', 'dir'] as const;
+
+const VALID_STATUS = new Set<DeviceFilters['status']>([
+	'all',
+	'connected',
+	'disconnected',
+	'blocked'
+]);
+const VALID_CONNECTION = new Set<DeviceFilters['connectionType']>(['all', 'wireless', 'wired']);
+const VALID_FREQUENCY = new Set<DeviceFilters['frequency']>(['all', '2.4GHz', '5GHz', '6GHz']);
+const VALID_SORT_BY = new Set<DeviceFilters['sortBy']>([
+	'name',
+	'ip',
+	'mac',
+	'hostname',
+	'manufacturer',
+	'deviceType',
+	'connection',
+	'signal',
+	'connectedTo',
+	'profile',
+	'last_active'
+]);
+const VALID_SORT_ORDER = new Set<DeviceFilters['sortOrder']>(['asc', 'desc']);
+
+/** True when the URL carries any of the device-filter query keys - used to decide whether the URL or localStorage wins on initial load. */
+export function hasDeviceFilterParams(params: URLSearchParams): boolean {
+	return DEVICE_FILTER_QUERY_KEYS.some((key) => params.has(key));
+}
+
+/** Serialize filters to URL query params, omitting anything at its default value so a "clean" filter state produces a clean URL. */
+export function deviceFiltersToSearchParams(filters: DeviceFilters): URLSearchParams {
+	const params = new URLSearchParams();
+	if (filters.search) params.set('q', filters.search);
+	if (filters.status !== initialFilters.status) params.set('status', filters.status);
+	if (filters.connectionType !== initialFilters.connectionType) {
+		params.set('conn', filters.connectionType);
+	}
+	if (filters.frequency !== initialFilters.frequency) params.set('band', filters.frequency);
+	if (filters.sortBy !== initialFilters.sortBy) params.set('sort', filters.sortBy);
+	if (filters.sortOrder !== initialFilters.sortOrder) params.set('dir', filters.sortOrder);
+	return params;
+}
+
+/** Parse filters from URL query params, falling back to defaults for anything missing or invalid. */
+export function deviceFiltersFromSearchParams(params: URLSearchParams): DeviceFilters {
+	const status = params.get('status');
+	const conn = params.get('conn');
+	const band = params.get('band');
+	const sort = params.get('sort');
+	const dir = params.get('dir');
+	return {
+		search: params.get('q') ?? initialFilters.search,
+		status: VALID_STATUS.has(status as DeviceFilters['status'])
+			? (status as DeviceFilters['status'])
+			: initialFilters.status,
+		connectionType: VALID_CONNECTION.has(conn as DeviceFilters['connectionType'])
+			? (conn as DeviceFilters['connectionType'])
+			: initialFilters.connectionType,
+		frequency: VALID_FREQUENCY.has(band as DeviceFilters['frequency'])
+			? (band as DeviceFilters['frequency'])
+			: initialFilters.frequency,
+		sortBy: VALID_SORT_BY.has(sort as DeviceFilters['sortBy'])
+			? (sort as DeviceFilters['sortBy'])
+			: initialFilters.sortBy,
+		sortOrder: VALID_SORT_ORDER.has(dir as DeviceFilters['sortOrder'])
+			? (dir as DeviceFilters['sortOrder'])
+			: initialFilters.sortOrder
+	};
+}
+
+/** Parse filters persisted to localStorage, tolerating missing/malformed JSON (private-mode quota, older shape, etc). */
+export function deviceFiltersFromStorage(raw: string | null): DeviceFilters {
+	if (!raw) return { ...initialFilters };
+	try {
+		const parsed = JSON.parse(raw) as Partial<DeviceFilters>;
+		return { ...initialFilters, ...parsed };
+	} catch {
+		return { ...initialFilters };
+	}
+}
 
 // ============================================
 // Query Parser
@@ -113,14 +207,6 @@ function parseSearchQuery(search: string): ParsedQuery {
 			// Remove this match from freeText
 			freeText = freeText.replace(match[0], '').trim();
 		}
-	}
-
-	// Debug: Log parsed query
-	if (fieldFilters.size > 0) {
-		console.log('[DeviceFilter] Parsed query:', {
-			freeText,
-			fieldFilters: Object.fromEntries(fieldFilters)
-		});
 	}
 
 	return { freeText, fieldFilters };
@@ -212,33 +298,37 @@ function createDevicesStore() {
 		},
 
 		/**
-		 * Block a device (with optimistic update)
+		 * Block a device.
+		 *
+		 * Unverified (plan § 5): `block_device` resolves a MAC server-side and
+		 * posts to the blacklist, but is not on the SDK's verified-write
+		 * allowlist, and can 422 when the device has no known MAC to block
+		 * by. This is therefore PESSIMISTIC - unlike `unblockDevice` and
+		 * `setNickname` below (both Verified), `blocked` is only flipped once
+		 * the API confirms it. The caller is responsible for a ConfirmDialog
+		 * stating the action is not verified end-to-end before calling this.
 		 */
 		async blockDevice(deviceId: string): Promise<boolean> {
-			// Optimistic update
-			update((s) => ({
-				...s,
-				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
-			}));
-
 			try {
 				const result = await api.devices.block(deviceId);
 				if (!result.success) {
 					throw new Error(result.message || 'Failed to block device');
 				}
-				return true;
-			} catch (error) {
-				// Rollback
 				update((s) => ({
 					...s,
-					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: false } : d))
+					devices: s.devices.map((d) => (d.id === deviceId ? { ...d, blocked: true } : d))
 				}));
+				return true;
+			} catch (error) {
+				if (error instanceof ApiClientError && error.status === 422) {
+					throw new Error(error.detail || 'Device has no known MAC address.', { cause: error });
+				}
 				throw error;
 			}
 		},
 
 		/**
-		 * Unblock a device (with optimistic update)
+		 * Unblock a device (with optimistic update). Verified (plan § 5).
 		 */
 		async unblockDevice(deviceId: string): Promise<boolean> {
 			// Optimistic update
@@ -261,6 +351,51 @@ function createDevicesStore() {
 				}));
 				throw error;
 			}
+		},
+
+		/**
+		 * Bulk block (WP9 § 6.2 Tier 3 "bulk block/unblock"). Runs sequentially, one
+		 * `blockDevice` per id, so each device's own pessimistic/unverified/422-on-no-MAC
+		 * behaviour is unchanged - this only aggregates the per-device outcomes rather than
+		 * introducing a new bulk-specific code path.
+		 */
+		async blockMany(
+			deviceIds: string[]
+		): Promise<{ ok: string[]; failed: { id: string; message: string }[] }> {
+			const ok: string[] = [];
+			const failed: { id: string; message: string }[] = [];
+			for (const id of deviceIds) {
+				try {
+					await this.blockDevice(id);
+					ok.push(id);
+				} catch (error) {
+					failed.push({
+						id,
+						message: error instanceof Error ? error.message : 'Failed to block device'
+					});
+				}
+			}
+			return { ok, failed };
+		},
+
+		/** Bulk unblock - same sequential aggregation as blockMany, over the Verified `unblockDevice`. */
+		async unblockMany(
+			deviceIds: string[]
+		): Promise<{ ok: string[]; failed: { id: string; message: string }[] }> {
+			const ok: string[] = [];
+			const failed: { id: string; message: string }[] = [];
+			for (const id of deviceIds) {
+				try {
+					await this.unblockDevice(id);
+					ok.push(id);
+				} catch (error) {
+					failed.push({
+						id,
+						message: error instanceof Error ? error.message : 'Failed to unblock device'
+					});
+				}
+			}
+			return { ok, failed };
 		},
 
 		/**
@@ -304,7 +439,7 @@ function createDevicesStore() {
 		},
 
 		/**
-		 * Set device nickname
+		 * Set device nickname (with optimistic update). Verified (plan § 5).
 		 */
 		async setNickname(deviceId: string, nickname: string): Promise<boolean> {
 			const currentState = get({ subscribe });
@@ -340,6 +475,56 @@ function createDevicesStore() {
 		},
 
 		/**
+		 * Set a device's type (with optimistic update). Verified (plan § 5,
+		 * phase-6.0-revamp.md § 7 WP6 deliverable 4).
+		 */
+		async setDeviceType(deviceId: string, deviceType: string): Promise<boolean> {
+			const currentState = get({ subscribe });
+			const device = currentState.devices.find((d) => d.id === deviceId);
+			const previousType = device?.device_type ?? null;
+
+			// Optimistic update
+			update((s) => ({
+				...s,
+				devices: s.devices.map((d) => (d.id === deviceId ? { ...d, device_type: deviceType } : d))
+			}));
+
+			try {
+				const result = await api.devices.setType(deviceId, deviceType);
+				if (!result.success) {
+					throw new Error(result.message || 'Failed to set device type');
+				}
+				return true;
+			} catch (error) {
+				// Rollback
+				update((s) => ({
+					...s,
+					devices: s.devices.map((d) =>
+						d.id === deviceId ? { ...d, device_type: previousType } : d
+					)
+				}));
+				throw error;
+			}
+		},
+
+		/**
+		 * Deny/allow a single device's secondary-WAN access
+		 * (phase-6.0-revamp.md § 5, § 7 WP8, family 10). Settings-class by
+		 * its own SDK docstring - treated as a mesh reboot, so this is
+		 * PESSIMISTIC (no optimistic flip): `deny` only changes once the API
+		 * confirms it. No dedicated getter exists on `DeviceSummary`/
+		 * `DeviceDetail`, so this does not touch the devices list - the
+		 * caller (the device detail page) owns its own local state.
+		 */
+		async setSecondaryWanAccess(deviceId: string, deny: boolean): Promise<boolean> {
+			const result = await api.devices.setSecondaryWanAccess(deviceId, deny);
+			if (!result.success) {
+				throw new Error('Failed to update secondary WAN access');
+			}
+			return result.changed;
+		},
+
+		/**
 		 * Clear all data
 		 */
 		clear(): void {
@@ -361,9 +546,7 @@ export const filteredDevices = derived([devicesStore, deviceFilters], ([$devices
 
 		// Apply field-specific filters
 		if (fieldFilters.size > 0) {
-			const beforeCount = result.length;
 			result = result.filter((d) => matchesFieldFilters(d, fieldFilters));
-			console.log(`[DeviceFilter] Field filter: ${beforeCount} → ${result.length} devices`);
 		}
 
 		// Apply free text search (case-insensitive across all text fields)

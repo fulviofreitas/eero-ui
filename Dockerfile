@@ -70,8 +70,6 @@ COPY --from=vm-downloader /tmp/victoria-metrics-prod /usr/local/bin/victoria-met
 COPY backend/pyproject.toml ./backend/
 
 # Install Python dependencies with uv and cache mount for faster rebuilds
-# Note: eero-prometheus-exporter is declared in pyproject.toml
-# and includes eero-api as a transitive dependency
 WORKDIR /app/backend
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv pip install --system .
@@ -89,7 +87,7 @@ RUN chmod +x /app/container-start.sh
 
 # Create data directories
 # - /data/victoria-metrics: Time-series storage for VictoriaMetrics
-# - /data/session: Session storage shared between FastAPI and eero-prometheus-exporter
+# - /data/session: eero-api session/credential file, owned by FastAPI only
 RUN mkdir -p /data/victoria-metrics /data/session && chmod -R 755 /data
 
 # Set environment variables
@@ -100,11 +98,8 @@ ENV EERO_DASHBOARD_COOKIE_FILE=/data/session/session.json
 # Metrics collection configuration
 ENV EERO_DASHBOARD_COLLECTION_INTERVAL=60
 ENV EERO_DASHBOARD_METRICS_RETENTION=1y
-ENV EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED=false
-# Shared session path for eero-prometheus-exporter
-ENV EERO_EXPORTER_SESSION_PATH=/data/session/exporter-session.json
 
-# Expose port (FastAPI only - VictoriaMetrics and exporter are internal)
+# Expose port (FastAPI only - VictoriaMetrics is internal/loopback-only)
 EXPOSE 8000
 
 # Run all services via container start script

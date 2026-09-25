@@ -6,8 +6,26 @@
 <script lang="ts">
 	import { confirmDialog, uiStore } from '$stores';
 	import { fade, scale } from 'svelte/transition';
+	import { trapFocus } from '$lib/utils/focusTrap';
 
-	let loading = false;
+	let loading = $state(false);
+
+	// A5 (WP5 a11y fix): restore focus to the opener on close, keyed off `$confirmDialog` itself
+	// rather than this element unmounting - unmount only happens after the close `transition:`
+	// outro finishes, which is both a visible delay and unreliable in jsdom (no real Web
+	// Animations timing). See focusTrap.ts for the corresponding note on why the trap action
+	// itself does not handle this.
+	// `$effect.pre` (runs before the DOM update that mounts the dialog and its `trapFocus`
+	// action) so the opener is captured before that action's own initial-focus steals it.
+	let openerEl: HTMLElement | null = null;
+	$effect.pre(() => {
+		if ($confirmDialog) {
+			openerEl = document.activeElement as HTMLElement | null;
+		} else if (openerEl) {
+			openerEl.focus();
+			openerEl = null;
+		}
+	});
 
 	async function handleConfirm() {
 		if (!$confirmDialog) return;
@@ -22,6 +40,7 @@
 	}
 
 	function handleCancel() {
+		$confirmDialog?.onCancel?.();
 		uiStore.closeConfirm();
 	}
 
@@ -32,19 +51,31 @@
 	}
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if $confirmDialog}
-	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-	<div class="modal-backdrop" transition:fade={{ duration: 150 }} on:click={handleCancel}>
-		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		transition:fade={{ duration: 150 }}
+		onclick={handleCancel}
+		onkeydown={(e) => e.key === 'Escape' && handleCancel()}
+	>
+		<!-- The click handler here only stops propagation to the backdrop (so clicking inside the
+		     dialog doesn't close it) - it's not a user-facing interactive gesture of its own.
+		     onkeydown is a deliberate no-op (never stopPropagation on keydown: Escape must still
+		     bubble to the <svelte:window> handler above) that satisfies the a11y rule pairing every
+		     click handler with a keyboard one, without duplicating the Escape logic. -->
 		<div
 			class="modal"
 			transition:scale={{ duration: 150, start: 0.95 }}
-			on:click|stopPropagation
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={() => {}}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"
+			tabindex="-1"
+			use:trapFocus
 		>
 			<h2 id="confirm-title" class="modal-title">
 				{$confirmDialog.title}
@@ -54,13 +85,21 @@
 				{$confirmDialog.message}
 			</p>
 
+			{#if $confirmDialog.details && $confirmDialog.details.length > 0}
+				<ul class="modal-details">
+					{#each $confirmDialog.details as detail}
+						<li>{detail}</li>
+					{/each}
+				</ul>
+			{/if}
+
 			<div class="modal-actions">
-				<button class="btn btn-secondary" on:click={handleCancel} disabled={loading}>
+				<button class="btn btn-secondary" onclick={handleCancel} disabled={loading}>
 					{$confirmDialog.cancelText || 'Cancel'}
 				</button>
 				<button
 					class="btn {$confirmDialog.danger ? 'btn-danger' : 'btn-primary'}"
-					on:click={handleConfirm}
+					onclick={handleConfirm}
 					disabled={loading}
 				>
 					{#if loading}
@@ -81,7 +120,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 100;
+		z-index: var(--z-modal);
 	}
 
 	.modal {
@@ -102,6 +141,15 @@
 	.modal-message {
 		color: var(--color-text-secondary);
 		margin-bottom: var(--space-6);
+	}
+
+	.modal-details {
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-6);
+		padding-left: var(--space-5);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
 	.modal-actions {

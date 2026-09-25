@@ -1,7 +1,12 @@
 <!--
   Profile Detail Page
-  
+
   Detailed view of a profile with associated devices.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/profile/* feature components; this
+  file is now data fetching + layout + composition only. Behaviour unchanged except:
+  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading (item 4) in place
+  of the previous back-link + full-block spinner.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -11,18 +16,34 @@
 	import type { ProfileSummary, ProfileDevice } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import DetailHeader from '$components/common/DetailHeader.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import ProfileStatusCard from '$lib/components/profile/ProfileStatusCard.svelte';
+	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
+	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
+	import ProfileSchedulesCard from '$lib/components/profile/ProfileSchedulesCard.svelte';
+	import ProfileContentFilterCard from '$lib/components/profile/ProfileContentFilterCard.svelte';
+	import ProfileBlockedApplicationsCard from '$lib/components/profile/ProfileBlockedApplicationsCard.svelte';
+	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
+	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
+	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import PremiumGate from '$components/common/PremiumGate.svelte';
 
-	let profile: ProfileSummary | null = null;
-	let loading = true;
-	let error: string | null = null;
-	let actionLoading = false;
-	let viewMode: 'blocks' | 'list' = 'blocks';
-	let showRenameModal = false;
-	let renameValue = '';
-	let renaming = false;
+	let profile = $state<ProfileSummary | null>(null);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let actionLoading = $state(false);
+	let showRenameModal = $state(false);
+	let renameValue = $state('');
+	let renaming = $state(false);
 
-	$: profileId = $page.params.id;
-	$: devices = profile?.devices || [];
+	function goToDevice(device: ProfileDevice) {
+		if (device.id) goto(`/devices/${device.id}`);
+	}
+
+	let profileId = $derived($page.params.id);
+	let devices = $derived(profile?.devices || []);
 
 	onMount(async () => {
 		await fetchProfile();
@@ -35,12 +56,12 @@
 			return;
 		}
 
+		// Stale-while-revalidate: keep the previous `profile` on screen while this
+		// refetch is in flight rather than blanking the page.
 		loading = true;
 		error = null;
 		try {
 			const result = await api.profiles.get(profileId, refresh);
-			console.log('Profile detail:', result);
-			console.log('Profile devices:', result.devices);
 			profile = result;
 		} catch (err) {
 			console.error('Failed to load profile:', err);
@@ -127,22 +148,18 @@
 		});
 	}
 
-	function getDeviceKey(device: ProfileDevice, index: number): string {
-		return device.id || device.mac || `device-${index}`;
-	}
-
 	function openRenameModal() {
 		renameValue = profile?.name ?? '';
 		showRenameModal = true;
 	}
 
-	async function handleRenameProfile() {
-		const name = renameValue.trim();
-		if (!name || !profileId) return;
+	async function handleRenameProfile(name: string) {
+		const trimmed = name.trim();
+		if (!trimmed || !profileId) return;
 		renaming = true;
 		try {
-			profile = await api.profiles.rename(profileId, name);
-			uiStore.success(`Profile renamed to "${name}"`);
+			profile = await api.profiles.rename(profileId, trimmed);
+			uiStore.success(`Profile renamed to "${trimmed}"`);
 			showRenameModal = false;
 		} catch (err) {
 			uiStore.error(err instanceof Error ? err.message : 'Failed to rename profile');
@@ -159,9 +176,13 @@
 			confirmText: 'Delete',
 			danger: true,
 			onConfirm: async () => {
-				await api.profiles.delete(profileId);
-				uiStore.success('Profile deleted');
-				goto('/profiles');
+				try {
+					await api.profiles.delete(profileId);
+					uiStore.success('Profile deleted');
+					goto('/profiles');
+				} catch (err) {
+					uiStore.error(err instanceof Error ? err.message : 'Failed to delete profile');
+				}
 			}
 		});
 	}
@@ -172,331 +193,107 @@
 </svelte:head>
 
 <div class="profile-detail-page">
-	<!-- Back navigation -->
-	<nav class="breadcrumb">
-		<a href="/profiles" class="back-link">← Back to Profiles</a>
-	</nav>
-
-	{#if loading}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading profile...</span>
-		</div>
+	{#if loading && !profile}
+		<Skeleton variant="card" height="100px" />
+		<Skeleton variant="table-rows" rows={4} columns={5} />
 	{:else if error}
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" on:click={() => fetchProfile(true)}> Try Again </button>
-				<button class="btn btn-ghost" on:click={() => goto('/profiles')}> Back to Profiles </button>
+				<button class="btn btn-secondary" onclick={() => fetchProfile(true)}> Try Again </button>
+				<button class="btn btn-ghost" onclick={() => goto('/profiles')}> Back to Profiles </button>
 			</div>
 		</div>
 	{:else if profile}
-		<!-- Header -->
-		<header class="detail-header">
-			<div class="header-info">
-				<div class="header-title">
-					<span class="profile-icon">👤</span>
-					<h1>{profile.name || 'Unknown Profile'}</h1>
-				</div>
-				<div class="header-meta">
-					<StatusBadge status={profile.paused ? 'paused' : 'online'} />
-					<span class="text-muted">•</span>
-					<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
-				</div>
-			</div>
-			<div class="header-actions">
+		<DetailHeader
+			backHref="/profiles"
+			backLabel="Back to profiles"
+			title={profile.name || 'Unknown Profile'}
+		>
+			{#snippet status()}
+				<StatusBadge status={profile!.paused ? 'paused' : 'online'} />
+				<span class="text-muted">•</span>
+				<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
+			{/snippet}
+			{#snippet actions()}
 				<button
 					class="btn btn-secondary"
-					on:click={() => fetchProfile(true)}
+					onclick={() => fetchProfile(true)}
 					disabled={actionLoading}
 				>
-					↻ Refresh
+					<Icon name="refresh" size={14} /> Refresh
 				</button>
-				<button class="btn btn-secondary" on:click={openRenameModal} disabled={actionLoading}>
-					✎ Rename
+				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}>
+					<Icon name="edit" size={14} /> Rename
 				</button>
-				<button class="btn btn-danger" on:click={handleDeleteProfile} disabled={actionLoading}>
+				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}>
 					Delete
 				</button>
 				<button
-					class="btn {profile.paused ? 'btn-primary' : 'btn-warning'}"
-					on:click={handleTogglePause}
+					class="btn {profile!.paused ? 'btn-primary' : 'btn-warning'}"
+					onclick={handleTogglePause}
 					disabled={actionLoading}
 				>
 					{#if actionLoading}
 						<span class="loading-spinner"></span>
-					{:else if profile.paused}
-						▶ Resume Internet
+					{:else if profile!.paused}
+						<Icon name="play" size={14} /> Resume Internet
 					{:else}
-						⏸ Pause Internet
+						<Icon name="pause" size={14} /> Pause Internet
 					{/if}
 				</button>
-			</div>
-		</header>
+			{/snippet}
+		</DetailHeader>
 
-		<!-- Status Card -->
-		<section class="card status-card" class:paused={profile.paused}>
-			{#if profile.paused}
-				<div class="status-message paused">
-					<span class="status-icon">⏸</span>
-					<div>
-						<strong>Internet Access Paused</strong>
-						<p class="text-sm text-muted">
-							All devices in this profile are currently blocked from accessing the internet.
-						</p>
-					</div>
-				</div>
-			{:else}
-				<div class="status-message active">
-					<span class="status-icon">✓</span>
-					<div>
-						<strong>Internet Access Active</strong>
-						<p class="text-sm text-muted">Devices in this profile have normal internet access.</p>
-					</div>
-				</div>
-			{/if}
-		</section>
+		<ProfileStatusCard paused={profile.paused} />
 
-		<!-- Technical -->
-		<section class="card info-card technical-card wide-card">
-			<h2>Technical</h2>
-			<dl class="info-list technical-list">
-				<div class="info-row">
-					<dt>Profile ID</dt>
-					<dd class="mono text-sm">{profile.id || '—'}</dd>
-				</div>
-				<div class="info-row">
-					<dt>Network ID</dt>
-					<dd class="mono text-sm">{$selectedNetworkId || '—'}</dd>
-				</div>
-				{#if profile.url}
-					<div class="info-row">
-						<dt>API URL</dt>
-						<dd class="mono text-sm text-muted">{profile.url}</dd>
-					</div>
-				{/if}
-			</dl>
-		</section>
+		<ProfileTechnicalCard {profile} networkId={$selectedNetworkId} />
 
-		<!-- Devices Section -->
-		<section class="devices-section">
-			<div class="section-header">
-				<h2>
-					Devices ({devices.length}{profile.device_count !== devices.length
-						? ` of ${profile.device_count}`
-						: ''})
-				</h2>
-				<div class="view-toggle">
-					<button
-						class="toggle-btn"
-						class:active={viewMode === 'blocks'}
-						on:click={() => (viewMode = 'blocks')}
-						title="Block view"
-					>
-						▦
-					</button>
-					<button
-						class="toggle-btn"
-						class:active={viewMode === 'list'}
-						on:click={() => (viewMode = 'list')}
-						title="List view"
-					>
-						☰
-					</button>
-				</div>
-			</div>
-
-			{#if loading && devices.length === 0}
-				<div class="loading-state small">
-					<span class="loading-spinner"></span>
-					<span>Loading devices...</span>
-				</div>
-			{:else if devices.length === 0}
-				<div class="empty-state card">
-					<p>No devices found for this profile.</p>
-					<p class="text-sm text-muted">
-						{#if profile.device_count > 0}
-							This profile has {profile.device_count} assigned devices, but they may not be in the current
-							device cache.
-							<button
-								class="btn btn-secondary btn-sm"
-								on:click={() => fetchProfile(true)}
-								style="margin-top: var(--space-2);"
-							>
-								Refresh
-							</button>
-						{:else}
-							Assign devices to this profile using the Eero app.
-						{/if}
-					</p>
-				</div>
-			{:else if viewMode === 'blocks'}
-				<!-- Block/Card View -->
-				<div class="devices-grid">
-					{#each devices as device, index (getDeviceKey(device, index))}
-						<a
-							href={device.id ? `/devices/${device.id}` : undefined}
-							class="card device-card"
-							class:paused={device.paused}
-							class:offline={!device.connected}
-							class:clickable={!!device.id}
-						>
-							<div class="device-header">
-								<div class="device-info">
-									<span class="device-icon">{device.wireless ? '📱' : '🖥️'}</span>
-									<div>
-										<h3>
-											{device.display_name ||
-												device.nickname ||
-												device.hostname ||
-												'Unknown Device'}
-										</h3>
-										<span class="text-sm text-muted mono">{device.ip || device.mac || '—'}</span>
-									</div>
-								</div>
-								<div class="device-status">
-									{#if device.paused}
-										<span class="badge badge-warning">Paused</span>
-									{:else if device.connected}
-										<span class="status-dot online"></span>
-									{:else}
-										<span class="status-dot offline"></span>
-									{/if}
-								</div>
-							</div>
-
-							<div class="device-details">
-								<div class="detail-row">
-									<span class="label">Status</span>
-									<span class="value">{device.connected ? 'Online' : 'Offline'}</span>
-								</div>
-								<div class="detail-row">
-									<span class="label">Connection</span>
-									<span class="value">{device.wireless ? '📶 Wireless' : '🔌 Wired'}</span>
-								</div>
-								{#if device.manufacturer}
-									<div class="detail-row">
-										<span class="label">Manufacturer</span>
-										<span class="value">{device.manufacturer}</span>
-									</div>
-								{/if}
-							</div>
-
-							<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-							<div class="device-actions" on:click|stopPropagation>
-								<button
-									class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
-									on:click|preventDefault={() => handlePauseDevice(device)}
-								>
-									{device.paused ? '▶ Resume' : '⏸ Pause'}
-								</button>
-							</div>
-						</a>
-					{/each}
-				</div>
-			{:else}
-				<!-- List View -->
-				<div class="card devices-list">
-					<table class="devices-table">
-						<thead>
-							<tr>
-								<th>Device</th>
-								<th>IP Address</th>
-								<th>Status</th>
-								<th>Connection</th>
-								<th>Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each devices as device, index (getDeviceKey(device, index))}
-								<tr
-									class:paused={device.paused}
-									class:offline={!device.connected}
-									class:clickable={!!device.id}
-									on:click={() => device.id && goto(`/devices/${device.id}`)}
-								>
-									<td class="device-name-cell">
-										<span class="device-icon-sm">{device.wireless ? '📱' : '🖥️'}</span>
-										<div>
-											<span class="device-name"
-												>{device.display_name ||
-													device.nickname ||
-													device.hostname ||
-													'Unknown'}</span
-											>
-											{#if device.manufacturer}
-												<span class="text-xs text-muted">{device.manufacturer}</span>
-											{/if}
-										</div>
-									</td>
-									<td class="mono text-sm">{device.ip || '—'}</td>
-									<td>
-										{#if device.paused}
-											<span class="badge badge-warning">Paused</span>
-										{:else if device.connected}
-											<span class="badge badge-success">Online</span>
-										{:else}
-											<span class="badge badge-muted">Offline</span>
-										{/if}
-									</td>
-									<td class="text-sm">{device.wireless ? '📶 Wireless' : '🔌 Wired'}</td>
-									<td on:click|stopPropagation>
-										<button
-											class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
-											on:click={() => handlePauseDevice(device)}
-										>
-											{device.paused ? 'Resume' : 'Pause'}
-										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</section>
-
-		{#if showRenameModal}
-			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-			<div class="modal-backdrop" on:click={() => (showRenameModal = false)}>
-				<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-				<div class="modal-card card" on:click|stopPropagation>
-					<h2>Rename Profile</h2>
-					<form on:submit|preventDefault={handleRenameProfile}>
-						<label class="modal-label" for="rename-profile-input">New name</label>
-						<!-- svelte-ignore a11y_autofocus -->
-						<input
-							id="rename-profile-input"
-							class="modal-input"
-							type="text"
-							bind:value={renameValue}
-							disabled={renaming}
-							autofocus
+		{#if profile.id}
+			<div class="info-grid premium-grid">
+				<PremiumGate feature="Profile insights">
+					<InsightsCard scope="profile" id={profile.id} />
+				</PremiumGate>
+				{#if $selectedNetworkId}
+					<PremiumGate feature="Data usage">
+						<DataUsageMiniCard
+							networkId={$selectedNetworkId}
+							entity="profile"
+							entityId={profile.id}
+							title="Data Usage"
 						/>
-						<div class="modal-actions">
-							<button
-								type="button"
-								class="btn btn-secondary"
-								on:click={() => (showRenameModal = false)}
-								disabled={renaming}
-							>
-								Cancel
-							</button>
-							<button
-								type="submit"
-								class="btn btn-primary"
-								disabled={renaming || !renameValue.trim()}
-							>
-								{#if renaming}
-									<span class="loading-spinner"></span>
-								{/if}
-								Save
-							</button>
-						</div>
-					</form>
-				</div>
+					</PremiumGate>
+				{/if}
 			</div>
 		{/if}
+
+		<ProfileDevicesSection
+			{devices}
+			deviceCount={profile.device_count}
+			{loading}
+			onPauseDevice={handlePauseDevice}
+			onGoToDevice={goToDevice}
+			onRefresh={() => fetchProfile(true)}
+		/>
+
+		{#if profile.id}
+			<ProfileSchedulesCard profileId={profile.id} />
+			<PremiumGate feature="Content filtering">
+				<ProfileContentFilterCard profileId={profile.id} />
+			</PremiumGate>
+			<PremiumGate feature="Blocked applications">
+				<ProfileBlockedApplicationsCard profileId={profile.id} />
+			</PremiumGate>
+		{/if}
+
+		<ProfileRenameModal
+			open={showRenameModal}
+			value={renameValue}
+			submitting={renaming}
+			onClose={() => (showRenameModal = false)}
+			onSubmit={handleRenameProfile}
+			onValueChange={(v) => (renameValue = v)}
+		/>
 	{/if}
 </div>
 
@@ -505,22 +302,7 @@
 		max-width: 1000px;
 	}
 
-	.breadcrumb {
-		margin-bottom: var(--space-4);
-	}
-
-	.back-link {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-	}
-
-	.back-link:hover {
-		color: var(--color-accent);
-	}
-
-	.loading-state,
-	.error-state,
-	.empty-state {
+	.error-state {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -531,381 +313,14 @@
 		text-align: center;
 	}
 
-	.loading-state {
-		flex-direction: row;
-	}
-
-	.loading-state.small {
-		padding: var(--space-6);
-	}
-
 	.error-actions {
 		display: flex;
 		gap: var(--space-3);
 	}
 
-	.detail-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		margin-bottom: var(--space-6);
-		padding-bottom: var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.header-title {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		margin-bottom: var(--space-2);
-	}
-
-	.header-title h1 {
-		margin: 0;
-		font-size: 1.5rem;
-	}
-
-	.profile-icon {
-		font-size: 2rem;
-	}
-
-	.header-meta {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding-left: calc(2rem + var(--space-3));
-	}
-
-	.header-actions {
-		display: flex;
-		gap: var(--space-2);
-	}
-
-	.status-card {
-		margin-bottom: var(--space-6);
-	}
-
-	.status-card.paused {
-		border-color: var(--color-warning);
-		background-color: rgba(245, 180, 50, 0.05);
-	}
-
-	.status-message {
-		display: flex;
-		align-items: flex-start;
-		gap: var(--space-3);
-	}
-
-	.status-icon {
-		font-size: 1.5rem;
-	}
-
-	.status-message.paused {
-		color: var(--color-warning);
-	}
-
-	.status-message.active {
-		color: var(--color-success);
-	}
-
-	.status-message p {
-		margin: var(--space-1) 0 0 0;
-		color: var(--color-text-secondary);
-	}
-
-	.section-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-4);
-	}
-
-	.section-header h2 {
-		font-size: 1rem;
-		margin: 0;
-	}
-
-	.view-toggle {
-		display: flex;
-		gap: var(--space-1);
-		background: var(--color-bg-tertiary);
-		padding: var(--space-1);
-		border-radius: var(--radius-md);
-	}
-
-	.toggle-btn {
-		padding: var(--space-1) var(--space-2);
-		border: none;
-		background: transparent;
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		font-size: 1rem;
-		color: var(--color-text-secondary);
-		transition: all 0.15s ease;
-	}
-
-	.toggle-btn:hover {
-		color: var(--color-text-primary);
-	}
-
-	.toggle-btn.active {
-		background: var(--color-bg-secondary);
-		color: var(--color-accent);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-	}
-
-	.devices-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		gap: var(--space-4);
-	}
-
-	.device-card {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-		text-decoration: none;
-		color: inherit;
-		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease,
-			border-color 0.15s ease;
-	}
-
-	.device-card.clickable {
-		cursor: pointer;
-	}
-
-	.device-card.clickable:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		border-color: var(--color-accent);
-	}
-
-	.device-card.paused {
-		border-color: var(--color-warning);
-		opacity: 0.7;
-	}
-
-	.device-card.offline {
-		opacity: 0.6;
-	}
-
-	.device-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-	}
-
-	.device-info {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.device-icon {
-		font-size: 1.5rem;
-	}
-
-	.device-info h3 {
-		margin: 0;
-		font-size: 0.9375rem;
-	}
-
-	.device-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.detail-row {
-		display: flex;
-		justify-content: space-between;
-		font-size: 0.8125rem;
-	}
-
-	.label {
-		color: var(--color-text-secondary);
-	}
-
-	.value {
-		font-weight: 500;
-	}
-
-	.device-actions {
-		display: flex;
-		gap: var(--space-2);
-		padding-top: var(--space-2);
-		border-top: 1px solid var(--color-border-muted);
-	}
-
-	.device-actions .btn {
-		flex: 1;
-	}
-
 	.btn-warning {
 		background-color: var(--color-warning);
 		color: var(--color-bg-primary);
-	}
-
-	.btn-warning:hover:not(:disabled) {
-		background-color: #e0a820;
-	}
-
-	/* List View Styles */
-	.devices-list {
-		overflow-x: auto;
-	}
-
-	.devices-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.devices-table th,
-	.devices-table td {
-		text-align: left;
-		padding: var(--space-3);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.devices-table th {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		font-weight: 600;
-		background: var(--color-bg-primary);
-	}
-
-	.devices-table tbody tr.clickable {
-		cursor: pointer;
-	}
-
-	.devices-table tbody tr:hover {
-		background: var(--color-bg-primary);
-	}
-
-	.devices-table tbody tr.clickable:hover {
-		background: var(--color-bg-tertiary);
-	}
-
-	.devices-table tbody tr.paused {
-		opacity: 0.7;
-	}
-
-	.devices-table tbody tr.offline {
-		opacity: 0.6;
-	}
-
-	.device-name-cell {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.device-icon-sm {
-		font-size: 1.25rem;
-	}
-
-	.device-name-cell div {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.device-name {
-		font-weight: 500;
-	}
-
-	.btn-xs {
-		padding: var(--space-1) var(--space-2);
-		font-size: 0.75rem;
-	}
-
-	.badge-success {
-		background-color: var(--color-success);
-		color: white;
-	}
-
-	.badge-muted {
-		background-color: var(--color-bg-tertiary);
-		color: var(--color-text-secondary);
-	}
-
-	.badge-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	/* Technical Card */
-	.technical-card {
-		margin-bottom: var(--space-6);
-	}
-
-	.wide-card {
-		grid-column: 1 / -1;
-	}
-
-	.technical-list {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: var(--space-2) var(--space-6);
-	}
-
-	.technical-list .info-row {
-		border-bottom: none;
-		padding: var(--space-2) 0;
-	}
-
-	.info-card h2 {
-		font-size: 1rem;
-		margin-bottom: var(--space-4);
-		padding-bottom: var(--space-2);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.info-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.info-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: var(--space-2) 0;
-	}
-
-	.info-row dt {
-		color: var(--color-text-secondary);
-		font-size: 0.875rem;
-	}
-
-	.info-row dd {
-		font-weight: 500;
-		text-align: right;
-		word-break: break-all;
-	}
-
-	@media (max-width: 768px) {
-		.detail-header {
-			flex-direction: column;
-			gap: var(--space-4);
-		}
-
-		.header-actions {
-			width: 100%;
-			flex-direction: column;
-		}
-
-		.header-actions .btn {
-			width: 100%;
-		}
-
-		.header-meta {
-			padding-left: 0;
-		}
 	}
 
 	.btn-danger {
@@ -917,56 +332,19 @@
 		opacity: 0.85;
 	}
 
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 100;
-	}
-
-	.modal-card {
-		width: 100%;
-		max-width: 400px;
-		padding: var(--space-6);
-		display: flex;
-		flex-direction: column;
+	.info-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
 		gap: var(--space-4);
 	}
 
-	.modal-card h2 {
-		margin: 0;
-		font-size: 1.125rem;
+	.premium-grid {
+		margin-top: var(--space-4);
 	}
 
-	.modal-label {
-		display: block;
-		font-size: 0.875rem;
-		color: var(--color-text-secondary);
-		margin-bottom: var(--space-2);
-	}
-
-	.modal-input {
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		color: var(--color-text-primary);
-		font-size: 0.9375rem;
-		box-sizing: border-box;
-	}
-
-	.modal-input:focus {
-		outline: none;
-		border-color: var(--color-accent);
-	}
-
-	.modal-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-3);
+	@media (max-width: 768px) {
+		.info-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

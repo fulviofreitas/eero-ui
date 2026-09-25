@@ -24,15 +24,13 @@ _Built for operators who want fast, efficient network control._
 
 | Dark Theme | Light Theme |
 |:----------:|:-----------:|
-| ![Dashboard Dark](./screenshots/dashboard.png) | ![Dashboard Light](./screenshots/dashboard-light.png) |
+| ![Dashboard Dark](./docs/screenshots/6.0/dashboard--dark--1440.png) | ![Dashboard Light](./docs/screenshots/6.0/dashboard--light--1440.png) |
 
-| Devices | Eeros | Profiles |
-|:-------:|:-----:|:--------:|
-| ![Devices](./screenshots/devices.png) | ![Eeros](./screenshots/eeros.png) | ![Profiles](./screenshots/profiles.png) |
+| Devices | Network | Topology |
+|:-------:|:-------:|:--------:|
+| ![Devices](./docs/screenshots/6.0/devices--dark--1440.png) | ![Network](./docs/screenshots/6.0/network-overview--dark--1440.png) | ![Topology](./docs/screenshots/6.0/topology--dark--1440.png) |
 
-| Topology | Network | Login |
-|:--------:|:-------:|:-----:|
-| ![Topology](./screenshots/topology.png) | ![Network](./screenshots/network.png) | ![Login](./screenshots/login.png) |
+Every route, in both themes, at desktop and phone widths — plus before/after captures from the 5.x UI — is indexed in [`docs/screenshots/6.0/README.md`](./docs/screenshots/6.0/README.md).
 
 ---
 
@@ -40,9 +38,19 @@ _Built for operators who want fast, efficient network control._
 
 | 📊 Monitor | 🎛️ Control | 🎨 Experience |
 |-----------|-----------|--------------|
-| Network health & speed tests | Block/unblock devices | Dark theme dashboard |
-| Device listing & search | Pause/unpause profiles | Real-time filtering |
-| Eero node status | Reboot nodes | Optimistic UI updates |
+| Network health, speed tests and history | Reboot nodes, LED on/off and brightness | Dark and light themes, no flash on load |
+| Device table: sort, search, filter, export | Block/unblock, rename and retype devices | Skeleton loading, keyboard-accessible tables |
+| Eero node status and mesh quality | Guest network, password, DNS | Optimistic updates where safe, confirmations where not |
+| Built-in metrics: clients, signal, speed over time | Profiles, schedules, content filter, forwards, reservations | Interactive network topology map |
+| Insights, data usage, events, channel utilisation (premium) | Advanced settings: SQM, DHCP, WPA3, WAN, power saving | Expired-session detection and clear error states |
+| Members and invites, backup internet, security and WAN, notifications | Bulk block/unblock from the device table | `⌘K` command palette, `?` shortcuts help, shareable URL filters |
+| Account page: name, consents, e-mail and phone (double-gated) | Eero location, node and port actions, Thread, DDNS, forwards, reservations | Virtualized device table, self-hosted fonts, view transitions |
+
+Writes that have not been verified end-to-end against a live eero network are hidden behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES`; account e-mail and phone changes additionally need `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` — see the [Roadmap](../../wiki/Roadmap) for exactly which writes are gated and [Configuration → Write gates](../../wiki/Configuration#write-gates) for the flags.
+
+**Keyboard shortcuts** — `⌘K` / `Ctrl+K` opens the command palette, `?` shows the shortcuts help, `Esc` closes the open dialog or menu. Shortcuts never fire while you are typing in a field. Device filters (`q`, `status`, `conn`, `band`, `sort`, `dir`) are encoded in the URL, so a filtered view survives a refresh and can be shared.
+
+**Runtime dependencies added in 6.0** — exactly one: [`@tanstack/svelte-virtual`](https://github.com/TanStack/virtual) (MIT), which virtualizes the device table so a few hundred rows stay smooth. The UI fonts (Inter and JetBrains Mono, variable WOFF2) are self-hosted from `frontend/static/fonts/` under the SIL Open Font License; the licence text ships in `static/fonts/OFL.txt`. Nothing is fetched from a third party at runtime.
 
 ---
 
@@ -60,6 +68,18 @@ Open **http://localhost:8000** 🎉
 
 > 💡 Or clone & run locally: `./start.sh`
 
+### One container, batteries included
+
+The image runs two processes: the FastAPI backend (which also serves the built Svelte app and runs the metrics collector) and an embedded [VictoriaMetrics](https://victoriametrics.com/) store, bound to loopback. eero-ui collects its own metrics from the eero API and writes them into that store; the charts read them back. Nothing is scraped, nothing else needs to be deployed, and nothing but port 8000 is exposed.
+
+### Optional: the Prometheus exporter
+
+If you want the full 90+ metric set from [eero-prometheus-exporter](https://github.com/fulviofreitas/eero-prometheus-exporter) for your own Prometheus, run `ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0` alongside — a commented-out service is in `docker-compose.yml`. It has its own login and its own credential file, and eero-ui does not depend on it in any way. See the [Metrics](../../wiki/Metrics) page.
+
+### Upgrading from 5.x
+
+6.0 is a breaking major: the exporter is gone from the image, `/metrics` is removed, `/api/metrics/*` requires a session, and `EERO_EXPORTER_SESSION_PATH` / `EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED` no longer exist. Existing metric history stays continuous. Back up the `eero-data` volume first, then follow [Configuration → Upgrading to 6.0](../../wiki/Configuration#upgrading-to-60).
+
 ---
 
 ## 📚 Documentation
@@ -69,20 +89,22 @@ Full documentation lives in the **[Wiki](../../wiki)**:
 | 📖 Guide | Description |
 |----------|-------------|
 | [🚀 Installation](../../wiki/Installation) | Docker & manual setup |
-| [⚙️ Configuration](../../wiki/Configuration) | Environment variables |
-| [🏗️ Architecture](../../wiki/Architecture) | System design & auth flow |
-| [📡 API Reference](../../wiki/API-Reference) | REST endpoints |
-| [🔒 Security](../../wiki/Security) | Best practices |
+| [⚙️ Configuration](../../wiki/Configuration) | Environment variables, write gates, upgrading to 6.0 |
+| [🏗️ Architecture](../../wiki/Architecture) | Two-process container, metrics pipeline, auth, error mapping |
+| [📈 Metrics](../../wiki/Metrics) | The metric contract, collection, the optional exporter |
+| [📡 API Reference](../../wiki/API-Reference) | Every REST endpoint with gates, limits and status codes |
+| [🔒 Security](../../wiki/Security) | Credential file, CSRF, gates, metrics surface |
 | [🛠️ Development](../../wiki/Development) | Local dev & testing |
 | [🔄 CI/CD](../../wiki/CI-CD) | GitHub Actions workflows |
-| [🔧 Troubleshooting](../../wiki/Troubleshooting) | Common issues |
-| [🗺️ Roadmap](../../wiki/Roadmap) | Future plans |
+| [🔧 Troubleshooting](../../wiki/Troubleshooting) | Expired sessions, empty charts, error types, rollback |
+| [🗺️ Roadmap](../../wiki/Roadmap) | Write verification status and future plans |
 
 ---
 
 ## 🔗 Related
 
-- **[eero-api](https://github.com/fulviofreitas/eero-api)** — Async Python SDK for Eero API
+- **[eero-api](https://github.com/fulviofreitas/eero-api)** — Async Python SDK for the eero API (v8)
+- **[eero-prometheus-exporter](https://github.com/fulviofreitas/eero-prometheus-exporter)** — optional, standalone Prometheus exporter
 
 ---
 

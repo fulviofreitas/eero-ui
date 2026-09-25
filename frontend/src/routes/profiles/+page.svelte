@@ -5,38 +5,55 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { ProfileSummary } from '$api/types';
 	import { uiStore, selectedNetworkId } from '$stores';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
+	import Icon from '$components/common/Icon.svelte';
+	import DataTable, {
+		type DataTableColumn,
+		type SortDirection
+	} from '$components/common/DataTable.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
+	import ErrorState from '$components/common/ErrorState.svelte';
+	import Skeleton from '$components/common/Skeleton.svelte';
+	import Modal from '$components/common/Modal.svelte';
 
-	let profiles: ProfileSummary[] = [];
-	let loading = true;
-	let error: string | null = null;
-	let viewMode: 'blocks' | 'list' = 'blocks';
-	let lastNetworkId: string | null = null;
-	let showCreateModal = false;
-	let newProfileName = '';
-	let creating = false;
+	let profiles: ProfileSummary[] = $state([]);
+	let loading = $state(true);
+	let error: string | null = $state(null);
+	let viewMode: 'blocks' | 'list' = $state('blocks');
+	let lastNetworkId: string | null = $state(null);
+	let showCreateModal = $state(false);
+	let newProfileName = $state('');
+	let creating = $state(false);
+
+	// Default sort is name ascending (house rule - see lessons-learned.md); DataTable is driven
+	// in controlled mode so the header reflects that default instead of only the data.
+	let sortBy: string | null = $state('name');
+	let sortDirection: SortDirection = $state('ascending');
+
+	function handleSort(key: string | null, direction: SortDirection) {
+		sortBy = key;
+		sortDirection = direction;
+	}
+
+	function goToProfile(profile: ProfileSummary) {
+		if (profile.id) goto(`/profiles/${profile.id}`);
+	}
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
 		await fetchProfiles();
 	});
 
-	// React to network changes
-	$: if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
-		lastNetworkId = $selectedNetworkId;
-		fetchProfiles(true);
-	}
-
 	async function fetchProfiles(refresh = false) {
 		loading = true;
 		error = null;
 		try {
 			const result = await api.profiles.list(refresh);
-			console.log('Profiles API response:', result);
 			// Ensure we have an array and sort alphabetically by name
 			profiles = Array.isArray(result)
 				? result.sort((a, b) => {
@@ -75,7 +92,33 @@
 			creating = false;
 		}
 	}
+	// React to network changes
+	$effect(() => {
+		if ($selectedNetworkId && $selectedNetworkId !== lastNetworkId && lastNetworkId !== null) {
+			lastNetworkId = $selectedNetworkId;
+			fetchProfiles(true);
+		}
+	});
 </script>
+
+{#snippet profileCell(profile: ProfileSummary)}
+	<div class="profile-name-cell">
+		<span class="profile-icon-sm"><Icon name="person" size={14} /></span>
+		<span class="profile-name">{profile.name || 'Unknown Profile'}</span>
+	</div>
+{/snippet}
+
+{#snippet devicesCell(profile: ProfileSummary)}
+	<span class="text-sm">{profile.device_count ?? 0}</span>
+{/snippet}
+
+{#snippet statusCell(profile: ProfileSummary)}
+	{#if profile.paused}
+		<span class="badge badge-warning">⏸ Paused</span>
+	{:else}
+		<span class="badge badge-success"><Icon name="check" size={12} /> Active</span>
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>Profiles | Eero Dashboard</title>
@@ -92,7 +135,7 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'blocks'}
-					on:click={() => (viewMode = 'blocks')}
+					onclick={() => (viewMode = 'blocks')}
 					title="Block view"
 				>
 					▦
@@ -100,51 +143,44 @@
 				<button
 					class="toggle-btn"
 					class:active={viewMode === 'list'}
-					on:click={() => (viewMode = 'list')}
+					onclick={() => (viewMode = 'list')}
 					title="List view"
 				>
-					☰
+					<Icon name="menu" size={14} />
 				</button>
 			</div>
 			<ExportMenu data={profiles} filename="profiles" disabled={loading} />
-			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)} disabled={loading}>
+			<button class="btn btn-secondary" onclick={() => fetchProfiles(true)} disabled={loading}>
 				{#if loading}
 					<span class="loading-spinner"></span>
 				{:else}
-					↻
+					<Icon name="refresh" size={14} />
 				{/if}
 				Refresh
 			</button>
-			<button class="btn btn-primary" on:click={() => (showCreateModal = true)}>
+			<button class="btn btn-primary" onclick={() => (showCreateModal = true)}>
 				+ New profile
 			</button>
 		</div>
 	</header>
 
 	{#if loading && profiles.length === 0}
-		<div class="loading-state">
-			<span class="loading-spinner"></span>
-			<span>Loading profiles...</span>
-		</div>
+		<Skeleton variant="table-rows" rows={4} columns={3} />
 	{:else if error}
-		<div class="error-state">
-			<p class="text-danger">Error: {error}</p>
-			<button class="btn btn-secondary" on:click={() => fetchProfiles(true)}> Try Again </button>
-		</div>
+		<ErrorState message={error} onRetry={() => fetchProfiles(true)} />
 	{:else if profiles.length === 0}
-		<div class="empty-state card">
-			<p>No profiles found.</p>
-			<p class="text-sm text-muted">
-				Profiles are created in the Eero app and can be used to group devices for parental controls.
-			</p>
-		</div>
+		<EmptyState
+			icon="person"
+			title="No profiles found."
+			description="Profiles are created in the Eero app and can be used to group devices for parental controls."
+		/>
 	{:else if viewMode === 'blocks'}
 		<!-- Block/Card View -->
 		<div class="profiles-grid">
 			{#each profiles as profile, index (getProfileKey(profile, index))}
 				<a href="/profiles/{profile.id}" class="card profile-card" class:paused={profile.paused}>
 					<div class="profile-header">
-						<div class="profile-icon">👤</div>
+						<div class="profile-icon"><Icon name="person" size={20} /></div>
 						<div class="profile-info">
 							<h3>{profile.name || 'Unknown Profile'}</h3>
 							<span class="text-sm text-muted">{profile.device_count ?? 0} devices</span>
@@ -166,82 +202,78 @@
 	{:else}
 		<!-- List View -->
 		<div class="card profiles-list">
-			<table class="profiles-table">
-				<thead>
-					<tr>
-						<th>Profile</th>
-						<th>Devices</th>
-						<th>Status</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each profiles as profile, index (getProfileKey(profile, index))}
-						<tr
-							class:paused={profile.paused}
-							class="clickable"
-							on:click={() => profile.id && window.location.assign(`/profiles/${profile.id}`)}
-						>
-							<td class="profile-name-cell">
-								<span class="profile-icon-sm">👤</span>
-								<span class="profile-name">{profile.name || 'Unknown Profile'}</span>
-							</td>
-							<td class="text-sm">{profile.device_count ?? 0}</td>
-							<td>
-								{#if profile.paused}
-									<span class="badge badge-warning">⏸ Paused</span>
-								{:else}
-									<span class="badge badge-success">✓ Active</span>
-								{/if}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+			<DataTable
+				id="profiles"
+				columns={[
+					{
+						key: 'name',
+						header: 'Profile',
+						required: true,
+						sortable: true,
+						accessor: (p) => (p.name || '').toLowerCase(),
+						render: profileCell
+					},
+					{
+						key: 'devices',
+						header: 'Devices',
+						sortable: true,
+						accessor: (p) => p.device_count ?? 0,
+						render: devicesCell
+					},
+					{
+						key: 'status',
+						header: 'Status',
+						sortable: true,
+						accessor: (p) => (p.paused ? 'paused' : 'active'),
+						render: statusCell
+					}
+				] as DataTableColumn<ProfileSummary>[]}
+				rows={profiles}
+				getRowId={(p) => p.id || p.name || ''}
+				emptyTitle="No profiles found."
+				{sortBy}
+				{sortDirection}
+				onSort={handleSort}
+				onRowClick={goToProfile}
+				rowClass={(p) => (p.paused ? 'profile-row paused' : 'profile-row')}
+			/>
 		</div>
 	{/if}
 
-	{#if showCreateModal}
-		<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-		<div class="modal-backdrop" on:click={() => (showCreateModal = false)}>
-			<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-			<div class="modal-card card" on:click|stopPropagation>
-				<h2>New Profile</h2>
-				<form on:submit|preventDefault={handleCreateProfile}>
-					<label class="modal-label" for="new-profile-name">Profile name</label>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						id="new-profile-name"
-						class="modal-input"
-						type="text"
-						bind:value={newProfileName}
-						placeholder="e.g. Kids"
-						disabled={creating}
-						autofocus
-					/>
-					<div class="modal-actions">
-						<button
-							type="button"
-							class="btn btn-secondary"
-							on:click={() => (showCreateModal = false)}
-							disabled={creating}
-						>
-							Cancel
-						</button>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							disabled={creating || !newProfileName.trim()}
-						>
-							{#if creating}
-								<span class="loading-spinner"></span>
-							{/if}
-							Create
-						</button>
-					</div>
-				</form>
+	<Modal open={showCreateModal} title="New Profile" onClose={() => (showCreateModal = false)}>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleCreateProfile();
+			}}
+		>
+			<label class="modal-label" for="new-profile-name">Profile name</label>
+			<input
+				id="new-profile-name"
+				class="modal-input"
+				type="text"
+				bind:value={newProfileName}
+				placeholder="e.g. Kids"
+				disabled={creating}
+			/>
+			<div class="modal-actions">
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={() => (showCreateModal = false)}
+					disabled={creating}
+				>
+					Cancel
+				</button>
+				<button type="submit" class="btn btn-primary" disabled={creating || !newProfileName.trim()}>
+					{#if creating}
+						<span class="loading-spinner"></span>
+					{/if}
+					Create
+				</button>
 			</div>
-		</div>
-	{/if}
+		</form>
+	</Modal>
 </div>
 
 <style>
@@ -258,23 +290,6 @@
 
 	.header-left h1 {
 		margin-bottom: var(--space-1);
-	}
-
-	.loading-state,
-	.empty-state,
-	.error-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-12);
-		color: var(--color-text-secondary);
-		text-align: center;
-	}
-
-	.loading-state {
-		flex-direction: row;
 	}
 
 	.profiles-grid {
@@ -386,7 +401,10 @@
 		cursor: pointer;
 		font-size: 1rem;
 		color: var(--color-text-secondary);
-		transition: all 0.15s ease;
+		transition:
+			background-color 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.toggle-btn:hover {
@@ -404,40 +422,10 @@
 		overflow-x: auto;
 	}
 
-	.profiles-table {
-		width: 100%;
-		border-collapse: collapse;
-	}
-
-	.profiles-table th,
-	.profiles-table td {
-		text-align: left;
-		padding: var(--space-3) var(--space-4);
-		border-bottom: 1px solid var(--color-border-muted);
-	}
-
-	.profiles-table th {
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-text-secondary);
-		font-weight: 600;
-		background: var(--color-bg-primary);
-	}
-
-	.profiles-table tbody tr {
-		transition: background-color 0.15s ease;
-	}
-
-	.profiles-table tbody tr.clickable {
-		cursor: pointer;
-	}
-
-	.profiles-table tbody tr:hover {
-		background: var(--color-bg-tertiary);
-	}
-
-	.profiles-table tbody tr.paused {
+	/* `<tr class="profile-row paused">` is DataTable's own element (rowClass hook), so it needs
+	   :global() — the cell content below is rendered via `render` snippets declared in this
+	   file and is scoped normally. */
+	:global(.profile-row.paused) {
 		opacity: 0.8;
 	}
 
@@ -465,30 +453,8 @@
 		color: var(--color-bg-primary);
 	}
 
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 100;
-	}
-
-	.modal-card {
-		width: 100%;
-		max-width: 400px;
-		padding: var(--space-6);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-4);
-	}
-
-	.modal-card h2 {
-		margin: 0;
-		font-size: 1.125rem;
-	}
-
+	/* Backdrop/card chrome now lives in the Modal primitive (R4, WP5); this file only styles the
+	   form content rendered inside it. */
 	.modal-label {
 		display: block;
 		font-size: 0.875rem;
@@ -508,8 +474,11 @@
 	}
 
 	.modal-input:focus {
-		outline: none;
 		border-color: var(--color-accent);
+	}
+
+	.modal-input:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 
 	.modal-actions {

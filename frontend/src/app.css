@@ -1,6 +1,28 @@
 /* Eero Dashboard - Global Styles */
 
 /* ============================================
+   Self-hosted fonts (WP9 perf, plan § 6.2 Tier 4)
+   Variable fonts, latin subset only - no CDN/runtime requests.
+   Inter covers wght 100-900, JetBrains Mono covers wght 400-800;
+   both comfortably span the 400/500/600 weights this app uses.
+   ============================================ */
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/inter-var.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-weight: 400 800;
+	font-display: swap;
+	src: url('/fonts/jetbrains-mono-var.woff2') format('woff2');
+}
+
+/* ============================================
    CSS Custom Properties (Design Tokens)
    ============================================ */
 :root {
@@ -19,7 +41,11 @@
 
 	--color-text-primary: #e6edf3;
 	--color-text-secondary: #8b949e;
-	--color-text-muted: #6e7681;
+	/* A1 (WP5 a11y fix): #7d8590 - 5.07:1 on --color-bg-primary (#0d1117), 4.64:1 on
+	   --color-bg-secondary (#161b22). Both clear WCAG AA (4.5:1) for normal text. */
+	--color-text-muted: #7d8590;
+	/* Alias kept for call sites (BarGauge, dashboard) that reference --color-text directly. */
+	--color-text: var(--color-text-primary);
 
 	/* Status Colors */
 	--color-success: #3fb950;
@@ -28,12 +54,41 @@
 	--color-warning-bg: rgba(210, 153, 34, 0.15);
 	--color-danger: #f85149;
 	--color-danger-bg: rgba(248, 81, 73, 0.15);
+	--color-danger-hover: #da3633;
+	--color-danger-active: #b62324;
+	/* A4 (WP5 a11y fix): white .btn-danger text on the dark theme's plain --color-danger fill was
+	   3.35:1. Filling with --color-danger-hover instead (4.61:1) and stepping one shade darker
+	   again on :hover (--color-danger-active) fixes contrast without touching --color-danger
+	   itself, which is still used as a plain foreground/border colour elsewhere. Light theme's
+	   fill/hover pair is unchanged (already 5.36:1) — see the override below. */
+	--color-danger-fill: var(--color-danger-hover);
+	--color-danger-fill-hover: var(--color-danger-active);
 	--color-info: #58a6ff;
 	--color-info-bg: rgba(88, 166, 255, 0.15);
+
+	/* A6 (badge contrast fix): dedicated text colours for .badge-danger/.badge-info scoped to the
+	   badge component only (not the shared --color-danger/--color-info tokens, which are also used
+	   as plain foreground/border colours elsewhere and already clear AA there). Verified with a
+	   WCAG relative-luminance script compositing each badge's tinted background over the card
+	   surface (--color-bg-secondary). Dark badge-danger's default #f85149 measured 4.35:1 (below
+	   AA); #f85a53 (lightened, same hue) measures 4.59:1. Dark badge-info already clears AA
+	   (5.32:1) with the plain --color-info value, so no override is needed here. */
+	--badge-danger-text: #f85a53;
+	--badge-info-text: var(--color-info);
+
+	/* Premium/plus accent - reuses the warning hue per Q4 (no design pass; no new palette) */
+	--color-premium: var(--color-warning);
+	--color-premium-bg: var(--color-warning-bg);
 
 	/* Accent */
 	--color-accent: #58a6ff;
 	--color-accent-hover: #79b8ff;
+	/* A3 (WP5 a11y fix): text colour for filled controls whose background IS --color-accent
+	   (.btn-primary, active .time-range-selector button, .step-number, .gateway-badge). White on
+	   dark theme's --color-accent (#58a6ff) is only 2.53:1; --color-bg-primary on that same
+	   accent is 7.49:1. Light theme's accent (#0969da) is already fine with white (5.19:1), so
+	   only the dark value changes below. */
+	--color-on-accent: var(--color-bg-primary);
 
 	/* Spacing Scale */
 	--space-1: 0.25rem;
@@ -61,6 +116,58 @@
 	--transition-fast: 0.1s ease;
 	--transition-normal: 0.2s ease;
 	--transition-slow: 0.3s ease;
+
+	/* Font-size scale */
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-base: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+
+	/*
+	 * Z-index scale.
+	 * Replaces the magic 1 / 2 / 10 / 15 / 20 / 40 / 49 / 50 / 100 / 1000 values that used to be
+	 * scattered across app.css, +layout.svelte, DeviceList.svelte, DeviceRow.svelte,
+	 * ExportMenu.svelte, ConfirmDialog.svelte, Toast.svelte, NetworkMap.svelte and the four route
+	 * detail pages that own a modal (devices/[id], profiles, profiles/[id], network/[id]).
+	 */
+	--z-base: 1;
+	--z-dropdown: 20;
+	--z-sticky: 40;
+	--z-overlay: 49;
+	--z-sidebar: 50;
+	--z-modal: 100;
+	--z-toast: 1000;
+
+	/*
+	 * Breakpoints (documentation only — CSS custom properties cannot be read inside a media query
+	 * feature list). This is the single source of truth for the pixel values; keep it in sync with
+	 * $lib/breakpoints.ts, which exposes the same numbers to TypeScript/JS.
+	 *   --bp-sm: 480px   phones
+	 *   --bp-md: 768px   tablets / sidebar collapse (see @media (max-width: 768px) below)
+	 *   --bp-lg: 1024px  small laptops
+	 *   --bp-xl: 1400px  matches .container max-width
+	 */
+
+	/* Chart series palette — shared across Chart.js components, defined for both themes */
+	--chart-1: #58a6ff;
+	--chart-2: #3fb950;
+	--chart-3: #d29922;
+	--chart-4: #f85149;
+	--chart-5: #bc8cff;
+	--chart-6: #39c5cf;
+	--chart-grid: rgba(230, 237, 243, 0.08);
+	--chart-text: var(--color-text-secondary);
+
+	/* Focus ring */
+	--focus-ring: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-accent);
+
+	/* Strong scrim for full-block overlays (loading/error/empty states over canvases like the
+	   topology map). Matches --color-bg-primary per theme so text drawn on top (using the normal
+	   text tokens) always has the contrast that theme expects. */
+	--color-overlay: rgba(13, 17, 23, 0.85);
 }
 
 /* ============================================
@@ -78,21 +185,56 @@
 
 	--color-text-primary: #1f2328;
 	--color-text-secondary: #656d76;
-	--color-text-muted: #8c959f;
+	/* WP9 audit: #6e7781 (A1, WP5 a11y fix) measured 4.55:1 on --color-bg-primary (#fff) but only
+	   4.27:1 on --color-bg-secondary (#f6f8fa) - short of WCAG AA (4.5:1) on the second surface,
+	   where this token is used just as often (cards, table rows). #68707a measures 5.02:1 on #fff
+	   and 4.71:1 on #f6f8fa - both clear AA now, verified with a WCAG relative-luminance script. */
+	--color-text-muted: #68707a;
+	--color-text: var(--color-text-primary);
 
 	/* Status Colors - slightly adjusted for light bg */
-	--color-success: #1a7f37;
+	/* A8 (WP5 a11y fix): darkened one step from #1a7f37 - on its own -bg tint composited over
+	   white, the old value measured 4.43:1 (below AA 4.5:1); #166b2f measures 5.69:1. Affects
+	   .badge-success and any other place --color-success is used as text. */
+	--color-success: #166b2f;
 	--color-success-bg: rgba(26, 127, 55, 0.1);
-	--color-warning: #9a6700;
+	/* A8: darkened one step from #9a6700 - composited over white/`--color-bg-secondary`, the old
+	   value measured 4.29:1/~4.1:1 on .tier-badge and .badge-warning (below AA 4.5:1); #8a5d00
+	   measures 5.02:1 on white, 4.74:1 on --color-bg-secondary (#f6f8fa). */
+	--color-warning: #8a5d00;
 	--color-warning-bg: rgba(154, 103, 0, 0.1);
 	--color-danger: #cf222e;
 	--color-danger-bg: rgba(207, 34, 46, 0.1);
+	--color-danger-hover: #a40e26;
+	/* Light theme's original fill/hover pair already clears AA (5.36:1) - unchanged from before A4. */
+	--color-danger-fill: var(--color-danger);
+	--color-danger-fill-hover: var(--color-danger-hover);
 	--color-info: #0969da;
 	--color-info-bg: rgba(9, 105, 218, 0.1);
+
+	/* A6 (badge contrast fix): light-theme overrides for the badge-only text tokens declared above.
+	   .badge-danger's default #cf222e measured 4.30:1 on its tinted background composited over
+	   --color-bg-secondary (#f6f8fa); #c6212c (darkened, same hue) measures 4.61:1. .badge-info's
+	   default #0969da measured 4.25:1; #0964d0 measures 4.57:1. Both keep the existing hue. */
+	--badge-danger-text: #c6212c;
+	--badge-info-text: #0964d0;
 
 	/* Accent - adjusted for light bg */
 	--color-accent: #0969da;
 	--color-accent-hover: #0550ae;
+	/* Light theme's accent already clears AA with white text (5.19:1) - no change needed. */
+	--color-on-accent: #ffffff;
+
+	/* Chart series palette - adjusted for light bg */
+	--chart-1: #0969da;
+	--chart-2: #1a7f37;
+	--chart-3: #9a6700;
+	--chart-4: #cf222e;
+	--chart-5: #8250df;
+	--chart-6: #1b7c83;
+	--chart-grid: rgba(31, 35, 40, 0.1);
+
+	--color-overlay: rgba(255, 255, 255, 0.9);
 
 	/* Shadows - softer for light theme */
 	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -253,7 +395,10 @@ code {
 	border: 1px solid transparent;
 	border-radius: var(--radius-md);
 	cursor: pointer;
-	transition: all var(--transition-fast);
+	transition:
+		background-color var(--transition-fast),
+		border-color var(--transition-fast),
+		color var(--transition-fast);
 	white-space: nowrap;
 }
 
@@ -264,7 +409,7 @@ code {
 
 .btn-primary {
 	background-color: var(--color-accent);
-	color: #ffffff;
+	color: var(--color-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -282,12 +427,12 @@ code {
 }
 
 .btn-danger {
-	background-color: var(--color-danger);
+	background-color: var(--color-danger-fill);
 	color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-	background-color: #da3633;
+	background-color: var(--color-danger-fill-hover);
 }
 
 .btn-ghost {
@@ -314,12 +459,15 @@ code {
 	background-color: var(--color-bg-tertiary);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-md);
-	outline: none;
 	transition: border-color var(--transition-fast);
 }
 
 .input:focus {
 	border-color: var(--color-accent);
+}
+
+.input:focus-visible {
+	box-shadow: var(--focus-ring);
 }
 
 .input::placeholder {
@@ -349,12 +497,12 @@ code {
 
 .badge-danger {
 	background-color: var(--color-danger-bg);
-	color: var(--color-danger);
+	color: var(--badge-danger-text);
 }
 
 .badge-info {
 	background-color: var(--color-info-bg);
-	color: var(--color-info);
+	color: var(--badge-info-text);
 }
 
 .badge-secondary {
@@ -459,7 +607,7 @@ code {
 	position: fixed;
 	bottom: var(--space-4);
 	right: var(--space-4);
-	z-index: 1000;
+	z-index: var(--z-toast);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2);
@@ -501,7 +649,7 @@ code {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	z-index: 100;
+	z-index: var(--z-modal);
 	animation: fadeIn 0.15s ease;
 }
 
@@ -585,5 +733,73 @@ code {
 
 	.container {
 		padding: 0 var(--space-3);
+	}
+}
+
+/* ============================================
+   Focus visibility
+   ============================================ */
+:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+
+/* ============================================
+   Reduced motion
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ============================================
+   View Transitions (route changes - WP9 § 6.2 Tier 3)
+   ============================================
+   Only engaged when the layout's onNavigate handler calls document.startViewTransition, which
+   it only does when lib/motion.ts's shouldUseViewTransition() is true - i.e. never under
+   prefers-reduced-motion. The reduced-motion override below is defence in depth in case a
+   browser ever fires these pseudo-elements outside that guard. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 150ms;
+	animation-timing-function: ease;
+}
+
+::view-transition-old(root) {
+	animation-name: eero-view-transition-fade-out;
+}
+
+::view-transition-new(root) {
+	animation-name: eero-view-transition-fade-in;
+}
+
+@keyframes eero-view-transition-fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes eero-view-transition-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation: none !important;
 	}
 }

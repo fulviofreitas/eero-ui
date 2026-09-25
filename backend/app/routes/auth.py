@@ -1,7 +1,6 @@
 """Authentication routes for the Eero Dashboard."""
 
 import logging
-from pathlib import Path
 
 from eero import EeroClient
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
@@ -10,15 +9,11 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..config import settings
-from ..deps import get_eero_client
+from ..deps import clear_client_session, get_eero_client
 from ..transformers import check_success, extract_data, extract_id_from_url
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
-
-# Shared session path for eero-prometheus-exporter
-EXPORTER_SESSION_PATH = Path(settings.exporter_session_path)
 
 # Rate limiter for auth endpoints (prevents brute force attacks)
 limiter = Limiter(key_func=get_remote_address)
@@ -40,6 +35,7 @@ class AuthStatusResponse(BaseModel):
     """Response for auth status endpoint."""
 
     authenticated: bool
+    reason: str | None = None
     preferred_network_id: str | None = None
     user_email: str | None = None
     user_name: str | None = None
@@ -68,15 +64,33 @@ class VerifyResponse(BaseModel):
 async def get_auth_status(
     client: EeroClient = Depends(get_eero_client),
 ) -> AuthStatusResponse:
-    """Check current authentication status."""
+    """Check current authentication status.
+
+    ``is_authenticated`` means only "a token is on disk" as of eero-api v8
+    (phase-6.0-revamp.md § 4.1) - it does not verify the token still works.
+    This route keeps the ``get_account()`` probe to distinguish a live
+    session from a dead one, and reports which case it saw via ``reason``:
+
+    - ``"none"``: no token at all.
+    - ``"expired"``: a token exists but the cloud rejected it; the token is
+      cleared here so a later call to this route reports ``authenticated:
+      false`` too, instead of looping.
+    - ``None``: authenticated with a working session (or the probe failed
+      for a reason other than authentication, e.g. a transient network
+      error - today's "authenticated but no account info" behaviour).
+    """
     user_email = None
     user_name = None
     user_phone = None
     user_role = None
     account_id = None
     premium_status = None
+    # is_authenticated is a property on EeroClient, not a method.
+    # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+    authenticated = client.is_authenticated
+    reason: str | None = None if authenticated else "none"
 
-    if client.is_authenticated:
+    if authenticated:
         try:
             raw_account = await client.get_account()
             account = extract_data(raw_account)
@@ -97,12 +111,18 @@ async def get_auth_status(
                     user_role = user.get("role")
 
             # Log minimal info - avoid PII in logs
-            _LOGGER.debug(f"Auth status check: authenticated, account_id={account_id}")
+            _LOGGER.debug("Auth status check: authenticated, account_id=%s", account_id)
+        except EeroAuthenticationException:
+            _LOGGER.info("Auth status check: session expired, clearing stored token")
+            await clear_client_session()
+            authenticated = False
+            reason = "expired"
         except Exception as e:
-            _LOGGER.warning(f"Failed to get account info: {e}")
+            _LOGGER.warning("Failed to get account info: %s", e)
 
     return AuthStatusResponse(
-        authenticated=client.is_authenticated,
+        authenticated=authenticated,
+        reason=reason,
         preferred_network_id=client.preferred_network_id,
         user_email=user_email,
         user_name=user_name,
@@ -138,54 +158,17 @@ async def login(
             message="Failed to initiate login. Please try again.",
         )
     except EeroAuthenticationException as e:
-        _LOGGER.warning(f"Login failed: {e}")
+        _LOGGER.warning("Login failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed. Please check your credentials.",
-        )
+        ) from e
     except EeroNetworkException as e:
-        _LOGGER.error(f"Network error during login: {e}")
+        _LOGGER.error("Network error during login: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error. Please check your connection.",
-        )
-
-
-async def _sync_session_to_exporter() -> None:
-    """Copy the authenticated session to the shared location.
-
-    This allows eero-prometheus-exporter to use the same session
-    for metrics collection. Reads from the main session file and
-    copies to the exporter session path.
-    """
-    try:
-        # Read the session from the main cookie file
-        main_session_path = Path(settings.cookie_file)
-        if not main_session_path.exists():
-            _LOGGER.warning("Main session file not found, cannot sync to exporter")
-            return
-
-        session_content = main_session_path.read_text()
-
-        # Ensure exporter directory exists
-        EXPORTER_SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-        # Copy session to exporter location
-        EXPORTER_SESSION_PATH.write_text(session_content)
-
-        _LOGGER.info("Session synced to eero-prometheus-exporter")
-    except Exception as e:
-        _LOGGER.warning(f"Failed to sync session to exporter: {e}")
-
-
-async def _clear_exporter_session() -> None:
-    """Remove the exporter session file on logout."""
-    try:
-        if EXPORTER_SESSION_PATH.exists():
-            EXPORTER_SESSION_PATH.unlink()
-            _LOGGER.info("Exporter session cleared")
-    except Exception as e:
-        _LOGGER.warning(f"Failed to clear exporter session: {e}")
+        ) from e
 
 
 @router.post("/verify", response_model=VerifyResponse)
@@ -203,9 +186,6 @@ async def verify(
         raw_result = await client.verify(verify_request.code)
         success = check_success(raw_result)
         if success:
-            # Sync session to eero-prometheus-exporter
-            await _sync_session_to_exporter()
-
             return VerifyResponse(
                 success=True,
                 message="Login successful!",
@@ -216,17 +196,17 @@ async def verify(
             message="Verification failed. Please try again.",
         )
     except EeroAuthenticationException as e:
-        _LOGGER.warning(f"Verification failed: {e}")
+        _LOGGER.warning("Verification failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code. Please try again.",
-        )
+        ) from e
     except EeroNetworkException as e:
-        _LOGGER.error(f"Network error during verification: {e}")
+        _LOGGER.error("Network error during verification: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error. Please check your connection.",
-        )
+        ) from e
 
 
 @router.post("/logout")
@@ -235,14 +215,10 @@ async def logout(
 ) -> dict:
     """Log out from the Eero API."""
     try:
-        # Clear exporter session first
-        await _clear_exporter_session()
-
         raw_result = await client.logout()
         success = check_success(raw_result)
         return {"success": success, "message": "Logged out successfully."}
     except Exception as e:
-        _LOGGER.error(f"Logout error: {e}")
-        # Even if logout fails, clear local state and exporter session
-        await _clear_exporter_session()
+        _LOGGER.error("Logout error: %s", e)
+        # Even if logout fails, clear local state
         return {"success": True, "message": "Logged out locally."}

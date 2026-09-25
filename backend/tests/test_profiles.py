@@ -2,7 +2,8 @@
 
 from unittest.mock import AsyncMock
 
-from eero.exceptions import EeroException
+import pytest
+from eero.exceptions import EeroException, EeroNotFoundException
 
 
 def make_raw_response(data, code: int = 200):
@@ -64,9 +65,9 @@ class TestGetProfile:
         assert data["name"] == "Kids"
 
     async def test_get_profile_eero_exception(self, auth_client, authenticated_client):
-        """EeroException returns 404."""
+        """EeroNotFoundException returns 404 (phase-6.0-revamp.md § 3.4)."""
         authenticated_client.get_profile = AsyncMock(
-            side_effect=EeroException("not found")
+            side_effect=EeroNotFoundException("profile", "profile-1")
         )
 
         response = await auth_client.get("/api/profiles/profile-1")
@@ -76,6 +77,12 @@ class TestGetProfile:
 
 class TestCreateProfile:
     """Tests for POST /api/profiles."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
 
     async def test_create_profile_success(self, auth_client, authenticated_client):
         """Creates a profile and returns 201 with ProfileSummary."""
@@ -88,7 +95,11 @@ class TestCreateProfile:
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Kids"
-        authenticated_client.create_profile.assert_called_once()
+        # v8 made network_id keyword-only on create_profile (§ 1.6); a
+        # positional second arg raises TypeError, not an EeroException.
+        authenticated_client.create_profile.assert_called_once_with(
+            "Kids", network_id="network-123"
+        )
 
     async def test_create_profile_empty_name(self, auth_client, authenticated_client):
         """Empty name returns 400 without calling SDK."""
@@ -115,6 +126,12 @@ class TestCreateProfile:
 class TestRenameProfile:
     """Tests for PATCH /api/profiles/{profile_id}."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
+
     async def test_rename_profile_success(self, auth_client, authenticated_client):
         """Renames a profile and returns updated ProfileSummary."""
         renamed_profile = {**sample_profile, "name": "Teens"}
@@ -129,7 +146,9 @@ class TestRenameProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Teens"
-        authenticated_client.rename_profile.assert_called_once()
+        authenticated_client.rename_profile.assert_called_once_with(
+            "profile-1", "Teens", network_id="network-123"
+        )
 
     async def test_rename_profile_empty_name(self, auth_client, authenticated_client):
         """Empty name returns 400 without calling SDK."""
@@ -145,9 +164,9 @@ class TestRenameProfile:
     async def test_rename_profile_eero_exception(
         self, auth_client, authenticated_client
     ):
-        """EeroException returns 404."""
+        """EeroNotFoundException returns 404 (phase-6.0-revamp.md § 3.4)."""
         authenticated_client.rename_profile = AsyncMock(
-            side_effect=EeroException("not found")
+            side_effect=EeroNotFoundException("profile", "profile-1")
         )
 
         response = await auth_client.patch(
@@ -159,6 +178,12 @@ class TestRenameProfile:
 
 class TestDeleteProfile:
     """Tests for DELETE /api/profiles/{profile_id}."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
 
     async def test_delete_profile_success(self, auth_client, authenticated_client):
         """Deletes a profile and returns ProfileAction with success=True."""
@@ -172,7 +197,9 @@ class TestDeleteProfile:
         data = response.json()
         assert data["success"] is True
         assert data["action"] == "delete"
-        authenticated_client.delete_profile.assert_called_once()
+        authenticated_client.delete_profile.assert_called_once_with(
+            "profile-1", network_id="network-123"
+        )
 
     async def test_delete_profile_eero_exception(
         self, auth_client, authenticated_client
@@ -190,6 +217,12 @@ class TestDeleteProfile:
 class TestPauseProfile:
     """Tests for POST /api/profiles/{profile_id}/pause."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
+
     async def test_pause_profile_success(self, auth_client, authenticated_client):
         """Pauses a profile and returns ProfileAction."""
         authenticated_client.pause_profile = AsyncMock(
@@ -201,10 +234,19 @@ class TestPauseProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "pause"
+        authenticated_client.pause_profile.assert_called_once_with(
+            "profile-1", paused=True, network_id="network-123"
+        )
 
 
 class TestUnpauseProfile:
     """Tests for POST /api/profiles/{profile_id}/unpause."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
 
     async def test_unpause_profile_success(self, auth_client, authenticated_client):
         """Unpauses a profile and returns ProfileAction."""
@@ -217,6 +259,9 @@ class TestUnpauseProfile:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "unpause"
+        authenticated_client.pause_profile.assert_called_once_with(
+            "profile-1", paused=False, network_id="network-123"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +299,12 @@ def _make_profile_with_devices(
 
 class TestAssignDevicesToProfile:
     """Tests for POST /api/profiles/{profile_id}/assign-devices."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_experimental_writes(self, experimental_writes_enabled):
+        """Unverified write (phase-6.0-revamp.md § 5): gated behind
+        require_experimental_writes (decision 6a). See
+        TestExperimentalWritesGate for the default-disabled 403 case."""
 
     async def test_three_devices_single_sdk_call_with_merge(
         self, auth_client, authenticated_client
@@ -296,12 +347,13 @@ class TestAssignDevicesToProfile:
 
         # The URL list passed must contain all 4 device URLs (merge of old + new)
         call_args = authenticated_client.set_profile_devices.call_args
-        # Positional: (profile_id, device_urls, network_id)
+        # Positional: (profile_id, device_urls); network_id is keyword-only.
         passed_urls: list[str] = call_args.args[1]
         expected_urls = {
             f"/2.2/networks/{network_id}/devices/device-{i}" for i in range(4)
         }
         assert set(passed_urls) == expected_urls
+        assert call_args.kwargs["network_id"] == network_id
 
     async def test_empty_device_ids_returns_200_with_count_zero(
         self, auth_client, authenticated_client
@@ -426,3 +478,69 @@ class TestAssignDevicesToProfile:
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422
+
+
+class TestExperimentalWritesGate:
+    """Every profile write classed Unverified in phase-6.0-revamp.md § 5 is
+    403 experimental_disabled unless EERO_DASHBOARD_EXPERIMENTAL_WRITES is
+    set (decision 6a) - the flag defaults to false, so these hit the SDK
+    mock zero times."""
+
+    async def test_create_profile_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.create_profile = AsyncMock()
+        response = await auth_client.post("/api/profiles", json={"name": "Kids"})
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.create_profile.assert_not_called()
+
+    async def test_rename_profile_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.rename_profile = AsyncMock()
+        response = await auth_client.patch(
+            "/api/profiles/profile-1", json={"name": "Teens"}
+        )
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.rename_profile.assert_not_called()
+
+    async def test_delete_profile_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.delete_profile = AsyncMock()
+        response = await auth_client.delete("/api/profiles/profile-1")
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.delete_profile.assert_not_called()
+
+    async def test_pause_profile_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.pause_profile = AsyncMock()
+        response = await auth_client.post("/api/profiles/profile-1/pause")
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.pause_profile.assert_not_called()
+
+    async def test_unpause_profile_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.pause_profile = AsyncMock()
+        response = await auth_client.post("/api/profiles/profile-1/unpause")
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.pause_profile.assert_not_called()
+
+    async def test_assign_devices_disabled_by_default(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.set_profile_devices = AsyncMock()
+        response = await auth_client.post(
+            "/api/profiles/profile-1/assign-devices",
+            json={"device_ids": ["device-1"]},
+        )
+        assert response.status_code == 403
+        assert response.json()["type"] == "experimental_disabled"
+        authenticated_client.set_profile_devices.assert_not_called()

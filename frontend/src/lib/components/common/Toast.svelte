@@ -6,29 +6,39 @@
 <script lang="ts">
 	import { toasts, uiStore } from '$stores';
 	import { fly } from 'svelte/transition';
+	import Icon from './Icon.svelte';
+	import type { IconName } from '$lib/icons/paths';
+
+	const TOAST_ICONS: Record<string, IconName> = {
+		success: 'check',
+		error: 'x',
+		warning: 'alert-triangle',
+		info: 'help-circle'
+	};
 </script>
 
-<div class="toast-container" aria-live="polite">
+<div class="toast-container">
 	{#each $toasts as toast (toast.id)}
-		<div class="toast {toast.type}" role="alert" transition:fly={{ x: 100, duration: 200 }}>
+		<div
+			class="toast {toast.type}"
+			role={toast.type === 'error' ? 'alert' : 'status'}
+			aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+			transition:fly={{ x: 100, duration: 200 }}
+			onmouseenter={() => uiStore.pauseToast(toast.id)}
+			onmouseleave={() => uiStore.resumeToast(toast.id)}
+			onfocusin={() => uiStore.pauseToast(toast.id)}
+			onfocusout={() => uiStore.resumeToast(toast.id)}
+		>
 			<span class="toast-icon">
-				{#if toast.type === 'success'}
-					✓
-				{:else if toast.type === 'error'}
-					✕
-				{:else if toast.type === 'warning'}
-					⚠
-				{:else}
-					ℹ
-				{/if}
+				<Icon name={TOAST_ICONS[toast.type] ?? 'help-circle'} size={16} />
 			</span>
 			<span class="toast-message">{toast.message}</span>
 			<button
 				class="toast-close"
-				on:click={() => uiStore.removeToast(toast.id)}
+				onclick={() => uiStore.removeToast(toast.id)}
 				aria-label="Dismiss"
 			>
-				×
+				<Icon name="close" size={14} />
 			</button>
 		</div>
 	{/each}
@@ -39,7 +49,7 @@
 		position: fixed;
 		bottom: var(--space-4);
 		right: var(--space-4);
-		z-index: 1000;
+		z-index: var(--z-toast);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
@@ -97,8 +107,15 @@
 	}
 
 	.toast-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* A7: 24x24 minimum touch/click target. */
+		min-width: 24px;
+		min-height: 24px;
 		background: none;
 		border: none;
+		border-radius: var(--radius-sm);
 		color: var(--color-text-muted);
 		cursor: pointer;
 		font-size: 1.25rem;
@@ -109,5 +126,9 @@
 
 	.toast-close:hover {
 		color: var(--color-text-primary);
+	}
+
+	.toast-close:focus-visible {
+		box-shadow: var(--focus-ring);
 	}
 </style>

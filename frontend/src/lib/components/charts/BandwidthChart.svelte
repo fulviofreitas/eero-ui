@@ -11,7 +11,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
+	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
 	import { getDeviceSignalHistory } from '$lib/api/metrics';
+	import { seriesColor, withAlpha } from '$lib/charts/defaults';
 
 	interface Props {
 		deviceMac: string;
@@ -19,17 +21,25 @@
 
 	let { deviceMac }: Props = $props();
 
-	let timeRange: '1h' | '6h' | '24h' = $state('1h');
+	type BandwidthTimeRange = '1h' | '6h' | '24h';
+
+	let timeRange: BandwidthTimeRange = $state('1h');
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let signalData: Array<{ x: number; y: number }> = $state([]);
+
+	const timeRangeOptions: { value: BandwidthTimeRange; label: string }[] = [
+		{ value: '1h', label: '1h' },
+		{ value: '6h', label: '6h' },
+		{ value: '24h', label: '24h' }
+	];
 
 	const datasets = $derived([
 		{
 			label: 'Signal Strength',
 			data: signalData,
-			borderColor: 'rgb(99, 102, 241)',
-			backgroundColor: 'rgba(99, 102, 241, 0.1)',
+			borderColor: seriesColor(4),
+			backgroundColor: withAlpha(seriesColor(4), 0.1),
 			fill: true
 		}
 	]);
@@ -98,11 +108,12 @@
 <div class="bandwidth-chart">
 	<div class="chart-header">
 		<h3>Signal Strength History</h3>
-		<div class="time-range-selector">
-			<button class:active={timeRange === '1h'} onclick={() => setTimeRange('1h')}> 1h </button>
-			<button class:active={timeRange === '6h'} onclick={() => setTimeRange('6h')}> 6h </button>
-			<button class:active={timeRange === '24h'} onclick={() => setTimeRange('24h')}> 24h </button>
-		</div>
+		<TimeRangeSelector
+			options={timeRangeOptions}
+			value={timeRange}
+			onChange={setTimeRange}
+			label="Signal strength history time range"
+		/>
 	</div>
 
 	<TimeSeriesChart title="" {datasets} yAxisLabel="dBm" {loading} {error} />
@@ -127,33 +138,5 @@
 		margin: 0;
 		font-size: 1rem;
 		font-weight: 600;
-	}
-
-	.time-range-selector {
-		display: flex;
-		gap: var(--space-1);
-	}
-
-	.time-range-selector button {
-		padding: var(--space-1) var(--space-3);
-		border: 1px solid var(--color-border);
-		background: var(--color-bg-primary);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		transition: all var(--transition-fast);
-	}
-
-	.time-range-selector button:hover {
-		background: var(--color-bg-tertiary);
-		color: var(--color-text-primary);
-	}
-
-	.time-range-selector button.active {
-		background: var(--color-accent);
-		color: white;
-		border-color: var(--color-accent);
 	}
 </style>

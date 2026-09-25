@@ -1,39 +1,19 @@
 <!--
   TimeSeriesChart Component
-  
+
   Base chart component for time-series data visualization using Chart.js.
-  Used as the foundation for SpeedtestChart and BandwidthChart.
+  Used as the foundation for SpeedtestChart, ClientCountChart and BandwidthChart.
+
+  Registration and theme-aware options come from `$lib/charts/defaults.ts` — see that module
+  for why (single register call, canvas cannot parse `var()`, one palette).
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import {
-		Chart as ChartJS,
-		CategoryScale,
-		LinearScale,
-		PointElement,
-		LineElement,
-		LineController,
-		Title,
-		Tooltip,
-		Legend,
-		TimeScale,
-		Filler
-	} from 'chart.js';
-	import 'chartjs-adapter-date-fns';
+	import { Chart as ChartJS } from 'chart.js';
+	import { registerCharts, lineChartOptions, onThemeChange } from '$lib/charts/defaults';
+	import Skeleton from '$components/common/Skeleton.svelte';
 
-	// Register Chart.js components (LineController is required for type: 'line')
-	ChartJS.register(
-		CategoryScale,
-		LinearScale,
-		PointElement,
-		LineElement,
-		LineController,
-		Title,
-		Tooltip,
-		Legend,
-		TimeScale,
-		Filler
-	);
+	registerCharts();
 
 	interface DataPoint {
 		x: number;
@@ -69,6 +49,28 @@
 
 	const hasData = $derived(datasets.length > 0 && datasets.some((ds) => ds.data.length > 0));
 
+	// A8: accessible label for the canvas, since Chart.js draws to a <canvas> with no text content
+	// for assistive tech to read. Reports the most recent point across all datasets (the value an
+	// operator glancing at the chart cares about most).
+	function getLatestPoint(ds: Dataset[]): DataPoint | null {
+		let latest: DataPoint | null = null;
+		for (const dataset of ds) {
+			for (const point of dataset.data) {
+				if (!latest || point.x > latest.x) {
+					latest = point;
+				}
+			}
+		}
+		return latest;
+	}
+
+	const ariaLabel = $derived.by(() => {
+		const latest = getLatestPoint(datasets);
+		if (!latest) return `${title}: no data`;
+		const time = new Date(latest.x).toLocaleTimeString();
+		return `${title}: latest ${latest.y} at ${time}`;
+	});
+
 	// Deep clone datasets to avoid Svelte 5 reactivity conflicts with Chart.js
 	// Chart.js uses Object.defineProperty which conflicts with $state proxies
 	function cloneDatasets() {
@@ -98,55 +100,7 @@
 			data: {
 				datasets: cloneDatasets()
 			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				interaction: {
-					mode: 'index',
-					intersect: false
-				},
-				plugins: {
-					legend: {
-						position: 'top'
-					},
-					title: {
-						display: !!title,
-						text: title
-					},
-					tooltip: {
-						callbacks: {
-							label: (context) => {
-								const value = context.parsed.y;
-								if (value === null || value === undefined) return '';
-								return `${context.dataset.label}: ${value.toFixed(2)} ${yAxisLabel}`;
-							}
-						}
-					}
-				},
-				scales: {
-					x: {
-						type: 'time',
-						time: {
-							tooltipFormat: 'PPpp',
-							displayFormats: {
-								hour: 'HH:mm',
-								day: 'MMM d'
-							}
-						},
-						title: {
-							display: true,
-							text: 'Time'
-						}
-					},
-					y: {
-						beginAtZero: true,
-						title: {
-							display: !!yAxisLabel,
-							text: yAxisLabel
-						}
-					}
-				}
-			}
+			options: lineChartOptions({ title, yAxisLabel })
 		});
 	}
 
@@ -154,6 +108,7 @@
 		if (!chart) return;
 
 		chart.data.datasets = cloneDatasets();
+		chart.options = lineChartOptions({ title, yAxisLabel });
 		chart.update('none');
 	}
 
@@ -182,7 +137,10 @@
 		}
 	});
 
+	const unsubscribeTheme = onThemeChange(() => updateChart());
+
 	onDestroy(() => {
+		unsubscribeTheme();
 		if (chart) {
 			chart.destroy();
 			chart = null;
@@ -191,12 +149,9 @@
 </script>
 
 <div class="chart-container">
-	{#if loading}
-		<div class="chart-loading">
-			<span class="loading-spinner"></span>
-			<span>Loading chart data...</span>
-		</div>
-	{:else if error}
+	{#if loading && !hasData}
+		<Skeleton variant="card" height="100%" />
+	{:else if error && !hasData}
 		<div class="chart-error">
 			<span>Error: {error}</span>
 		</div>
@@ -205,7 +160,16 @@
 			<span>No data available for the selected time range</span>
 		</div>
 	{:else}
-		<canvas use:handleCanvas></canvas>
+		<!-- A8: canvas has no implicit role; role="img" + aria-label is the documented MDN
+		     pattern for giving a <canvas> chart an accessible name. Svelte's a11y check flags
+		     it as a noninteractive-role-on-non-interactive-element false positive. -->
+		<!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
+		<canvas use:handleCanvas role="img" aria-label={ariaLabel}></canvas>
+		{#if loading}
+			<span class="chart-refreshing" role="status" aria-label="Refreshing chart data">
+				<span class="loading-spinner"></span>
+			</span>
+		{/if}
 	{/if}
 </div>
 
@@ -216,7 +180,6 @@
 		width: 100%;
 	}
 
-	.chart-loading,
 	.chart-error,
 	.chart-empty {
 		display: flex;
@@ -230,6 +193,13 @@
 
 	.chart-error {
 		color: var(--color-danger);
+	}
+
+	.chart-refreshing {
+		position: absolute;
+		top: var(--space-2);
+		right: var(--space-2);
+		display: inline-flex;
 	}
 
 	canvas {

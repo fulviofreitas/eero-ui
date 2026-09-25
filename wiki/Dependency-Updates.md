@@ -5,11 +5,15 @@ This project uses **Renovate** with a **GitHub App** for automated dependency ma
 ## Overview
 
 The dependency update system automatically:
-- Tracks new releases of `eero-api` (the core API client)
+- Tracks new releases of `eero-api` (the core API client), capped below `9.0.0`
+- Tracks the pinned VictoriaMetrics binary (`Dockerfile`) via GitHub releases
+- Tracks the documented `eero-prometheus-exporter` image tag in the optional, commented-out compose service
 - Creates PRs **immediately** when dependencies have updates available
 - Auto-merges minor/patch updates for non-critical dependencies
 - Requires manual review for `eero-api` and major updates
 - Triggers instantly when `eero-api` releases a new version
+
+Since 6.0 the exporter is **not** a dependency of eero-ui — it appears in Renovate only as a documented image tag (see [Custom Managers](#custom-managers-regex)).
 
 ## Ecosystem Repositories
 
@@ -19,8 +23,9 @@ The Renovate configuration is standardized across all repositories:
 |:-----------|:---------------------|:-------------|:------------|
 | **eero-api** | ❌ N/A (is eero-api) | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-api/blob/master/.github/renovate.json5) |
 | **eero-cli** | ✅ `^pyproject\.toml$` | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-cli/blob/master/.github/renovate.json5) |
-| **eero-prometheus-exporter** | ✅ `^pyproject\.toml$` | ❌ No | [renovate.json5](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/renovate.json5) |
-| **eero-ui** | ✅ `^backend/pyproject\.toml$` | ✅ Yes | [renovate.json5](https://github.com/fulviofreitas/eero-ui/blob/master/.github/renovate.json5) |
+| **eero-ui** | ✅ `^backend/pyproject\.toml$` (`allowedVersions: "<9.0.0"`) | ✅ Yes | [renovate.json5](https://github.com/fulviofreitas/eero-ui/blob/master/.github/renovate.json5) |
+
+`eero-prometheus-exporter` is a separate project with its own Renovate setup; it is no longer part of eero-ui's dependency chain.
 
 ---
 
@@ -54,24 +59,23 @@ flowchart TB
             cli_ci["🧪 CI Pipeline"]
             cli_renovate --> cli_pr --> cli_ci
         end
-
-        subgraph exporter ["eero-prometheus-exporter"]
-            exp_renovate["🔄 Renovate Workflow"]
-            exp_pr["📝 Create PR"]
-            exp_ci["🧪 CI Pipeline"]
-            exp_renovate --> exp_pr --> exp_ci
-        end
     end
 
     event --> ui_renovate
     event --> cli_renovate
-    event --> exp_renovate
 
     ui_ci --> review["👀 Manual Review"]
     cli_ci --> review
-    exp_ci --> review
 
     review --> merge["✅ Merge"]
+
+    subgraph regex ["eero-ui custom.regex managers (scheduled, not dispatched)"]
+        vm["🔷 VictoriaMetrics binary<br/>Dockerfile ARG VM_VERSION ← GitHub releases"]
+        exp_tag["🔷 exporter image tag<br/>docker-compose.yml commented service ← ghcr.io"]
+    end
+
+    vm --> ui_pr
+    exp_tag --> ui_pr
 ```
 
 ---
@@ -102,6 +106,8 @@ All repositories use the same base configuration. See the config files linked ab
 | 🟡 **Python minor/patch** | ✅ Squash | `chore(deps-python):` | `automerge` |
 | 🟡 **npm minor/patch** | ✅ Squash | `chore(deps-npm):` | `automerge` |
 | 🟢 **GitHub Actions** | ✅ Squash | `chore(deps-actions):` | `automerge` |
+| 🔷 **VictoriaMetrics binary** (minor/patch) | ✅ Squash | `chore(deps-vm):` | `victoria-metrics` |
+| 🔷 **eero-prometheus-exporter documented tag** (minor/patch) | ✅ Squash | `docs(deps):` | `eero-packages` |
 | 🔵 **Major updates** | ❌ No | `chore(deps-major):` | `major-update`, `needs-review` |
 | 🟣 **Security patches** | Priority 20 | - | - |
 | 🚨 **Vulnerability alerts** | ✅ Yes | - | `security`, `critical` |
@@ -123,6 +129,15 @@ All major version updates (any dependency):
 - Automatically request review from maintainers
 - Never auto-merged
 
+## Custom Managers (regex)
+
+Two versions have no native package manager, so `enabledManagers` includes `custom.regex` and `customManagers` defines one matcher each:
+
+| Manager | Where it looks | Source of new versions | Why |
+|:--------|:---------------|:-----------------------|:----|
+| **VictoriaMetrics binary** | `Dockerfile` `ARG VM_VERSION=v1.96.0` in the `vm-downloader` stage | GitHub releases of `VictoriaMetrics/VictoriaMetrics` (v-prefixed tags, kept like-for-like via `extractVersionTemplate`) | The embedded time-series store was untracked before 6.0. Minor/patch auto-merge; majors go through the generic major-updates rule |
+| **eero-prometheus-exporter image tag** | the commented-out `eero-exporter` service in `docker-compose.yml` (`image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0`) | ghcr.io tags | eero-ui does not run or depend on the exporter; this only keeps the documented known-good tag current for operators who opt in. Minor/patch auto-merge with a `docs(deps):` prefix |
+
 ---
 
 ## Cross-Repository Dispatch
@@ -137,7 +152,6 @@ sequenceDiagram
     participant GH as GitHub
     participant UI as eero-ui
     participant CLI as eero-cli
-    participant EXP as eero-exporter
 
     EC->>EC: 🚀 Semantic Release
     EC->>GH: notify-downstream job
@@ -145,17 +159,16 @@ sequenceDiagram
     par Dispatch to all repos
         GH->>UI: repository_dispatch
         GH->>CLI: repository_dispatch
-        GH->>EXP: repository_dispatch
     end
 
     UI->>UI: 🔄 Renovate runs
     CLI->>CLI: 🔄 Renovate runs
-    EXP->>EXP: 🔄 Renovate runs
 
     UI->>UI: 📝 Creates PR
     CLI->>CLI: 📝 Creates PR
-    EXP->>EXP: 📝 Creates PR
 ```
+
+The two regex-managed versions (VictoriaMetrics binary, exporter image tag) are picked up on the scheduled and manual runs only; there is no cross-repository dispatch for them.
 
 ### Workflow Files
 
@@ -163,7 +176,6 @@ sequenceDiagram
 |:-----------|:-----------------|:------------------|
 | **eero-api** | [release.yml](https://github.com/fulviofreitas/eero-api/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-api/blob/master/.github/workflows/renovate.yml) |
 | **eero-cli** | [release.yml](https://github.com/fulviofreitas/eero-cli/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-cli/blob/master/.github/workflows/renovate.yml) |
-| **eero-prometheus-exporter** | [release.yml](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-prometheus-exporter/blob/master/.github/workflows/renovate.yml) |
 | **eero-ui** | [release.yml](https://github.com/fulviofreitas/eero-ui/blob/master/.github/workflows/release.yml) | [renovate.yml](https://github.com/fulviofreitas/eero-ui/blob/master/.github/workflows/renovate.yml) |
 
 ---

@@ -26,11 +26,6 @@ interface SpeedtestHistoryResponse {
 	upload: MetricsResponse;
 }
 
-interface BandwidthHistoryResponse {
-	rx: MetricsResponse;
-	tx: MetricsResponse;
-}
-
 interface SignalHistoryResponse {
 	signal_strength: MetricsResponse;
 	connection_score: MetricsResponse;
@@ -140,64 +135,6 @@ export async function getDeviceSignalHistory(
 	}
 }
 
-/**
- * Get device bandwidth history for charts (legacy - returns signal data)
- * @deprecated Use getDeviceSignalHistory instead
- */
-export async function getDeviceBandwidth(
-	mac: string,
-	start: string,
-	end: string,
-	step = '1m'
-): Promise<{ rx: TimeSeriesPoint[]; tx: TimeSeriesPoint[] }> {
-	try {
-		// Normalize MAC address (remove colons, lowercase)
-		const normalizedMac = mac.replace(/:/g, '').toLowerCase();
-
-		const response = await fetchMetrics<BandwidthHistoryResponse>(
-			`/metrics/devices/${normalizedMac}/bandwidth`,
-			{
-				start,
-				end,
-				step
-			}
-		);
-
-		return {
-			rx: transformMetricsResponse(response.rx),
-			tx: transformMetricsResponse(response.tx)
-		};
-	} catch (error) {
-		// Return empty data on error - charts will show "no data available"
-		console.error('Failed to fetch device bandwidth:', error);
-		return { rx: [], tx: [] };
-	}
-}
-
-/**
- * Execute arbitrary PromQL query (instant)
- */
-export async function queryMetrics(promql: string): Promise<MetricsResponse> {
-	return fetchMetrics<MetricsResponse>('/metrics/query', { query: promql });
-}
-
-/**
- * Execute PromQL range query
- */
-export async function queryMetricsRange(
-	promql: string,
-	start: string,
-	end: string,
-	step = '1m'
-): Promise<MetricsResponse> {
-	return fetchMetrics<MetricsResponse>('/metrics/query_range', {
-		query: promql,
-		start,
-		end,
-		step
-	});
-}
-
 interface ClientCountHistoryResponse {
 	total: MetricsResponse;
 	wireless: MetricsResponse;
@@ -238,35 +175,5 @@ export async function getClientCountHistory(
 	} catch (error) {
 		console.error('Failed to fetch client count history:', error);
 		return { total: [], wireless: [], wired: [] };
-	}
-}
-
-interface MeshQualityHistoryResponse {
-	mesh_quality: MetricsResponse;
-}
-
-/**
- * Get eero mesh quality history for charts
- */
-export async function getEeroMeshQualityHistory(
-	serial: string,
-	start: string,
-	end: string,
-	step = '5m'
-): Promise<TimeSeriesPoint[]> {
-	try {
-		const response = await fetchMetrics<MeshQualityHistoryResponse>(
-			`/metrics/eeros/${serial}/quality`,
-			{
-				start,
-				end,
-				step
-			}
-		);
-
-		return transformMetricsResponse(response.mesh_quality);
-	} catch (error) {
-		console.error('Failed to fetch eero mesh quality history:', error);
-		return [];
 	}
 }
