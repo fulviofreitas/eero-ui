@@ -256,7 +256,6 @@ class MetricsCollector:
             or any individual network's collection failed; True otherwise.
         """
         # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
-        # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
         if not client.is_authenticated:
             return False
 
