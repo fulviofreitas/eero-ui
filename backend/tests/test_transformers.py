@@ -268,6 +268,71 @@ class TestNormalizeNetwork:
         result = normalize_network(raw)
         assert result["guest_network_enabled"] is True
 
+    def test_speed_test_normalizes_raw_envelope_shape(self):
+        """The raw ``speed`` envelope (down/up wrapper dicts) must come out
+        in the download_mbps/upload_mbps/timestamp shape the frontend's
+        SpeedTestResult expects - not the raw down/up shape (the bug that
+        left the dashboard Speed Test card blank)."""
+        raw = {
+            "url": "/networks/1",
+            "speed": {
+                "down": {"value": 500.0, "units": "Mbps"},
+                "up": {"value": 50.0, "units": "Mbps"},
+                "date": "2026-01-01T00:00:00Z",
+            },
+        }
+        result = normalize_network(raw)
+        assert result["speed_test"] == {
+            "download_mbps": 500.0,
+            "upload_mbps": 50.0,
+            "latency_ms": None,
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+
+    def test_speed_test_prefers_speed_test_key_over_speed(self):
+        """``speed_test`` (if present) takes priority over ``speed``."""
+        raw = {
+            "url": "/networks/1",
+            "speed_test": {"down": {"value": 10.0}, "up": {"value": 5.0}},
+            "speed": {"down": {"value": 999.0}, "up": {"value": 999.0}},
+        }
+        result = normalize_network(raw)
+        assert result["speed_test"]["download_mbps"] == 10.0
+        assert result["speed_test"]["upload_mbps"] == 5.0
+
+    def test_speed_test_passes_through_already_normalized_shape(self):
+        """A dict already in the normalized download_mbps/upload_mbps shape
+        (e.g. round-tripped through our own API) passes through unchanged."""
+        raw = {
+            "url": "/networks/1",
+            "speed_test": {
+                "download_mbps": 123.4,
+                "upload_mbps": 45.6,
+                "latency_ms": 12.0,
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            },
+        }
+        result = normalize_network(raw)
+        assert result["speed_test"] == {
+            "download_mbps": 123.4,
+            "upload_mbps": 45.6,
+            "latency_ms": 12.0,
+            "timestamp": "2026-01-01T00:00:00+00:00",
+        }
+
+    def test_speed_test_none_when_absent(self):
+        """No speed/speed_test key at all normalizes to None."""
+        raw = {"url": "/networks/1"}
+        result = normalize_network(raw)
+        assert result["speed_test"] is None
+
+    def test_speed_test_none_when_down_and_up_both_missing(self):
+        """A speed object with neither down nor up normalizes to None,
+        even though the key itself is present."""
+        raw = {"url": "/networks/1", "speed": {"date": "2026-01-01T00:00:00Z"}}
+        result = normalize_network(raw)
+        assert result["speed_test"] is None
+
 
 class TestNormalizeDevice:
     """Tests for normalize_device function."""
@@ -660,3 +725,52 @@ class TestNormalizeSpeedTest:
             "latency_ms": None,
             "date": None,
         }
+
+    def test_accepts_bare_number_down_and_up(self):
+        """down/up sent as bare numbers (not the {"value": n} wrapper) are
+        accepted, not silently dropped to None."""
+        result = normalize_speed_test({"down": 250.5, "up": 20.1})
+
+        assert result["down_mbps"] == 250.5
+        assert result["up_mbps"] == 20.1
+
+    def test_bool_down_or_up_is_not_treated_as_numeric(self):
+        """bool is an int subclass in Python; must not be coerced to 0.0/1.0."""
+        result = normalize_speed_test({"down": True, "up": False})
+
+        assert result["down_mbps"] is None
+        assert result["up_mbps"] is None
+
+    def test_accepts_timestamp_key(self):
+        """Accepts 'timestamp' as an alternative to 'date'."""
+        result = normalize_speed_test({"timestamp": "2026-01-01T00:00:00Z"})
+
+        assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_accepts_created_at_key(self):
+        """Accepts 'created_at' as an alternative to 'date'."""
+        result = normalize_speed_test({"created_at": "2026-01-01T00:00:00Z"})
+
+        assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_naive_date_gets_utc_offset_appended(self):
+        """A naive date (eero's own values are UTC) becomes tz-aware so the
+        frontend's newer-than-started_at comparison never mis-parses it as
+        local time."""
+        result = normalize_speed_test({"date": "2026-01-01T00:00:00"})
+
+        assert result["date"] == "2026-01-01T00:00:00+00:00"
+
+    def test_already_tz_aware_date_is_unchanged(self):
+        """A date that already carries an offset is returned unchanged, not
+        reformatted (e.g. 'Z' is preserved rather than rewritten to
+        '+00:00')."""
+        result = normalize_speed_test({"date": "2026-01-01T00:00:00Z"})
+
+        assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_unparseable_date_is_returned_unchanged(self):
+        """A malformed date string is passed through rather than raising."""
+        result = normalize_speed_test({"date": "not-a-date"})
+
+        assert result["date"] == "not-a-date"

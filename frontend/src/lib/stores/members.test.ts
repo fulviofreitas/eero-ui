@@ -50,9 +50,15 @@ describe('membersStore', () => {
 		expect(state.error).toBeNull();
 	});
 
-	it('records a transport failure as error', async () => {
+	it('records a whole-card error only when every one of the three sources fails', async () => {
 		server.use(
 			http.get('/api/networks/:networkId/permissions', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			),
+			http.get('/api/networks/:networkId/members', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			),
+			http.get('/api/networks/:networkId/invites', () =>
 				HttpResponse.json({ detail: 'boom' }, { status: 500 })
 			)
 		);
@@ -62,6 +68,28 @@ describe('membersStore', () => {
 		const state = get(membersStore);
 		expect(state.error).toBeTruthy();
 		expect(state.loading).toBe(false);
+	});
+
+	it('degrades one failed source to partial instead of erroring the whole card (bug-fix follow-up)', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/invites', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			)
+		);
+
+		await membersStore.fetch('network-123');
+
+		const state = get(membersStore);
+		// Permissions/members still loaded even though invites failed outright.
+		expect(state.error).toBeNull();
+		expect(state.role).toBe('owner');
+		expect(state.permissions.can_manage_devices).toBe(true);
+		expect(state.members).toHaveLength(1);
+		// The failed source falls back to empty and is flagged partial.
+		expect(state.invites).toEqual([]);
+		expect(state.invitesPartial).toBe(true);
+		expect(state.permissionsPartial).toBe(false);
+		expect(state.membersPartial).toBe(false);
 	});
 
 	it('clear resets to the initial state', async () => {

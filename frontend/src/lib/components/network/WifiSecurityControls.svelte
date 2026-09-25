@@ -19,9 +19,11 @@
 
 	interface Props {
 		networkId: string;
+		/** Suppress this control's own "disabled by operator" note - the parent card renders one summary note instead. */
+		silent?: boolean;
 	}
 
-	let { networkId }: Props = $props();
+	let { networkId, silent = false }: Props = $props();
 
 	let wanState = $derived($securityWanStore);
 
@@ -159,7 +161,7 @@
 	let proxiedNodesEnabled = $derived(Boolean(wanState.advanced?.proxied_nodes_enabled));
 </script>
 
-<ExperimentalGate>
+<ExperimentalGate {silent}>
 	<div class="wifi-security-controls">
 		<div class="control-group">
 			<span class="control-label">WPA3 - 2.4 GHz</span>

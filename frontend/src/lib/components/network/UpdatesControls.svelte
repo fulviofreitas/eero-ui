@@ -19,9 +19,11 @@
 
 	interface Props {
 		networkId: string;
+		/** Suppress this control's own "disabled by operator" note - the parent card renders one summary note instead. */
+		silent?: boolean;
 	}
 
-	let { networkId }: Props = $props();
+	let { networkId, silent = false }: Props = $props();
 
 	let wanState = $derived($securityWanStore);
 
@@ -60,7 +62,7 @@
 </script>
 
 {#if updateAvailable}
-	<ExperimentalGate>
+	<ExperimentalGate {silent}>
 		<div class="updates-controls">
 			{#if note}<p class="field-note">{note}</p>{/if}
 			<button

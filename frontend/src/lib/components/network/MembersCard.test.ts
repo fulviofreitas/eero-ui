@@ -65,9 +65,15 @@ describe('MembersCard', () => {
 		);
 	});
 
-	it('renders ErrorState with a working retry on a 5xx', async () => {
+	it('renders ErrorState with a working retry when every one of the three sources fails', async () => {
 		server.use(
 			http.get('/api/networks/:networkId/permissions', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			),
+			http.get('/api/networks/:networkId/members', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			),
+			http.get('/api/networks/:networkId/invites', () =>
 				HttpResponse.json({ detail: 'boom' }, { status: 500 })
 			)
 		);
@@ -79,11 +85,39 @@ describe('MembersCard', () => {
 		server.use(
 			http.get('/api/networks/:networkId/permissions', () =>
 				HttpResponse.json({ permissions: {}, role: 'recovered', partial: false })
+			),
+			http.get('/api/networks/:networkId/members', () =>
+				HttpResponse.json({ members: [], partial: false })
+			),
+			http.get('/api/networks/:networkId/invites', () =>
+				HttpResponse.json({ invites: [], partial: false })
 			)
 		);
 		await fireEvent.click(screen.getByRole('button', { name: /retry/i }));
 
 		await waitFor(() => expect(screen.getByText('recovered')).toBeInTheDocument());
+	});
+
+	it('renders role and permissions with a muted note instead of erroring when only one source fails (bug-fix follow-up)', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/invites', () =>
+				HttpResponse.json({ detail: 'boom' }, { status: 500 })
+			)
+		);
+
+		render(MembersCard, { props: { networkId: 'network-123' } });
+
+		// The invites source 5xxs, so the API client's GET retry/backoff (2
+		// retries, exponential) runs to exhaustion before Promise.allSettled
+		// resolves - same real-time cost as the "every source fails" retry
+		// test above, hence the same extended timeout.
+		await waitFor(
+			() => expect(screen.getByText('Some data unavailable for this account.')).toBeInTheDocument(),
+			{ timeout: 5000 }
+		);
+		expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+		expect(screen.getAllByText('owner').length).toBeGreaterThan(0);
+		expect(screen.getByText('can_manage_devices')).toBeInTheDocument();
 	});
 
 	it('hides every invite/admin write control when the experimental-writes gate is off', async () => {
