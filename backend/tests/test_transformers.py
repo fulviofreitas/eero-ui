@@ -356,6 +356,36 @@ class TestNormalizeDevice:
         assert normalize_device(raw_wireless)["connection_type"] == "wireless"
         assert normalize_device(raw_wired)["connection_type"] == "wired"
 
+    def test_connection_type_falls_back_to_connection_type_field(self):
+        """When `wireless` is absent, fall back to a `connection_type` string.
+
+        Matches eero-prometheus-exporter's `_get_connection_type`
+        (collector.py:849-865): a `wireless` boolean always wins, but a
+        device that omits it can still be classified from its own
+        `connection_type` field.
+        """
+        raw = {"url": "/devices/1", "connection_type": "Wireless"}
+        assert normalize_device(raw)["connection_type"] == "wireless"
+
+    def test_connection_type_unknown_when_indeterminate(self):
+        """A device with neither `wireless` nor a recognizable
+        `connection_type` field must be "unknown", never silently folded
+        into "wired" (eero-ui#413: this is what caused the wireless/wired
+        client-count split to lose devices across the 6.0 collector
+        migration instead of reclassifying them).
+        """
+        assert normalize_device({"url": "/devices/1"})["connection_type"] == "unknown"
+        assert (
+            normalize_device({"url": "/devices/1", "connection_type": "ethernet"})[
+                "connection_type"
+            ]
+            == "unknown"
+        )
+
+    def test_connected_flag_defaults_false(self):
+        """A device with no `connected` key must normalize to False, not None."""
+        assert normalize_device({"url": "/devices/1"})["connected"] is False
+
     def test_extracts_connectivity_info(self):
         """Should extract signal and frequency from connectivity."""
         raw = {
@@ -768,6 +798,84 @@ class TestNormalizeSpeedTest:
         result = normalize_speed_test({"date": "2026-01-01T00:00:00Z"})
 
         assert result["date"] == "2026-01-01T00:00:00Z"
+
+    def test_nested_under_speed_wrapper(self):
+        """down/up nested under a top-level `speed` key (the shape the
+        network envelope uses for its own embedded single result, per
+        eero-api tests/api/conftest.py sample_network_data) are accepted
+        for history entries too (eero-ui#413)."""
+        raw = {
+            "date": "2026-01-01T00:00:00Z",
+            "speed": {
+                "down": {"value": 500.0, "units": "Mbps"},
+                "up": {"value": 50.0, "units": "Mbps"},
+            },
+        }
+
+        result = normalize_speed_test(raw)
+
+        assert result["down_mbps"] == 500.0
+        assert result["up_mbps"] == 50.0
+
+    def test_download_upload_key_names(self):
+        """`download`/`upload` are accepted as alternatives to `down`/`up`."""
+        raw = {"download": {"value": 300.0}, "upload": {"value": 25.0}}
+
+        result = normalize_speed_test(raw)
+
+        assert result["down_mbps"] == 300.0
+        assert result["up_mbps"] == 25.0
+
+    def test_download_mbps_upload_mbps_bare_numeric_fields(self):
+        """`download_mbps`/`upload_mbps` bare numeric fields are accepted."""
+        raw = {"down_mbps": 400.0, "up_mbps": 40.0}
+
+        result = normalize_speed_test(raw)
+
+        assert result["down_mbps"] == 400.0
+        assert result["up_mbps"] == 40.0
+
+    def test_latency_ms_key(self):
+        """`latency_ms` is accepted as an alternative to `latency`."""
+        result = normalize_speed_test({"latency_ms": 15.5})
+
+        assert result["latency_ms"] == 15.5
+
+    def test_ping_key(self):
+        """`ping` is accepted as an alternative to `latency`/`latency_ms`."""
+        result = normalize_speed_test({"ping": 9.0})
+
+        assert result["latency_ms"] == 9.0
+
+    def test_latency_as_value_wrapper(self):
+        """Latency sent as a {"value": n} wrapper (like down/up) is unwrapped."""
+        result = normalize_speed_test({"latency": {"value": 11.0, "units": "ms"}})
+
+        assert result["latency_ms"] == 11.0
+
+    def test_kbps_units_converted_to_mbps(self):
+        """A `units` of "Kbps" is converted to Mbps, not treated as already-Mbps."""
+        result = normalize_speed_test({"down": {"value": 500000.0, "units": "Kbps"}})
+
+        assert result["down_mbps"] == 500.0
+
+    def test_gbps_units_converted_to_mbps(self):
+        """A `units` of "Gbps" is converted to Mbps, not treated as already-Mbps."""
+        result = normalize_speed_test({"up": {"value": 1.0, "units": "Gbps"}})
+
+        assert result["up_mbps"] == 1000.0
+
+    def test_top_level_down_up_take_priority_over_speed_wrapper(self):
+        """When both top-level and `speed`-nested down/up are present, the
+        top-level value wins (it is the more specific, entry-level shape)."""
+        raw = {
+            "down": {"value": 100.0},
+            "speed": {"down": {"value": 999.0}},
+        }
+
+        result = normalize_speed_test(raw)
+
+        assert result["down_mbps"] == 100.0
 
     def test_unparseable_date_is_returned_unchanged(self):
         """A malformed date string is passed through rather than raising."""

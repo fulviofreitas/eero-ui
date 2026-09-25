@@ -429,7 +429,27 @@ async def get_speed_test_history(
         network_id=network_id, limit=limit, start_time=start_time, end_time=end_time
     )
     results = extract_list(raw_response, "speedtest")
-    return [_speed_test_result_model(r) for r in results if isinstance(r, dict)]
+    dict_results = [r for r in results if isinstance(r, dict)]
+    normalized_results = [_speed_test_result_model(r) for r in dict_results]
+
+    if dict_results and all(
+        result.download_mbps is None and result.upload_mbps is None
+        for result in normalized_results
+    ):
+        # Every entry normalized to null download/upload despite the API
+        # returning results -- the entry shape has drifted from every
+        # variant `normalize_speed_test` knows about (eero-ui#413). Log
+        # the first raw entry's keys (never its values, which may include
+        # PII-adjacent network data) so a future occurrence is
+        # diagnosable without reproducing against a live network.
+        _LOGGER.debug(
+            "get_speed_test_history: every entry normalized to null "
+            "download/upload for network %s; first raw entry keys: %s",
+            network_id,
+            sorted(dict_results[0].keys()),
+        )
+
+    return normalized_results
 
 
 @router.put("/{network_id}/guest-network")

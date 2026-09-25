@@ -164,40 +164,84 @@ async def get_device_signal_history(
         ) from e
 
 
+def _device_connected_query(
+    network_id: str | None, connection_type: str | None = None
+) -> str:
+    """Build a ``count(eero_device_connected{...} == 1)`` PromQL query.
+
+    Both ``total`` and the per-``connection_type`` counts are derived from
+    the same ``eero_device_connected`` per-device series, so ``total`` is
+    always >= ``wireless + wired`` by construction (eero-ui#413) --
+    unlike the previous implementation, which sourced ``total`` from the
+    unrelated ``eero_network_clients_count`` network-scoped gauge while
+    sourcing ``wireless``/``wired`` from this device-scoped one, letting
+    the two disagree whenever their label sets diverged.
+
+    Args:
+        network_id: Already-validated network id, or None to query across
+            every network.
+        connection_type: ``"wireless"`` or ``"wired"`` to scope to that
+            bucket, or None for the unscoped total (which also counts
+            devices whose connection type could not be determined).
+
+    Returns:
+        The PromQL query string.
+    """
+    filters: list[str] = []
+    if connection_type:
+        filters.append(f'connection_type="{connection_type}"')
+    if network_id:
+        filters.append(f'network_id="{network_id}"')
+    selector = "{" + ",".join(filters) + "}" if filters else ""
+    return f"count(eero_device_connected{selector} == 1)"
+
+
 @router.get("/network/client_count")
 async def get_network_client_count(
     start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
     end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
     step: str = Query("5m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Scope results to a single network"
+    ),
 ) -> dict[str, Any]:
     """Get network client count history.
 
     Returns the number of connected clients over time, including
-    total, wireless, and wired counts.
+    total, wireless, and wired counts. ``total`` and the wireless/wired
+    split are all derived from the same ``eero_device_connected`` series
+    (see ``_device_connected_query``) so total is always >= wireless +
+    wired.
+
+    When ``network_id`` is provided, the underlying PromQL is scoped to
+    that network so accounts with multiple networks see only the
+    requested one; otherwise series from all networks are aggregated
+    together.
 
     Args:
         start: Start time for the range.
         end: End time for the range.
         step: Query resolution step.
+        network_id: Optional network ID to filter by.
 
     Returns:
         Client count history (total, wireless, wired).
     """
+    validated_network_id = (
+        _validate_identifier(network_id, "network_id") if network_id else None
+    )
     try:
-        # Total connected clients
         total = await victoria_client.query_range(
-            "eero_network_clients_count", start, end, step
+            _device_connected_query(validated_network_id), start, end, step
         )
-        # Wireless clients count
         wireless = await victoria_client.query_range(
-            'count(eero_device_connected{connection_type="wireless"} == 1)',
+            _device_connected_query(validated_network_id, "wireless"),
             start,
             end,
             step,
         )
-        # Wired clients count
         wired = await victoria_client.query_range(
-            'count(eero_device_connected{connection_type="wired"} == 1)',
+            _device_connected_query(validated_network_id, "wired"),
             start,
             end,
             step,
