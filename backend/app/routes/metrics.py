@@ -28,11 +28,11 @@ def _validate_identifier(value: str, field_name: str) -> str:
     """
     try:
         return validate_path_id(value)
-    except InvalidIdentifierError:
+    except InvalidIdentifierError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid {field_name}",
-        )
+        ) from exc
 
 
 def _network_label_selector(network_id: str | None) -> str:
@@ -108,11 +108,11 @@ async def get_speedtest_history(
         )
         return {"download": download, "upload": upload}
     except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
+        _LOGGER.error("VictoriaMetrics connection error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Metrics service unavailable",
-        )
+        ) from e
 
 
 @router.get("/devices/{device_id}/signal")
@@ -157,11 +157,11 @@ async def get_device_signal_history(
             "connection_score": connection_score,
         }
     except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
+        _LOGGER.error("VictoriaMetrics connection error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Metrics service unavailable",
-        )
+        ) from e
 
 
 @router.get("/network/client_count")
@@ -210,8 +210,8 @@ async def get_network_client_count(
             "client_count": total,
         }
     except httpx.RequestError as e:
-        _LOGGER.error(f"VictoriaMetrics connection error: {e}")
+        _LOGGER.error("VictoriaMetrics connection error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Metrics service unavailable",
-        )
+        ) from e

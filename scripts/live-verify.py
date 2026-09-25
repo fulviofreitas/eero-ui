@@ -55,7 +55,7 @@ import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -298,7 +298,7 @@ async def _snapshot(
         victoria_data = _query_victoria(victoria_url, network_id, list(eeros.keys()))
 
     return {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "network_id": network_id,
         "network": {
             "name": network_raw.get("name"),
@@ -371,7 +371,8 @@ def _query_victoria(
                 for item in resp.json().get("data", {}).get("result", []):
                     value = item.get("value", [None, None])[1]
                     result["eero_eero_last_reboot_timestamp_seconds"][eero_id] = value
-    except Exception as exc:  # noqa: BLE001 - report and continue, this is best-effort
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # Deliberate fail-safe: this read-only check is best-effort; report and continue.
         result["error"] = str(exc)
     return result
 

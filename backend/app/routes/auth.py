@@ -85,7 +85,9 @@ async def get_auth_status(
     user_role = None
     account_id = None
     premium_status = None
-    authenticated = client.is_authenticated
+    authenticated = (
+        client.is_authenticated
+    )  # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
     reason: str | None = None if authenticated else "none"
 
     if authenticated:
@@ -109,14 +111,14 @@ async def get_auth_status(
                     user_role = user.get("role")
 
             # Log minimal info - avoid PII in logs
-            _LOGGER.debug(f"Auth status check: authenticated, account_id={account_id}")
+            _LOGGER.debug("Auth status check: authenticated, account_id=%s", account_id)
         except EeroAuthenticationException:
             _LOGGER.info("Auth status check: session expired, clearing stored token")
             await clear_client_session()
             authenticated = False
             reason = "expired"
         except Exception as e:
-            _LOGGER.warning(f"Failed to get account info: {e}")
+            _LOGGER.warning("Failed to get account info: %s", e)
 
     return AuthStatusResponse(
         authenticated=authenticated,
@@ -156,17 +158,17 @@ async def login(
             message="Failed to initiate login. Please try again.",
         )
     except EeroAuthenticationException as e:
-        _LOGGER.warning(f"Login failed: {e}")
+        _LOGGER.warning("Login failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed. Please check your credentials.",
-        )
+        ) from e
     except EeroNetworkException as e:
-        _LOGGER.error(f"Network error during login: {e}")
+        _LOGGER.error("Network error during login: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error. Please check your connection.",
-        )
+        ) from e
 
 
 @router.post("/verify", response_model=VerifyResponse)
@@ -194,17 +196,17 @@ async def verify(
             message="Verification failed. Please try again.",
         )
     except EeroAuthenticationException as e:
-        _LOGGER.warning(f"Verification failed: {e}")
+        _LOGGER.warning("Verification failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid verification code. Please try again.",
-        )
+        ) from e
     except EeroNetworkException as e:
-        _LOGGER.error(f"Network error during verification: {e}")
+        _LOGGER.error("Network error during verification: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Network error. Please check your connection.",
-        )
+        ) from e
 
 
 @router.post("/logout")
@@ -217,6 +219,6 @@ async def logout(
         success = check_success(raw_result)
         return {"success": success, "message": "Logged out successfully."}
     except Exception as e:
-        _LOGGER.error(f"Logout error: {e}")
+        _LOGGER.error("Logout error: %s", e)
         # Even if logout fails, clear local state
         return {"success": True, "message": "Logged out locally."}

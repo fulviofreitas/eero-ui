@@ -89,7 +89,7 @@ def calculate_uptime_seconds(last_reboot: str | None) -> int | None:
         delta = now - reboot_time
         return int(delta.total_seconds())
     except Exception as e:
-        _LOGGER.debug(f"Failed to calculate uptime from {last_reboot}: {e}")
+        _LOGGER.debug("Failed to calculate uptime from %s: %s", last_reboot, e)
         return None
 
 
@@ -771,7 +771,7 @@ async def _gateway_uplink_port_response(
         content={
             "detail": (
                 "Refusing to disable data/power/the port on the gateway's "
-                "WAN/uplink port - this would disconnect the whole network."
+                + "WAN/uplink port - this would disconnect the whole network."
             ),
             "type": "port_protected",
         },

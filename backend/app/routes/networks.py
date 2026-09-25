@@ -345,11 +345,11 @@ async def set_preferred_network(
     try:
         client.set_preferred_network(network_id)
     except EeroException as e:
-        _LOGGER.error(f"Failed to set preferred network {network_id}: {e}")
+        _LOGGER.error("Failed to set preferred network %s: %s", network_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to set preferred network. Please try again.",
-        )
+        ) from e
     return {"success": True, "preferred_network_id": network_id}
 
 
@@ -665,11 +665,11 @@ def _parse_family_servers(
             )
         try:
             address = ipaddress.ip_address(candidate)
-        except ValueError:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{entry!r} is not a valid IP address",
-            )
+            ) from exc
         if address.version != expected_version:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1035,11 +1035,11 @@ def _reject_invalid_ip_literal(value: str, field: str) -> None:
     """
     try:
         ipaddress.ip_address(value)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be a valid IP address.",
-        )
+        ) from exc
 
 
 def _reject_non_ipv4(value: str, field: str) -> ipaddress.IPv4Address:
@@ -1051,11 +1051,11 @@ def _reject_non_ipv4(value: str, field: str) -> ipaddress.IPv4Address:
     """
     try:
         return ipaddress.IPv4Address(value)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be a valid IPv4 address.",
-        )
+        ) from exc
 
 
 def _validate_dhcp_custom_range(custom: DhcpCustomLease) -> None:
@@ -1079,11 +1079,11 @@ def _validate_dhcp_custom_range(custom: DhcpCustomLease) -> None:
         network = ipaddress.IPv4Network(
             f"{custom.subnet_ip}/{custom.subnet_mask}", strict=True
         )
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
-        )
+        ) from exc
     if not network.is_private:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1958,10 +1958,10 @@ async def update_power_saving_schedule(
     """Update a power-saving schedule. Unverified, non-settings write."""
     try:
         validate_path_id(schedule_id)
-    except InvalidIdentifierError:
+    except InvalidIdentifierError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid schedule_id."
-        )
+        ) from exc
 
     if (
         body.name is None
@@ -2019,10 +2019,10 @@ async def delete_power_saving_schedule(
     """Delete a power-saving schedule. Unverified, non-settings write."""
     try:
         validate_path_id(schedule_id)
-    except InvalidIdentifierError:
+    except InvalidIdentifierError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid schedule_id."
-        )
+        ) from exc
 
     raw_result = await client.delete_power_saving_schedule(
         schedule_id, network_id=network_id
@@ -2266,11 +2266,11 @@ def _validate_multistaticip_settings(model: MultiStaticIpSettings) -> None:
         network = ipaddress.IPv4Network(
             f"{model.subnet_ip}/{model.subnet_mask}", strict=True
         )
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="subnet_ip/subnet_mask must form a valid IPv4 network.",
-        )
+        ) from exc
     if router_ip not in network:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -2965,10 +2965,10 @@ def _validate_timezone(timezone: str | None) -> str | None:
         )
     try:
         ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
+    except (ZoneInfoNotFoundError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid timezone."
-        )
+        ) from exc
     return timezone
 
 
@@ -4642,11 +4642,11 @@ def _validate_port(value: int, field_name: str) -> None:
 def _validate_ip_literal(value: str, field_name: str) -> None:
     try:
         ipaddress.ip_address(value)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be a valid IP address.",
-        )
+        ) from exc
 
 
 def _validate_private_ipv4(value: str, field_name: str) -> None:
@@ -4663,11 +4663,11 @@ def _validate_private_ipv4(value: str, field_name: str) -> None:
     """
     try:
         address = ipaddress.IPv4Address(value)
-    except ValueError:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} must be a valid private IPv4 address.",
-        )
+        ) from exc
     if not address.is_private:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -4713,11 +4713,11 @@ def _validate_id_list(
     for entry in values:
         try:
             validate_path_id(entry)
-        except InvalidIdentifierError:
+        except InvalidIdentifierError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{field_name} entries must be valid identifiers.",
-            )
+            ) from exc
 
 
 class ForwardsResponse(BaseModel):
@@ -5044,11 +5044,11 @@ def _validate_domain(domain: str) -> str:
         )
     try:
         ascii_candidate = candidate.encode("idna").decode("ascii")
-    except UnicodeError:
+    except UnicodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="domain could not be encoded to IDNA (punycode).",
-        )
+        ) from exc
     if len(ascii_candidate) > _DOMAIN_MAX_LEN:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -71,7 +71,9 @@ async def require_auth(
     It does not probe the account endpoint - that is ``/auth/status``'s
     job (see ``routes/auth.py`` and phase-6.0-revamp.md § 4.1).
     """
-    if not client.is_authenticated:
+    if (
+        not client.is_authenticated
+    ):  # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in first.",
@@ -172,11 +174,11 @@ async def validate_request_path_ids(
             continue
         try:
             validate_path_id(value)
-        except InvalidIdentifierError:
+        except InvalidIdentifierError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid {name}.",
-            )
+            ) from exc
 
 
 async def get_network_id(
@@ -202,16 +204,16 @@ async def get_network_id(
             if net_id:
                 try:
                     return validate_identifier(net_id)
-                except EeroValidationException:
+                except EeroValidationException as exc:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Invalid network_id.",
-                    )
-    except EeroAuthenticationException:
+                    ) from exc
+    except EeroAuthenticationException as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired. Please log in again.",
-        )
+        ) from exc
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

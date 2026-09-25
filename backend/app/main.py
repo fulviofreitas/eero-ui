@@ -45,7 +45,8 @@ def get_eero_client_version() -> str:
     """Get the installed eero-api version."""
     try:
         return pkg_version("eero-api")
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Deliberate fail-safe: version lookup is cosmetic, never fatal.
         return "unknown"
 
 

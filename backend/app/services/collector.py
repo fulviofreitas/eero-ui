@@ -175,8 +175,8 @@ class MetricsCollector:
         while True:
             try:
                 await self.run_cycle()
-            # pylint: disable-next=broad-exception-caught
-            except Exception:  # never let a cycle kill the task
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Deliberate fail-safe: never let a cycle kill the task.
                 _LOGGER.warning(
                     "Unhandled error in metrics collector cycle", exc_info=True
                 )
@@ -208,49 +208,19 @@ class MetricsCollector:
         cycle_start = time.monotonic()
         now_ms = int(time.time() * 1000)
         samples: list[Sample] = []
-        cycle_ok = True
 
         try:
             client = await self._current_client()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: run_cycle() must never raise (see docstring).
             _LOGGER.warning(
                 "Metrics collector could not obtain EeroClient", exc_info=True
             )
             self._count_error("unknown")
-            cycle_ok = False
             client = None
-
-        if client is not None and not client.is_authenticated:
             cycle_ok = False
-        elif client is not None:
-            try:
-                raw_networks = await client.get_networks()
-            except EeroException as exc:
-                reason = _reason_for_exception(exc)
-                _LOGGER.warning("Metrics collector failed to list networks: %s", reason)
-                self._count_error(reason)
-                cycle_ok = False
-            except Exception:
-                _LOGGER.warning(
-                    "Metrics collector failed to list networks (unexpected)",
-                    exc_info=True,
-                )
-                self._count_error("unknown")
-                cycle_ok = False
-            else:
-                networks = [
-                    normalize_network(raw)
-                    for raw in extract_list(raw_networks, "networks")
-                ]
-                for network in networks:
-                    network_id = network.get("id")
-                    if not network_id:
-                        _LOGGER.debug("Skipping network with no resolvable id")
-                        continue
-                    network_ok = await self._collect_network(
-                        client, network_id, network, samples, now_ms
-                    )
-                    cycle_ok = cycle_ok and network_ok
+        else:
+            cycle_ok = await self._collect_all_networks(client, samples, now_ms)
 
         samples.append(Sample("eero_up", 1.0 if cycle_ok else 0.0, now_ms))
         samples.append(
@@ -275,6 +245,50 @@ class MetricsCollector:
         except VictoriaWriteError:
             self._count_error("write")
             _LOGGER.warning("Metrics collector failed to write to VictoriaMetrics")
+
+    async def _collect_all_networks(
+        self, client: EeroClient, samples: list[Sample], now_ms: int
+    ) -> bool:
+        """List networks (if authenticated) and collect every metric for each.
+
+        Returns:
+            False if the client is unauthenticated, listing networks failed,
+            or any individual network's collection failed; True otherwise.
+        """
+        # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
+        if not client.is_authenticated:
+            return False
+
+        try:
+            raw_networks = await client.get_networks()
+        except EeroException as exc:
+            reason = _reason_for_exception(exc)
+            _LOGGER.warning("Metrics collector failed to list networks: %s", reason)
+            self._count_error(reason)
+            return False
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
+            _LOGGER.warning(
+                "Metrics collector failed to list networks (unexpected)",
+                exc_info=True,
+            )
+            self._count_error("unknown")
+            return False
+
+        cycle_ok = True
+        networks = [
+            normalize_network(raw) for raw in extract_list(raw_networks, "networks")
+        ]
+        for network in networks:
+            network_id = network.get("id")
+            if not network_id:
+                _LOGGER.debug("Skipping network with no resolvable id")
+                continue
+            network_ok = await self._collect_network(
+                client, network_id, network, samples, now_ms
+            )
+            cycle_ok = cycle_ok and network_ok
+        return cycle_ok
 
     async def _collect_network(
         self,
@@ -341,7 +355,8 @@ class MetricsCollector:
             _LOGGER.warning("Metrics collector failed to list devices: %s", reason)
             self._count_error(reason)
             return False
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
             _LOGGER.warning(
                 "Metrics collector failed to list devices (unexpected)", exc_info=True
             )
@@ -358,64 +373,10 @@ class MetricsCollector:
                 _LOGGER.debug("Skipping device with no resolvable id")
                 continue
 
-            connected = bool(device.get("connected"))
-            if connected:
+            if self._collect_device_samples(
+                network_id, device_id, device, samples, now_ms
+            ):
                 connected_count += 1
-
-            base_labels = {
-                "network_id": network_id,
-                "device_id": device_id,
-                "name": _label(device.get("display_name")),
-                "mac": _label(device.get("mac")),
-                "manufacturer": _label(device.get("manufacturer")),
-                "device_type": _label(device.get("device_type")),
-                "connection_type": _label(device.get("connection_type")),
-                "source_eero": _label(device.get("connected_to_eero")),
-            }
-            samples.append(
-                Sample(
-                    "eero_device_connected",
-                    1.0 if connected else 0.0,
-                    now_ms,
-                    labels=base_labels,
-                )
-            )
-
-            signal_strength = device.get("signal_strength")
-            if signal_strength is not None:
-                samples.append(
-                    Sample(
-                        "eero_device_signal_strength_dbm",
-                        float(signal_strength),
-                        now_ms,
-                        labels={
-                            "network_id": network_id,
-                            "device_id": device_id,
-                            "name": _label(device.get("display_name")),
-                            "manufacturer": _label(device.get("manufacturer")),
-                            "band": _label(device.get("frequency")),
-                            "source_eero": _label(device.get("connected_to_eero")),
-                        },
-                    )
-                )
-
-            signal_bars = device.get("signal_bars")
-            if signal_bars is not None:
-                samples.append(
-                    Sample(
-                        "eero_device_connection_score_bars",
-                        float(signal_bars),
-                        now_ms,
-                        labels={
-                            "network_id": network_id,
-                            "device_id": device_id,
-                            "name": _label(device.get("display_name")),
-                            "manufacturer": _label(device.get("manufacturer")),
-                            "connection_type": _label(device.get("connection_type")),
-                            "source_eero": _label(device.get("connected_to_eero")),
-                        },
-                    )
-                )
 
         samples.append(
             Sample(
@@ -426,6 +387,78 @@ class MetricsCollector:
             )
         )
         return True
+
+    def _collect_device_samples(
+        self,
+        network_id: str,
+        device_id: str,
+        device: dict[str, Any],
+        samples: list[Sample],
+        now_ms: int,
+    ) -> bool:
+        """Append every per-device sample for one device.
+
+        Returns:
+            True if the device is connected (for the caller's client count).
+        """
+        connected = bool(device.get("connected"))
+
+        base_labels = {
+            "network_id": network_id,
+            "device_id": device_id,
+            "name": _label(device.get("display_name")),
+            "mac": _label(device.get("mac")),
+            "manufacturer": _label(device.get("manufacturer")),
+            "device_type": _label(device.get("device_type")),
+            "connection_type": _label(device.get("connection_type")),
+            "source_eero": _label(device.get("connected_to_eero")),
+        }
+        samples.append(
+            Sample(
+                "eero_device_connected",
+                1.0 if connected else 0.0,
+                now_ms,
+                labels=base_labels,
+            )
+        )
+
+        signal_strength = device.get("signal_strength")
+        if signal_strength is not None:
+            samples.append(
+                Sample(
+                    "eero_device_signal_strength_dbm",
+                    float(signal_strength),
+                    now_ms,
+                    labels={
+                        "network_id": network_id,
+                        "device_id": device_id,
+                        "name": _label(device.get("display_name")),
+                        "manufacturer": _label(device.get("manufacturer")),
+                        "band": _label(device.get("frequency")),
+                        "source_eero": _label(device.get("connected_to_eero")),
+                    },
+                )
+            )
+
+        signal_bars = device.get("signal_bars")
+        if signal_bars is not None:
+            samples.append(
+                Sample(
+                    "eero_device_connection_score_bars",
+                    float(signal_bars),
+                    now_ms,
+                    labels={
+                        "network_id": network_id,
+                        "device_id": device_id,
+                        "name": _label(device.get("display_name")),
+                        "manufacturer": _label(device.get("manufacturer")),
+                        "connection_type": _label(device.get("connection_type")),
+                        "source_eero": _label(device.get("connected_to_eero")),
+                    },
+                )
+            )
+
+        return connected
 
     async def _collect_eeros(
         self, client: EeroClient, network_id: str, samples: list[Sample], now_ms: int
@@ -442,7 +475,8 @@ class MetricsCollector:
             _LOGGER.warning("Metrics collector failed to list eeros: %s", reason)
             self._count_error(reason)
             return False
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
             _LOGGER.warning(
                 "Metrics collector failed to list eeros (unexpected)", exc_info=True
             )
@@ -455,48 +489,58 @@ class MetricsCollector:
             if not eero_id:
                 _LOGGER.debug("Skipping eero with no resolvable id")
                 continue
+            self._collect_eero_samples(network_id, eero_id, eero, samples, now_ms)
 
-            mesh_quality_bars = eero.get("mesh_quality_bars")
-            if mesh_quality_bars is not None:
-                samples.append(
-                    Sample(
-                        "eero_eero_mesh_quality_bars",
-                        float(mesh_quality_bars),
-                        now_ms,
-                        labels={
-                            "network_id": network_id,
-                            "eero_id": eero_id,
-                            "location": _label(eero.get("location")),
-                            "model": _label(eero.get("model")),
-                        },
-                    )
-                )
+        return True
 
+    def _collect_eero_samples(
+        self,
+        network_id: str,
+        eero_id: str,
+        eero: dict[str, Any],
+        samples: list[Sample],
+        now_ms: int,
+    ) -> None:
+        """Append every per-eero sample for one eero node."""
+        mesh_quality_bars = eero.get("mesh_quality_bars")
+        if mesh_quality_bars is not None:
             samples.append(
                 Sample(
-                    "eero_eero_client_count",
-                    float(eero.get("connected_clients_count") or 0),
+                    "eero_eero_mesh_quality_bars",
+                    float(mesh_quality_bars),
                     now_ms,
                     labels={
                         "network_id": network_id,
                         "eero_id": eero_id,
                         "location": _label(eero.get("location")),
+                        "model": _label(eero.get("model")),
                     },
                 )
             )
 
-            last_reboot = _parse_iso_timestamp_to_epoch_seconds(eero.get("last_reboot"))
-            if last_reboot is not None:
-                samples.append(
-                    Sample(
-                        "eero_eero_last_reboot_timestamp_seconds",
-                        last_reboot,
-                        now_ms,
-                        labels={"network_id": network_id, "eero_id": eero_id},
-                    )
-                )
+        samples.append(
+            Sample(
+                "eero_eero_client_count",
+                float(eero.get("connected_clients_count") or 0),
+                now_ms,
+                labels={
+                    "network_id": network_id,
+                    "eero_id": eero_id,
+                    "location": _label(eero.get("location")),
+                },
+            )
+        )
 
-        return True
+        last_reboot = _parse_iso_timestamp_to_epoch_seconds(eero.get("last_reboot"))
+        if last_reboot is not None:
+            samples.append(
+                Sample(
+                    "eero_eero_last_reboot_timestamp_seconds",
+                    last_reboot,
+                    now_ms,
+                    labels={"network_id": network_id, "eero_id": eero_id},
+                )
+            )
 
     async def _collect_speed_tests(
         self, client: EeroClient, network_id: str, samples: list[Sample], now_ms: int
@@ -516,7 +560,8 @@ class MetricsCollector:
             _LOGGER.warning("Metrics collector failed to get speed tests: %s", reason)
             self._count_error(reason)
             return False
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
             _LOGGER.warning(
                 "Metrics collector failed to get speed tests (unexpected)",
                 exc_info=True,
@@ -571,7 +616,8 @@ class MetricsCollector:
             _LOGGER.warning("Metrics collector failed to get DNS settings: %s", reason)
             self._count_error(reason)
             return False
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Deliberate fail-safe: one unexpected error must not abort the cycle.
             _LOGGER.warning(
                 "Metrics collector failed to get DNS settings (unexpected)",
                 exc_info=True,

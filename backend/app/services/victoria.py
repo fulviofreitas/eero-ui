@@ -205,7 +205,7 @@ class VictoriaMetricsClient:
             response = await client.get("/health", timeout=5.0)
             return response.status_code == 200
         except httpx.RequestError as e:
-            _LOGGER.debug(f"VictoriaMetrics health check failed: {e}")
+            _LOGGER.debug("VictoriaMetrics health check failed: %s", e)
             return False
 
     async def get_label_values(self, label: str) -> list[str]:

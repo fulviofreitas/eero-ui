@@ -151,7 +151,7 @@ async def list_devices(
     device_id_filter = None
     if device_ids:
         device_id_filter = set(device_ids.split(","))
-        _LOGGER.debug(f"Filtering by {len(device_id_filter)} device IDs")
+        _LOGGER.debug("Filtering by %d device IDs", len(device_id_filter))
 
     result = []
     matched_ids = set()
@@ -218,22 +218,29 @@ async def list_devices(
             )
         except Exception as e:
             _LOGGER.error(
-                f"CRITICAL: Failed to process device {raw_dev.get('url', 'unknown')}: {e}"
+                "CRITICAL: Failed to process device %s: %s",
+                raw_dev.get("url", "unknown"),
+                e,
             )
             skipped_devices.append(raw_dev.get("url", "unknown"))
 
     if skipped_devices:
         _LOGGER.error(
-            f"CRITICAL: Skipped {len(skipped_devices)} devices due to processing errors"
+            "CRITICAL: Skipped %d devices due to processing errors",
+            len(skipped_devices),
         )
 
     if device_id_filter:
         _LOGGER.debug(
-            f"Matched {len(matched_ids)} of {len(device_id_filter)} requested device IDs"
+            "Matched %d of %d requested device IDs",
+            len(matched_ids),
+            len(device_id_filter),
         )
 
     _LOGGER.info(
-        f"Devices API: eero_api_count={len(raw_devices)}, returned_count={len(result)}"
+        "Devices API: eero_api_count=%d, returned_count=%d",
+        len(raw_devices),
+        len(result),
     )
 
     return result

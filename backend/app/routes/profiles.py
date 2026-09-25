@@ -118,7 +118,9 @@ async def list_profiles(
             for dev in profile.get("devices", [])
         ]
 
-        _LOGGER.debug(f"Profile {profile.get('name')}: {len(profile_devices)} devices")
+        _LOGGER.debug(
+            "Profile %s: %d devices", profile.get("name"), len(profile_devices)
+        )
 
         result.append(
             ProfileSummary(
@@ -165,7 +167,7 @@ async def get_profile(
         for dev in profile.get("devices", [])
     ]
 
-    _LOGGER.debug(f"Profile {profile.get('name')}: {len(profile_devices)} devices")
+    _LOGGER.debug("Profile %s: %d devices", profile.get("name"), len(profile_devices))
 
     return ProfileSummary(
         id=profile.get("id"),
@@ -532,11 +534,11 @@ def _validate_id_list(
     for entry in values:
         try:
             validate_path_id(entry)
-        except InvalidIdentifierError:
+        except InvalidIdentifierError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"{field_name} entries must be valid identifiers.",
-            )
+            ) from exc
 
 
 def _validate_schedule_days(days: list[str]) -> None:
