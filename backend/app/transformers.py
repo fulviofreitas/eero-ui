@@ -401,6 +401,56 @@ def normalize_status(status: Any) -> str:
     return status_map.get(status_str, status_str)
 
 
+def _normalize_network_speed_test(raw_speed: Any) -> dict[str, Any] | None:
+    """Normalize the ``speed``/``speed_test`` object embedded in a network
+    envelope to the shape ``NetworkDetail.speed_test`` / the frontend's
+    ``SpeedTestResult`` expect: ``download_mbps``, ``upload_mbps``,
+    ``latency_ms``, ``timestamp``.
+
+    The raw envelope carries the SDK's documented ``speed`` shape
+    (``{"down": {"value": n, "units": "Mbps"}, "up": {...}}``, eero-api
+    ``tests/conftest.py`` ``sample_network_data``), so this passes it
+    through ``normalize_speed_test`` rather than returning it unchanged -
+    returning it unchanged is the bug that left the dashboard Speed Test
+    card unable to read ``download_mbps``/``upload_mbps`` off an
+    un-normalised object. Also tolerates an input that is already in the
+    normalised ``download_mbps``/``upload_mbps`` shape (e.g. a value
+    written back from the ``POST .../speedtest`` flow), passing it through
+    unchanged. Returns ``None`` when there is nothing to report.
+
+    Args:
+        raw_speed: The raw ``speed_test`` or ``speed`` value from a network
+            envelope, or ``None``.
+
+    Returns:
+        A normalized dict, or ``None`` if absent or if both download and
+        upload values are missing.
+    """
+    if not isinstance(raw_speed, dict):
+        return None
+
+    if "download_mbps" in raw_speed or "upload_mbps" in raw_speed:
+        # Already normalized (e.g. round-tripped through our own API).
+        result = {
+            "download_mbps": raw_speed.get("download_mbps"),
+            "upload_mbps": raw_speed.get("upload_mbps"),
+            "latency_ms": raw_speed.get("latency_ms"),
+            "timestamp": raw_speed.get("timestamp"),
+        }
+    else:
+        normalized = normalize_speed_test(raw_speed)
+        result = {
+            "download_mbps": normalized["down_mbps"],
+            "upload_mbps": normalized["up_mbps"],
+            "latency_ms": normalized["latency_ms"],
+            "timestamp": normalized["date"],
+        }
+
+    if result["download_mbps"] is None and result["upload_mbps"] is None:
+        return None
+    return result
+
+
 def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a raw network response to a consistent format.
 
@@ -452,7 +502,9 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
         "public_ip": public_ip,
         "guest_network_enabled": guest_network_enabled,
         "guest_network_name": guest_network_name,
-        "speed_test": raw.get("speed_test") or raw.get("speed"),
+        "speed_test": _normalize_network_speed_test(
+            raw.get("speed_test") or raw.get("speed")
+        ),
         "health": raw.get("health"),
         "settings": raw.get("settings"),
         "dhcp": raw.get("dhcp"),
@@ -806,6 +858,46 @@ def normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _speed_component_mbps(value: Any) -> float | None:
+    """Coerce a raw ``down``/``up`` component to a float Mbps value.
+
+    The documented shape is ``{"value": n, "units": "Mbps"}`` (eero-api
+    ``tests/conftest.py`` ``sample_network_data``: ``speed.down`` /
+    ``speed.up``), but some entries in ``get_speed_tests`` history have been
+    observed sending the bare number instead of the wrapper dict. Accept
+    both; anything else (missing, wrong type) normalizes to ``None`` rather
+    than raising.
+    """
+    if isinstance(value, dict):
+        value = value.get("value")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _normalize_speed_test_date(value: Any) -> str | None:
+    """Normalize a speed-test timestamp to a timezone-aware ISO-8601 string.
+
+    eero's own ``date`` values are UTC. A naive value (no ``Z``/offset) is
+    therefore assumed to be UTC and gets ``+00:00`` appended so the frontend's
+    "is this result newer than ``started_at``" comparison never mis-parses it
+    as local time. A value that already carries timezone info is returned
+    unchanged (its original representation, e.g. a trailing ``Z``, is
+    preserved rather than reformatted).
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC).isoformat()
+    return value
+
+
 def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a single raw speed-test result to a consistent shape.
 
@@ -814,18 +906,21 @@ def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
     live (phase-6.0-revamp.md § 3.3, § 8.1).
 
     Args:
-        raw: One entry from ``get_speed_tests``' result list.
+        raw: One entry from ``get_speed_tests``' result list, or the
+            ``speed``/``speed_test`` object embedded in a network envelope.
 
     Returns:
         A dict with ``down_mbps``, ``up_mbps``, ``latency_ms`` and ``date``.
     """
-    down = raw.get("down") if isinstance(raw, dict) else None
-    up = raw.get("up") if isinstance(raw, dict) else None
+    if not isinstance(raw, dict):
+        return {"down_mbps": None, "up_mbps": None, "latency_ms": None, "date": None}
+
+    date = raw.get("date") or raw.get("timestamp") or raw.get("created_at")
     return {
-        "down_mbps": down.get("value") if isinstance(down, dict) else None,
-        "up_mbps": up.get("value") if isinstance(up, dict) else None,
-        "latency_ms": raw.get("latency") if isinstance(raw, dict) else None,
-        "date": raw.get("date") if isinstance(raw, dict) else None,
+        "down_mbps": _speed_component_mbps(raw.get("down")),
+        "up_mbps": _speed_component_mbps(raw.get("up")),
+        "latency_ms": raw.get("latency"),
+        "date": _normalize_speed_test_date(date) if date else date,
     }
 
 
