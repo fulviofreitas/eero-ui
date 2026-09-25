@@ -48,8 +48,11 @@ export default {
     // Header (type + scope + subject) max length
     'header-max-length': [2, 'always', 100],
     
-    // Body max line length
-    'body-max-line-length': [2, 'always', 200],
+    // Body max line length: disabled. Squash merges use the PR description as
+    // the body, and markdown bullets there routinely exceed any fixed width
+    // (the 6.0.0 follow-up merge failed master CI on exactly this). Headers
+    // and footers keep their limits below.
+    'body-max-line-length': [0],
     
     // Footer max line length. BREAKING CHANGE footers are one sentence per
     // breaking item and must not wrap (semantic-release reads each line as a
