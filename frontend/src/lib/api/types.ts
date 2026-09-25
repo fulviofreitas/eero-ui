@@ -311,6 +311,17 @@ export interface NetworkEntitlements {
 	premium_status: PremiumStatus | null;
 	capabilities: unknown[];
 	experimental_writes: boolean;
+	/**
+	 * Bug-fix follow-up (maintainer feedback, 6.0.0): the backend's `is_premium`
+	 * detection can land on `null` (unknown) even for a genuinely premium
+	 * network - `premium_tier`/`premium_signals` are the backend's own
+	 * best-effort detail for that case, so a gated card can say what it found
+	 * instead of just "unknown". Optional/defensive - not every backend
+	 * revision populates them, and their element shape is otherwise
+	 * undocumented upstream, same caveat as `features`/`capabilities` above.
+	 */
+	premium_tier?: string | null;
+	premium_signals?: unknown;
 }
 
 // ============================================

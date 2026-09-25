@@ -133,3 +133,137 @@ class TestEntitlements:
         response = await async_client.get("/api/networks/net-1/entitlements")
 
         assert response.status_code == 401
+
+
+class TestEntitlementsPremiumSignalDerivation:
+    """Tests for the tri-state ``is_premium`` derivation (production
+    report, 2026-09-25: "I have eero Plus and can't see advanced info").
+
+    Real network envelopes have been seen sending ``premium_status`` as a
+    bare string (``"active"``) rather than a ``{"active": true}`` dict
+    (eero-api tests/conftest.py, tests/integration/conftest.py) - the
+    previous code only ever checked the dict shape, so ``is_premium``
+    stayed false/null for real Plus accounts using this shape.
+    """
+
+    @staticmethod
+    def _stub_feature_sources(authenticated_client, **overrides):
+        """Wire up empty/default responses for every entitlements source,
+        then apply any overrides."""
+        defaults = {
+            "get_entitlement_features": make_raw_response({"features": []}),
+            "get_upsell_features": make_raw_response({"upsell_features": []}),
+            "get_model_capabilities": make_raw_response({"models": []}),
+            "get_premium_customer": make_raw_response({}),
+            "get_premium_status": make_raw_response({}),
+        }
+        defaults.update(overrides)
+        for method, value in defaults.items():
+            setattr(authenticated_client, method, AsyncMock(return_value=value))
+
+    async def test_premium_status_string_shape_is_a_positive_signal(
+        self, auth_client, authenticated_client
+    ):
+        """``premium_status: "active"`` (a bare string) must count as a
+        positive premium signal."""
+        self._stub_feature_sources(
+            authenticated_client,
+            get_premium_status=make_raw_response({"premium_status": "active"}),
+        )
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is True
+        assert "premium_status:active" in data["premium_signals"]
+        assert data["premium_tier"] == "active"
+
+    async def test_premium_details_tier_is_a_positive_signal(
+        self, auth_client, authenticated_client
+    ):
+        """A ``premium_details.tier`` value of ``"plus"`` must count as a
+        positive premium signal, with no other source contributing."""
+        self._stub_feature_sources(
+            authenticated_client,
+            get_premium_status=make_raw_response({"premium_details": {"tier": "plus"}}),
+        )
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is True
+        assert data["premium_tier"] == "plus"
+        assert any(
+            s.startswith("premium_details.tier:") for s in data["premium_signals"]
+        )
+
+    async def test_premium_customer_endpoint_alone_is_a_positive_signal(
+        self, auth_client, authenticated_client
+    ):
+        """``is_premium`` from the account-level customer endpoint alone
+        must count, with no signal from the network-scoped sources."""
+        self._stub_feature_sources(
+            authenticated_client,
+            get_premium_customer=make_raw_response({"is_premium": True}),
+        )
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is True
+        assert "premium_customer.is_premium" in data["premium_signals"]
+
+    async def test_feature_name_alone_is_a_positive_signal(
+        self, auth_client, authenticated_client
+    ):
+        """A feature entry whose name hints at a premium-only capability
+        (e.g. "backup") must count, with no other source contributing."""
+        self._stub_feature_sources(
+            authenticated_client,
+            get_entitlement_features=make_raw_response(
+                {"features": [{"name": "backup_internet"}]}
+            ),
+        )
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is True
+        assert any(s.startswith("features:") for s in data["premium_signals"])
+
+    async def test_no_positive_signal_from_successful_sources_is_false(
+        self, auth_client, authenticated_client
+    ):
+        """Every source answers successfully but shows no premium
+        indication: ``is_premium`` must be an explicit ``False``, not
+        ``None`` (distinct from "we never got an answer")."""
+        self._stub_feature_sources(authenticated_client)
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is False
+        assert data["premium_signals"] == []
+
+    async def test_premium_status_unrecognised_string_is_not_a_crash(
+        self, auth_client, authenticated_client
+    ):
+        """An unrecognised ``premium_status`` string must be ignored, not
+        raise and not be assumed positive."""
+        self._stub_feature_sources(
+            authenticated_client,
+            get_premium_status=make_raw_response(
+                {"premium_status": "some-unexpected-value"}
+            ),
+        )
+
+        response = await auth_client.get("/api/networks/net-1/entitlements")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_premium"] is False

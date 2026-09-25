@@ -10,6 +10,8 @@
 
 	interface Props {
 		network: NetworkDetail;
+		/** Best available result; when omitted the card falls back to `network.speed_test`. */
+		speedTest?: SpeedTestResult | null;
 		loading: boolean;
 		/** Whole seconds elapsed since the run started (see stores/networks.ts's speedTestFor). */
 		elapsedSeconds?: number;
@@ -18,7 +20,20 @@
 		onRunTest: () => void;
 	}
 
-	let { network, loading, elapsedSeconds = 0, error = null, onRunTest }: Props = $props();
+	let {
+		network,
+		speedTest = undefined,
+		loading,
+		elapsedSeconds = 0,
+		error = null,
+		onRunTest
+	}: Props = $props();
+
+	// Bug-fix follow-up (6.0.0): the card only ever read `network.speed_test`, which the
+	// backend used to pass through un-normalised, so a completed run and a reload both showed
+	// the empty state. The page now hands in the best available result (poll result, then the
+	// network detail, then the latest history entry); `network.speed_test` stays the fallback.
+	let effectiveSpeedTest = $derived(speedTest === undefined ? network.speed_test : speedTest);
 
 	function getDownloadSpeed(speedTest: SpeedTestResult | null): string {
 		if (!speedTest) return '—';
@@ -67,13 +82,13 @@
 			></progress>
 		{:else if error}
 			<p class="text-danger text-sm" role="alert">{error}</p>
-		{:else if network.speed_test && (getDownloadSpeed(network.speed_test) !== '—' || getUploadSpeed(network.speed_test) !== '—')}
+		{:else if effectiveSpeedTest && (getDownloadSpeed(effectiveSpeedTest) !== '—' || getUploadSpeed(effectiveSpeedTest) !== '—')}
 			<div class="speed-results">
 				<div class="speed-item download">
 					<div class="speed-icon">↓</div>
 					<div class="speed-data">
 						<span class="speed-value">
-							{getDownloadSpeed(network.speed_test)}
+							{getDownloadSpeed(effectiveSpeedTest)}
 							<span class="speed-unit">Mbps</span>
 						</span>
 						<span class="speed-label">Download</span>
@@ -83,16 +98,16 @@
 					<div class="speed-icon">↑</div>
 					<div class="speed-data">
 						<span class="speed-value">
-							{getUploadSpeed(network.speed_test)}
+							{getUploadSpeed(effectiveSpeedTest)}
 							<span class="speed-unit">Mbps</span>
 						</span>
 						<span class="speed-label">Upload</span>
 					</div>
 				</div>
 			</div>
-			{#if getSpeedTestDate(network.speed_test)}
+			{#if getSpeedTestDate(effectiveSpeedTest)}
 				<p class="speed-timestamp text-muted text-sm">
-					Last tested: {getSpeedTestDate(network.speed_test)}
+					Last tested: {getSpeedTestDate(effectiveSpeedTest)}
 				</p>
 			{/if}
 		{:else}

@@ -58,32 +58,54 @@ function createMembersStore() {
 	return {
 		subscribe,
 
+		/**
+		 * Bug-fix follow-up (maintainer feedback, 6.0.0): this used to await the three sources
+		 * with `Promise.all`, so one source rejecting (a genuine transport/auth failure on just
+		 * `/invites`, say) discarded whatever `/permissions` and `/members` had ALREADY returned
+		 * and rendered the whole card as `ErrorState` - on top of the backend's own per-field
+		 * `partial: true` soft-fail, which only covers a 403 *within* one source, not one source
+		 * failing outright. `Promise.allSettled` lets each source degrade independently: a failed
+		 * source falls back to its empty default and counts as partial, while every source that
+		 * did succeed still renders. The full-card `error` is now reserved for every source
+		 * failing at once, i.e. nothing at all to show.
+		 */
 		async fetch(networkId: string): Promise<void> {
 			update((s) => ({ ...s, loading: true, error: null }));
-			try {
-				const [permissions, members, invites] = await Promise.all([
-					api.networks.getPermissions(networkId),
-					api.networks.getMembers(networkId),
-					api.networks.getInvites(networkId)
-				]);
-				update((s) => ({
-					...s,
-					permissions: permissions.permissions,
-					role: permissions.role,
-					permissionsPartial: permissions.partial,
-					members: members.members,
-					membersPartial: members.partial,
-					invites: invites.invites,
-					invitesPartial: invites.partial,
-					loading: false
-				}));
-			} catch (error) {
+
+			const [permissionsResult, membersResult, invitesResult] = await Promise.allSettled([
+				api.networks.getPermissions(networkId),
+				api.networks.getMembers(networkId),
+				api.networks.getInvites(networkId)
+			]);
+
+			if (
+				permissionsResult.status === 'rejected' &&
+				membersResult.status === 'rejected' &&
+				invitesResult.status === 'rejected'
+			) {
+				const reason = permissionsResult.reason;
 				update((s) => ({
 					...s,
 					loading: false,
-					error: error instanceof Error ? error.message : 'Failed to load members'
+					error: reason instanceof Error ? reason.message : 'Failed to load members'
 				}));
+				return;
 			}
+
+			update((s) => ({
+				...s,
+				permissions:
+					permissionsResult.status === 'fulfilled' ? permissionsResult.value.permissions : {},
+				role: permissionsResult.status === 'fulfilled' ? permissionsResult.value.role : s.role,
+				permissionsPartial:
+					permissionsResult.status === 'fulfilled' ? permissionsResult.value.partial : true,
+				members: membersResult.status === 'fulfilled' ? membersResult.value.members : [],
+				membersPartial: membersResult.status === 'fulfilled' ? membersResult.value.partial : true,
+				invites: invitesResult.status === 'fulfilled' ? invitesResult.value.invites : [],
+				invitesPartial: invitesResult.status === 'fulfilled' ? invitesResult.value.partial : true,
+				loading: false,
+				error: null
+			}));
 		},
 
 		/** Create an invite for the network. Pessimistic - re-lists on success. */

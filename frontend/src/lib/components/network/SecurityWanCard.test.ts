@@ -322,6 +322,178 @@ describe('SecurityWanCard', () => {
 		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
 	});
 
+	it('renders WPA3 per band as three labelled rows with mode badges', async () => {
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.getByText('WPA3 (2.4 GHz)')).toBeInTheDocument();
+		expect(screen.getByText('WPA3 (5 GHz)')).toBeInTheDocument();
+		expect(screen.getByText('WPA3 (6 GHz)')).toBeInTheDocument();
+
+		const row24 = screen.getByText('WPA3 (2.4 GHz)').closest('.badge-row');
+		const row6 = screen.getByText('WPA3 (6 GHz)').closest('.badge-row');
+		expect(row24).not.toBeNull();
+		expect(row6).not.toBeNull();
+		expect(row24!.querySelector('.badge')?.textContent?.trim()).toBe('WPA3');
+		expect(row6!.querySelector('.badge')?.textContent?.trim()).toBe('WPA2');
+	});
+
+	it('renders the fast transition badge as Disabled from {fast_transition: false}', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: null,
+					wpa3_per_band: null,
+					fast_transition: { fast_transition: false },
+					sqm: false,
+					thread: null,
+					updates: null
+				})
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		const row = screen.getByText('Fast transition').closest('.badge-row');
+		expect(row).not.toBeNull();
+		expect(row!.querySelector('.badge')?.textContent?.trim()).toBe('Disabled');
+	});
+
+	it('lists IPv6 custom name servers in a mono list', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: { name_servers: { mode: 'custom', custom: ['1.1.1.1', '8.8.8.8'] } },
+					wpa3_per_band: null,
+					fast_transition: null,
+					sqm: false,
+					thread: null,
+					updates: null
+				})
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.getByText('IPv6 name servers')).toBeInTheDocument();
+		expect(screen.getByText('1.1.1.1, 8.8.8.8')).toBeInTheDocument();
+	});
+
+	it('renders the DHCP range as a start – end row', async () => {
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.getByText('DHCP range')).toBeInTheDocument();
+		expect(screen.getByText('10.0.0.10 – 10.0.0.254')).toBeInTheDocument();
+	});
+
+	it('shows a release-notes link only when manifest_resource is an http(s) URL', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: null,
+					wpa3_per_band: null,
+					fast_transition: null,
+					sqm: false,
+					thread: null,
+					updates: { has_update: false, manifest_resource: 'https://example.com/notes' }
+				})
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		const link = screen.getByRole('link', { name: /view release notes/i });
+		expect(link).toHaveAttribute('href', 'https://example.com/notes');
+		expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+	});
+
+	it('hides the release-notes link when manifest_resource is not an http(s) URL', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: null,
+					wpa3_per_band: null,
+					fast_transition: null,
+					sqm: false,
+					thread: null,
+					updates: { has_update: false, manifest_resource: 's3://internal-bucket/notes' }
+				})
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.queryByRole('link', { name: /view release notes/i })).not.toBeInTheDocument();
+	});
+
+	it('renders exactly one "Disabled by operator" note when the gate is off', async () => {
+		mockEntitlements(false);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.getAllByText(/disabled by operator/i)).toHaveLength(1);
+		expect(screen.getByText('EERO_DASHBOARD_EXPERIMENTAL_WRITES=true')).toBeInTheDocument();
+	});
+
+	it('renders no "Disabled by operator" note when the gate is on', async () => {
+		mockEntitlements(true);
+		await entitlementsStore.fetch('network-123');
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		expect(screen.queryByText(/disabled by operator/i)).not.toBeInTheDocument();
+	});
+
+	it('drops id columns from the subnets table', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/subnets', () =>
+				HttpResponse.json({
+					subnets: [
+						{
+							subnet_id: 'sub-1',
+							network_id: 'network-123',
+							name: 'guest',
+							enabled: true,
+							wan_access: true,
+							lan_access: false,
+							nat_port_randomization: true,
+							password_set: true
+						}
+					]
+				})
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('router')).toBeInTheDocument());
+
+		const subnetsSection = document.querySelector('[data-family="subnets"]');
+		expect(subnetsSection).not.toBeNull();
+		expect(subnetsSection!.textContent).not.toMatch(/subnet id/i);
+		expect(subnetsSection!.textContent).not.toMatch(/network id/i);
+		expect(subnetsSection!.querySelector('th')?.textContent?.toLowerCase()).not.toContain('id');
+	});
+
 	it('gate-on: regenerating Thread credentials names the re-commissioning consequence', async () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');

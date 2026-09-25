@@ -2657,14 +2657,93 @@ class NetworkEntitlements(BaseModel):
     unchanged - their shape is undocumented in eero-api v8.0.3
     (sdk-surface-map-v8.0.3.md WP6: "element shape undocumented and
     unfixtured ([] only) - take from a live read").
+
+    ``premium_tier`` and ``premium_signals`` were added while fixing a
+    production report ("I have eero Plus and can't see advanced info",
+    2026-09-25): ``premium_status`` on a live network envelope can arrive
+    as a bare string (``"active"``) rather than the ``{"active": true}``
+    dict our fixtures assumed (eero-api tests/integration/conftest.py and
+    tests/conftest.py both show this shape), so ``is_premium`` silently
+    stayed ``None``/``False`` for real Plus accounts. ``premium_signals``
+    lists which source(s) contributed a positive premium signal so the UI
+    can explain an upsell it disagrees with; ``premium_tier`` surfaces any
+    tier/plan string we found (``premium_details.tier``, ``plan``, ...).
     """
 
     features: list[Any] = []
     upsell_features: list[Any] = []
     is_premium: bool | None = None
     premium_status: PremiumStatus | None = None
+    premium_tier: str | None = None
+    premium_signals: list[str] = []
     capabilities: list[Any] = []
     experimental_writes: bool
+
+
+# Substrings that, when found in a feature/capability entry's name-like
+# field (case-insensitive), indicate a premium-only (Eero Plus/Secure)
+# entitlement. Heuristic only - the SDK does not document feature-name
+# strings (Python-API.md "Entitlements": "deciding whether a feature is
+# 'on' is your job").
+_PREMIUM_FEATURE_NAME_HINTS = (
+    "backup",
+    "premium",
+    "secure",
+    "plus",
+    "ad_block",
+    "adblock",
+    "malware",
+)
+
+# Tokens recognised for a bare-string ``premium_status`` (eero-api
+# tests/conftest.py, tests/integration/conftest.py: real envelopes carry
+# ``"premium_status": "active"`` rather than a nested dict).
+_PREMIUM_STATUS_TRUE_TOKENS = frozenset(
+    {"active", "subscribed", "enabled", "premium", "plus", "true", "1"}
+)
+_PREMIUM_STATUS_FALSE_TOKENS = frozenset(
+    {
+        "inactive",
+        "canceled",
+        "cancelled",
+        "expired",
+        "suspended",
+        "none",
+        "free",
+        "false",
+        "0",
+        "",
+    }
+)
+
+
+def _feature_entry_name(entry: Any) -> str | None:
+    """Best-effort extraction of a name-like string from a feature entry.
+
+    ``entry`` may be a bare string or a dict using any of several
+    plausible key names - the shape is unfixtured. Returns ``None`` when
+    no string can be found.
+    """
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, dict):
+        for key in ("name", "slug", "key", "feature", "id", "feature_name"):
+            value = entry.get(key)
+            if isinstance(value, str):
+                return value
+    return None
+
+
+def _premium_signal_from_features(features: list[Any], source: str) -> str | None:
+    """Return a signal name if any feature entry matches a premium hint."""
+    for entry in features:
+        name = _feature_entry_name(entry)
+        if not name:
+            continue
+        lowered = name.lower()
+        if any(hint in lowered for hint in _PREMIUM_FEATURE_NAME_HINTS):
+            return f"{source}:{name}"
+    return None
 
 
 @router.get("/{network_id}/entitlements", response_model=NetworkEntitlements)
@@ -2676,18 +2755,32 @@ async def get_entitlements(
     model capabilities, plus the ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
     flag so one call configures every premium-gated and unverified-write
     control in the UI (mirrors ``/api/health``, decision 6a).
+
+    ``is_premium`` is derived from ANY positive signal across the sources
+    below rather than a single field, since a real Plus account can
+    signal its subscription through any one of them and none is
+    guaranteed present (see ``NetworkEntitlements`` docstring). It is
+    ``None`` when every source failed (we never asked), ``False`` when at
+    least one source answered but none showed a positive signal, and
+    ``True`` otherwise.
     """
     features: list[Any] = []
     upsell_features: list[Any] = []
     capabilities: list[Any] = []
-    is_premium: bool | None = None
+    is_premium_customer: bool | None = None
     premium_status: PremiumStatus | None = None
+    premium_tier: str | None = None
+    signals: list[str] = []
+    premium_source_answered = False
 
     try:
         raw = await client.get_entitlement_features(network_id=network_id)
         data = extract_data(raw)
         if isinstance(data.get("features"), list):
             features = strip_sensitive_keys(data["features"])
+            signal = _premium_signal_from_features(features, "features")
+            if signal:
+                signals.append(signal)
     except _PROPAGATE_FIRST:
         raise
     except EeroException as e:
@@ -2708,6 +2801,9 @@ async def get_entitlements(
         data = extract_data(raw)
         if isinstance(data.get("models"), list):
             capabilities = strip_sensitive_keys(data["models"])
+            signal = _premium_signal_from_features(capabilities, "capabilities")
+            if signal:
+                signals.append(signal)
     except _PROPAGATE_FIRST:
         raise
     except EeroException as e:
@@ -2716,8 +2812,11 @@ async def get_entitlements(
     try:
         raw = await client.get_premium_customer()
         data = extract_data(raw)
+        premium_source_answered = True
         if "is_premium" in data:
-            is_premium = bool(coerce_bool(data.get("is_premium")))
+            is_premium_customer = coerce_bool(data.get("is_premium"))
+            if is_premium_customer:
+                signals.append("premium_customer.is_premium")
     except _PROPAGATE_FIRST:
         raise
     except EeroException as e:
@@ -2726,27 +2825,99 @@ async def get_entitlements(
     try:
         raw = await client.get_premium_status(network_id=network_id)
         data = extract_data(raw)
+        premium_source_answered = True
         raw_status = data.get("premium_status")
+
+        active: bool | None = None
         if isinstance(raw_status, dict):
+            active = coerce_bool(raw_status.get("active"))
+            if active is None and "status" in raw_status:
+                active = coerce_bool(raw_status.get("status"))
+            if active is None and "is_active" in raw_status:
+                active = coerce_bool(raw_status.get("is_active"))
+            if active:
+                signals.append("premium_status.active")
+            tier = raw_status.get("tier")
+            if isinstance(tier, str) and tier.strip().lower() not in (
+                "",
+                "none",
+                "free",
+            ):
+                premium_tier = tier
+                signals.append(f"premium_status.tier:{tier}")
+        elif isinstance(raw_status, str):
+            token = raw_status.strip().lower()
+            if token in _PREMIUM_STATUS_TRUE_TOKENS:
+                active = True
+                premium_tier = premium_tier or raw_status
+                signals.append(f"premium_status:{raw_status}")
+            elif token in _PREMIUM_STATUS_FALSE_TOKENS:
+                active = False
+            else:
+                _LOGGER.debug(
+                    "Unrecognised premium_status string %r for %s",
+                    raw_status,
+                    network_id,
+                )
+
+        eero_plus_raw = data.get("eero_plus")
+        eero_plus_signal = coerce_bool(eero_plus_raw)
+        if eero_plus_signal:
+            signals.append("eero_plus")
+
+        premium_dns_raw = data.get("premium_dns")
+        premium_dns_signal = (
+            coerce_bool(premium_dns_raw) if "premium_dns" in data else None
+        )
+        if premium_dns_signal:
+            signals.append("premium_dns")
+
+        premium_details = data.get("premium_details")
+        if isinstance(premium_details, dict):
+            details_tier = premium_details.get("tier")
+            if isinstance(details_tier, str) and details_tier.strip().lower() not in (
+                "",
+                "none",
+                "free",
+            ):
+                premium_tier = premium_tier or details_tier
+                signals.append(f"premium_details.tier:{details_tier}")
+
+        if raw_status is not None or "eero_plus" in data or "premium_dns" in data:
             premium_status = PremiumStatus(
-                active=raw_status.get("active"),
-                eero_plus=data.get("eero_plus"),
-                premium_dns=(
-                    bool(coerce_bool(data.get("premium_dns")))
-                    if "premium_dns" in data
-                    else None
-                ),
+                active=active,
+                eero_plus=eero_plus_raw,
+                premium_dns=premium_dns_signal,
             )
     except _PROPAGATE_FIRST:
         raise
     except EeroException as e:
         _LOGGER.debug("Premium status unavailable for %s: %s", network_id, e)
 
+    # Tri-state: True on any positive signal; False when at least one
+    # source answered but showed none; None when every source failed (we
+    # never got an answer at all).
+    if signals:
+        is_premium = True
+    elif premium_source_answered:
+        is_premium = False
+    else:
+        is_premium = None
+
+    _LOGGER.debug(
+        "Premium signals for network %s: %s (tier=%s)",
+        network_id,
+        signals,
+        premium_tier,
+    )
+
     return NetworkEntitlements(
         features=features,
         upsell_features=upsell_features,
         is_premium=is_premium,
         premium_status=premium_status,
+        premium_tier=premium_tier,
+        premium_signals=signals,
         capabilities=capabilities,
         experimental_writes=settings.experimental_writes,
     )
@@ -3268,12 +3439,115 @@ async def get_channel_utilization(
 # ---------------------------------------------------------------------------
 
 
+def _coerce_optional_str(value: Any) -> str | None:
+    """Coerce a plausibly-scalar API field to ``str``, else ``None``.
+
+    A real envelope may send a timestamp as an int/float instead of an
+    ISO-8601 string, or a role/status as some other scalar. Pydantic v2
+    does not coerce ``int``/``float`` into a ``str`` field by default, so
+    passing such a value straight into a ``str | None`` model field
+    raises a ``ResponseValidationError`` (a 500) rather than degrading
+    gracefully - this is one of the two production "Internal server
+    error" reports on the Members & Permissions card (2026-09-25).
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return str(value)
+    return None
+
+
+def _stringify_name(value: Any) -> str | None:
+    """Best-effort extraction of a display name from a name-like field.
+
+    Real member envelopes have been seen (account API fixtures,
+    eero-api tests/conftest.py ``sample_account_response``) sending
+    ``name`` as a structured ``{"first": ..., "last": ...}`` object
+    instead of a bare string.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        first = value.get("first")
+        last = value.get("last")
+        parts = [p for p in (first, last) if isinstance(p, str) and p]
+        if parts:
+            return " ".join(parts)
+        for candidate in value.values():
+            if isinstance(candidate, str) and candidate:
+                return candidate
+    return None
+
+
+def _dict_values_as_list(data: dict[str, Any], list_key: str) -> list[Any] | None:
+    """Recover a list from a dict-keyed-by-id shape, e.g.
+    ``{"member_1": {...}, "member_2": {...}}`` instead of
+    ``{"members": [...]}``. Returns ``None`` when ``data`` does not look
+    like this shape (empty, or holds non-dict values), so the caller can
+    fall back to its normal empty-result handling instead of guessing.
+    """
+    candidate = data.get(list_key)
+    if isinstance(candidate, dict) and candidate:
+        if all(isinstance(v, dict) for v in candidate.values()):
+            return list(candidate.values())
+        return None
+    # The whole envelope itself may be keyed by id, with no `list_key`
+    # wrapper at all.
+    if (
+        list_key not in data
+        and data
+        and all(isinstance(v, dict) for v in data.values())
+    ):
+        return list(data.values())
+    return None
+
+
 class PermissionsResponse(BaseModel):
     """The current user's permissions on the network."""
 
     permissions: dict[str, bool] = {}
     role: str | None = None
     partial: bool = False
+
+
+def _normalize_permissions(
+    data: dict[str, Any],
+) -> tuple[dict[str, bool], str | None, bool]:
+    """Normalise a permissions envelope defensively.
+
+    Real envelopes may carry non-bool permission values, or nest ``role``
+    under ``user`` rather than at the top level. Unmappable permission
+    entries are dropped rather than raised on; the caller signals
+    ``partial=True`` when anything had to be dropped or reshaped so the
+    UI knows the result may be incomplete.
+    """
+    partial = False
+    permissions: dict[str, bool] = {}
+    raw_permissions = data.get("permissions")
+    if isinstance(raw_permissions, dict):
+        for key, value in raw_permissions.items():
+            if not isinstance(key, str):
+                partial = True
+                continue
+            coerced = coerce_bool(value)
+            if coerced is None:
+                partial = True
+                continue
+            permissions[key] = coerced
+    elif raw_permissions is not None:
+        partial = True
+
+    role = _coerce_optional_str(data.get("role"))
+    if role is None:
+        user = data.get("user")
+        if isinstance(user, dict):
+            role = _coerce_optional_str(user.get("role"))
+        if role is None and data.get("role") is not None:
+            partial = True
+
+    return permissions, role, partial
 
 
 @router.get("/{network_id}/permissions", response_model=PermissionsResponse)
@@ -3286,12 +3560,15 @@ async def get_network_permissions(
         raw = await client.get_permissions(network_id=network_id)
     except EeroAccessDeniedException:
         return PermissionsResponse(partial=True)
-    data = extract_data(raw)
-    permissions = data.get("permissions")
-    return PermissionsResponse(
-        permissions=permissions if isinstance(permissions, dict) else {},
-        role=data.get("role"),
-    )
+    try:
+        data = extract_data(raw)
+        permissions, role, partial = _normalize_permissions(data)
+    except Exception:
+        _LOGGER.debug(
+            "Unexpected permissions envelope shape for %s", network_id, exc_info=True
+        )
+        return PermissionsResponse(partial=True)
+    return PermissionsResponse(permissions=permissions, role=role, partial=partial)
 
 
 class Member(BaseModel):
@@ -3305,12 +3582,38 @@ class Member(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-def _normalize_member(raw: dict[str, Any]) -> Member:
-    return Member(
-        name=raw.get("name") or raw.get("user_name"),
-        role=raw.get("role"),
-        status=raw.get("status"),
-    )
+def _normalize_member(raw: dict[str, Any]) -> tuple[Member, bool]:
+    """Normalise one member entry defensively.
+
+    Real envelopes may send ``name`` as a structured object, nest
+    ``role`` under ``user``, or send ``status``/timestamps as non-string
+    scalars. Returns the normalised ``Member`` plus whether anything had
+    to be dropped/reshaped.
+    """
+    partial = False
+
+    raw_name = raw.get("name")
+    name = _stringify_name(raw_name)
+    if name is None:
+        name = _coerce_optional_str(raw.get("user_name"))
+    if name is None and raw_name is not None:
+        partial = True
+
+    raw_role = raw.get("role")
+    role = _coerce_optional_str(raw_role)
+    if role is None:
+        user = raw.get("user")
+        if isinstance(user, dict):
+            role = _coerce_optional_str(user.get("role"))
+    if role is None and raw_role is not None:
+        partial = True
+
+    raw_status = raw.get("status")
+    status = _coerce_optional_str(raw_status)
+    if status is None and raw_status is not None:
+        partial = True
+
+    return Member(name=name, role=role, status=status), partial
 
 
 class MembersResponse(BaseModel):
@@ -3330,10 +3633,30 @@ async def get_network_members(
         raw = await client.get_members(network_id=network_id)
     except EeroAccessDeniedException:
         return MembersResponse(partial=True)
-    members = extract_list(raw, "members")
-    return MembersResponse(
-        members=[_normalize_member(m) for m in members if isinstance(m, dict)]
-    )
+
+    try:
+        members_raw = extract_list(raw, "members")
+        if not members_raw:
+            recovered = _dict_values_as_list(extract_data(raw), "members")
+            if recovered is not None:
+                members_raw = recovered
+
+        members: list[Member] = []
+        partial = False
+        for entry in members_raw:
+            if not isinstance(entry, dict):
+                partial = True
+                continue
+            member, dropped = _normalize_member(entry)
+            members.append(member)
+            partial = partial or dropped
+    except Exception:
+        _LOGGER.debug(
+            "Unexpected members envelope shape for %s", network_id, exc_info=True
+        )
+        return MembersResponse(partial=True)
+
+    return MembersResponse(members=members, partial=partial)
 
 
 class InviteSummary(BaseModel):
@@ -3352,13 +3675,52 @@ class InviteSummary(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-def _normalize_invite(raw: dict[str, Any]) -> InviteSummary:
-    return InviteSummary(
-        id=extract_id_from_url(raw.get("url")),
-        role=raw.get("invite_role") or raw.get("role"),
-        status=raw.get("status"),
-        created=raw.get("created"),
-        expires=raw.get("expires") or raw.get("expiration"),
+def _normalize_invite(raw: dict[str, Any]) -> tuple[InviteSummary, bool]:
+    """Normalise one invite entry defensively.
+
+    ``id`` is always derived from ``url`` only (never from the raw
+    ``invite_id``/``invite_url`` keys - security review, 2026-09-24).
+    Every other field may arrive as a non-string scalar on a real
+    envelope (e.g. an epoch timestamp), which would otherwise raise a
+    response-validation error.
+    """
+    partial = False
+
+    raw_role = raw.get("invite_role")
+    role = _coerce_optional_str(raw_role)
+    if role is None:
+        raw_role = raw.get("role")
+        role = _coerce_optional_str(raw_role)
+    if role is None and raw_role is not None:
+        partial = True
+
+    raw_status = raw.get("status")
+    status = _coerce_optional_str(raw_status)
+    if status is None and raw_status is not None:
+        partial = True
+
+    raw_created = raw.get("created")
+    created = _coerce_optional_str(raw_created)
+    if created is None and raw_created is not None:
+        partial = True
+
+    raw_expires = raw.get("expires")
+    expires = _coerce_optional_str(raw_expires)
+    if expires is None:
+        raw_expires = raw.get("expiration")
+        expires = _coerce_optional_str(raw_expires)
+    if expires is None and raw_expires is not None:
+        partial = True
+
+    return (
+        InviteSummary(
+            id=extract_id_from_url(raw.get("url")),
+            role=role,
+            status=status,
+            created=created,
+            expires=expires,
+        ),
+        partial,
     )
 
 
@@ -3386,10 +3748,30 @@ async def get_network_invites(
         raw = await client.get_invites(network_id=network_id)
     except EeroAccessDeniedException:
         return InvitesResponse(partial=True)
-    invites = extract_list(raw, "invites")
-    return InvitesResponse(
-        invites=[_normalize_invite(i) for i in invites if isinstance(i, dict)]
-    )
+
+    try:
+        invites_raw = extract_list(raw, "invites")
+        if not invites_raw:
+            recovered = _dict_values_as_list(extract_data(raw), "invites")
+            if recovered is not None:
+                invites_raw = recovered
+
+        invites: list[InviteSummary] = []
+        partial = False
+        for entry in invites_raw:
+            if not isinstance(entry, dict):
+                partial = True
+                continue
+            invite, dropped = _normalize_invite(entry)
+            invites.append(invite)
+            partial = partial or dropped
+    except Exception:
+        _LOGGER.debug(
+            "Unexpected invites envelope shape for %s", network_id, exc_info=True
+        )
+        return InvitesResponse(partial=True)
+
+    return InvitesResponse(invites=invites, partial=partial)
 
 
 # ---------------------------------------------------------------------------
@@ -4237,7 +4619,8 @@ async def update_network_invite(
     raw_result = await client.update_invite(
         invite_id, invite_nickname=nickname, network_id=network_id
     )
-    return _normalize_invite(extract_data(raw_result))
+    invite, _partial = _normalize_invite(extract_data(raw_result))
+    return invite
 
 
 @router.delete(

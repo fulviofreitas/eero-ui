@@ -22,9 +22,11 @@
 
 	interface Props {
 		networkId: string;
+		/** Suppress this control's own "disabled by operator" note - the parent card renders one summary note instead. */
+		silent?: boolean;
 	}
 
-	let { networkId }: Props = $props();
+	let { networkId, silent = false }: Props = $props();
 
 	const MAIN_SUBNET_TYPE = 'main';
 	const REBOOT_DETAILS = [
@@ -161,7 +163,7 @@
 	}
 </script>
 
-<ExperimentalGate>
+<ExperimentalGate {silent}>
 	<div class="subnets-controls">
 		{#if editableSubnets.length === 0}
 			<p class="text-muted text-sm">No non-main subnets to edit.</p>
