@@ -26,6 +26,16 @@ def make_raw_response(data, code: int = 200):
     return {"meta": {"code": code}, "data": data}
 
 
+def _read_metrics_route_source() -> str:
+    """Read routes/metrics.py source text.
+
+    A plain sync helper (never called from inside an ``async def``) so the
+    blocking file read never runs on the event loop -- see ASYNC230.
+    """
+    with open(metrics_route.__file__, encoding="utf-8") as f:
+        return f.read()
+
+
 def make_network(net_id="net-1", name="Home", last_reboot=None):
     """Build a minimal raw network dict."""
     net: dict = {"url": f"/2.2/networks/{net_id}", "name": name}
@@ -608,9 +618,7 @@ class TestMetricNamesAreSubsetOfPromQLLiterals:
     ):
         import re
 
-        source = metrics_route.__file__
-        with open(source, encoding="utf-8") as f:
-            text = f.read()
+        text = _read_metrics_route_source()
 
         literals = set(re.findall(r"\beero_[a-z_]+\b", text))
 
@@ -742,9 +750,7 @@ class TestMetricContractAllowlist:
         """
         import re
 
-        source = metrics_route.__file__
-        with open(source, encoding="utf-8") as f:
-            text = f.read()
+        text = _read_metrics_route_source()
         literals = set(re.findall(r"\beero_[a-z_]+\b", text))
 
         assert literals == self.QUERIED_CONTRACT_METRICS, (
@@ -771,9 +777,7 @@ class TestMetricContractAllowlist:
         metric or an added one -- never an unlisted third name."""
         import re
 
-        source = metrics_route.__file__
-        with open(source, encoding="utf-8") as f:
-            text = f.read()
+        text = _read_metrics_route_source()
         literals = set(re.findall(r"\beero_[a-z_]+\b", text))
 
         undocumented = literals - self.ALLOWLIST

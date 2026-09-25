@@ -151,7 +151,7 @@ def is_valid_iso8601(value: str) -> bool:
     if not isinstance(value, str) or not value:
         return False
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        datetime.fromisoformat(value)
     except ValueError:
         return False
     return True
@@ -177,7 +177,7 @@ def parse_iso8601(value: str) -> datetime:
     Callers must validate with ``is_valid_iso8601`` first; this raises
     ``ValueError`` on a malformed value like ``datetime.fromisoformat``.
     """
-    return _as_aware_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    return _as_aware_utc(datetime.fromisoformat(value))
 
 
 def has_control_or_format_chars(value: str) -> bool:

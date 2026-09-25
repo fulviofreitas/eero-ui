@@ -224,7 +224,7 @@ class TestDeviceNicknameValidation:
 
         response = await auth_client.put(
             "/api/devices/device-1/nickname",
-            json={"nickname": "Kids‮Tablet"},
+            json={"nickname": "Kids\u202eTablet"},
         )
 
         assert response.status_code == 422

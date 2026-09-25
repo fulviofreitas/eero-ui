@@ -65,7 +65,7 @@ class TestLifespanStartup:
 async def _noop_async(*args, **kwargs) -> None:
     """A do-nothing async replacement for shutdown_client/aclose in tests
     that don't care about call ordering."""
-    return None
+    return
 
 
 class TestLifespanShutdownOrdering:

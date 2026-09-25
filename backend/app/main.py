@@ -65,7 +65,7 @@ def _remove_legacy_exporter_session_file() -> None:
             legacy_path.unlink()
             _LOGGER.info("Removed legacy exporter session file")
     except OSError as e:
-        _LOGGER.warning(f"Failed to remove legacy exporter session file: {e}")
+        _LOGGER.warning("Failed to remove legacy exporter session file: %s", e)
 
 
 # Configure logging
@@ -451,7 +451,7 @@ if frontend_dist.exists():
             file_path.relative_to(frontend_dist_resolved)
         except ValueError:
             # Path traversal attempt detected - serve index.html instead
-            _LOGGER.warning(f"Path traversal attempt blocked: {full_path}")
+            _LOGGER.warning("Path traversal attempt blocked: %s", full_path)
             return FileResponse(frontend_dist / "index.html")
 
         # Check if it's a static file that exists

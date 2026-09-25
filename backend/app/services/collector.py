@@ -175,7 +175,8 @@ class MetricsCollector:
         while True:
             try:
                 await self.run_cycle()
-            except Exception:  # noqa: BLE001 - never let a cycle kill the task
+            # pylint: disable-next=broad-exception-caught
+            except Exception:  # never let a cycle kill the task
                 _LOGGER.warning(
                     "Unhandled error in metrics collector cycle", exc_info=True
                 )

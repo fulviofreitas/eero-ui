@@ -10,6 +10,7 @@ Covers phase-6.0-revamp.md § 2.5 (metrics-layer security defects):
   never the SPA's index.html.
 """
 
+from typing import ClassVar
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -86,7 +87,7 @@ class TestDeletedMetricsRoutesAreGone:
 class TestIdentifierValidation:
     """Identifiers must be validated before reaching a PromQL selector."""
 
-    MALICIOUS_VALUES = [
+    MALICIOUS_VALUES: ClassVar[list[str]] = [
         '"',
         "}",
         "\n",

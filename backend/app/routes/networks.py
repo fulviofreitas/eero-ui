@@ -2807,8 +2807,8 @@ def validate_insight_params(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="start and end must be ISO-8601 timestamps.",
         )
-    start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
-    end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    start_dt = datetime.fromisoformat(start)
+    end_dt = datetime.fromisoformat(end)
     if end_dt <= start_dt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
