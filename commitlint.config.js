@@ -51,8 +51,10 @@ export default {
     // Body max line length
     'body-max-line-length': [2, 'always', 200],
     
-    // Footer max line length
-    'footer-max-line-length': [2, 'always', 200],
+    // Footer max line length. BREAKING CHANGE footers are one sentence per
+    // breaking item and must not wrap (semantic-release reads each line as a
+    // note); 6.0's longest was 222 characters, so leave headroom.
+    'footer-max-line-length': [2, 'always', 250],
   },
   
   // Help message displayed on validation failure
