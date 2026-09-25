@@ -36,6 +36,69 @@ describe('networksStore', () => {
 		await networksStore.fetch();
 	});
 
+	describe('fetch (issue #401 - stored selection must be re-sent as preferred)', () => {
+		it('re-sends a stored, still-valid selection via POST set-preferred on every fetch', async () => {
+			// Simulate a container restart: localStorage already holds a valid
+			// selection from a previous session, but the backend's in-memory
+			// preferred network is empty - the store must re-assert it, not
+			// only send it on the fallback (first-network) path.
+			networksStore.clear();
+			localStorage.setItem('eero_selected_network', 'network-123');
+
+			const setPreferredCalls: string[] = [];
+			server.use(
+				http.get('/api/networks', () => HttpResponse.json([network123])),
+				http.post('/api/networks/:networkId/set-preferred', ({ params }) => {
+					setPreferredCalls.push(params.networkId as string);
+					return HttpResponse.json({ success: true });
+				})
+			);
+
+			await networksStore.fetch();
+
+			expect(setPreferredCalls).toEqual(['network-123']);
+			expect(get(networksStore).selectedNetworkId).toBe('network-123');
+		});
+
+		it('still selects and sends the first network when no valid selection is stored (fallback path)', async () => {
+			networksStore.clear();
+			// No localStorage entry, and network-123 is the only available network.
+
+			const setPreferredCalls: string[] = [];
+			server.use(
+				http.get('/api/networks', () => HttpResponse.json([network123])),
+				http.post('/api/networks/:networkId/set-preferred', ({ params }) => {
+					setPreferredCalls.push(params.networkId as string);
+					return HttpResponse.json({ success: true });
+				})
+			);
+
+			await networksStore.fetch();
+
+			expect(setPreferredCalls).toEqual(['network-123']);
+			expect(get(networksStore).selectedNetworkId).toBe('network-123');
+		});
+
+		it('does not throw and still resolves fetch when set-preferred fails', async () => {
+			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			server.use(
+				http.get('/api/networks', () => HttpResponse.json([network123])),
+				http.post('/api/networks/:networkId/set-preferred', () =>
+					HttpResponse.json({ detail: 'boom' }, { status: 500 })
+				)
+			);
+
+			await expect(networksStore.fetch()).resolves.toBeUndefined();
+
+			expect(get(networksStore).selectedNetworkId).toBe('network-123');
+			expect(get(networksStore).error).toBeNull();
+			expect(consoleErrorSpy).toHaveBeenCalled();
+
+			consoleErrorSpy.mockRestore();
+		});
+	});
+
 	describe('runSpeedTest', () => {
 		beforeEach(() => {
 			vi.useFakeTimers({ shouldAdvanceTime: true });

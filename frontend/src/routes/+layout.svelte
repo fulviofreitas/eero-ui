@@ -134,10 +134,14 @@
 		initialized = true;
 	});
 
-	// Fetch networks when authenticated
+	// Fetch networks when authenticated. Awaited (issue #401): `networksStore.fetch()`
+	// re-asserts the preferred network on the backend before it resolves, and pages
+	// (dashboard, devices, eeros, ...) fetch network-scoped data from their own
+	// `onMount` reactively off `$selectedNetworkId` - that data must not be requested
+	// until the backend's preferred network matches the frontend's selection.
 	$effect(() => {
 		if (initialized && $isAuthenticated) {
-			networksStore.fetch();
+			void networksStore.fetch();
 		}
 	});
 

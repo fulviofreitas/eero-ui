@@ -7,7 +7,8 @@
   (`/backup-access-points`). Plus-gated - wrapped in `<PremiumGate>` by the
   caller, with the same internal `premiumRequired` fallback `DataUsageCard`
   uses in case entitlements are stale. `cellular_usage`/`cellular_events` are
-  unfixtured upstream and rendered defensively via `GenericRecordList`.
+  unfixtured upstream and rendered defensively - usage as InfoRows plus an
+  itemised list (never `JSON.stringify`), events via the shared `EventsTable`.
 
   Write controls (phase-6.0-revamp.md § 7 WP7, family 11 and family 5): the
   enable/disable toggle on the Status section, and add/edit/delete/reorder/
@@ -24,10 +25,16 @@
 	import DataTable, { type DataTableColumn } from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import GenericRecordList from '$components/common/GenericRecordList.svelte';
+	import NestedValue from '$components/common/NestedValue.svelte';
+	import EventsTable from '$components/common/EventsTable.svelte';
+	import StatusBadge from '$components/common/StatusBadge.svelte';
+	import InfoRow from '$components/common/InfoRow.svelte';
+	import EmptyState from '$components/common/EmptyState.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 	import BackupAccessPointModal from './BackupAccessPointModal.svelte';
+	import { formatBytes } from '$lib/utils/format-bytes';
+	import { formatRelativeTime } from '$lib/utils/format-datetime';
 
 	interface Props {
 		networkId: string;
@@ -41,25 +48,82 @@
 	let editingAp = $state<BackupAccessPoint | null>(null);
 	let apPrefill = $state<DiscoveredBackupSsid | null>(null);
 
-	let usageRecords = $derived(
-		cardState.status?.cellular_usage ? [cardState.status.cellular_usage] : []
-	);
 	let eventRecords = $derived(cardState.status?.cellular_events ?? []);
 
-	function summarizeConnectivity(value: unknown): string {
-		if (value === null || value === undefined) return '—';
-		if (typeof value === 'object') return JSON.stringify(value);
-		return String(value);
+	/** Any array-valued key inside `cellular_usage` - the upstream shape isn't fixtured, so the
+	 * "usage items" array is located structurally rather than by a specific known key name. */
+	function usageItems(
+		usage: Record<string, unknown> | null | undefined
+	): Record<string, unknown>[] {
+		if (!usage) return [];
+		for (const value of Object.values(usage)) {
+			if (Array.isArray(value)) return value as Record<string, unknown>[];
+		}
+		return [];
+	}
+
+	/** Scalar (non-array) entries of `cellular_usage`, rendered as InfoRows. */
+	function usageScalarEntries(
+		usage: Record<string, unknown> | null | undefined
+	): [string, unknown][] {
+		if (!usage) return [];
+		return Object.entries(usage).filter(([, value]) => !Array.isArray(value));
+	}
+
+	function humanizeKey(key: string): string {
+		return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+	}
+
+	/** Bytes-shaped keys (anything matching /bytes/i) are humanised via formatBytes; everything
+	 * else falls back to NestedValue's primitive rendering rules. */
+	function isByteKey(key: string): boolean {
+		return /bytes/i.test(key);
+	}
+
+	function formatUsageValue(key: string, value: unknown): string | null {
+		if (isByteKey(key) && typeof value === 'number') return formatBytes(value);
+		return null;
+	}
+
+	let cellularUsage = $derived(cardState.status?.cellular_usage ?? null);
+	let cellularUsageItems = $derived(usageItems(cellularUsage));
+	let cellularUsageScalars = $derived(usageScalarEntries(cellularUsage));
+
+	/** Extracts a status label and a "last checked" timestamp from a connectivity payload of
+	 * unknown shape, defensively - never JSON.stringify (maintainer screenshot showed a raw
+	 * envelope dumped into the Connectivity column). */
+	function connectivityInfo(value: unknown): { status: string | null; checkedAt: string | null } {
+		if (
+			value === null ||
+			value === undefined ||
+			typeof value !== 'object' ||
+			Array.isArray(value)
+		) {
+			return { status: null, checkedAt: null };
+		}
+		const obj = value as Record<string, unknown>;
+		let status: string | null = null;
+		for (const key of ['connected', 'status', 'state', 'reachable']) {
+			if (key in obj) {
+				const v = obj[key];
+				if (typeof v === 'boolean') status = v ? 'Online' : 'Offline';
+				else if (typeof v === 'string' && v) status = v;
+				if (status) break;
+			}
+		}
+		let checkedAt: string | null = null;
+		for (const key of ['last_checked', 'checked_at', 'timestamp']) {
+			const v = obj[key];
+			if (typeof v === 'string' && v) {
+				checkedAt = v;
+				break;
+			}
+		}
+		return { status, checkedAt };
 	}
 
 	const apColumns: DataTableColumn<BackupAccessPoint>[] = [
-		{ key: 'ssid', header: 'SSID', required: true, accessor: (row) => row.ssid ?? '—' },
-		{
-			key: 'priority',
-			header: 'Priority',
-			align: 'right',
-			accessor: (row) => row.priority ?? null
-		},
+		{ key: 'ssid', header: 'SSID', required: true, width: '160px', render: ssidCell },
 		{
 			key: 'enabled',
 			header: 'Enabled',
@@ -70,7 +134,7 @@
 		{
 			key: 'connectivity',
 			header: 'Connectivity',
-			accessor: (row) => summarizeConnectivity(row.connectivity)
+			render: connectivityCell
 		},
 		{ key: 'actions', header: 'Actions', align: 'right', render: apActionsCell }
 	];
@@ -270,19 +334,34 @@
 
 		<section class="backup-section">
 			<h4>Cellular Usage</h4>
-			<GenericRecordList
-				records={usageRecords}
-				emptyTitle="No cellular usage data"
-				recordLabel={() => 'Current cycle'}
-			/>
+			{#if !cellularUsage}
+				<EmptyState title="No cellular usage data" />
+			{:else}
+				{#each cellularUsageScalars as [key, value] (key)}
+					<InfoRow label={humanizeKey(key)} value={formatUsageValue(key, value) ?? value} />
+				{/each}
+				{#if cellularUsageItems.length === 0}
+					<p class="text-muted text-sm">No usage in the current cycle.</p>
+				{:else}
+					<ul class="usage-items">
+						{#each cellularUsageItems as item, i (i)}
+							<li class="usage-item">
+								{#each Object.entries(item) as [key, value] (key)}
+									<InfoRow label={humanizeKey(key)} value={formatUsageValue(key, value) ?? value} />
+								{/each}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			{/if}
 		</section>
 
 		<section class="backup-section">
 			<h4>Cellular Events</h4>
-			<GenericRecordList
-				records={eventRecords}
+			<EventsTable
+				id="backup-internet-cellular-events"
+				events={eventRecords}
 				emptyTitle="No cellular events"
-				recordLabel={(_r, i) => `Event ${i + 1}`}
 			/>
 		</section>
 
@@ -317,10 +396,18 @@
 			</div>
 
 			{#if cardState.checkResult}
-				<p class="text-muted text-sm">
-					Last check: {cardState.checkResult.ssid ?? '—'} — {summarizeConnectivity(
-						cardState.checkResult.connectivity ?? cardState.checkResult.status
-					)}
+				{@const checkInfo = connectivityInfo(
+					cardState.checkResult.connectivity ?? cardState.checkResult.status
+				)}
+				<p class="text-muted text-sm last-check">
+					Last check: {cardState.checkResult.ssid ?? '—'} —
+					{#if checkInfo.status}
+						<StatusBadge status={checkInfo.status} size="sm" />
+					{:else}
+						<NestedValue
+							value={cardState.checkResult.connectivity ?? cardState.checkResult.status}
+						/>
+					{/if}
 				</p>
 			{/if}
 
@@ -364,6 +451,34 @@
 	onSubmit={handleApSubmit}
 />
 
+{#snippet ssidCell(row: BackupAccessPoint)}
+	<span class="ssid-cell">
+		<span class="ssid-name">{row.ssid ?? '—'}</span>
+		{#if row.priority !== null && row.priority !== undefined}
+			<span class="badge badge-neutral badge-sm priority-badge" title="Priority">
+				#{row.priority}
+			</span>
+		{/if}
+	</span>
+{/snippet}
+
+{#snippet connectivityCell(row: BackupAccessPoint)}
+	{@const info = connectivityInfo(row.connectivity)}
+	{#if info.status}
+		<span class="connectivity-cell">
+			<StatusBadge status={info.status} size="sm" />
+			{#if info.checkedAt}
+				{@const relative = formatRelativeTime(info.checkedAt)}
+				{#if relative}
+					<span class="text-muted text-xs checked-at">checked {relative}</span>
+				{/if}
+			{/if}
+		</span>
+	{:else}
+		<NestedValue value={row.connectivity} />
+	{/if}
+{/snippet}
+
 {#snippet apActionsCell(row: BackupAccessPoint)}
 	<ExperimentalGate>
 		<div class="row-actions">
@@ -402,6 +517,54 @@
 <style>
 	.ap-header-actions {
 		display: flex;
+		gap: var(--space-2);
+	}
+
+	.usage-items {
+		list-style: none;
+		margin: var(--space-2) 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.usage-item {
+		padding: var(--space-3);
+		border: 1px solid var(--color-border-muted);
+		border-radius: var(--radius-md);
+	}
+
+	.ssid-cell {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.ssid-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.priority-badge {
+		flex-shrink: 0;
+	}
+
+	.connectivity-cell {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-1);
+	}
+
+	.checked-at {
+		white-space: nowrap;
+	}
+
+	.last-check {
+		display: flex;
+		align-items: center;
 		gap: var(--space-2);
 	}
 

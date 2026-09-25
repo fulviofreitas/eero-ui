@@ -5,6 +5,9 @@
  * - loads and renders history rows on mount (default limit 10)
  * - switching the limit selector re-fetches with the new limit
  * - an error with no cached results renders ErrorState with a working retry
+ * - a compact one-line date+time (never the full toLocaleString() form) for the timestamp column
+ * - an all-null history renders one muted message and skips the chart, instead of a table of
+ *   dashes plus an empty-looking chart
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -82,5 +85,74 @@ describe('SpeedTestHistoryCard', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /retry/i }));
 
 		await waitFor(() => expect(screen.getByText('100.0 Mbps')).toBeInTheDocument());
+	});
+
+	it('renders a compact one-line date+time for each row, never a clipped full timestamp', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/speedtests', () =>
+				HttpResponse.json([
+					{
+						download_mbps: 480.2,
+						upload_mbps: 95.6,
+						latency_ms: 12,
+						timestamp: '2026-09-25T11:45:38.000Z'
+					}
+				])
+			)
+		);
+
+		render(SpeedTestHistoryCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('480.2 Mbps')).toBeInTheDocument());
+		// Full toLocaleString() output includes seconds ("11:45:38 AM") - the compact
+		// formatter must not.
+		expect(screen.queryByText(/:45:38/)).not.toBeInTheDocument();
+	});
+
+	it('shows one muted message and no chart when every row has all-null measurements', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/speedtests', () =>
+				HttpResponse.json([
+					{
+						download_mbps: null,
+						upload_mbps: null,
+						latency_ms: null,
+						timestamp: '2026-09-25T11:45:38.000Z'
+					}
+				])
+			)
+		);
+
+		const { container } = render(SpeedTestHistoryCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() =>
+			expect(screen.getByText('No speed-test measurements in these entries.')).toBeInTheDocument()
+		);
+		expect(container.querySelector('canvas')).toBeNull();
+		expect(container.querySelector('table')).toBeNull();
+	});
+
+	it('renders the chart and table when at least one row has a numeric value', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/speedtests', () =>
+				HttpResponse.json([
+					{
+						download_mbps: null,
+						upload_mbps: null,
+						latency_ms: null,
+						timestamp: resultAt(1).timestamp
+					},
+					{ download_mbps: 50, upload_mbps: 10, latency_ms: 20, timestamp: resultAt(0).timestamp }
+				])
+			)
+		);
+
+		const { container } = render(SpeedTestHistoryCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('50.0 Mbps')).toBeInTheDocument());
+		expect(container.querySelector('canvas')).not.toBeNull();
+		expect(
+			screen.queryByText('No speed-test measurements in these entries.')
+		).not.toBeInTheDocument();
 	});
 });

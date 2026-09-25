@@ -225,9 +225,11 @@ function createNetworksStore() {
 			try {
 				const networks = await api.networks.list(refresh);
 
+				let selectedNetworkId: string | null = null;
+
 				update((s) => {
 					// If no network is selected, or selected network doesn't exist, select the first one
-					let selectedNetworkId = s.selectedNetworkId;
+					selectedNetworkId = s.selectedNetworkId;
 
 					if (!selectedNetworkId || !networks.find((n) => n.id === selectedNetworkId)) {
 						selectedNetworkId = networks.length > 0 ? networks[0].id : null;
@@ -235,11 +237,6 @@ function createNetworksStore() {
 						// Persist to localStorage
 						if (selectedNetworkId && typeof window !== 'undefined') {
 							localStorage.setItem(STORAGE_KEY, selectedNetworkId);
-						}
-
-						// Set as preferred on backend
-						if (selectedNetworkId) {
-							api.networks.setPreferred(selectedNetworkId).catch(console.error);
 						}
 					}
 
@@ -250,6 +247,20 @@ function createNetworksStore() {
 						loading: false
 					};
 				});
+
+				// Always re-send the preferred network on every fetch (issue #401): the
+				// backend's "preferred network" is in-memory and empty after a restart,
+				// so a stored-but-valid selection must be re-asserted, not just the
+				// fallback-to-first-network case. Awaited so callers (e.g. +layout's
+				// onMount) can rely on the backend knowing the right network before
+				// firing off data fetches that depend on it.
+				if (selectedNetworkId) {
+					try {
+						await api.networks.setPreferred(selectedNetworkId);
+					} catch (error) {
+						console.error('Failed to set preferred network:', error);
+					}
+				}
 			} catch (error) {
 				update((s) => ({
 					...s,
