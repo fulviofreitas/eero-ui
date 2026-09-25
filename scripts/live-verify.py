@@ -371,7 +371,7 @@ def _query_victoria(
                 for item in resp.json().get("data", {}).get("result", []):
                     value = item.get("value", [None, None])[1]
                     result["eero_eero_last_reboot_timestamp_seconds"][eero_id] = value
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         # Deliberate fail-safe: this read-only check is best-effort; report and continue.
         result["error"] = str(exc)
     return result
