@@ -6,7 +6,7 @@
  * tests/mocks/app-stores.ts always resolves `params` to `{}` (see that file's own comment).
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { readable } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
@@ -53,9 +53,12 @@ const baseDevices = [
 	}
 ];
 
-async function importPage() {
-	return (await import('./+page.svelte')).default;
-}
+// The page's module graph (InsightsCard/DataUsageMiniCard pull in Chart.js) is transformed
+// once here, outside any timed test, so no test pays the cold transform cost under load.
+let Page: (typeof import('./+page.svelte'))['default'];
+beforeAll(async () => {
+	Page = (await import('./+page.svelte')).default;
+}, 60000);
 
 // R2 (WP5 reviewer fix): the row no longer carries `onRowClick`/`role="button"` - a nested
 // <button> (the device-name link) inside an interactive row is invalid a11y. Body rows are
@@ -86,7 +89,6 @@ describe('profile detail page - devices list view', () => {
 	});
 
 	async function renderListView() {
-		const Page = await importPage();
 		render(Page);
 		await waitFor(() => expect(screen.getByText('Kids')).toBeInTheDocument());
 		await fireEvent.click(screen.getByTitle('List view'));
@@ -121,7 +123,6 @@ describe('profile detail page - devices list view', () => {
 			)
 		);
 
-		const Page = await importPage();
 		render(Page);
 
 		await waitFor(() =>

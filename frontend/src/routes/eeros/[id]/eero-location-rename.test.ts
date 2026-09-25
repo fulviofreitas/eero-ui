@@ -14,7 +14,7 @@
  * shared stub in tests/mocks/app-stores.ts always resolves `params` to `{}`.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
@@ -48,9 +48,12 @@ function mockEntitlements(experimentalWrites: boolean) {
 	);
 }
 
-async function importPage() {
-	return (await import('./+page.svelte')).default;
-}
+// The page's module graph (charts, cards) is transformed once here, outside any timed
+// test, so the first test does not pay the cold transform cost under load.
+let Page: (typeof import('./+page.svelte'))['default'];
+beforeAll(async () => {
+	Page = (await import('./+page.svelte')).default;
+}, 60000);
 
 async function waitForEeroHeading() {
 	await waitFor(
@@ -71,7 +74,6 @@ describe('eero detail page - location rename', () => {
 		mockEntitlements(false);
 		await entitlementsStore.fetch('network-123');
 
-		const Page = await importPage();
 		render(Page);
 		await waitForEeroHeading();
 
@@ -82,7 +84,6 @@ describe('eero detail page - location rename', () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');
 
-		const Page = await importPage();
 		render(Page);
 		await waitForEeroHeading();
 
@@ -111,7 +112,6 @@ describe('eero detail page - location rename', () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');
 
-		const Page = await importPage();
 		render(Page);
 		await waitForEeroHeading();
 
@@ -139,7 +139,6 @@ describe('eero detail page - location rename', () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');
 
-		const Page = await importPage();
 		render(Page);
 		await waitForEeroHeading();
 
@@ -166,7 +165,6 @@ describe('eero detail page - location rename', () => {
 		mockEntitlements(true);
 		await entitlementsStore.fetch('network-123');
 
-		const Page = await importPage();
 		render(Page);
 		await waitForEeroHeading();
 
