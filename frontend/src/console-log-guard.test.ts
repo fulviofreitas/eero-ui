@@ -1,29 +1,47 @@
 /**
  * console.log guard (plan § 6.2 Tier 4 / WP9: "strip the 13 console.log"s).
  *
- * As of this audit there are still 7 `console.log(` call sites left in
- * product code (test files are excluded - deliberate debug helpers there are
- * fine). This is a PRODUCT BUG this suite does not own fixing (WP9 scope,
- * frontend/src/routes and frontend/src/lib/stores/devices.ts are product
- * code), so the assertion is written as `it.todo` carrying the exact file
- * list rather than skipped silently or left to fail the gate:
- *
- *   - src/lib/stores/devices.ts:120
- *   - src/lib/stores/devices.ts:370
- *   - src/routes/eeros/[id]/+page.svelte:46
- *   - src/routes/network/[id]/+page.svelte:29
- *   - src/routes/network/[id]/+page.svelte:38
- *   - src/routes/network/[id]/+page.svelte:51
- *   - src/routes/devices/[id]/+page.svelte:50
- *
- * Re-run the walk below (`npx vitest run console-log-guard`) after WP9 strips
- * them; once it finds zero, promote `it.todo` back to `it`.
+ * WP9 removed the last 7 `console.log(` call sites from product code
+ * (frontend/src/lib/stores/devices.ts and frontend/src/routes/**). This walks
+ * `src` (excluding *.test.ts, where deliberate debug helpers are fine) and
+ * fails if any `console.log(` call site is reintroduced. `console.error`/
+ * `console.warn` are unaffected - they report real failures.
  */
 
-import { describe, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { join, relative } from 'path';
+
+const SRC_DIR = join(__dirname);
+
+function collectSourceFiles(dir: string): string[] {
+	const files: string[] = [];
+	for (const entry of readdirSync(dir)) {
+		const fullPath = join(dir, entry);
+		const stat = statSync(fullPath);
+		if (stat.isDirectory()) {
+			files.push(...collectSourceFiles(fullPath));
+		} else if (/\.(ts|svelte)$/.test(entry) && !entry.endsWith('.test.ts')) {
+			files.push(fullPath);
+		}
+	}
+	return files;
+}
 
 describe('console.log guard', () => {
-	it.todo(
-		'zero console.log( call sites remain in src (excluding *.test.ts) - currently 7, see file header for the list (WP9 scope)'
-	);
+	it('has zero console.log( call sites in src (excluding *.test.ts)', () => {
+		const offenders: string[] = [];
+
+		for (const file of collectSourceFiles(SRC_DIR)) {
+			const content = readFileSync(file, 'utf-8');
+			const lines = content.split('\n');
+			lines.forEach((line, index) => {
+				if (line.includes('console.log(')) {
+					offenders.push(`${relative(SRC_DIR, file)}:${index + 1}`);
+				}
+			});
+		}
+
+		expect(offenders).toEqual([]);
+	});
 });

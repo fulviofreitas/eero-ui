@@ -209,14 +209,6 @@ function parseSearchQuery(search: string): ParsedQuery {
 		}
 	}
 
-	// Debug: Log parsed query
-	if (fieldFilters.size > 0) {
-		console.log('[DeviceFilter] Parsed query:', {
-			freeText,
-			fieldFilters: Object.fromEntries(fieldFilters)
-		});
-	}
-
 	return { freeText, fieldFilters };
 }
 
@@ -554,9 +546,7 @@ export const filteredDevices = derived([devicesStore, deviceFilters], ([$devices
 
 		// Apply field-specific filters
 		if (fieldFilters.size > 0) {
-			const beforeCount = result.length;
 			result = result.filter((d) => matchesFieldFilters(d, fieldFilters));
-			console.log(`[DeviceFilter] Field filter: ${beforeCount} → ${result.length} devices`);
 		}
 
 		// Apply free text search (case-insensitive across all text fields)

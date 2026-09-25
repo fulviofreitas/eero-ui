@@ -55,19 +55,38 @@
 		// this refetch is in flight rather than blanking the page.
 		loading = true;
 		try {
-			const networkId = $selectedNetworkId;
-			if (networkId) {
-				network = await api.networks.get(networkId);
-				eeros = await api.eeros.list();
-				profiles = await api.profiles.list();
-			} else {
+			let networkId = $selectedNetworkId;
+			if (!networkId) {
 				// Fallback: get first network
 				const networks = await api.networks.list();
-				if (networks.length > 0) {
-					network = await api.networks.get(networks[0].id);
-					eeros = await api.eeros.list();
-					profiles = await api.profiles.list();
-				}
+				networkId = networks[0]?.id ?? null;
+			}
+			if (!networkId) return;
+
+			// WP9 perf (plan § 6.1): these three reads are independent of each other (eeros/
+			// profiles are scoped server-side to the already-selected network, not to the
+			// `network` detail response), so fetch them concurrently instead of one at a time.
+			// Each result is handled individually so one failure doesn't blank the other cards.
+			const [networkResult, eerosResult, profilesResult] = await Promise.allSettled([
+				api.networks.get(networkId),
+				api.eeros.list(),
+				api.profiles.list()
+			]);
+
+			if (networkResult.status === 'fulfilled') {
+				network = networkResult.value;
+			} else {
+				console.error('Failed to load network:', networkResult.reason);
+			}
+			if (eerosResult.status === 'fulfilled') {
+				eeros = eerosResult.value;
+			} else {
+				console.error('Failed to load eeros:', eerosResult.reason);
+			}
+			if (profilesResult.status === 'fulfilled') {
+				profiles = profilesResult.value;
+			} else {
+				console.error('Failed to load profiles:', profilesResult.reason);
 			}
 		} catch (_error) {
 			console.error('Failed to load network data:', _error);

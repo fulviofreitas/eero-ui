@@ -80,7 +80,6 @@
 	];
 
 	onMount(() => {
-		console.log('Network page mounted, ID:', networkId);
 		fetchNetwork();
 	});
 
@@ -89,8 +88,6 @@
 	});
 
 	async function fetchNetwork(refresh = false) {
-		console.log('Fetching network with ID:', networkId);
-
 		if (!networkId) {
 			console.error('Network ID is missing');
 			error = 'Invalid network ID';
@@ -104,7 +101,6 @@
 		error = null;
 		try {
 			const result = await api.networks.get(networkId, refresh);
-			console.log('Network detail result:', result);
 			network = result;
 		} catch (err) {
 			console.error('Failed to load network:', err);

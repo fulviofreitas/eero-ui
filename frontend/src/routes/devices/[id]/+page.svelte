@@ -67,7 +67,6 @@
 		error = null;
 		try {
 			const result = await api.devices.get(deviceId, refresh);
-			console.log('Device detail:', result);
 			device = result;
 		} catch (err) {
 			console.error('Failed to load device:', err);

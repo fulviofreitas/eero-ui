@@ -61,7 +61,6 @@
 		error = null;
 		try {
 			const result = await api.eeros.get(eeroId, refresh);
-			console.log('Eero detail:', result);
 			eero = result;
 		} catch (err) {
 			console.error('Failed to load eero:', err);

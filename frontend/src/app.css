@@ -1,6 +1,28 @@
 /* Eero Dashboard - Global Styles */
 
 /* ============================================
+   Self-hosted fonts (WP9 perf, plan § 6.2 Tier 4)
+   Variable fonts, latin subset only - no CDN/runtime requests.
+   Inter covers wght 100-900, JetBrains Mono covers wght 400-800;
+   both comfortably span the 400/500/600 weights this app uses.
+   ============================================ */
+@font-face {
+	font-family: 'Inter';
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/inter-var.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-weight: 400 800;
+	font-display: swap;
+	src: url('/fonts/jetbrains-mono-var.woff2') format('woff2');
+}
+
+/* ============================================
    CSS Custom Properties (Design Tokens)
    ============================================ */
 :root {

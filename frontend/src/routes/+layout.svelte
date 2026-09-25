@@ -195,14 +195,8 @@
 	}
 </script>
 
-<svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-		rel="stylesheet"
-	/>
-</svelte:head>
+<!-- Fonts (Inter, JetBrains Mono) are self-hosted via @font-face in app.css (WP9 perf,
+     plan § 6.2 Tier 4) - no external Google Fonts request. -->
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
@@ -250,7 +244,7 @@
 				<!-- A14 (WP5 a11y fix): brand mark, not a document heading - the page itself owns its
 				     own <h1> per route. -->
 				<div class="logo">
-					<img src="/logo.png" alt="eero" class="logo-img" />
+					<img src="/logo.png" alt="eero" class="logo-img" width="28" height="28" />
 					<span class="logo-text">eero</span>
 				</div>
 			</div>
@@ -598,17 +592,28 @@
 		margin-left: 240px;
 	}
 
-	/* Top bar with account and network */
+	/* Top bar with account and network (WP9 shell polish, plan § 6.2 Tier 4). The previous
+	   gradient-to-transparent background let scrolled content show through the lower half of
+	   the bar; a solid background is the baseline, with backdrop-filter blur layered on top
+	   for browsers that support it. */
 	.top-bar {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		padding: var(--space-2) var(--space-6);
-		background: linear-gradient(180deg, var(--color-bg-secondary) 0%, transparent 100%);
+		background: var(--color-bg-secondary);
 		position: sticky;
 		top: 0;
 		z-index: var(--z-sticky);
 		gap: var(--space-4);
+	}
+
+	@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+		.top-bar {
+			background: color-mix(in srgb, var(--color-bg-secondary) 85%, transparent);
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+		}
 	}
 
 	.account-info {
@@ -817,9 +822,13 @@
 		padding: 8px;
 	}
 
-	/* Page content */
+	/* Page content - contained width (WP9 shell polish, plan § 6.2 Tier 4). Tables/other
+	   full-bleed elements remain full-width *within* this container. */
 	.page-content {
 		flex: 1;
+		width: 100%;
+		max-width: 1440px;
+		margin: 0 auto;
 		padding: var(--space-6);
 		padding-top: var(--space-4);
 	}
