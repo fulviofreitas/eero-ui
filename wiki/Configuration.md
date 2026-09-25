@@ -71,10 +71,12 @@ What changes for an existing deployment:
 - Device block and unblock resolve the device MAC server-side; a device without a known MAC is rejected with `422`.
 - eero-api errors map to `401/402/403/409/422/429/502/503` instead of a blanket `500`; `GET /api/auth/status` gains `reason`.
 - Settings-class writes require confirmation and may restart every eero; unverified writes are hidden unless `EERO_DASHBOARD_EXPERIMENTAL_WRITES=true`.
+- Every `POST`/`PUT`/`PATCH`/`DELETE` under `/api` requires the header `X-Requested-With: eero-ui`, else `403 {"type": "csrf"}`. The bundled frontend sends it; any script or non-browser client of your own that writes through the API must add it. See [[Security#csrf]].
+- Account e-mail and phone changes additionally require `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES=true` on top of the experimental flag. Both default to `false`.
 
 Steps:
 
 1. Back up the `eero-data` volume (session and VictoriaMetrics data) as described in the runbook.
-2. Remove `EERO_EXPORTER_SESSION_PATH` and `EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED` from your compose file or manifest.
+2. Remove `EERO_EXPORTER_SESSION_PATH` and `EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED` from your compose file or manifest. Decide whether you need `EERO_DASHBOARD_EXPERIMENTAL_WRITES` or `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES`; leave both unset unless you do.
 3. Start the 6.0 image against the same volume. Existing metric history stays continuous because the metric names and label sets are unchanged ([[Metrics#history-continuity]]).
 4. Optionally run `scripts/check-history-continuity.sh` against the cutover timestamp.

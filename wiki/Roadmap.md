@@ -8,7 +8,7 @@
 - [ ] Making the embedded VictoriaMetrics optional when `EERO_DASHBOARD_VICTORIA_METRICS_URL` points elsewhere
 - [ ] Live verification of the settings-class write families, one at a time, so their gates can be opened individually
 
-Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared component primitives and `DataTable`, themed Chart.js, SVG icon set, skeleton loading, native metrics collector, eero-api v8, the WP6 read families (entitlements, insights, data usage, events, channel utilisation, members and invites, backup internet, security, subnets, WAN), and the gated write families below.
+Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared component primitives and `DataTable`, themed Chart.js, SVG icon set, skeleton loading, native metrics collector, eero-api v8, the WP6 read families (entitlements, insights, data usage, events, channel utilisation, members and invites, backup internet, security, subnets, WAN, notifications), the account page, the gated write families below, and the WP9 shell: `⌘K` command palette, `?` shortcuts help, URL-encoded device filters, bulk block/unblock, a virtualized device table (`@tanstack/svelte-virtual`, MIT — the one new runtime dependency) and self-hosted fonts (OFL). Every route is captured before and after in `docs/screenshots/6.0/README.md`.
 
 ## Write verification status
 
@@ -26,7 +26,7 @@ Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared co
 | Pause / unpause profile | untested | unverified (SDK now warns) — gated |
 | LED on / off | silently dead in v6/v7 | **verified** |
 | Guest network enable / disable | — | **verified**; disconnects guest clients |
-| Rename network | — | unverified; settings-class, assumed to reboot the mesh; not gated (predates the flag) |
+| Rename network | — | unverified; settings-class, assumed to reboot the mesh; gated (`_NETWORK_NAME_GATE`, security review 2026-09-24) |
 | DNS settings | — | **live-verified to reboot every eero**; settings-class; not gated (predates the flag) |
 
 ### Verified writes (always available)

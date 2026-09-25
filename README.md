@@ -43,8 +43,14 @@ Every route, in both themes, at desktop and phone widths — plus before/after c
 | Eero node status and mesh quality | Guest network, password, DNS | Optimistic updates where safe, confirmations where not |
 | Built-in metrics: clients, signal, speed over time | Profiles, schedules, content filter, forwards, reservations | Interactive network topology map |
 | Insights, data usage, events, channel utilisation (premium) | Advanced settings: SQM, DHCP, WPA3, WAN, power saving | Expired-session detection and clear error states |
+| Members and invites, backup internet, security and WAN, notifications | Bulk block/unblock from the device table | `⌘K` command palette, `?` shortcuts help, shareable URL filters |
+| Account page: name, consents, e-mail and phone (double-gated) | Eero location, node and port actions, Thread, DDNS, forwards, reservations | Virtualized device table, self-hosted fonts, view transitions |
 
-Writes that have not been verified end-to-end against a live eero network are hidden behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES` — see the [Roadmap](../../wiki/Roadmap) for exactly which ones.
+Writes that have not been verified end-to-end against a live eero network are hidden behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES`; account e-mail and phone changes additionally need `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` — see the [Roadmap](../../wiki/Roadmap) for exactly which writes are gated and [Configuration → Write gates](../../wiki/Configuration#write-gates) for the flags.
+
+**Keyboard shortcuts** — `⌘K` / `Ctrl+K` opens the command palette, `?` shows the shortcuts help, `Esc` closes the open dialog or menu. Shortcuts never fire while you are typing in a field. Device filters (`q`, `status`, `conn`, `band`, `sort`, `dir`) are encoded in the URL, so a filtered view survives a refresh and can be shared.
+
+**Runtime dependencies added in 6.0** — exactly one: [`@tanstack/svelte-virtual`](https://github.com/TanStack/virtual) (MIT), which virtualizes the device table so a few hundred rows stay smooth. The UI fonts (Inter and JetBrains Mono, variable WOFF2) are self-hosted from `frontend/static/fonts/` under the SIL Open Font License; the licence text ships in `static/fonts/OFL.txt`. Nothing is fetched from a third party at runtime.
 
 ---
 

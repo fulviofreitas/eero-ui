@@ -76,12 +76,11 @@ Conventions that apply to every route below:
 | `PUT` | `/api/networks/{network_id}/guest/password` | 5/minute `guest_password` | `GuestPasswordRequest {password}` | `GuestPasswordResponse` | read-back returned; password never echoed |
 | `DELETE` | `/api/networks/{network_id}/guest/password` | 5/minute `guest_password` | — | `GuestPasswordResponse` | |
 
-### Settings-class writes, pre-existing (not gated; reboot the mesh)
+### Settings-class write, pre-existing (not gated; reboots the mesh)
 
 | Method | Endpoint | Request | Response | Notes |
 |---|---|---|---|---|
-| `PUT` | `/api/networks/{network_id}/dns` | `DnsUpdateRequest` | `DnsUpdateResponse {success, changed, ...}` | server-side no-op guard on parsed addresses; `changed: false` means nothing was written; `422 {field, message}` on a bad server; **proven to reboot every eero** |
-| `PUT` | `/api/networks/{network_id}/name` | `NetworkRenameRequest {name}` | `{success, changed, name}` | `422` on control/format characters or > 32 bytes; no-op guard; assumed to reboot the mesh |
+| `PUT` | `/api/networks/{network_id}/dns` | `DnsUpdateRequest` | `DnsUpdateResponse {success, changed, ...}` | server-side no-op guard on parsed addresses; `changed: false` means nothing was written; `422 {field, message}` on a bad server; **proven to reboot every eero**; the only settings-class write that is not gated (live-verified) |
 
 ### Settings-class writes (gate: experimental; limit 2/minute `settings_writes`; reboot warning)
 
@@ -89,9 +88,10 @@ Each route depends on its own gate constant in `networks.py` (`_SQM_GATE`, `_DHC
 
 | Method | Endpoint | Request | Response | Notes |
 |---|---|---|---|---|
+| `PUT` | `/api/networks/{network_id}/name` | `NetworkRenameRequest {name}` | `{success, changed, name}` | `_NETWORK_NAME_GATE`; `400` empty, `422` on control/format characters or > 32 bytes; read-first no-op guard; assumed to reboot the mesh |
 | `PUT` | `/api/networks/{network_id}/sqm` | `SqmUpdateRequest` | `SqmUpdateResponse` | no-op guard |
 | `PUT` | `/api/networks/{network_id}/dhcp` | `DhcpUpdateRequest {mode, custom?}` | `DhcpUpdateResponse` | `422` invalid range; `custom_v2` not exposed |
-| `PUT` | `/api/networks/{network_id}/connection-mode` | `ConnectionModeRequest {mode: BRIDGE|NAT}` | `ConnectionModeResponse` | |
+| `PUT` | `/api/networks/{network_id}/connection-mode` | `ConnectionModeRequest {mode: BRIDGE\|NAT, acknowledge_disables_routing?}` | `ConnectionModeResponse` | `mode: BRIDGE` requires `acknowledge_disables_routing: true` (`422` otherwise) — bridge mode disables the network's own DHCP/NAT |
 | `PUT` | `/api/networks/{network_id}/nat-port-randomization` | `NatPortRandomizationRequest {enabled}` | `NatPortRandomizationResponse` | best-effort no-op guard |
 | `PUT` | `/api/networks/{network_id}/wpa3` | `Wpa3PerBandRequest` | `Wpa3PerBandResponse` | `422`; no 6 GHz field in v8.0.3 |
 | `PUT` | `/api/networks/{network_id}/security` | `SecurityUpdateRequest` (exactly one of `wpa3`, `band_steering`, `upnp`, `ipv6`) | `SecurityUpdateResponse` | `422` if zero or more than one field |
@@ -104,9 +104,9 @@ Each route depends on its own gate constant in `networks.py` (`_SQM_GATE`, `_DHC
 | `DELETE` | `/api/networks/{network_id}/subnets/{subnet_type}` | — | `SubnetConfigResponse` | `400` unknown type |
 | `PUT` | `/api/networks/{network_id}/multistaticip` | `MultiStaticIpRequest` | `MultiStaticIpUpdateResponse` | |
 | `PUT` | `/api/networks/{network_id}/secondary-wan` | `SecondaryWanConfigRequest` (bulk) | `SecondaryWanConfigResponse` | `422`; no no-op guard for the bulk form |
-| `POST` | `/api/networks/{network_id}/updates/apply` | — | `NetworkUpdateApplyResponse` | `409 {"type": "no_update_available"}` when nothing is pending; reboots every node |
+| `POST` | `/api/networks/{network_id}/updates/apply` | — | `NetworkUpdateApplyResponse` | `409 {"type": "no_update_available"}` when nothing is pending; `409 {"type": "update_in_progress"}` when a previous apply is still within its window; reboots every node |
 | `PUT` | `/api/networks/{network_id}/password` | `NetworkPasswordRequest {password}` | `NetworkPasswordResponse` | limit 2/minute `network_password`; `422`; disconnects every client; never logged or echoed |
-| `DELETE` | `/api/networks/{network_id}/password` | — | `NetworkPasswordResponse` | limit 2/minute `network_password` |
+| `DELETE` | `/api/networks/{network_id}/password` | `NetworkPasswordClearRequest {confirm_open_network: true}` | `NetworkPasswordResponse` | limit 2/minute `network_password`; `422` unless `confirm_open_network` is `true` — an empty-body `DELETE` can never open the network |
 
 ### Unverified, non-settings writes (gate: experimental; limit 10/minute `experimental_writes` unless noted)
 
@@ -118,7 +118,7 @@ Each route depends on its own gate constant in `networks.py` (`_SQM_GATE`, `_DHC
 | `POST` | `/api/networks/{network_id}/thread/regenerate` | — | `{success, ...}` | limit 1/minute `thread_regenerate` |
 | `PUT` | `/api/networks/{network_id}/notifications` | `NotificationSettingsUpdateRequest` | `NotificationsResponse` | `400`/`422` |
 | `POST` | `/api/networks/{network_id}/notifications/mark-read` | — | `{success}` | |
-| `POST` | `/api/networks/{network_id}/invites` | `InviteCreateRequest` | `201 InviteCreateResponse` | limit 2/minute `invite_create`; `422`; returns no invite id |
+| `POST` | `/api/networks/{network_id}/invites` | `InviteCreateRequest {role: owner\|admin}` | `201 InviteCreateResponse {success, role}` | limit 2/minute `invite_create`; `422` unknown role; returns neither the invite id nor `invite_url` — re-list `/invites` |
 | `PUT` | `/api/networks/{network_id}/invites/{invite_id}` | `InviteUpdateRequest {name}` | `InviteSummary` | `422` |
 | `DELETE` | `/api/networks/{network_id}/invites/{invite_id}` | — | `{success}` | |
 | `POST` | `/api/networks/{network_id}/members/{member_id}/promote` | — | `{success}` | |
@@ -210,7 +210,7 @@ All account writes share the `account_writes` scope at 10/minute.
 
 ## 📈 Metrics (`/api/metrics`)
 
-All routes require a session (router-level `require_auth`). `503 "Metrics service unavailable"` when VictoriaMetrics cannot be reached. See [[Metrics]].
+All routes require a session (router-level `require_auth`) and validate every path id at router level (`validate_request_path_ids`) before it can reach a PromQL label selector; the `network_id` query parameter is validated the same way. `503 "Metrics service unavailable"` when VictoriaMetrics cannot be reached. See [[Metrics]].
 
 | Method | Endpoint | Query | Response |
 |---|---|---|---|
