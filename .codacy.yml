@@ -56,10 +56,14 @@ engines:
       - "frontend/tests/**"
       - "frontend/src/**/*.test.ts"
 
-  # Test modules scale with the API surface they cover.
+  # Test modules scale with the API surface they cover. scripts/ holds
+  # operator tooling (live verification, smoke tests) written as linear,
+  # commented procedures on purpose; splitting them into <50-line pieces
+  # would hurt the readability the maintainer relies on while a mesh reboots.
   lizard:
     exclude_paths:
       - "backend/tests/**"
+      - "scripts/**"
       - "frontend/tests/**"
       - "frontend/src/**/*.test.ts"
 
