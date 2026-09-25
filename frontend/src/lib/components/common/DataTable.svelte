@@ -345,7 +345,7 @@
 	{/if}
 </div>
 
-<div class="table-wrapper">
+<div class="table-wrapper" class:virtualized-scroll={virtualized && !!body}>
 	{#if loading && rows.length === 0}
 		<div class="table-skeleton">
 			<Skeleton variant="table-rows" rows={skeletonRows} columns={visibleColumns.length} />
@@ -485,6 +485,16 @@
 
 	.table-wrapper {
 		overflow-x: auto;
+	}
+
+	/* WP9 § 6.2 Tier 4: only set when both `virtualized` and a caller-supplied `body` are present
+	   (VirtualBody.svelte finds this element via `closest('.table-wrapper')` to use as its
+	   scroll container). Bounded height + vertical scroll here, rather than the page/window,
+	   keeps the virtualizer's math simple and keeps this element as the single sticky-header
+	   scroll root in both the virtualized and non-virtualized cases. */
+	.table-wrapper.virtualized-scroll {
+		max-height: 70vh;
+		overflow-y: auto;
 	}
 
 	.table-skeleton {

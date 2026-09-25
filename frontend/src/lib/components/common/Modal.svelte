@@ -18,9 +18,15 @@
 		title: string;
 		onClose: () => void;
 		children: Snippet;
+		/**
+		 * Card width variant. `sm` (default) is the original 400px used by every settings/confirm
+		 * dialog; `lg` is for content-dense dialogs (WP9's CommandPalette) that need more
+		 * horizontal room for result rows. Existing callers are unaffected - `sm` is the default.
+		 */
+		size?: 'sm' | 'lg';
 	}
 
-	let { open, title, onClose, children }: Props = $props();
+	let { open, title, onClose, children, size = 'sm' }: Props = $props();
 
 	// Stable for the lifetime of this component instance - safe even if multiple Modals were
 	// ever mounted at once (they wouldn't share an id and collide on aria-labelledby).
@@ -61,6 +67,7 @@
 		     that satisfies the a11y click/keyboard pairing rule without duplicating Escape logic. -->
 		<div
 			class="modal-card card"
+			class:modal-card-lg={size === 'lg'}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={titleId}
@@ -98,5 +105,9 @@
 	.modal-card h2 {
 		margin: 0;
 		font-size: 1.125rem;
+	}
+
+	.modal-card-lg {
+		max-width: 560px;
 	}
 </style>

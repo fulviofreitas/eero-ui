@@ -8,6 +8,7 @@
 	import { page } from '$app/stores';
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
 	import { shouldUseViewTransition } from '$lib/motion';
+	import { isCommandPaletteShortcut, isShortcutsHelpKey, isTypingTarget } from '$lib/shortcuts';
 	import {
 		authStore,
 		isAuthenticated,
@@ -24,6 +25,8 @@
 	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
+	import CommandPalette from '$components/common/CommandPalette.svelte';
+	import ShortcutsHelp from '$components/common/ShortcutsHelp.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import IconSprite from '$lib/icons/IconSprite.svelte';
 	import type { IconName } from '$lib/icons/paths';
@@ -39,6 +42,8 @@
 	let sidebarToggleEl: HTMLButtonElement | undefined = $state();
 	let sidebarEl: HTMLElement | undefined = $state();
 	let wasSidebarOpen = false;
+	let commandPaletteOpen = $state(false);
+	let shortcutsHelpOpen = $state(false);
 
 	function isMobileViewport(): boolean {
 		return typeof window !== 'undefined' && window.innerWidth <= 768;
@@ -64,6 +69,21 @@
 	function handleWindowKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && $sidebarOpen && isMobileViewport()) {
 			uiStore.closeSidebar();
+		}
+
+		// ⌘K / Ctrl+K always opens the command palette, even while typing elsewhere - it IS the
+		// modifier combo the "ignore while typing" rule carves out an exception for.
+		if (isCommandPaletteShortcut(event)) {
+			event.preventDefault();
+			commandPaletteOpen = true;
+			return;
+		}
+
+		// Bare "?" opens the shortcuts help dialog, but never while the user is typing in a field
+		// (a "?" in a search box must stay a literal "?") or while the palette is already open.
+		if (isShortcutsHelpKey(event) && !isTypingTarget(event.target) && !commandPaletteOpen) {
+			event.preventDefault();
+			shortcutsHelpOpen = true;
 		}
 	}
 
@@ -319,6 +339,15 @@
 				<!-- Network + Sign out (right, stacked) -->
 				<div class="top-bar-right">
 					<div class="signout-row">
+						<button
+							class="command-palette-btn"
+							onclick={() => (commandPaletteOpen = true)}
+							title="Search (⌘K)"
+						>
+							<Icon name="search" size={14} />
+							Search
+							<kbd class="command-palette-kbd">⌘K</kbd>
+						</button>
 						<span class="status-dot online"></span>
 						<button class="signout-btn" onclick={handleLogout} title="Sign out"> Sign out </button>
 					</div>
@@ -362,6 +391,8 @@
 <!-- Global components -->
 <Toast />
 <ConfirmDialog />
+<CommandPalette bind:open={commandPaletteOpen} />
+<ShortcutsHelp bind:open={shortcutsHelpOpen} />
 
 <style>
 	/* A14 (WP5 a11y fix): visually hidden until focused (keyboard Tab from page load), then
@@ -665,6 +696,37 @@
 		top: var(--space-4);
 		right: var(--space-4);
 		z-index: var(--z-sticky);
+	}
+
+	.command-palette-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		background: none;
+		border: 1px solid var(--color-border-muted);
+		padding: 4px 10px;
+		border-radius: 12px;
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition:
+			background-color var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast);
+	}
+
+	.command-palette-btn:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
+	.command-palette-kbd {
+		font-family: var(--font-mono);
+		font-size: 0.625rem;
+		padding: 1px 4px;
+		border-radius: var(--radius-sm);
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border-muted);
 	}
 
 	.signout-btn {

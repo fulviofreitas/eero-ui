@@ -95,7 +95,8 @@ export const ICON_PATHS: Record<string, string> = {
 	'arrow-up': 'M12 19V5M6 11l6-6 6 6',
 	'arrow-left': 'M19 12H5M12 19l-7-7 7-7',
 	inbox: 'M3 12h4l2 4h6l2-4h4M5 5h14l2 7v7H3v-7z',
-	copy: 'M9 9h11v11H9zM5 15H4V4h11v1'
+	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+	search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35'
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

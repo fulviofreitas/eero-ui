@@ -46,6 +46,7 @@
 		"vitest": "^4.0.0"
 	},
 	"dependencies": {
+		"@tanstack/svelte-virtual": "^3.13.39",
 		"@xyflow/svelte": "^1.5.0",
 		"chart.js": "^4.5.1",
 		"chartjs-adapter-date-fns": "^3.0.0",

@@ -36,12 +36,16 @@
 		type DataTableColumn,
 		type SortDirection
 	} from '$components/common/DataTable.svelte';
+	import VirtualBody from '$components/common/VirtualBody.svelte';
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import DeviceRow from './DeviceRow.svelte';
 	import ExportMenu from '$components/common/ExportMenu.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import Dropdown, { type DropdownItem } from '$components/common/Dropdown.svelte';
+
+	/** Above this many filtered rows, DataTable renders VirtualBody instead of its own `<tbody>`. */
+	const VIRTUALIZE_THRESHOLD = 60;
 
 	let refreshing = $state(false);
 	let profiles: { id: string; name: string }[] = $state([]);
@@ -429,6 +433,33 @@
 	<DeviceRow {device} />
 {/snippet}
 
+<!--
+  Virtualized body (WP9 § 6.2 Tier 4). Only above VIRTUALIZE_THRESHOLD rows - small lists keep
+  DataTable's own <tbody> with `animate:flip`, since a virtual list recycles DOM nodes across
+  unrelated rows (a "move" there would flip the wrong row - see DataTable's `virtualized` prop
+  doc comment). Declared as a snippet inside DeviceList's own scope (not a prop DataTable passes
+  values into) so it can close over the same selection state/store callbacks the non-virtualized
+  path already uses, without DataTable's `body` escape hatch needing to know anything about
+  selection.
+-->
+{#snippet virtualDeviceBody({
+	rows,
+	columns
+}: {
+	rows: DeviceSummary[];
+	columns: DataTableColumn<DeviceSummary>[];
+})}
+	<VirtualBody
+		{rows}
+		{columns}
+		getRowId={(d) => d.id || d.mac || ''}
+		selectable={$selectionMode}
+		selected={$selectedDevices}
+		onSelectionChange={(s) => selectedDevices.set(s)}
+		rowClass={deviceRowClass}
+	/>
+{/snippet}
+
 <div class="device-list-container">
 	<!-- Header -->
 	<div class="list-header">
@@ -761,6 +792,8 @@
 				stickyActionsColumn
 				rowClass={deviceRowClass}
 				onVisibleColumnsChange={(v) => (visibleColumnKeys = v)}
+				virtualized={$filteredDevices.length > VIRTUALIZE_THRESHOLD}
+				body={$filteredDevices.length > VIRTUALIZE_THRESHOLD ? virtualDeviceBody : undefined}
 			/>
 		{/if}
 	</div>
