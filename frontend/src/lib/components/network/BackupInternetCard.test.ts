@@ -18,6 +18,10 @@
  *   verified end-to-end" before any POST fires
  * - a successful add confirmation re-fetches the access-point list
  * - a failed add surfaces an error toast
+ * - cellular usage renders humanised byte values as InfoRows, never raw JSON,
+ *   and a "no usage" message when the usage-items array is empty
+ * - a recognised connectivity shape renders a status badge (never raw JSON)
+ * - an unrecognised connectivity shape falls back to NestedValue, not JSON.stringify
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -316,5 +320,85 @@ describe('BackupInternetCard', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 		await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'error')).toBe(true));
+	});
+
+	it('renders cellular usage as humanised InfoRows and never raw JSON', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/backup-internet', () =>
+				HttpResponse.json({
+					enabled: true,
+					cellular_usage: { used_bytes: 1024, limit_bytes: 5 * 1024 * 1024 },
+					cellular_events: []
+				})
+			)
+		);
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		expect(screen.getByText('1.0 KB')).toBeInTheDocument();
+		expect(screen.getByText('5.0 MB')).toBeInTheDocument();
+		expect(screen.getByText('No usage in the current cycle.')).toBeInTheDocument();
+		expect(screen.queryByText(/"used_bytes":1024/)).not.toBeInTheDocument();
+	});
+
+	it('renders non-empty usage items as rows rather than a bare item count', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/backup-internet', () =>
+				HttpResponse.json({
+					enabled: true,
+					cellular_usage: {
+						backup_usage_items: [{ date: '2026-09-01', bytes_used: 2048 }]
+					},
+					cellular_events: []
+				})
+			)
+		);
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+		expect(screen.queryByText('0 items')).not.toBeInTheDocument();
+		expect(screen.queryByText(/items/)).not.toBeInTheDocument();
+	});
+
+	it('renders a recognised connectivity shape as a status badge, never raw JSON', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/backup-access-points', () =>
+				HttpResponse.json({
+					access_points: [
+						{
+							id: 'ap-1',
+							ssid: 'Backup-5G',
+							uuid: 'uuid-1',
+							priority: 1,
+							enabled: true,
+							status: 'active',
+							connectivity: { connected: true, last_checked: new Date().toISOString() }
+						}
+					]
+				})
+			)
+		);
+
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		expect(screen.getByText('Online', { selector: '.badge' })).toBeInTheDocument();
+		expect(screen.queryByText(/{"connected":true/)).not.toBeInTheDocument();
+	});
+
+	it('falls back to a structured (non-JSON) render for an unrecognised connectivity shape', async () => {
+		render(BackupInternetCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('Backup-5G')).toBeInTheDocument());
+
+		// Default fixture connectivity is `{ signal: 'good' }` - no recognised status key.
+		expect(screen.queryByText(/{"signal":"good"}/)).not.toBeInTheDocument();
+		expect(screen.getByText('good')).toBeInTheDocument();
 	});
 });

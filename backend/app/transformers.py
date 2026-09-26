@@ -540,6 +540,42 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _derive_connection_type(raw: dict[str, Any]) -> str:
+    """Derive a device's connection type, matching eero-prometheus-exporter.
+
+    Mirrors ``eero_exporter.collector._get_connection_type`` (exporter
+    4.0.1, ``collector.py:849-865``) so the ``connection_type`` label this
+    project writes to ``eero_device_connected`` carries the same value the
+    exporter wrote for the same raw device, keeping metric history
+    continuous across the 6.0 collector migration (see
+    ``.claude/rules/lessons-learned.md`` "Preserve Metric Names and Label
+    Sets Across a Collector Change").
+
+    A device with no boolean ``wireless`` field and no recognizable
+    ``connection_type`` string is ``"unknown"`` rather than defaulting to
+    ``"wired"`` -- silently folding an indeterminate device into "wired"
+    is what caused the wireless/wired split to lose devices instead of
+    reclassifying them (eero-ui#413).
+
+    Args:
+        raw: Raw device data.
+
+    Returns:
+        ``"wired"``, ``"wireless"``, or ``"unknown"``.
+    """
+    wireless = raw.get("wireless")
+    if wireless is True:
+        return "wireless"
+    if wireless is False:
+        return "wired"
+    conn_type = raw.get("connection_type") or ""
+    if isinstance(conn_type, str) and conn_type:
+        lowered = conn_type.lower()
+        if lowered in ("wired", "wireless"):
+            return lowered
+    return "unknown"
+
+
 def normalize_device(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a raw device response to a consistent format.
 
@@ -645,7 +681,7 @@ def normalize_device(raw: dict[str, Any]) -> dict[str, Any]:
         "paused": raw.get("paused") or False,
         "is_guest": raw.get("is_guest") or False,
         "is_private": raw.get("is_private") or False,
-        "connection_type": "wireless" if raw.get("wireless") else "wired",
+        "connection_type": _derive_connection_type(raw),
         "signal_strength": signal,
         "signal_bars": signal_bars,
         "frequency": frequency,
@@ -858,23 +894,63 @@ def normalize_profile(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _speed_component_mbps(value: Any) -> float | None:
-    """Coerce a raw ``down``/``up`` component to a float Mbps value.
+_SPEED_UNIT_TO_MBPS: dict[str, float] = {
+    "bps": 1e-6,
+    "kbps": 1e-3,
+    "mbps": 1.0,
+    "gbps": 1e3,
+}
 
-    The documented shape is ``{"value": n, "units": "Mbps"}`` (eero-api
-    ``tests/conftest.py`` ``sample_network_data``: ``speed.down`` /
-    ``speed.up``), but some entries in ``get_speed_tests`` history have been
-    observed sending the bare number instead of the wrapper dict. Accept
-    both; anything else (missing, wrong type) normalizes to ``None`` rather
-    than raising.
+
+def _coerce_number(value: Any) -> float | None:
+    """Best-effort coercion of a raw value to ``float``.
+
+    Accepts ``int``/``float`` directly and numeric strings (the eero API
+    has been observed sending both), rejects ``bool`` (a ``bool`` is an
+    ``int`` subclass in Python and would otherwise silently coerce to
+    ``0.0``/``1.0``), and normalizes anything else to ``None``.
     """
-    if isinstance(value, dict):
-        value = value.get("value")
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
     return None
+
+
+def _speed_component_mbps(value: Any) -> float | None:
+    """Coerce a raw ``down``/``up``/``latency`` component to a float.
+
+    The documented shape is ``{"value": n, "units": "Mbps"}`` (eero-api
+    ``tests/conftest.py`` ``sample_network_data``: ``speed.down`` /
+    ``speed.up``; ``wiki/Examples.md`` prints the same shape for
+    ``get_speed_tests`` history entries), but real ``get_speed_tests``
+    history entries have also been observed sending the bare number
+    instead of the wrapper dict, and a non-Mbps ``units`` value (e.g.
+    ``"Kbps"``/``"Gbps"``) has been observed on some accounts. Convert to
+    Mbps whenever a recognized throughput ``units`` value is present;
+    otherwise return the raw number unscaled -- this also makes the
+    function safe to reuse for ``latency``/``latency_ms``/``ping``
+    (whose ``units``, e.g. ``"ms"``, is never in the throughput scale
+    table, so it is never rescaled). Anything else (missing, wrong type,
+    unparseable) normalizes to ``None`` rather than raising.
+    """
+    units: str | None = None
+    if isinstance(value, dict):
+        units = value.get("units")
+        value = value.get("value")
+    number = _coerce_number(value)
+    if number is None:
+        return None
+    if isinstance(units, str):
+        scale = _SPEED_UNIT_TO_MBPS.get(units.strip().lower())
+        if scale is not None:
+            return number * scale
+    return number
 
 
 def _normalize_speed_test_date(value: Any) -> str | None:
@@ -898,12 +974,49 @@ def _normalize_speed_test_date(value: Any) -> str | None:
     return value
 
 
+def _first_present(raw: dict[str, Any], *keys: str) -> Any:
+    """Return the first key in ``keys`` present in ``raw`` with a non-None value.
+
+    Args:
+        raw: The dict to search.
+        keys: Candidate keys, in priority order.
+
+    Returns:
+        The first non-None value found, or None if none of ``keys`` are set.
+    """
+    for key in keys:
+        value = raw.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a single raw speed-test result to a consistent shape.
 
     Shared by ``routes/networks.py`` and ``services/collector.py`` so both
     consumers of ``get_speed_tests`` agree on where ``down``/``up``/``date``
     live (phase-6.0-revamp.md § 3.3, § 8.1).
+
+    Real ``get_speed_tests`` history entries have been observed in more
+    shapes than the SDK's own docs/tests fixture (eero-ui#413):
+
+    - Top-level ``down``/``up`` (as ``{"value": n, "units": "Mbps"}`` or a
+      bare number) -- the documented shape (eero-api
+      ``wiki/Examples.md:243-245``, ``tests/api/conftest.py:157-158``).
+    - Nested under a ``speed`` wrapper, matching the shape the network
+      envelope uses for its own embedded single result (eero-api
+      ``tests/api/conftest.py`` ``sample_network_data``: top-level
+      ``"speed": {"down": {...}, "up": {...}}``) -- some accounts have
+      been observed nesting history entries the same way.
+    - ``download``/``upload`` instead of ``down``/``up``.
+    - ``download_mbps``/``upload_mbps`` (or ``down_mbps``/``up_mbps``) bare
+      numeric fields.
+    - Latency as ``latency``, ``latency_ms``, or ``ping``, as either a bare
+      number or a ``{"value": n, ...}`` wrapper.
+
+    Every variant is tried; the entry only normalizes to ``None`` for a
+    component when none of its known shapes are present.
 
     Args:
         raw: One entry from ``get_speed_tests``' result list, or the
@@ -915,11 +1028,30 @@ def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {"down_mbps": None, "up_mbps": None, "latency_ms": None, "date": None}
 
+    speed = raw.get("speed")
+    speed_container = speed if isinstance(speed, dict) else {}
+
+    down_value = _first_present(raw, "down", "download")
+    if down_value is None:
+        down_value = _first_present(speed_container, "down", "download")
+    if down_value is None:
+        down_value = _first_present(raw, "download_mbps", "down_mbps")
+
+    up_value = _first_present(raw, "up", "upload")
+    if up_value is None:
+        up_value = _first_present(speed_container, "up", "upload")
+    if up_value is None:
+        up_value = _first_present(raw, "upload_mbps", "up_mbps")
+
+    latency_value = _first_present(raw, "latency", "latency_ms", "ping")
+    if latency_value is None:
+        latency_value = _first_present(speed_container, "latency", "latency_ms", "ping")
+
     date = raw.get("date") or raw.get("timestamp") or raw.get("created_at")
     return {
-        "down_mbps": _speed_component_mbps(raw.get("down")),
-        "up_mbps": _speed_component_mbps(raw.get("up")),
-        "latency_ms": raw.get("latency"),
+        "down_mbps": _speed_component_mbps(down_value),
+        "up_mbps": _speed_component_mbps(up_value),
+        "latency_ms": _speed_component_mbps(latency_value),
         "date": _normalize_speed_test_date(date) if date else date,
     }
 

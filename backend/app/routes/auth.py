@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..deps import clear_client_session, get_eero_client
+from ..deps import clear_client_session, clear_preferred_network_id, get_eero_client
 from ..transformers import check_success, extract_data, extract_id_from_url
 
 router = APIRouter()
@@ -214,6 +214,10 @@ async def logout(
     client: EeroClient = Depends(get_eero_client),
 ) -> dict:
     """Log out from the Eero API."""
+    clear_preferred_network_id()
+    # The SDK keeps the in-memory preference across logout()/verify(); reset
+    # it so a different account logging in next never inherits this one's id.
+    client.set_preferred_network(None)  # type: ignore[arg-type]
     try:
         raw_result = await client.logout()
         success = check_success(raw_result)

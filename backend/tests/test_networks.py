@@ -1,6 +1,7 @@
 """Tests for network routes."""
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from eero.exceptions import EeroException
@@ -237,6 +238,25 @@ class TestSetPreferredNetwork:
         assert data["success"] is True
         assert data["preferred_network_id"] == "net-1"
 
+    async def test_set_preferred_network_persists_to_disk(
+        self, auth_client, authenticated_client
+    ):
+        """The selection is also written to the preferred-network file
+        (eero-ui#401) so it survives a container restart."""
+        import json
+
+        from app.config import settings
+
+        authenticated_client.set_preferred_network = MagicMock()
+
+        response = await auth_client.post("/api/networks/net-1/set-preferred")
+
+        assert response.status_code == 200
+        pref_file = Path(settings.cookie_file).parent / "preferred-network.json"
+        assert pref_file.exists()
+        assert json.loads(pref_file.read_text()) == {"network_id": "net-1"}
+        assert (pref_file.stat().st_mode & 0o777) == 0o600
+
     async def test_set_preferred_network_eero_exception(
         self, auth_client, authenticated_client
     ):
@@ -396,4 +416,94 @@ class TestGetSpeedTestHistory:
         assert response.status_code == 200
         authenticated_client.get_speed_tests.assert_called_once_with(
             network_id="net-1", limit=10, start_time=None, end_time=None
+        )
+
+    async def test_entries_nested_under_speed_wrapper_are_normalised(
+        self, auth_client, authenticated_client
+    ):
+        """History entries that nest down/up under a `speed` key (eero-ui#413)
+        surface non-null download/upload, not "-" in the UI."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response(
+                [
+                    {
+                        "date": "2026-01-01T00:00:00Z",
+                        "speed": {
+                            "down": {"value": 500.0, "units": "Mbps"},
+                            "up": {"value": 50.0, "units": "Mbps"},
+                        },
+                    }
+                ]
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/speedtests")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data[0]["download_mbps"] == 500.0
+        assert data[0]["upload_mbps"] == 50.0
+
+    async def test_download_upload_key_names_are_normalised(
+        self, auth_client, authenticated_client
+    ):
+        """History entries using `download`/`upload` instead of `down`/`up`
+        surface non-null values."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response(
+                [{"date": "2026-01-01T00:00:00Z", "download": 300.0, "upload": 25.0}]
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1/speedtests")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data[0]["download_mbps"] == 300.0
+        assert data[0]["upload_mbps"] == 25.0
+
+    async def test_logs_debug_when_every_entry_normalises_to_null(
+        self, auth_client, authenticated_client, caplog
+    ):
+        """When every returned entry has a timestamp but no down/up in any
+        known shape, a DEBUG log records the first entry's raw keys so the
+        drift is diagnosable without reproducing against a live network."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response(
+                [{"date": "2026-01-01T00:00:00Z", "unrecognized_field": 1}]
+            )
+        )
+
+        with caplog.at_level("DEBUG", logger="app.routes.networks"):
+            response = await auth_client.get("/api/networks/net-1/speedtests")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data[0]["download_mbps"] is None
+        assert data[0]["upload_mbps"] is None
+        assert any(
+            "every entry normalized to null" in message for message in caplog.messages
+        )
+        assert any("unrecognized_field" in message for message in caplog.messages)
+
+    async def test_no_debug_log_when_some_entries_have_values(
+        self, auth_client, authenticated_client, caplog
+    ):
+        """The all-null diagnostic log must not fire when at least one entry
+        normalised successfully."""
+        authenticated_client.get_speed_tests = AsyncMock(
+            return_value=make_raw_response(
+                [
+                    {"date": "2026-01-01T00:00:00Z", "down": {"value": 100.0}},
+                    {"date": "2026-01-02T00:00:00Z"},
+                ]
+            )
+        )
+
+        with caplog.at_level("DEBUG", logger="app.routes.networks"):
+            response = await auth_client.get("/api/networks/net-1/speedtests")
+
+        assert response.status_code == 200
+        assert not any(
+            "every entry normalized to null" in message for message in caplog.messages
         )

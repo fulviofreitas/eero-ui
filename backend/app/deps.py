@@ -1,7 +1,10 @@
 """FastAPI dependencies for the Eero Dashboard."""
 
 import asyncio
+import json
 import logging
+import os
+import tempfile
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -27,6 +30,106 @@ _client: EeroClient | None = None
 # requests can never build two EeroClient instances (phase-6.0-revamp.md
 # § 3.1).
 _client_lock = asyncio.Lock()
+
+# Persisted preferred-network preference (eero-ui#401): ``EeroClient``'s own
+# ``set_preferred_network`` is in-memory only (eero-api client.py), so a
+# container restart otherwise loses the user's selection and
+# ``get_network_id`` silently falls back to the account's first network.
+# Stored next to the session cookie file, as a single-key JSON document.
+_PREFERRED_NETWORK_FILENAME = "preferred-network.json"
+
+
+def _preferred_network_file() -> Path:
+    """Path to the persisted preferred-network file.
+
+    Lives alongside ``settings.cookie_file`` rather than in a fixed
+    location, so it moves with ``EERO_DASHBOARD_COOKIE_FILE`` and never
+    needs its own environment variable.
+    """
+    return Path(settings.cookie_file).parent / _PREFERRED_NETWORK_FILENAME
+
+
+def _load_preferred_network_id() -> str | None:
+    """Best-effort load of the persisted preferred network id.
+
+    Returns ``None`` for anything short of a valid, well-formed id: a
+    missing file, unreadable file, corrupt JSON, wrong shape, or an id that
+    fails ``validate_path_id``. This restores a UI convenience, never a
+    hard dependency - ``get_network_id`` already has its own fallback to
+    the account's first network, so a failure here is silently ignored
+    (logged at DEBUG only; network ids are not secrets, but there is no
+    reason to log them at a level that shows up by default).
+    """
+    path = _preferred_network_file()
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError):
+        _LOGGER.debug("Ignoring unreadable preferred-network file at %s", path)
+        return None
+
+    try:
+        data = json.loads(raw)
+        network_id = data["network_id"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        _LOGGER.debug("Ignoring corrupt preferred-network file at %s", path)
+        return None
+
+    if not isinstance(network_id, str) or not network_id:
+        _LOGGER.debug("Ignoring malformed preferred-network id in %s", path)
+        return None
+
+    try:
+        return validate_path_id(network_id)
+    except InvalidIdentifierError:
+        _LOGGER.debug("Ignoring invalid persisted preferred-network id")
+        return None
+
+
+def save_preferred_network_id(network_id: str) -> None:
+    """Persist ``network_id`` as the preferred network, atomically.
+
+    Writes a temp file in the same directory (so the final ``os.replace``
+    is an atomic rename on the same filesystem) with mode 0600 before it is
+    ever visible at the final path, then renames it into place. Best
+    effort: a failure here is logged and swallowed by the caller
+    (``routes/networks.py``'s ``set_preferred_network``) rather than
+    failing the request - the in-memory preference set via
+    ``client.set_preferred_network()`` already took effect for the current
+    process.
+    """
+    path = _preferred_network_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=".preferred-network-", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps({"network_id": network_id}))
+        os.chmod(tmp_name, 0o600)
+        os.replace(tmp_name, path)
+    except OSError:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
+def clear_preferred_network_id() -> None:
+    """Remove the persisted preferred-network file, if present.
+
+    Called on logout (``routes/auth.py``) so a stale preference never
+    outlives the session it was recorded for.
+    """
+    try:
+        _preferred_network_file().unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        _LOGGER.debug("Failed to remove preferred-network file: %s", exc)
 
 
 async def get_eero_client() -> AsyncGenerator[EeroClient, None]:
@@ -54,6 +157,11 @@ async def get_eero_client() -> AsyncGenerator[EeroClient, None]:
                     get_retries=settings.sdk_get_retries,
                 )
                 await new_client.__aenter__()
+
+                preferred_network_id = _load_preferred_network_id()
+                if preferred_network_id:
+                    new_client.set_preferred_network(preferred_network_id)
+
                 _client = new_client
                 _LOGGER.info("EeroClient initialized")
 

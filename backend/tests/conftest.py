@@ -63,6 +63,25 @@ def _reset_rate_limiter():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_preferred_network_file(tmp_path, monkeypatch):
+    """Point ``settings.cookie_file`` at a per-test tmp directory.
+
+    ``routes.networks.set_preferred_network`` and ``routes.auth.logout``
+    (eero-ui#401) write/remove a small JSON file next to
+    ``settings.cookie_file`` (``app/deps.py``'s
+    ``save_preferred_network_id``/``clear_preferred_network_id``).
+    Without this, any test that hits those routes would touch the real
+    ``~/.eero-dashboard/`` directory on the machine running the suite.
+    Individual tests (e.g. ``test_deps.py``) that need a specific
+    ``cookie_file`` still patch it themselves, which simply overrides this
+    default for the duration of that test.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "cookie_file", str(tmp_path / "session.json"))
+
+
+@pytest.fixture(autouse=True)
 def _reset_networks_module_state():
     """Reset the other two module-level, process-global dicts on
     ``app.routes.networks`` before and after every test.

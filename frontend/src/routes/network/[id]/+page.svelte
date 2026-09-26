@@ -383,8 +383,12 @@
 					{/if}
 				</div>
 				{#if networkId}
-					<div class="info-grid diagnostics-secondary">
+					<!-- Speed Test History is full-width, not a grid cell (maintainer feedback):
+					     its table has enough columns that a half-width card clips the timestamp. -->
+					<div class="diagnostics-full">
 						<SpeedTestHistoryCard {networkId} />
+					</div>
+					<div class="info-grid diagnostics-secondary">
 						<NetworkScanCard {networkId} />
 						<EventsCard {networkId} />
 						<ChannelUtilizationCard {networkId} />
@@ -447,6 +451,10 @@
 
 	.network-charts {
 		margin-top: var(--space-6);
+	}
+
+	.diagnostics-full {
+		margin-top: var(--space-4);
 	}
 
 	.diagnostics-secondary {

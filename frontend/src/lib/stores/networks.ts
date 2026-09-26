@@ -225,31 +225,46 @@ function createNetworksStore() {
 			try {
 				const networks = await api.networks.list(refresh);
 
-				update((s) => {
-					// If no network is selected, or selected network doesn't exist, select the first one
-					let selectedNetworkId = s.selectedNetworkId;
+				// Compute the selection from the CURRENT store state (not yet
+				// overwritten) plus the freshly-fetched list, without committing
+				// anything to the store yet (Codacy PR #413, Medium): reactive
+				// consumers of `$selectedNetworkId` must not see the new
+				// selection - and fire network-scoped fetches against it - while
+				// the backend's preferred network is still stale.
+				let selectedNetworkId = get({ subscribe }).selectedNetworkId;
 
-					if (!selectedNetworkId || !networks.find((n) => n.id === selectedNetworkId)) {
-						selectedNetworkId = networks.length > 0 ? networks[0].id : null;
+				// If no network is selected, or selected network doesn't exist, select the first one
+				if (!selectedNetworkId || !networks.find((n) => n.id === selectedNetworkId)) {
+					selectedNetworkId = networks.length > 0 ? networks[0].id : null;
 
-						// Persist to localStorage
-						if (selectedNetworkId && typeof window !== 'undefined') {
-							localStorage.setItem(STORAGE_KEY, selectedNetworkId);
-						}
-
-						// Set as preferred on backend
-						if (selectedNetworkId) {
-							api.networks.setPreferred(selectedNetworkId).catch(console.error);
-						}
+					// Persist to localStorage
+					if (selectedNetworkId && typeof window !== 'undefined') {
+						localStorage.setItem(STORAGE_KEY, selectedNetworkId);
 					}
+				}
 
-					return {
-						...s,
-						networks,
-						selectedNetworkId,
-						loading: false
-					};
-				});
+				// Always re-send the preferred network on every fetch (issue #401): the
+				// backend's "preferred network" is in-memory and empty after a restart,
+				// so a stored-but-valid selection must be re-asserted, not just the
+				// fallback-to-first-network case. Awaited BEFORE the store is updated
+				// with the new networks/selection so callers (e.g. +layout's onMount)
+				// and any reactive `$selectedNetworkId` subscriber can rely on the
+				// backend already knowing the right network before data fetches that
+				// depend on it can fire.
+				if (selectedNetworkId) {
+					try {
+						await api.networks.setPreferred(selectedNetworkId);
+					} catch (error) {
+						console.error('Failed to set preferred network:', error);
+					}
+				}
+
+				update((s) => ({
+					...s,
+					networks,
+					selectedNetworkId,
+					loading: false
+				}));
 			} catch (error) {
 				update((s) => ({
 					...s,

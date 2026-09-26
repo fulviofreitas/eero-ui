@@ -16,6 +16,7 @@
 	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
 	import TimeSeriesChart from '$lib/components/charts/TimeSeriesChart.svelte';
 	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import { formatShortDateTime } from '$lib/utils/format-datetime';
 
 	interface Props {
 		networkId: string;
@@ -40,6 +41,7 @@
 			header: 'Time',
 			sortable: true,
 			required: true,
+			width: '160px',
 			accessor: (row) => row.timestamp,
 			render: timestampCell
 		},
@@ -48,6 +50,7 @@
 			header: 'Download',
 			sortable: true,
 			align: 'right',
+			width: '110px',
 			accessor: (row) => row.download_mbps,
 			render: downloadCell
 		},
@@ -56,6 +59,7 @@
 			header: 'Upload',
 			sortable: true,
 			align: 'right',
+			width: '110px',
 			accessor: (row) => row.upload_mbps,
 			render: uploadCell
 		},
@@ -64,10 +68,19 @@
 			header: 'Latency',
 			sortable: true,
 			align: 'right',
+			width: '100px',
 			accessor: (row) => row.latency_ms,
 			render: latencyCell
 		}
 	];
+
+	/** True when every row has all three numeric measurements null - a "no measurements" fixture
+	 * or history window rather than a real reading with some fields simply unpopulated. */
+	let hasAnyMeasurement = $derived(
+		results.some(
+			(row) => row.download_mbps !== null || row.upload_mbps !== null || row.latency_ms !== null
+		)
+	);
 
 	function getRowId(row: SpeedTestResult): string {
 		return row.timestamp ?? String(results.indexOf(row));
@@ -109,7 +122,7 @@
 </script>
 
 {#snippet timestampCell(row: SpeedTestResult)}
-	{row.timestamp ? new Date(row.timestamp).toLocaleString() : '—'}
+	{formatShortDateTime(row.timestamp)}
 {/snippet}
 
 {#snippet downloadCell(row: SpeedTestResult)}
@@ -136,12 +149,16 @@
 
 	{#if cardState.error && results.length === 0}
 		<ErrorState message={cardState.error} onRetry={() => load()} />
+	{:else if results.length > 0 && !hasAnyMeasurement && !cardState.loading}
+		<p class="text-muted text-sm no-measurements">No speed-test measurements in these entries.</p>
 	{:else}
-		<TimeSeriesChart
-			datasets={chartDatasets}
-			yAxisLabel="Mbps"
-			loading={cardState.loading && results.length === 0}
-		/>
+		{#if hasAnyMeasurement || cardState.loading}
+			<TimeSeriesChart
+				datasets={chartDatasets}
+				yAxisLabel="Mbps"
+				loading={cardState.loading && results.length === 0}
+			/>
+		{/if}
 		<div class="speedtest-history-table">
 			<DataTable
 				id="speedtest-history"
@@ -160,5 +177,17 @@
 <style>
 	.speedtest-history-table {
 		margin-top: var(--space-4);
+	}
+
+	/* Column widths are set per-column via DataTableColumn.width, but the underlying <table> also
+	   needs its own min-width - otherwise a narrow card (this card is a half-column by default)
+	   still squeezes the Time column and clips the date (maintainer screenshot showed the date cut
+	   off, leaving only ", 11:45:38 AM"). */
+	.speedtest-history-table :global(.data-table) {
+		min-width: 480px;
+	}
+
+	.no-measurements {
+		margin: var(--space-4) 0 0;
 	}
 </style>
