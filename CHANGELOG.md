@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.0.2](https://github.com/fulviofreitas/eero-ui/compare/v6.0.1...v6.0.2) (2026-09-26)
+
+### 🐛 Bug Fixes
+
+* **app:** 6.0.1 follow-ups: network restore, client counts, cards ([#413](https://github.com/fulviofreitas/eero-ui/issues/413)) ([ae767a1](https://github.com/fulviofreitas/eero-ui/commit/ae767a1d8403b279d5b4f976bd086e8ea5b64340))
+
 ## [6.0.1](https://github.com/fulviofreitas/eero-ui/compare/v6.0.0...v6.0.1) (2026-09-25)
 
 ### 🐛 Bug Fixes
