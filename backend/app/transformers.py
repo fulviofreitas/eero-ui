@@ -1010,7 +1010,8 @@ def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
       ``"speed": {"down": {...}, "up": {...}}``) -- some accounts have
       been observed nesting history entries the same way.
     - ``download``/``upload`` instead of ``down``/``up``.
-    - ``download_mbps``/``upload_mbps`` bare numeric fields.
+    - ``download_mbps``/``upload_mbps`` (or ``down_mbps``/``up_mbps``) bare
+      numeric fields.
     - Latency as ``latency``, ``latency_ms``, or ``ping``, as either a bare
       number or a ``{"value": n, ...}`` wrapper.
 
@@ -1034,13 +1035,13 @@ def normalize_speed_test(raw: dict[str, Any]) -> dict[str, Any]:
     if down_value is None:
         down_value = _first_present(speed_container, "down", "download")
     if down_value is None:
-        down_value = raw.get("down_mbps")
+        down_value = _first_present(raw, "download_mbps", "down_mbps")
 
     up_value = _first_present(raw, "up", "upload")
     if up_value is None:
         up_value = _first_present(speed_container, "up", "upload")
     if up_value is None:
-        up_value = raw.get("up_mbps")
+        up_value = _first_present(raw, "upload_mbps", "up_mbps")
 
     latency_value = _first_present(raw, "latency", "latency_ms", "ping")
     if latency_value is None:

@@ -1,6 +1,7 @@
 """Tests for network routes."""
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from eero.exceptions import EeroException
@@ -236,6 +237,25 @@ class TestSetPreferredNetwork:
         data = response.json()
         assert data["success"] is True
         assert data["preferred_network_id"] == "net-1"
+
+    async def test_set_preferred_network_persists_to_disk(
+        self, auth_client, authenticated_client
+    ):
+        """The selection is also written to the preferred-network file
+        (eero-ui#401) so it survives a container restart."""
+        import json
+
+        from app.config import settings
+
+        authenticated_client.set_preferred_network = MagicMock()
+
+        response = await auth_client.post("/api/networks/net-1/set-preferred")
+
+        assert response.status_code == 200
+        pref_file = Path(settings.cookie_file).parent / "preferred-network.json"
+        assert pref_file.exists()
+        assert json.loads(pref_file.read_text()) == {"network_id": "net-1"}
+        assert (pref_file.stat().st_mode & 0o777) == 0o600
 
     async def test_set_preferred_network_eero_exception(
         self, auth_client, authenticated_client

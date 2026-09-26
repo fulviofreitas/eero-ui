@@ -22,7 +22,12 @@ from pydantic import BaseModel, ConfigDict
 
 from .._coercion import coerce_bool
 from ..config import settings
-from ..deps import require_auth, require_experimental_writes, validate_request_path_ids
+from ..deps import (
+    require_auth,
+    require_experimental_writes,
+    save_preferred_network_id,
+    validate_request_path_ids,
+)
 from ..transformers import (
     InvalidIdentifierError,
     check_success,
@@ -341,7 +346,16 @@ async def set_preferred_network(
     network_id: str,
     client: EeroClient = Depends(require_auth),
 ) -> dict:
-    """Set the preferred network for subsequent operations."""
+    """Set the preferred network for subsequent operations.
+
+    ``network_id`` is already validated by the router-level
+    ``validate_request_path_ids`` dependency before this handler runs.
+    Persists the selection to disk (eero-ui#401) so it survives a
+    container restart, alongside the existing in-memory
+    ``client.set_preferred_network()`` call. Persistence is best-effort: a
+    filesystem failure is logged but does not fail the request, since the
+    in-memory preference already took effect for the running process.
+    """
     try:
         client.set_preferred_network(network_id)
     except EeroException as e:
@@ -350,6 +364,12 @@ async def set_preferred_network(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to set preferred network. Please try again.",
         ) from e
+
+    try:
+        save_preferred_network_id(network_id)
+    except OSError as e:
+        _LOGGER.warning("Failed to persist preferred network id: %s", e)
+
     return {"success": True, "preferred_network_id": network_id}
 
 

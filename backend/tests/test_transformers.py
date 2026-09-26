@@ -828,12 +828,21 @@ class TestNormalizeSpeedTest:
 
     def test_download_mbps_upload_mbps_bare_numeric_fields(self):
         """`download_mbps`/`upload_mbps` bare numeric fields are accepted."""
-        raw = {"down_mbps": 400.0, "up_mbps": 40.0}
+        raw = {"download_mbps": 400.0, "upload_mbps": 40.0}
 
         result = normalize_speed_test(raw)
 
         assert result["down_mbps"] == 400.0
         assert result["up_mbps"] == 40.0
+
+    def test_down_mbps_up_mbps_bare_numeric_fields(self):
+        """The short `down_mbps`/`up_mbps` spelling is accepted too."""
+        raw = {"down_mbps": 410.0, "up_mbps": 41.0}
+
+        result = normalize_speed_test(raw)
+
+        assert result["down_mbps"] == 410.0
+        assert result["up_mbps"] == 41.0
 
     def test_latency_ms_key(self):
         """`latency_ms` is accepted as an alternative to `latency`."""

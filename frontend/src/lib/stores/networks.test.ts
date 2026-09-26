@@ -79,6 +79,39 @@ describe('networksStore', () => {
 			expect(get(networksStore).selectedNetworkId).toBe('network-123');
 		});
 
+		it('does not commit networks/selectedNetworkId to the store until set-preferred resolves (Codacy PR #413)', async () => {
+			networksStore.clear();
+			localStorage.setItem('eero_selected_network', 'network-123');
+
+			let resolveSetPreferred: (() => void) | null = null;
+			const gate = new Promise<void>((resolve) => {
+				resolveSetPreferred = resolve;
+			});
+
+			server.use(
+				http.get('/api/networks', () => HttpResponse.json([network123])),
+				http.post('/api/networks/:networkId/set-preferred', async () => {
+					await gate;
+					return HttpResponse.json({ success: true });
+				})
+			);
+
+			const fetchPromise = networksStore.fetch();
+
+			// The list request has resolved by the time the awaited
+			// `setPreferred` call is gating, but the store must still reflect
+			// the pre-fetch (empty) state.
+			await vi.waitFor(() => expect(get(networksStore).loading).toBe(true));
+			expect(get(networksStore).networks).toEqual([]);
+			expect(get(networksStore).selectedNetworkId).toBeNull();
+
+			resolveSetPreferred!();
+			await fetchPromise;
+
+			expect(get(networksStore).networks).toEqual([network123]);
+			expect(get(networksStore).selectedNetworkId).toBe('network-123');
+		});
+
 		it('does not throw and still resolves fetch when set-preferred fails', async () => {
 			const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

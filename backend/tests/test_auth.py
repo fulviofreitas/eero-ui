@@ -8,6 +8,7 @@ Tests cover:
 - Error scenarios
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
@@ -259,6 +260,35 @@ class TestLogout:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+
+    async def test_logout_removes_persisted_preferred_network(
+        self, auth_client, authenticated_client
+    ):
+        """Logout removes the persisted preferred-network file (eero-ui#401)
+        so a stale preference never outlives the session."""
+        from app.config import settings
+
+        authenticated_client.logout = AsyncMock(return_value=make_raw_response({}))
+
+        pref_file = Path(settings.cookie_file).parent / "preferred-network.json"
+        pref_file.parent.mkdir(parents=True, exist_ok=True)
+        pref_file.write_text('{"network_id": "net-1"}')
+
+        response = await auth_client.post("/api/auth/logout")
+
+        assert response.status_code == 200
+        assert not pref_file.exists()
+
+    async def test_logout_removes_preferred_network_when_file_absent(
+        self, auth_client, authenticated_client
+    ):
+        """Logout is a no-op (not an error) when no preference was ever
+        persisted."""
+        authenticated_client.logout = AsyncMock(return_value=make_raw_response({}))
+
+        response = await auth_client.post("/api/auth/logout")
+
+        assert response.status_code == 200
 
 
 class TestHealthCheck:

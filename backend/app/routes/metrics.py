@@ -1,5 +1,6 @@
 """Metrics routes for querying historical data from VictoriaMetrics."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -231,20 +232,22 @@ async def get_network_client_count(
         _validate_identifier(network_id, "network_id") if network_id else None
     )
     try:
-        total = await victoria_client.query_range(
-            _device_connected_query(validated_network_id), start, end, step
-        )
-        wireless = await victoria_client.query_range(
-            _device_connected_query(validated_network_id, "wireless"),
-            start,
-            end,
-            step,
-        )
-        wired = await victoria_client.query_range(
-            _device_connected_query(validated_network_id, "wired"),
-            start,
-            end,
-            step,
+        total, wireless, wired = await asyncio.gather(
+            victoria_client.query_range(
+                _device_connected_query(validated_network_id), start, end, step
+            ),
+            victoria_client.query_range(
+                _device_connected_query(validated_network_id, "wireless"),
+                start,
+                end,
+                step,
+            ),
+            victoria_client.query_range(
+                _device_connected_query(validated_network_id, "wired"),
+                start,
+                end,
+                step,
+            ),
         )
         return {
             "total": total,
