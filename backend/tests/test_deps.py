@@ -168,6 +168,25 @@ class TestPersistedPreferredNetwork:
             client.set_preferred_network.assert_not_called()
             await gen.aclose()
 
+    async def test_non_utf8_persisted_file_is_ignored(self, tmp_path):
+        """Invalid UTF-8 bytes are treated as a corrupt file, not raised."""
+        cookie_file = str(tmp_path / "session.json")
+        pref_file = tmp_path / "preferred-network.json"
+        pref_file.write_bytes(b'{"network_id": "\xff\xfe"}')
+
+        with (
+            patch.object(settings, "cookie_file", cookie_file),
+            patch("app.deps.EeroClient") as mock_cls,
+        ):
+            mock_instance = AsyncMock()
+            mock_cls.return_value = mock_instance
+
+            gen = deps.get_eero_client()
+            client = await gen.__anext__()
+
+            client.set_preferred_network.assert_not_called()
+            await gen.aclose()
+
     async def test_invalid_persisted_id_is_ignored(self, tmp_path):
         """An id that fails ``validate_path_id`` (e.g. path traversal) is
         ignored rather than handed to the SDK."""

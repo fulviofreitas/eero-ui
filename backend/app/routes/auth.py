@@ -215,6 +215,9 @@ async def logout(
 ) -> dict:
     """Log out from the Eero API."""
     clear_preferred_network_id()
+    # The SDK keeps the in-memory preference across logout()/verify(); reset
+    # it so a different account logging in next never inherits this one's id.
+    client.set_preferred_network(None)  # type: ignore[arg-type]
     try:
         raw_result = await client.logout()
         success = check_success(raw_result)

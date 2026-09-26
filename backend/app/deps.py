@@ -63,7 +63,10 @@ def _load_preferred_network_id() -> str | None:
     path = _preferred_network_file()
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError:
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError):
+        _LOGGER.debug("Ignoring unreadable preferred-network file at %s", path)
         return None
 
     try:

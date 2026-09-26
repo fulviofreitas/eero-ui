@@ -278,6 +278,8 @@ class TestLogout:
 
         assert response.status_code == 200
         assert not pref_file.exists()
+        # The SDK keeps the in-memory preference across logout(); we reset it.
+        authenticated_client.set_preferred_network.assert_called_once_with(None)
 
     async def test_logout_removes_preferred_network_when_file_absent(
         self, auth_client, authenticated_client
