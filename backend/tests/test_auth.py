@@ -93,6 +93,20 @@ class TestAuthStatus:
         assert data["account_id"] == "account-123"
         assert data["premium_status"] == "premium"
 
+    async def test_status_with_int_preferred_network_id(
+        self, auth_client, authenticated_client
+    ):
+        """An integer preferred id from the SDK does not 500 the status route (#415)."""
+        authenticated_client.get_account = AsyncMock(
+            return_value=make_raw_response({"users": []})
+        )
+        authenticated_client.preferred_network_id = 12345678
+
+        response = await auth_client.get("/api/auth/status")
+
+        assert response.status_code == 200
+        assert response.json()["preferred_network_id"] == "12345678"
+
 
 class TestLogin:
     """Tests for POST /api/auth/login."""
@@ -193,6 +207,18 @@ class TestVerify:
         data = response.json()
         assert data["success"] is True
         assert data["preferred_network_id"] == "network-123"
+
+    async def test_verify_success_with_int_network_id(
+        self, async_client, mock_eero_client
+    ):
+        """An integer preferred id from the SDK is returned as a string (#415)."""
+        mock_eero_client.verify = AsyncMock(return_value=make_raw_response({}))
+        mock_eero_client.preferred_network_id = 12345678
+
+        response = await async_client.post("/api/auth/verify", json={"code": "123456"})
+
+        assert response.status_code == 200
+        assert response.json()["preferred_network_id"] == "12345678"
 
     async def test_verify_failure(self, async_client, mock_eero_client):
         """Failed verification returns success=false."""
