@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.0.3](https://github.com/fulviofreitas/eero-ui/compare/v6.0.2...v6.0.3) (2026-09-29)
+
+### 🐛 Bug Fixes
+
+* **backend:** coerce the SDK's preferred network id to a string ([#421](https://github.com/fulviofreitas/eero-ui/issues/421)) ([d66333e](https://github.com/fulviofreitas/eero-ui/commit/d66333e06a284c90c7a6ff0a3470d13ffc5fdeb6)), closes [#415](https://github.com/fulviofreitas/eero-ui/issues/415)
+* **deps:** require eero-api 8.0.5 ([#422](https://github.com/fulviofreitas/eero-ui/issues/422)) ([0d2f59f](https://github.com/fulviofreitas/eero-ui/commit/0d2f59fc826c81efc3fc02a70b1d6fb0c55fa52b)), closes [#415](https://github.com/fulviofreitas/eero-ui/issues/415) [#416](https://github.com/fulviofreitas/eero-ui/issues/416) [#417](https://github.com/fulviofreitas/eero-ui/issues/417) [#137](https://github.com/fulviofreitas/eero-ui/issues/137) [#135](https://github.com/fulviofreitas/eero-ui/issues/135) [#136](https://github.com/fulviofreitas/eero-ui/issues/136) [#421](https://github.com/fulviofreitas/eero-ui/issues/421)
+
 ## [6.0.2](https://github.com/fulviofreitas/eero-ui/compare/v6.0.1...v6.0.2) (2026-09-26)
 
 ### 🐛 Bug Fixes
