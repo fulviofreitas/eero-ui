@@ -54,10 +54,12 @@ export default {
     // and footers keep their limits below.
     'body-max-line-length': [0],
     
-    // Footer max line length. BREAKING CHANGE footers are one sentence per
-    // breaking item and must not wrap (semantic-release reads each line as a
-    // note); 6.0's longest was 222 characters, so leave headroom.
-    'footer-max-line-length': [2, 'always', 250],
+    // Footer max line length: disabled. The parser classifies the last
+    // paragraph of a squash body as the footer whenever it looks like one, so
+    // a long PR "Reviewer notes" paragraph failed master CI (#422) even with
+    // the limit at 250. BREAKING CHANGE footers must stay one line per item
+    // for semantic-release, which this rule never enforced anyway.
+    'footer-max-line-length': [0],
   },
   
   // Help message displayed on validation failure
