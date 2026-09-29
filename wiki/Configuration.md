@@ -66,7 +66,7 @@ What changes for an existing deployment:
 - The `/metrics` endpoint is removed with no replacement; eero-ui is no longer a Prometheus scrape target, and nothing inside the container is scraped.
 - Metrics beyond the eight the dashboard uses are no longer collected; run `ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0` alongside and point your own Prometheus at it.
 - `/api/metrics/*` now requires an authenticated session; the raw PromQL passthrough endpoints and two unused metrics routes are removed.
-- Requires `eero-api >= 8.0.3`; session transport, auth encodings and the credential record changed upstream. The credential file is migrated to schema 2 in place on first start — no re-login is needed.
+- Requires `eero-api >= 8.0.5` (8.0.5 sends a current client version string so the cloud advertises the full capability set, and sends the `custom` DHCP mode the API actually accepts); session transport, auth encodings and the credential record changed upstream. The credential file is migrated to schema 2 in place on first start — no re-login is needed.
 - `POST /api/networks/{id}/speedtest` returns `202` and the result is read from `GET /api/networks/{id}/speedtests`; `SpeedTestResult` has a single normalised shape.
 - Device block and unblock resolve the device MAC server-side; a device without a known MAC is rejected with `422`.
 - eero-api errors map to `401/402/403/409/422/429/502/503` instead of a blanket `500`; `GET /api/auth/status` gains `reason`.
