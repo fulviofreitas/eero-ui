@@ -246,6 +246,39 @@ class TestPersistedPreferredNetwork:
             deps.clear_preferred_network_id()  # must not raise
 
 
+class TestPreferredNetworkIdStr:
+    """`preferred_network_id_str` and `get_network_id` coerce the SDK's id (#415)."""
+
+    def test_int_id_becomes_str(self):
+        client = MagicMock()
+        client.preferred_network_id = 12345678
+
+        assert deps.preferred_network_id_str(client) == "12345678"
+
+    def test_str_id_unchanged(self):
+        client = MagicMock()
+        client.preferred_network_id = "net-1"
+
+        assert deps.preferred_network_id_str(client) == "net-1"
+
+    @pytest.mark.parametrize("value", [None, ""])
+    def test_missing_id_is_none(self, value):
+        client = MagicMock()
+        client.preferred_network_id = value
+
+        assert deps.preferred_network_id_str(client) is None
+
+    async def test_get_network_id_returns_str_for_int_preference(self):
+        client = MagicMock()
+        client.preferred_network_id = 12345678
+        client.get_networks = AsyncMock()
+
+        result = await deps.get_network_id(client=client, network_id=None)
+
+        assert result == "12345678"
+        client.get_networks.assert_not_called()
+
+
 class TestRequireExperimentalWrites:
     """Tests for the decision-6a experimental-writes gate."""
 

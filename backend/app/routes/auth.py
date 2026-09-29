@@ -9,7 +9,12 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..deps import clear_client_session, clear_preferred_network_id, get_eero_client
+from ..deps import (
+    clear_client_session,
+    clear_preferred_network_id,
+    get_eero_client,
+    preferred_network_id_str,
+)
 from ..transformers import check_success, extract_data, extract_id_from_url
 
 router = APIRouter()
@@ -123,7 +128,7 @@ async def get_auth_status(
     return AuthStatusResponse(
         authenticated=authenticated,
         reason=reason,
-        preferred_network_id=client.preferred_network_id,
+        preferred_network_id=preferred_network_id_str(client),
         user_email=user_email,
         user_name=user_name,
         user_phone=user_phone,
@@ -189,7 +194,7 @@ async def verify(
             return VerifyResponse(
                 success=True,
                 message="Login successful!",
-                preferred_network_id=client.preferred_network_id,
+                preferred_network_id=preferred_network_id_str(client),
             )
         return VerifyResponse(
             success=False,

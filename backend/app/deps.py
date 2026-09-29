@@ -289,6 +289,22 @@ async def validate_request_path_ids(
             ) from exc
 
 
+def preferred_network_id_str(client: EeroClient) -> str | None:
+    """Return the SDK's preferred network id as a string, or ``None``.
+
+    The eero API returns some accounts' network ``id`` as a JSON integer
+    and eero-api <= 8.0.4 stores it as-is (``client.py:481``), so
+    ``client.preferred_network_id`` can be an ``int`` despite its
+    ``Optional[str]`` annotation (eero-ui#415). Every consumer here wants a
+    string: response models declare ``str | None`` and path validation
+    expects text.
+    """
+    value = client.preferred_network_id
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
 async def get_network_id(
     client: EeroClient = Depends(require_auth),
     network_id: str | None = None,
@@ -300,8 +316,9 @@ async def get_network_id(
     if network_id:
         return network_id
 
-    if client.preferred_network_id:
-        return client.preferred_network_id
+    preferred = preferred_network_id_str(client)
+    if preferred:
+        return preferred
 
     # Try to get first network
     try:
