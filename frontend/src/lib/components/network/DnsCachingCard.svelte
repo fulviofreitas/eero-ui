@@ -19,7 +19,7 @@
 	import { onMount } from 'svelte';
 	import { dnsStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
-	import { buildCachingUpdateRequest } from '$lib/utils/dns-form';
+	import { buildCachingUpdateRequest } from '#lib/utils/dns-form.js';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
 	interface Props {

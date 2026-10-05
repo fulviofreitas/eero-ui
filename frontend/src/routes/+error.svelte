@@ -1,3 +1,10 @@
+<script lang="ts">
+	import { page } from '$app/state';
+	import ErrorState from '$components/common/ErrorState.svelte';
+
+	let message = $derived(page.error?.message || 'Something went wrong.');
+</script>
+
 <!--
   Error boundary (WP5 A14)
 
@@ -5,24 +12,13 @@
   used for inline data-fetch failures elsewhere, so a routing/load error looks like the rest of
   the app instead of a bare browser-default page.
 -->
-<script lang="ts">
-	import { page } from '$app/stores';
-	import ErrorState from '$components/common/ErrorState.svelte';
-
-	let message = $derived($page.error?.message || 'Something went wrong.');
-</script>
-
-<svelte:head>
-	<title>Error | Eero Dashboard</title>
-</svelte:head>
+<svelte:head><title>Error | Eero Dashboard</title></svelte:head>
 
 <div class="error-page">
 	<div>
-		<h1 class="sr-only">Error {$page.status}</h1>
-		<ErrorState message="{$page.status}: {message}" />
-		<p class="error-back">
-			<a href="/">Back to dashboard</a>
-		</p>
+		<h1 class="sr-only">Error {page.status}</h1>
+		<ErrorState message="{page.status}: {message}" />
+		<p class="error-back"><a href="/">Back to dashboard</a></p>
 	</div>
 </div>
 

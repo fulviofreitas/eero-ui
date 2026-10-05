@@ -20,7 +20,6 @@ export default defineConfig({
 		environment: 'jsdom',
 		setupFiles: ['./tests/setup.ts'],
 		alias: {
-			$lib: resolve('./src/lib'),
 			$api: resolve('./src/lib/api'),
 			$stores: resolve('./src/lib/stores'),
 			$components: resolve('./src/lib/components'),
@@ -28,7 +27,7 @@ export default defineConfig({
 			// These stubs let route/layout components that import them load under plain Vitest;
 			// individual tests can still vi.mock() either path to assert on calls.
 			'$app/navigation': resolve('./tests/mocks/app-navigation.ts'),
-			'$app/stores': resolve('./tests/mocks/app-stores.ts')
+			'$app/state': resolve('./tests/mocks/app-state.ts')
 		},
 		coverage: {
 			provider: 'v8',

@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Toast from './Toast.svelte';
-import { uiStore, toasts } from '$lib/stores/ui';
+import { uiStore, toasts } from '#lib/stores/ui.js';
 
 function drainToasts() {
 	get(toasts).forEach((t) => uiStore.removeToast(t.id));

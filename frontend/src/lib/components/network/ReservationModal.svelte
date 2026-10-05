@@ -10,7 +10,7 @@
 <script lang="ts">
 	import Modal from '$components/common/Modal.svelte';
 	import type { ReservationSummary } from '$api/types';
-	import { isPrivateIpv4, isValidIpLiteral, isValidMac } from '$lib/utils/network-forms';
+	import { isPrivateIpv4, isValidIpLiteral, isValidMac } from '#lib/utils/network-forms.js';
 
 	interface Props {
 		open: boolean;

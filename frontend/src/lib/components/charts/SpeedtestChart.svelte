@@ -8,8 +8,8 @@
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
 	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
-	import { getSpeedtestHistory } from '$lib/api/metrics';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import { getSpeedtestHistory } from '#lib/api/metrics.js';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
 
 	interface Props {
 		networkId: string;

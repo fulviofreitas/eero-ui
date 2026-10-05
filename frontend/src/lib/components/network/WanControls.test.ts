@@ -17,7 +17,7 @@ import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import WanControls from './WanControls.svelte';
 import { securityWanStore, entitlementsStore, uiStore, confirmDialog } from '$stores';
-import { resetSettingsLock } from '$lib/stores/settingsLock';
+import { resetSettingsLock } from '#lib/stores/settingsLock.js';
 import { server } from '../../../../tests/mocks/server';
 
 function mockEntitlements(experimentalWrites: boolean) {

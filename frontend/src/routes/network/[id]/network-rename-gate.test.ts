@@ -12,21 +12,21 @@
  *   after the client already believed it was on) surfaces as an error toast,
  *   not a thrown crash
  *
- * `$app/stores`'s `page` is mocked here to supply a route param, since the
- * shared stub in tests/mocks/app-stores.ts always resolves `params` to `{}`.
+ * `$app/state`'s `page` is mocked here to supply a route param, since the
+ * shared stub in tests/mocks/app-state.ts always resolves `params` to `{}`.
  * The full network detail page mounts a large card tree, so every wait below
  * uses a generous timeout rather than the 5s default.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
-import { readable, get } from 'svelte/store';
+import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { entitlementsStore, uiStore, networksStore, confirmDialog } from '$stores';
 import { server } from '../../../../tests/mocks/server';
 
-vi.mock('$app/stores', () => ({
-	page: readable({
+vi.mock('$app/state', () => ({
+	page: {
 		url: new URL('http://localhost/network/network-123'),
 		params: { id: 'network-123' },
 		route: { id: '/network/[id]' },
@@ -34,7 +34,7 @@ vi.mock('$app/stores', () => ({
 		error: null,
 		data: {},
 		form: null
-	})
+	}
 }));
 
 function mockEntitlements(experimentalWrites: boolean) {

@@ -24,7 +24,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
-	import { entitlementsStore, isPremium } from '$lib/stores/entitlements';
+	import { entitlementsStore, isPremium } from '#lib/stores/entitlements.js';
 
 	interface Props {
 		/** Shown in the upsell notice, e.g. "Network insights". */

@@ -17,7 +17,7 @@
 	import { uiStore } from '$stores';
 	import type { EeroDetail } from '$api/types';
 	import { PORT_ACTIONS, type PortAction } from '$api/types';
-	import { formatPortSpeed } from '$lib/utils/eero-format';
+	import { formatPortSpeed } from '#lib/utils/eero-format.js';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	interface Props {

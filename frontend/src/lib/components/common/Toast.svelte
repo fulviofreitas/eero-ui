@@ -7,7 +7,7 @@
 	import { toasts, uiStore } from '$stores';
 	import { fly } from 'svelte/transition';
 	import Icon from './Icon.svelte';
-	import type { IconName } from '$lib/icons/paths';
+	import type { IconName } from '#lib/icons/paths.js';
 
 	const TOAST_ICONS: Record<string, IconName> = {
 		success: 'check',

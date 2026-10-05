@@ -15,7 +15,7 @@
 <script lang="ts">
 	import { securityWanStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
-	import { isValidIpv4 } from '$lib/utils/ip-address';
+	import { isValidIpv4 } from '#lib/utils/ip-address.js';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 	import type { SecondaryWanDeviceEntry } from '$api/types';
 

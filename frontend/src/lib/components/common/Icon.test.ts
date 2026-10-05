@@ -10,8 +10,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Icon from './Icon.svelte';
-import IconSprite from '$lib/icons/IconSprite.svelte';
-import { ICON_PATHS } from '$lib/icons/paths';
+import IconSprite from '#lib/icons/IconSprite.svelte';
+import { ICON_PATHS } from '#lib/icons/paths.js';
 
 describe('Icon', () => {
 	it('renders a <use> referencing the requested symbol', () => {

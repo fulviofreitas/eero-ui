@@ -5,8 +5,8 @@
   Extracted from routes/+page.svelte (WP5 decomposition).
 -->
 <script lang="ts">
-	import PieChart from '$lib/components/charts/PieChart.svelte';
-	import BarGauge from '$lib/components/charts/BarGauge.svelte';
+	import PieChart from '#lib/components/charts/PieChart.svelte';
+	import BarGauge from '#lib/components/charts/BarGauge.svelte';
 
 	interface ChartDatum {
 		label: string;

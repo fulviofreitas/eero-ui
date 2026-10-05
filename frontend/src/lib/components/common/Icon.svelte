@@ -13,7 +13,7 @@
     icon is the ONLY conveyor of information (e.g. an icon-only button with no visible text).
 -->
 <script lang="ts">
-	import type { IconName } from '$lib/icons/paths';
+	import type { IconName } from '#lib/icons/paths.js';
 
 	interface Props {
 		name: IconName;

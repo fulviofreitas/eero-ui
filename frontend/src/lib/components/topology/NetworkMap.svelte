@@ -25,13 +25,13 @@
 		type TopologyNodeData,
 		type LayoutType,
 		type NodeDetailLevel
-	} from '$lib/stores/topology';
+	} from '#lib/stores/topology.js';
 
 	import EeroNode from './nodes/EeroNode.svelte';
 	import DeviceNode from './nodes/DeviceNode.svelte';
 	import GatewayNode from './nodes/GatewayNode.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import type { IconName } from '$lib/icons/paths';
+	import type { IconName } from '#lib/icons/paths.js';
 
 	interface Props {
 		// Props

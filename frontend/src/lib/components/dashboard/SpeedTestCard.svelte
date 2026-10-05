@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import type { NetworkDetail, SpeedTestResult } from '$api/types';
-	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
+	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
 
 	interface Props {
 		network: NetworkDetail;
