@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.0.5](https://github.com/fulviofreitas/eero-ui/compare/v6.0.4...v6.0.5) (2026-10-05)
+
+### 🐛 Bug Fixes
+
+* **deps:** migrate to SvelteKit 3 and adapter-static 4 ([#435](https://github.com/fulviofreitas/eero-ui/issues/435)) ([55678ac](https://github.com/fulviofreitas/eero-ui/commit/55678ac992a819eb04978cc8a7323c2c995a7136)), closes [428/#429](https://github.com/428/eero-ui/issues/429) [#348](https://github.com/fulviofreitas/eero-ui/issues/348) [#428](https://github.com/fulviofreitas/eero-ui/issues/428) [#429](https://github.com/fulviofreitas/eero-ui/issues/429)
+
 ## [6.0.4](https://github.com/fulviofreitas/eero-ui/compare/v6.0.3...v6.0.4) (2026-10-05)
 
 ### 🐛 Bug Fixes
