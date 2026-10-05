@@ -26,6 +26,9 @@ afterEach(async () => {
 	// corrupting shared Svelte stores with stale/wrong-test data one test
 	// later. One `setTimeout(0)` tick is enough to let in-flight requests bind
 	// to their handler before the next test calls `server.use()`.
+	// Under fake timers that setTimeout would never fire, so a test that forgot
+	// `vi.useRealTimers()` would hang the whole run here; restore them first.
+	if (vi.isFakeTimers()) vi.useRealTimers();
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	server.resetHandlers();
 });

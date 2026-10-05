@@ -68,7 +68,7 @@ describe('DataUsageMiniCard', () => {
 		// daily too), so `toContain('daily')` is already true from the mount
 		// fetch and would resolve before the refetch lands. Assert on the count
 		// directly so this only passes once the second request has arrived.
-		await waitFor(() => expect(seenCadences.length).toBeGreaterThan(1));
+		await waitFor(() => expect(seenCadences.length).toBe(2));
 	});
 
 	it('renders an upsell notice — not an error — on a 402', async () => {
