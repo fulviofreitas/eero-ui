@@ -11,7 +11,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import { trapFocus } from '$lib/utils/focusTrap';
+	import { trapFocus } from '#lib/utils/focusTrap.js';
 
 	interface Props {
 		open: boolean;

@@ -1,16 +1,6 @@
-<!--
-  Device Detail Page
-
-  Full detailed view of a single device with all available information.
-
-  WP5 (6.0 revamp) note: decomposed into lib/components/device/* feature components; this
-  file is now data fetching + layout + composition only. Behaviour unchanged except:
-  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading with
-  stale-while-revalidate (item 4) in place of the previous back-link + full-block spinner.
--->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { DeviceDetail, ProfileSummary } from '$api/types';
@@ -18,16 +8,16 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import BandwidthChart from '$lib/components/charts/BandwidthChart.svelte';
+	import BandwidthChart from '#lib/components/charts/BandwidthChart.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import DeviceProfileSelector from '$lib/components/device/DeviceProfileSelector.svelte';
-	import DeviceTypePicker from '$lib/components/device/DeviceTypePicker.svelte';
-	import DeviceIdentificationCard from '$lib/components/device/DeviceIdentificationCard.svelte';
-	import DeviceConnectionCard from '$lib/components/device/DeviceConnectionCard.svelte';
-	import DeviceStatusCard from '$lib/components/device/DeviceStatusCard.svelte';
-	import DeviceSecondaryWanToggle from '$lib/components/device/DeviceSecondaryWanToggle.svelte';
-	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
-	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import DeviceProfileSelector from '#lib/components/device/DeviceProfileSelector.svelte';
+	import DeviceTypePicker from '#lib/components/device/DeviceTypePicker.svelte';
+	import DeviceIdentificationCard from '#lib/components/device/DeviceIdentificationCard.svelte';
+	import DeviceConnectionCard from '#lib/components/device/DeviceConnectionCard.svelte';
+	import DeviceStatusCard from '#lib/components/device/DeviceStatusCard.svelte';
+	import DeviceSecondaryWanToggle from '#lib/components/device/DeviceSecondaryWanToggle.svelte';
+	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
+	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let device = $state<DeviceDetail | null>(null);
@@ -40,11 +30,11 @@
 	let loadingProfiles = $state(false);
 	let changingProfile = $state(false);
 	let changingDeviceType = $state(false);
-
-	let deviceId = $derived($page.params.id);
+	let deviceId = $derived(page.params.id);
 	let displayName = $derived(
 		device?.display_name || device?.nickname || device?.hostname || device?.mac || 'Unknown Device'
 	);
+
 	let statusLabel = $derived(
 		device?.blocked ? 'blocked' : device?.connected ? 'connected' : 'disconnected'
 	);
@@ -181,9 +171,17 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{displayName} | Eero Dashboard</title>
-</svelte:head>
+<!--
+  Device Detail Page
+
+  Full detailed view of a single device with all available information.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/device/* feature components; this
+  file is now data fetching + layout + composition only. Behaviour unchanged except:
+  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading with
+  stale-while-revalidate (item 4) in place of the previous back-link + full-block spinner.
+-->
+<svelte:head><title>{displayName} | Eero Dashboard</title></svelte:head>
 
 <div class="device-detail-page">
 	{#if loading && !device}
@@ -213,20 +211,22 @@
 				<span class="mono text-muted">{device!.mac || '—'}</span>
 			{/snippet}
 			{#snippet actions()}
-				<button
-					class="btn btn-secondary"
-					onclick={() => fetchDevice(true)}
-					disabled={actionLoading}
+				<button class="btn btn-secondary" onclick={() => fetchDevice(true)} disabled={actionLoading}
+					><Icon name="refresh" size={14} />Refresh</button
 				>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
-				<button class="btn btn-secondary" onclick={handleRename} disabled={actionLoading}>
-					<Icon name="edit" size={14} /> Rename
-				</button>
+
+				<button class="btn btn-secondary" onclick={handleRename} disabled={actionLoading}
+					><Icon name="edit" size={14} />Rename</button
+				>
+
 				{#if device!.blocked}
 					<button class="btn btn-primary" onclick={handleUnblock} disabled={actionLoading}>
-						{#if actionLoading}<span class="loading-spinner"></span>{/if}
-						<Icon name="check" size={14} /> Unblock
+						{#if actionLoading}
+							<span class="loading-spinner"></span>
+						{/if}
+
+						<Icon name="check" size={14} />
+						Unblock
 					</button>
 				{:else}
 					<button class="btn btn-danger" onclick={handleBlock} disabled={actionLoading}>

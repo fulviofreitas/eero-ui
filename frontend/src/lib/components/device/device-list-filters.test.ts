@@ -2,14 +2,13 @@
  * Tests for DeviceList's URL-encoded, debounced, persisted filters and "Reset filters" button
  * (WP9 § 6.2 Tier 3 "URL-encoded, debounced, persisted filters").
  *
- * `$app/stores`'s `page` and `$app/navigation`'s `goto` are mocked per-test, following the
- * pattern in eero-location-rename.test.ts, since the shared stubs in tests/mocks/app-stores.ts
+ * `$app/state`'s `page` and `$app/navigation`'s `goto` are mocked per-test, following the
+ * pattern in eero-location-rename.test.ts, since the shared stubs in tests/mocks/app-state.ts
  * and app-navigation.ts always resolve to a fixed URL / a no-op respectively.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
-import { readable } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { deviceFilters, defaultDeviceFilters } from '$stores';
 import DeviceList from './DeviceList.svelte';
@@ -23,8 +22,8 @@ vi.mock('$app/navigation', () => ({
 
 let currentUrl = new URL('http://localhost/devices');
 
-vi.mock('$app/stores', () => ({
-	page: readable({
+vi.mock('$app/state', () => ({
+	page: {
 		get url() {
 			return currentUrl;
 		},
@@ -34,7 +33,7 @@ vi.mock('$app/stores', () => ({
 		error: null,
 		data: {},
 		form: null
-	})
+	}
 }));
 
 function mockDevices() {
@@ -121,7 +120,7 @@ describe('DeviceList - URL-encoded filters', () => {
 			expect(gotoMock).toHaveBeenCalledTimes(1);
 			const [url, opts] = gotoMock.mock.calls[0];
 			expect(String(url)).toContain('q=iphone');
-			expect(opts).toEqual({ replaceState: true, keepFocus: true, noScroll: true });
+			expect(opts).toEqual({ replace: true, reset: false });
 			expect(localStorage.getItem('eero-ui:device-filters')).toContain('iphone');
 		} finally {
 			vi.useRealTimers();

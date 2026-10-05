@@ -1,17 +1,6 @@
-<!--
-  Eero Detail Page
-
-  Detailed view of a single Eero node with all available information.
-
-  WP5 (6.0 revamp) note: decomposed into lib/components/eero/* feature components (and
-  lib/utils/eero-format.ts for the shared formatting helpers); this file is now data fetching +
-  layout + composition only. Behaviour unchanged except: breadcrumb navigation via DetailHeader
-  (item 5) and skeleton-first loading with stale-while-revalidate (item 4) in place of the
-  previous back-link + full-block spinner.
--->
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { EeroDetail } from '$api/types';
@@ -20,15 +9,15 @@
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import EeroStatusClientsCard from '$lib/components/eero/EeroStatusClientsCard.svelte';
-	import EeroNetworkHardwareCard from '$lib/components/eero/EeroNetworkHardwareCard.svelte';
-	import EeroPerformanceHistoryCard from '$lib/components/eero/EeroPerformanceHistoryCard.svelte';
-	import EeroRadiosCard from '$lib/components/eero/EeroRadiosCard.svelte';
-	import EeroPortsCard from '$lib/components/eero/EeroPortsCard.svelte';
-	import EeroTechnicalCard from '$lib/components/eero/EeroTechnicalCard.svelte';
-	import EeroActionsCard from '$lib/components/eero/EeroActionsCard.svelte';
-	import EeroConnectionsCard from '$lib/components/eero/EeroConnectionsCard.svelte';
-	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import EeroStatusClientsCard from '#lib/components/eero/EeroStatusClientsCard.svelte';
+	import EeroNetworkHardwareCard from '#lib/components/eero/EeroNetworkHardwareCard.svelte';
+	import EeroPerformanceHistoryCard from '#lib/components/eero/EeroPerformanceHistoryCard.svelte';
+	import EeroRadiosCard from '#lib/components/eero/EeroRadiosCard.svelte';
+	import EeroPortsCard from '#lib/components/eero/EeroPortsCard.svelte';
+	import EeroTechnicalCard from '#lib/components/eero/EeroTechnicalCard.svelte';
+	import EeroActionsCard from '#lib/components/eero/EeroActionsCard.svelte';
+	import EeroConnectionsCard from '#lib/components/eero/EeroConnectionsCard.svelte';
+	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let eero: EeroDetail | null = $state(null);
@@ -41,7 +30,7 @@
 	let ledBrightnessTimer: ReturnType<typeof setTimeout> | null = null;
 	const LED_BRIGHTNESS_DEBOUNCE_MS = 300;
 
-	let eeroId = $derived($page.params.id);
+	let eeroId = $derived(page.params.id);
 
 	onMount(async () => {
 		lastNetworkId = $selectedNetworkId;
@@ -206,9 +195,18 @@
 	});
 </script>
 
-<svelte:head>
-	<title>{eero?.location || eero?.model || 'Eero'} | Eero Dashboard</title>
-</svelte:head>
+<!--
+  Eero Detail Page
+
+  Detailed view of a single Eero node with all available information.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/eero/* feature components (and
+  lib/utils/eero-format.ts for the shared formatting helpers); this file is now data fetching +
+  layout + composition only. Behaviour unchanged except: breadcrumb navigation via DetailHeader
+  (item 5) and skeleton-first loading with stale-while-revalidate (item 4) in place of the
+  previous back-link + full-block spinner.
+-->
+<svelte:head><title>{eero?.location || eero?.model || 'Eero'} | Eero Dashboard</title></svelte:head>
 
 <div class="eero-detail-page">
 	{#if loading && !eero}
@@ -234,6 +232,7 @@
 		>
 			{#snippet status()}
 				<span class="status-dot large" class:online={eero!.status === 'green'}></span>
+
 				{#if eero!.is_gateway}
 					<span class="badge badge-info">Gateway</span>
 				{/if}

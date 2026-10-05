@@ -5,8 +5,8 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import { resolveInitialTheme, hasStoredThemePreference, THEME_STORAGE_KEY } from '$lib/theme';
-import type { Theme } from '$lib/theme';
+import { resolveInitialTheme, hasStoredThemePreference, THEME_STORAGE_KEY } from '#lib/theme.js';
+import type { Theme } from '#lib/theme.js';
 
 // ============================================
 // Types

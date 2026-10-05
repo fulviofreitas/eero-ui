@@ -54,7 +54,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import Icon from './Icon.svelte';
-	import { flipDuration } from '$lib/motion';
+	import { flipDuration } from '#lib/motion.js';
 
 	interface Props {
 		/** Stable identifier for this table; used as the localStorage key for column visibility. */

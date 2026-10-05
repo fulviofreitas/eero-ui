@@ -20,10 +20,10 @@
 	import GenericRecordList from '$components/common/GenericRecordList.svelte';
 	import DataTable, { type DataTableColumn } from '$components/common/DataTable.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import TimeSeriesChart from '$lib/components/charts/TimeSeriesChart.svelte';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
-	import { formatBytes } from '$lib/utils/format-bytes';
-	import { deriveTimeSeries, labelOf, downloadOf, uploadOf } from '$lib/utils/data-usage';
+	import TimeSeriesChart from '#lib/components/charts/TimeSeriesChart.svelte';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
+	import { formatBytes } from '#lib/utils/format-bytes.js';
+	import { deriveTimeSeries, labelOf, downloadOf, uploadOf } from '#lib/utils/data-usage.js';
 
 	interface Props {
 		networkId: string;

@@ -4,13 +4,13 @@
   Base chart component for time-series data visualization using Chart.js.
   Used as the foundation for SpeedtestChart, ClientCountChart and BandwidthChart.
 
-  Registration and theme-aware options come from `$lib/charts/defaults.ts` — see that module
+  Registration and theme-aware options come from `#lib/charts/defaults.ts` — see that module
   for why (single register call, canvas cannot parse `var()`, one palette).
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { Chart as ChartJS } from 'chart.js';
-	import { registerCharts, lineChartOptions, onThemeChange } from '$lib/charts/defaults';
+	import { registerCharts, lineChartOptions, onThemeChange } from '#lib/charts/defaults.js';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
 	registerCharts();

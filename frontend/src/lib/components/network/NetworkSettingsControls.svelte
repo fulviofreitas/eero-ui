@@ -20,7 +20,7 @@
 		dhcpCustomLeaseIsValid,
 		validateDhcpCustomLease,
 		type DhcpCustomLeaseForm
-	} from '$lib/utils/dhcp-form';
+	} from '#lib/utils/dhcp-form.js';
 
 	interface Props {
 		networkId: string;

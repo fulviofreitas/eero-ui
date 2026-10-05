@@ -10,7 +10,7 @@
 	import type { DeviceDetail } from '$api/types';
 	import Icon from '$components/common/Icon.svelte';
 	import InfoRow from '$components/common/InfoRow.svelte';
-	import { getDeviceTypeIcon } from '$lib/deviceIcons';
+	import { getDeviceTypeIcon } from '#lib/deviceIcons.js';
 
 	interface Props {
 		device: DeviceDetail;

@@ -4,7 +4,7 @@
   Displays data as a donut/pie chart using Chart.js.
   Used for distribution visualizations like connection types, WiFi bands, etc.
 
-  Registration and theme-aware options come from `$lib/charts/defaults.ts`. Previously this
+  Registration and theme-aware options come from `#lib/charts/defaults.ts`. Previously this
   component passed `var(--color-bg-secondary)` straight into the canvas border colour
   (PieChart.svelte:66 pre-refactor) — canvas cannot parse CSS custom properties, so the border
   silently rendered as nothing. `doughnutChartOptions()`/`readThemeColors()` resolve the token
@@ -18,7 +18,7 @@
 		doughnutChartOptions,
 		readThemeColors,
 		onThemeChange
-	} from '$lib/charts/defaults';
+	} from '#lib/charts/defaults.js';
 	import Skeleton from '$components/common/Skeleton.svelte';
 
 	registerCharts();

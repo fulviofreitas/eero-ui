@@ -9,7 +9,7 @@
 <script lang="ts">
 	import type { ProfileDevice } from '$api/types';
 	import Icon from '$components/common/Icon.svelte';
-	import { getDeviceTypeIcon } from '$lib/deviceIcons';
+	import { getDeviceTypeIcon } from '#lib/deviceIcons.js';
 	import DataTable, {
 		type DataTableColumn,
 		type SortDirection

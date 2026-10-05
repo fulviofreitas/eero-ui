@@ -8,7 +8,7 @@
 	import type { EeroDetail } from '$api/types';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import { getMeshQualityBars, getUniqueBands } from '$lib/utils/eero-format';
+	import { getMeshQualityBars, getUniqueBands } from '#lib/utils/eero-format.js';
 
 	interface Props {
 		eero: EeroDetail;

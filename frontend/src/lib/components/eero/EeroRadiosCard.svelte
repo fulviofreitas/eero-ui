@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import type { EeroDetail } from '$api/types';
-	import { formatBand } from '$lib/utils/eero-format';
+	import { formatBand } from '#lib/utils/eero-format.js';
 
 	interface Props {
 		eero: EeroDetail;

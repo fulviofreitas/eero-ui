@@ -27,7 +27,7 @@
 		isFormDirty,
 		validateForm,
 		type DnsFormState
-	} from '$lib/utils/dns-form';
+	} from '#lib/utils/dns-form.js';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import DnsProviderPicker from './DnsProviderPicker.svelte';
 

@@ -12,8 +12,8 @@
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
 	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
-	import { getDeviceSignalHistory } from '$lib/api/metrics';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import { getDeviceSignalHistory } from '#lib/api/metrics.js';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
 
 	interface Props {
 		deviceMac: string;

@@ -6,7 +6,7 @@
   AccountCard.svelte.
 -->
 <script lang="ts">
-	import AccountCard from '$lib/components/account/AccountCard.svelte';
+	import AccountCard from '#lib/components/account/AccountCard.svelte';
 </script>
 
 <svelte:head>

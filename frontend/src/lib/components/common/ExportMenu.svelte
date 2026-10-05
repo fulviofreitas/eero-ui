@@ -6,9 +6,9 @@
   hand-rolled open-state div this used to be.
 -->
 <script lang="ts">
-	import { exportData, type ExportFormat } from '$lib/utils/export';
+	import { exportData, type ExportFormat } from '#lib/utils/export.js';
 	import Icon from './Icon.svelte';
-	import type { IconName } from '$lib/icons/paths';
+	import type { IconName } from '#lib/icons/paths.js';
 	import Dropdown, { type DropdownItem } from './Dropdown.svelte';
 
 	interface Props {

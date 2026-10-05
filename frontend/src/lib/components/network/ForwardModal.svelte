@@ -9,7 +9,7 @@
 <script lang="ts">
 	import Modal from '$components/common/Modal.svelte';
 	import type { ForwardSummary } from '$api/types';
-	import { isPrivateIpv4, isValidPort } from '$lib/utils/network-forms';
+	import { isPrivateIpv4, isValidPort } from '#lib/utils/network-forms.js';
 
 	interface Props {
 		open: boolean;

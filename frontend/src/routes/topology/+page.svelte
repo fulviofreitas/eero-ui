@@ -4,7 +4,7 @@
   Visual network topology map showing eero mesh nodes and connected devices.
 -->
 <script lang="ts">
-	import NetworkMap from '$lib/components/topology/NetworkMap.svelte';
+	import NetworkMap from '#lib/components/topology/NetworkMap.svelte';
 </script>
 
 <svelte:head>

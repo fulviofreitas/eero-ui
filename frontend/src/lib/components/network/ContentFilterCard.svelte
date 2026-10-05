@@ -15,7 +15,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { contentFilterStore, uiStore } from '$stores';
-	import { isValidContentFilterDomain } from '$lib/utils/network-forms';
+	import { isValidContentFilterDomain } from '#lib/utils/network-forms.js';
 	import Card from '$components/common/Card.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';

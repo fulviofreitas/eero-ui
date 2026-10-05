@@ -22,8 +22,8 @@
 	import EmptyState from './EmptyState.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import Icon from './Icon.svelte';
-	import TimeSeriesChart from '$lib/components/charts/TimeSeriesChart.svelte';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import TimeSeriesChart from '#lib/components/charts/TimeSeriesChart.svelte';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
 
 	interface Props {
 		scope: InsightScope;

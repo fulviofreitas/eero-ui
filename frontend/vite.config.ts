@@ -1,3 +1,5 @@
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import { readFileSync } from 'fs';
@@ -9,7 +11,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [
+		sveltekit({
+			preprocess: vitePreprocess(),
+			adapter: adapter({
+				pages: 'build',
+				assets: 'build',
+				fallback: 'index.html',
+				precompress: true,
+				strict: true
+			}),
+
+			alias: {
+				$api: './src/lib/api',
+				$stores: './src/lib/stores',
+				$components: './src/lib/components'
+			}
+		})
+	],
 	define: {
 		// Inject version at build time
 		__APP_VERSION__: JSON.stringify(pkg.version)

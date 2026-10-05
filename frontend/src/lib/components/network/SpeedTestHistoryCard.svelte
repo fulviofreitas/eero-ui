@@ -14,9 +14,9 @@
 	import DataTable, { type DataTableColumn } from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
-	import TimeSeriesChart from '$lib/components/charts/TimeSeriesChart.svelte';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
-	import { formatShortDateTime } from '$lib/utils/format-datetime';
+	import TimeSeriesChart from '#lib/components/charts/TimeSeriesChart.svelte';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
+	import { formatShortDateTime } from '#lib/utils/format-datetime.js';
 
 	interface Props {
 		networkId: string;
