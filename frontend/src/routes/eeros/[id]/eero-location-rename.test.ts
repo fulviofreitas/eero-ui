@@ -10,19 +10,19 @@
  * - `changed: false` (no-op) surfaces as an info toast, not success
  * - a failed write surfaces an error toast
  *
- * `$app/stores`'s `page` is mocked here to supply a route param, since the
- * shared stub in tests/mocks/app-stores.ts always resolves `params` to `{}`.
+ * `$app/state`'s `page` is mocked here to supply a route param, since the
+ * shared stub in tests/mocks/app-state.ts always resolves `params` to `{}`.
  */
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
-import { readable, get } from 'svelte/store';
+import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { entitlementsStore, uiStore, confirmDialog } from '$stores';
 import { server } from '../../../../tests/mocks/server';
 
-vi.mock('$app/stores', () => ({
-	page: readable({
+vi.mock('$app/state', () => ({
+	page: {
 		url: new URL('http://localhost/eeros/eero-1'),
 		params: { id: 'eero-1' },
 		route: { id: '/eeros/[id]' },
@@ -30,7 +30,7 @@ vi.mock('$app/stores', () => ({
 		error: null,
 		data: {},
 		form: null
-	})
+	}
 }));
 
 function mockEntitlements(experimentalWrites: boolean) {

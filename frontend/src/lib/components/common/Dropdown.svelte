@@ -18,7 +18,7 @@
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
-	import type { IconName } from '$lib/icons/paths';
+	import type { IconName } from '#lib/icons/paths.js';
 
 	export interface DropdownItem {
 		id: string;

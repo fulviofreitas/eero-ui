@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { render, screen } from '@testing-library/svelte';
 import ExperimentalGate from './ExperimentalGate.svelte';
-import { entitlementsStore } from '$lib/stores/entitlements';
+import { entitlementsStore } from '#lib/stores/entitlements.js';
 import { server } from '../../../../tests/mocks/server';
 import { http, HttpResponse } from 'msw';
 

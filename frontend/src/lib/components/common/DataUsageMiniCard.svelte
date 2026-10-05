@@ -16,10 +16,10 @@
 	import Skeleton from './Skeleton.svelte';
 	import GenericRecordList from './GenericRecordList.svelte';
 	import Icon from './Icon.svelte';
-	import TimeSeriesChart from '$lib/components/charts/TimeSeriesChart.svelte';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
-	import { formatBytes } from '$lib/utils/format-bytes';
-	import { deriveTimeSeries } from '$lib/utils/data-usage';
+	import TimeSeriesChart from '#lib/components/charts/TimeSeriesChart.svelte';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
+	import { formatBytes } from '#lib/utils/format-bytes.js';
+	import { deriveTimeSeries } from '#lib/utils/data-usage.js';
 
 	interface Props {
 		networkId: string;

@@ -1,14 +1,9 @@
-<!--
-  Root Layout
-  
-  Main application layout with sidebar navigation and global components.
--->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto, afterNavigate, onNavigate } from '$app/navigation';
-	import { shouldUseViewTransition } from '$lib/motion';
-	import { isCommandPaletteShortcut, isShortcutsHelpKey, isTypingTarget } from '$lib/shortcuts';
+	import { shouldUseViewTransition } from '#lib/motion.js';
+	import { isCommandPaletteShortcut, isShortcutsHelpKey, isTypingTarget } from '#lib/shortcuts.js';
 	import {
 		authStore,
 		isAuthenticated,
@@ -22,22 +17,22 @@
 		userName,
 		userRole
 	} from '$stores';
-	import { uiStore, theme, sidebarOpen } from '$lib/stores/ui';
+	import { uiStore, theme, sidebarOpen } from '#lib/stores/ui.js';
 	import { api } from '$api/client';
 	import Toast from '$components/common/Toast.svelte';
 	import ConfirmDialog from '$components/common/ConfirmDialog.svelte';
 	import CommandPalette from '$components/common/CommandPalette.svelte';
 	import ShortcutsHelp from '$components/common/ShortcutsHelp.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import IconSprite from '$lib/icons/IconSprite.svelte';
-	import type { IconName } from '$lib/icons/paths';
+	import IconSprite from '#lib/icons/IconSprite.svelte';
+	import type { IconName } from '#lib/icons/paths.js';
 	import '../app.css';
+
 	interface Props {
 		children?: import('svelte').Snippet;
 	}
 
 	let { children }: Props = $props();
-
 	let initialized = $state(false);
 	let eeroClientVersion: string | null = $state(null);
 	let sidebarToggleEl: HTMLButtonElement | undefined = $state();
@@ -164,7 +159,7 @@
 			initialized &&
 			!$isAuthLoading &&
 			!$isAuthenticated &&
-			!$page.url.pathname.startsWith('/login')
+			!page.url.pathname.startsWith('/login')
 		) {
 			goto('/login');
 		}
@@ -194,7 +189,9 @@
 	);
 
 	// Close sidebar on navigation (mobile only)
-	afterNavigate(() => {
+	afterNavigate(({ shallow }) => {
+		if (shallow) return;
+
 		if (typeof window !== 'undefined' && window.innerWidth <= 768) {
 			uiStore.closeSidebar();
 		}
@@ -205,6 +202,7 @@
 	// lib/motion.ts). SvelteKit's own `document.startViewTransition` promise settles once the DOM
 	// update `navigation.complete` resolves, so the whole thing is a one-line guard around that.
 	onNavigate((navigation) => {
+		if (navigation.shallow) return;
 		if (!shouldUseViewTransition()) return;
 
 		return new Promise((resolve) => {
@@ -229,6 +227,11 @@
 	}
 </script>
 
+<!--
+  Root Layout
+  
+  Main application layout with sidebar navigation and global components.
+-->
 <!-- Fonts (Inter, JetBrains Mono) are self-hosted via @font-face in app.css (WP9 perf,
      plan § 6.2 Tier 4) - no external Google Fonts request. -->
 
@@ -244,12 +247,10 @@
 			<span>Loading...</span>
 		</div>
 	</div>
-{:else if !$isAuthenticated && !$page.url.pathname.startsWith('/login')}
+{:else if !$isAuthenticated && !page.url.pathname.startsWith('/login')}
 	<!-- Redirecting to login -->
-	<div class="loading-screen">
-		<span>Redirecting to login...</span>
-	</div>
-{:else if $page.url.pathname.startsWith('/login')}
+	<div class="loading-screen"><span>Redirecting to login...</span></div>
+{:else if page.url.pathname.startsWith('/login')}
 	<!-- Login page - no sidebar -->
 	<main class="login-layout">
 		<button
@@ -286,8 +287,9 @@
 			<nav class="sidebar-nav">
 				{#each navItems as item}
 					{@const isActive =
-						$page.url.pathname === item.path ||
-						(item.label === 'Network' && $page.url.pathname.startsWith('/network/'))}
+						page.url.pathname === item.path ||
+						(item.label === 'Network' && page.url.pathname.startsWith('/network/'))}
+
 					<a
 						href={item.path}
 						class="nav-item"

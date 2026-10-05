@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
 	import Modal from './Modal.svelte';
-	import { shortcuts } from '$lib/shortcuts';
+	import { shortcuts } from '#lib/shortcuts.js';
 
 	interface Props {
 		open: boolean;

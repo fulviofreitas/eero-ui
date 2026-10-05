@@ -7,7 +7,7 @@
  * label-inference fallback, so there is a single place to add a new category.
  */
 
-import type { IconName } from '$lib/icons/paths';
+import type { IconName } from '#lib/icons/paths.js';
 
 const DEVICE_TYPE_ICONS: Record<string, IconName> = {
 	// Mobile

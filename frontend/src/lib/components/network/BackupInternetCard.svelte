@@ -33,8 +33,8 @@
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 	import BackupAccessPointModal from './BackupAccessPointModal.svelte';
-	import { formatBytes } from '$lib/utils/format-bytes';
-	import { formatRelativeTime } from '$lib/utils/format-datetime';
+	import { formatBytes } from '#lib/utils/format-bytes.js';
+	import { formatRelativeTime } from '#lib/utils/format-datetime.js';
 
 	interface Props {
 		networkId: string;

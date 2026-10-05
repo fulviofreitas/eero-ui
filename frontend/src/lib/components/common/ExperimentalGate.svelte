@@ -17,7 +17,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
-	import { experimentalWrites } from '$lib/stores/entitlements';
+	import { experimentalWrites } from '#lib/stores/entitlements.js';
 
 	interface Props {
 		children: Snippet;

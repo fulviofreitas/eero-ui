@@ -15,7 +15,7 @@
 <script lang="ts">
 	import DataTable, { type DataTableColumn } from './DataTable.svelte';
 	import NestedValue from './NestedValue.svelte';
-	import { formatShortDateTime } from '$lib/utils/format-datetime';
+	import { formatShortDateTime } from '#lib/utils/format-datetime.js';
 
 	interface EventRow {
 		event: Record<string, unknown>;

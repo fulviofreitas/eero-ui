@@ -96,8 +96,13 @@ const VALID_SORT_BY = new Set<DeviceFilters['sortBy']>([
 ]);
 const VALID_SORT_ORDER = new Set<DeviceFilters['sortOrder']>(['asc', 'desc']);
 
-/** True when the URL carries any of the device-filter query keys - used to decide whether the URL or localStorage wins on initial load. */
-export function hasDeviceFilterParams(params: URLSearchParams): boolean {
+/**
+ * True when the URL carries any of the device-filter query keys - used to decide whether the
+ * URL or localStorage wins on initial load. Accepts `page.url.searchParams`, which is read-only
+ * (`ReadonlyURLSearchParams`) under SvelteKit 3's `$app/state`, as well as a plain
+ * `URLSearchParams` - this only ever reads from `params`.
+ */
+export function hasDeviceFilterParams(params: Pick<URLSearchParams, 'has'>): boolean {
 	return DEVICE_FILTER_QUERY_KEYS.some((key) => params.has(key));
 }
 
@@ -115,8 +120,12 @@ export function deviceFiltersToSearchParams(filters: DeviceFilters): URLSearchPa
 	return params;
 }
 
-/** Parse filters from URL query params, falling back to defaults for anything missing or invalid. */
-export function deviceFiltersFromSearchParams(params: URLSearchParams): DeviceFilters {
+/**
+ * Parse filters from URL query params, falling back to defaults for anything missing or
+ * invalid. Accepts `page.url.searchParams` (read-only `ReadonlyURLSearchParams` under
+ * SvelteKit 3's `$app/state`) as well as a plain `URLSearchParams` - this only ever reads.
+ */
+export function deviceFiltersFromSearchParams(params: Pick<URLSearchParams, 'get'>): DeviceFilters {
 	const status = params.get('status');
 	const conn = params.get('conn');
 	const band = params.get('band');

@@ -52,8 +52,13 @@ engines:
   # audit rules flag the test-only helpers that read source files from disk
   # (security-guards.test.ts, console-log-guard.test.ts) and the MSW fixtures
   # that build HTML strings. Semgrep runs on the real sources in CI.
+  # Opengrep's "variant versions" rule also flags every caret range in
+  # package.json; caret ranges plus the committed lockfile are this
+  # repository's convention (Renovate keeps them current, `npm ci` installs
+  # the exact locked version), so the rule only reports the lines a PR touched.
   opengrep:
     exclude_paths:
+      - "frontend/package.json"
       - "backend/tests/**"
       - "frontend/tests/**"
       - "frontend/src/*.test.ts"

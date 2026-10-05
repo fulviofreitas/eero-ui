@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeDetailLevel } from '$lib/stores/topology';
+	import type { NodeDetailLevel } from '#lib/stores/topology.js';
 	import Icon from '$components/common/Icon.svelte';
 
 	interface Props {

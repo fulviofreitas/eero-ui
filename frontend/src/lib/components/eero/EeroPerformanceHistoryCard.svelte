@@ -12,7 +12,7 @@
 		formatPercentage,
 		formatTemperature,
 		formatDate
-	} from '$lib/utils/eero-format';
+	} from '#lib/utils/eero-format.js';
 
 	interface Props {
 		eero: EeroDetail;

@@ -2,18 +2,17 @@
  * Tests for the profile-devices table after the DataTable migration
  * (phase-6.0-revamp.md § 6.2 Tier 2 / § 7 WP3).
  *
- * `$app/stores`'s `page` is mocked here to supply a route param, since the shared stub in
- * tests/mocks/app-stores.ts always resolves `params` to `{}` (see that file's own comment).
+ * `$app/state`'s `page` is mocked here to supply a route param, since the shared stub in
+ * tests/mocks/app-state.ts always resolves `params` to `{}` (see that file's own comment).
  */
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import { readable } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../../../tests/mocks/server';
 
-vi.mock('$app/stores', () => ({
-	page: readable({
+vi.mock('$app/state', () => ({
+	page: {
 		url: new URL('http://localhost/profiles/profile-1'),
 		params: { id: 'profile-1' },
 		route: { id: '/profiles/[id]' },
@@ -21,7 +20,7 @@ vi.mock('$app/stores', () => ({
 		error: null,
 		data: {},
 		form: null
-	})
+	}
 }));
 
 const baseDevices = [

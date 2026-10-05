@@ -22,7 +22,7 @@
 	import { api } from '$api/client';
 	import type { ProfileSummary } from '$api/types';
 	import { contentFilterStore, selectedNetworkId, uiStore } from '$stores';
-	import { isValidContentFilterDomain } from '$lib/utils/network-forms';
+	import { isValidContentFilterDomain } from '#lib/utils/network-forms.js';
 	import Card from '$components/common/Card.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 

@@ -6,7 +6,7 @@
 <script lang="ts">
 	import { confirmDialog, uiStore } from '$stores';
 	import { fade, scale } from 'svelte/transition';
-	import { trapFocus } from '$lib/utils/focusTrap';
+	import { trapFocus } from '#lib/utils/focusTrap.js';
 
 	let loading = $state(false);
 

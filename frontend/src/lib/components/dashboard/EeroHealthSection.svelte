@@ -6,8 +6,8 @@
 -->
 <script lang="ts">
 	import type { EeroSummary } from '$api/types';
-	import PieChart from '$lib/components/charts/PieChart.svelte';
-	import BarGauge from '$lib/components/charts/BarGauge.svelte';
+	import PieChart from '#lib/components/charts/PieChart.svelte';
+	import BarGauge from '#lib/components/charts/BarGauge.svelte';
 
 	interface ChartDatum {
 		label: string;

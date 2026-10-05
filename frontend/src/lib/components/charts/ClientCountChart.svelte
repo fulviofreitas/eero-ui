@@ -8,8 +8,8 @@
 	import { onMount } from 'svelte';
 	import TimeSeriesChart from './TimeSeriesChart.svelte';
 	import TimeRangeSelector from '$components/common/TimeRangeSelector.svelte';
-	import { getClientCountHistory } from '$lib/api/metrics';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import { getClientCountHistory } from '#lib/api/metrics.js';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
 
 	type ClientCountTimeRange = '6h' | '24h' | '7d';
 

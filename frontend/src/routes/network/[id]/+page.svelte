@@ -1,16 +1,6 @@
-<!--
-  Network Detail Page
-
-  WP5 (6.0 revamp) note: decomposed into lib/components/network/* feature components; this
-  file is now data fetching + layout + composition only. The 16-card wall is grouped into tabs
-  (Overview / Wi-Fi & Guest / DNS / Advanced / Diagnostics) per the WP5 brief. Behaviour is
-  unchanged except: the guest-network toggle is now optimistic-with-rollback instead of
-  await-then-full-refetch (plan § 5, "Verified" write class), and loading uses a skeleton with
-  stale-while-revalidate instead of a full-block spinner.
--->
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { NetworkDetail } from '$api/types';
@@ -20,39 +10,39 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Tabs from '$components/common/Tabs.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import SpeedtestChart from '$lib/components/charts/SpeedtestChart.svelte';
-	import DnsSettingsCard from '$lib/components/network/DnsSettingsCard.svelte';
-	import DnsCachingCard from '$lib/components/network/DnsCachingCard.svelte';
-	import OverviewCard from '$lib/components/network/OverviewCard.svelte';
-	import HardwareFeaturesCard from '$lib/components/network/HardwareFeaturesCard.svelte';
-	import LocationPremiumCard from '$lib/components/network/LocationPremiumCard.svelte';
-	import GuestNetworkCard from '$lib/components/network/GuestNetworkCard.svelte';
-	import GuestPasswordCard from '$lib/components/network/GuestPasswordCard.svelte';
-	import PremiumDnsCard from '$lib/components/network/PremiumDnsCard.svelte';
-	import AdvancedSettingsCard from '$lib/components/network/AdvancedSettingsCard.svelte';
-	import NetworkHealthCard from '$lib/components/network/NetworkHealthCard.svelte';
-	import NetworkSpeedTestCard from '$lib/components/network/NetworkSpeedTestCard.svelte';
-	import SpeedTestHistoryCard from '$lib/components/network/SpeedTestHistoryCard.svelte';
-	import NetworkScanCard from '$lib/components/network/NetworkScanCard.svelte';
-	import NetworkRenameModal from '$lib/components/network/NetworkRenameModal.svelte';
-	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
-	import DataUsageCard from '$lib/components/network/DataUsageCard.svelte';
-	import EventsCard from '$lib/components/network/EventsCard.svelte';
-	import ChannelUtilizationCard from '$lib/components/network/ChannelUtilizationCard.svelte';
-	import MembersCard from '$lib/components/network/MembersCard.svelte';
-	import BackupInternetCard from '$lib/components/network/BackupInternetCard.svelte';
-	import ForwardsReservationsCard from '$lib/components/network/ForwardsReservationsCard.svelte';
-	import SecurityWanCard from '$lib/components/network/SecurityWanCard.svelte';
-	import NetworkSettingsControls from '$lib/components/network/NetworkSettingsControls.svelte';
-	import WifiSecurityControls from '$lib/components/network/WifiSecurityControls.svelte';
-	import PowerSavingControls from '$lib/components/network/PowerSavingControls.svelte';
-	import PowerSavingSchedulesCard from '$lib/components/network/PowerSavingSchedulesCard.svelte';
-	import SubnetsControls from '$lib/components/network/SubnetsControls.svelte';
-	import WanControls from '$lib/components/network/WanControls.svelte';
-	import UpdatesControls from '$lib/components/network/UpdatesControls.svelte';
-	import NetworkPasswordCard from '$lib/components/network/NetworkPasswordCard.svelte';
-	import NotificationsCard from '$lib/components/network/NotificationsCard.svelte';
-	import ContentFilterCard from '$lib/components/network/ContentFilterCard.svelte';
+	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
+	import DnsSettingsCard from '#lib/components/network/DnsSettingsCard.svelte';
+	import DnsCachingCard from '#lib/components/network/DnsCachingCard.svelte';
+	import OverviewCard from '#lib/components/network/OverviewCard.svelte';
+	import HardwareFeaturesCard from '#lib/components/network/HardwareFeaturesCard.svelte';
+	import LocationPremiumCard from '#lib/components/network/LocationPremiumCard.svelte';
+	import GuestNetworkCard from '#lib/components/network/GuestNetworkCard.svelte';
+	import GuestPasswordCard from '#lib/components/network/GuestPasswordCard.svelte';
+	import PremiumDnsCard from '#lib/components/network/PremiumDnsCard.svelte';
+	import AdvancedSettingsCard from '#lib/components/network/AdvancedSettingsCard.svelte';
+	import NetworkHealthCard from '#lib/components/network/NetworkHealthCard.svelte';
+	import NetworkSpeedTestCard from '#lib/components/network/NetworkSpeedTestCard.svelte';
+	import SpeedTestHistoryCard from '#lib/components/network/SpeedTestHistoryCard.svelte';
+	import NetworkScanCard from '#lib/components/network/NetworkScanCard.svelte';
+	import NetworkRenameModal from '#lib/components/network/NetworkRenameModal.svelte';
+	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
+	import DataUsageCard from '#lib/components/network/DataUsageCard.svelte';
+	import EventsCard from '#lib/components/network/EventsCard.svelte';
+	import ChannelUtilizationCard from '#lib/components/network/ChannelUtilizationCard.svelte';
+	import MembersCard from '#lib/components/network/MembersCard.svelte';
+	import BackupInternetCard from '#lib/components/network/BackupInternetCard.svelte';
+	import ForwardsReservationsCard from '#lib/components/network/ForwardsReservationsCard.svelte';
+	import SecurityWanCard from '#lib/components/network/SecurityWanCard.svelte';
+	import NetworkSettingsControls from '#lib/components/network/NetworkSettingsControls.svelte';
+	import WifiSecurityControls from '#lib/components/network/WifiSecurityControls.svelte';
+	import PowerSavingControls from '#lib/components/network/PowerSavingControls.svelte';
+	import PowerSavingSchedulesCard from '#lib/components/network/PowerSavingSchedulesCard.svelte';
+	import SubnetsControls from '#lib/components/network/SubnetsControls.svelte';
+	import WanControls from '#lib/components/network/WanControls.svelte';
+	import UpdatesControls from '#lib/components/network/UpdatesControls.svelte';
+	import NetworkPasswordCard from '#lib/components/network/NetworkPasswordCard.svelte';
+	import NotificationsCard from '#lib/components/network/NotificationsCard.svelte';
+	import ContentFilterCard from '#lib/components/network/ContentFilterCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -68,7 +58,7 @@
 	/** Cancelled on unmount (REVIEWER finding, Medium) so an in-flight poll loop stops immediately rather than leaking past navigation. */
 	let speedTestController: AbortController | null = null;
 
-	let networkId = $derived($page.params.id);
+	let networkId = $derived(page.params.id);
 	let speedTestProgress = $derived(speedTestFor(networkId ?? ''));
 
 	// Bug-fix follow-up (6.0.0): best available result for the Speed Test card - the poll
@@ -226,9 +216,17 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{network?.name || 'Network'} | Eero Dashboard</title>
-</svelte:head>
+<!--
+  Network Detail Page
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/network/* feature components; this
+  file is now data fetching + layout + composition only. The 16-card wall is grouped into tabs
+  (Overview / Wi-Fi & Guest / DNS / Advanced / Diagnostics) per the WP5 brief. Behaviour is
+  unchanged except: the guest-network toggle is now optimistic-with-rollback instead of
+  await-then-full-refetch (plan § 5, "Verified" write class), and loading uses a skeleton with
+  stale-while-revalidate instead of a full-block spinner.
+-->
+<svelte:head><title>{network?.name || 'Network'} | Eero Dashboard</title></svelte:head>
 
 <div class="network-detail-page">
 	{#if loading && !network}
@@ -291,12 +289,10 @@
 				</div>
 				{#if networkId}
 					<div class="info-grid premium-grid">
-						<PremiumGate feature="Network insights">
-							<InsightsCard scope="network" id={networkId} />
-						</PremiumGate>
-						<PremiumGate feature="Data usage">
-							<DataUsageCard {networkId} />
-						</PremiumGate>
+						<PremiumGate feature="Network insights"
+							><InsightsCard scope="network" id={networkId} /></PremiumGate
+						>
+						<PremiumGate feature="Data usage"><DataUsageCard {networkId} /></PremiumGate>
 					</div>
 				{/if}
 			{:else if activeTab === 'wifi'}
@@ -315,9 +311,7 @@
 					{#if networkId}
 						<DnsSettingsCard {networkId} />
 						<DnsCachingCard {networkId} />
-						<PremiumGate feature="Content filtering">
-							<ContentFilterCard {networkId} />
-						</PremiumGate>
+						<PremiumGate feature="Content filtering"><ContentFilterCard {networkId} /></PremiumGate>
 					{/if}
 					<PremiumDnsCard {network} />
 				</div>
@@ -330,12 +324,11 @@
 				>
 					<AdvancedSettingsCard {network} />
 				</div>
+
 				{#if networkId}
 					<div class="info-grid advanced-secondary">
 						<MembersCard {networkId} />
-						<PremiumGate feature="Backup internet">
-							<BackupInternetCard {networkId} />
-						</PremiumGate>
+						<PremiumGate feature="Backup internet"><BackupInternetCard {networkId} /></PremiumGate>
 					</div>
 					<div class="advanced-full">
 						<SecurityWanCard {networkId}>
@@ -385,17 +378,15 @@
 				{#if networkId}
 					<!-- Speed Test History is full-width, not a grid cell (maintainer feedback):
 					     its table has enough columns that a half-width card clips the timestamp. -->
-					<div class="diagnostics-full">
-						<SpeedTestHistoryCard {networkId} />
-					</div>
+					<div class="diagnostics-full"><SpeedTestHistoryCard {networkId} /></div>
+
 					<div class="info-grid diagnostics-secondary">
 						<NetworkScanCard {networkId} />
 						<EventsCard {networkId} />
 						<ChannelUtilizationCard {networkId} />
 					</div>
-					<section class="network-charts">
-						<SpeedtestChart {networkId} />
-					</section>
+
+					<section class="network-charts"><SpeedtestChart {networkId} /></section>
 				{/if}
 			{/if}
 		</div>

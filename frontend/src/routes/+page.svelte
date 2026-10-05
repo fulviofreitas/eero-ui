@@ -24,15 +24,15 @@
 	} from '$stores';
 	import PageHeader from '$components/common/PageHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import ClientCountChart from '$lib/components/charts/ClientCountChart.svelte';
-	import NetworkStatusCard from '$lib/components/dashboard/NetworkStatusCard.svelte';
-	import DeviceStatCard from '$lib/components/dashboard/DeviceStatCard.svelte';
-	import EeroStatCard from '$lib/components/dashboard/EeroStatCard.svelte';
-	import ProfileStatCard from '$lib/components/dashboard/ProfileStatCard.svelte';
-	import SpeedTestCard from '$lib/components/dashboard/SpeedTestCard.svelte';
-	import DeviceInsightsSection from '$lib/components/dashboard/DeviceInsightsSection.svelte';
-	import EeroHealthSection from '$lib/components/dashboard/EeroHealthSection.svelte';
-	import { seriesColor, withAlpha } from '$lib/charts/defaults';
+	import ClientCountChart from '#lib/components/charts/ClientCountChart.svelte';
+	import NetworkStatusCard from '#lib/components/dashboard/NetworkStatusCard.svelte';
+	import DeviceStatCard from '#lib/components/dashboard/DeviceStatCard.svelte';
+	import EeroStatCard from '#lib/components/dashboard/EeroStatCard.svelte';
+	import ProfileStatCard from '#lib/components/dashboard/ProfileStatCard.svelte';
+	import SpeedTestCard from '#lib/components/dashboard/SpeedTestCard.svelte';
+	import DeviceInsightsSection from '#lib/components/dashboard/DeviceInsightsSection.svelte';
+	import EeroHealthSection from '#lib/components/dashboard/EeroHealthSection.svelte';
+	import { seriesColor, withAlpha } from '#lib/charts/defaults.js';
 
 	let network = $state<NetworkDetail | null>(null);
 	let eeros: EeroSummary[] = $state([]);

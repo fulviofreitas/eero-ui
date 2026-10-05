@@ -1,16 +1,6 @@
-<!--
-  Device List Component
-
-  Main device listing with filtering and search. Table itself is DataTable
-  (phase-6.0-revamp.md § 6.2 Tier 2) — sort, column visibility, sticky header/actions column and
-  keyboard-accessible `aria-sort` headers all come from there now. This component keeps the
-  field-scoped search, the three filter groups with live counts, bulk selection, and export,
-  which are all orthogonal to how the table itself renders.
--->
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { get } from 'svelte/store';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
 		devicesStore,
@@ -83,7 +73,7 @@
 	let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function loadInitialFilters(): typeof $deviceFilters {
-		const url = get(page).url;
+		const url = page.url;
 		if (hasDeviceFilterParams(url.searchParams)) {
 			return deviceFiltersFromSearchParams(url.searchParams);
 		}
@@ -104,11 +94,10 @@
 			// here anyway (this is a one-shot target string for `goto`).
 			const params = deviceFiltersToSearchParams(filters);
 			const search = params.toString();
-			const pathname = get(page).url.pathname;
+			const pathname = page.url.pathname;
 			goto(search ? `${pathname}?${search}` : pathname, {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
+				replace: true,
+				reset: false
 			});
 
 			if (typeof localStorage !== 'undefined') {
@@ -337,6 +326,16 @@
 		return classes.join(' ');
 	}
 </script>
+
+<!--
+  Device List Component
+
+  Main device listing with filtering and search. Table itself is DataTable
+  (phase-6.0-revamp.md § 6.2 Tier 2) — sort, column visibility, sticky header/actions column and
+  keyboard-accessible `aria-sort` headers all come from there now. This component keeps the
+  field-scoped search, the three filter groups with live counts, bulk selection, and export,
+  which are all orthogonal to how the table itself renders.
+-->
 
 {#snippet nameCell(device: DeviceSummary)}
 	<div class="device-name-wrapper">

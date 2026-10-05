@@ -14,7 +14,7 @@ import { server } from '../../tests/mocks/server';
 import { authStore, networksStore } from '$stores';
 import Layout from './+layout.svelte';
 
-// $app/stores and $app/navigation resolve to the stubs aliased in vitest.config.ts, whose
+// $app/state and $app/navigation resolve to the stubs aliased in vitest.config.ts, whose
 // default `page.url` is http://localhost/ - matching the "not on /login" branch this test needs.
 
 describe('root layout - theme toggle placement', () => {

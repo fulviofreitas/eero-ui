@@ -1,16 +1,6 @@
-<!--
-  Profile Detail Page
-
-  Detailed view of a profile with associated devices.
-
-  WP5 (6.0 revamp) note: decomposed into lib/components/profile/* feature components; this
-  file is now data fetching + layout + composition only. Behaviour unchanged except:
-  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading (item 4) in place
-  of the previous back-link + full-block spinner.
--->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api } from '$api/client';
 	import type { ProfileSummary, ProfileDevice } from '$api/types';
@@ -19,15 +9,15 @@
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Icon from '$components/common/Icon.svelte';
-	import ProfileStatusCard from '$lib/components/profile/ProfileStatusCard.svelte';
-	import ProfileTechnicalCard from '$lib/components/profile/ProfileTechnicalCard.svelte';
-	import ProfileDevicesSection from '$lib/components/profile/ProfileDevicesSection.svelte';
-	import ProfileSchedulesCard from '$lib/components/profile/ProfileSchedulesCard.svelte';
-	import ProfileContentFilterCard from '$lib/components/profile/ProfileContentFilterCard.svelte';
-	import ProfileBlockedApplicationsCard from '$lib/components/profile/ProfileBlockedApplicationsCard.svelte';
-	import ProfileRenameModal from '$lib/components/profile/ProfileRenameModal.svelte';
-	import InsightsCard from '$lib/components/common/InsightsCard.svelte';
-	import DataUsageMiniCard from '$lib/components/common/DataUsageMiniCard.svelte';
+	import ProfileStatusCard from '#lib/components/profile/ProfileStatusCard.svelte';
+	import ProfileTechnicalCard from '#lib/components/profile/ProfileTechnicalCard.svelte';
+	import ProfileDevicesSection from '#lib/components/profile/ProfileDevicesSection.svelte';
+	import ProfileSchedulesCard from '#lib/components/profile/ProfileSchedulesCard.svelte';
+	import ProfileContentFilterCard from '#lib/components/profile/ProfileContentFilterCard.svelte';
+	import ProfileBlockedApplicationsCard from '#lib/components/profile/ProfileBlockedApplicationsCard.svelte';
+	import ProfileRenameModal from '#lib/components/profile/ProfileRenameModal.svelte';
+	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
+	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let profile = $state<ProfileSummary | null>(null);
@@ -42,7 +32,7 @@
 		if (device.id) goto(`/devices/${device.id}`);
 	}
 
-	let profileId = $derived($page.params.id);
+	let profileId = $derived(page.params.id);
 	let devices = $derived(profile?.devices || []);
 
 	onMount(async () => {
@@ -188,9 +178,17 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{profile?.name || 'Profile'} | Eero Dashboard</title>
-</svelte:head>
+<!--
+  Profile Detail Page
+
+  Detailed view of a profile with associated devices.
+
+  WP5 (6.0 revamp) note: decomposed into lib/components/profile/* feature components; this
+  file is now data fetching + layout + composition only. Behaviour unchanged except:
+  breadcrumb navigation via DetailHeader (item 5) and skeleton-first loading (item 4) in place
+  of the previous back-link + full-block spinner.
+-->
+<svelte:head><title>{profile?.name || 'Profile'} | Eero Dashboard</title></svelte:head>
 
 <div class="profile-detail-page">
 	{#if loading && !profile}
@@ -219,16 +217,17 @@
 				<button
 					class="btn btn-secondary"
 					onclick={() => fetchProfile(true)}
-					disabled={actionLoading}
+					disabled={actionLoading}><Icon name="refresh" size={14} />Refresh</button
 				>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
-				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}>
-					<Icon name="edit" size={14} /> Rename
-				</button>
-				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}>
-					Delete
-				</button>
+
+				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}
+					><Icon name="edit" size={14} />Rename</button
+				>
+
+				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}
+					>Delete</button
+				>
+
 				<button
 					class="btn {profile!.paused ? 'btn-primary' : 'btn-warning'}"
 					onclick={handleTogglePause}
@@ -237,7 +236,7 @@
 					{#if actionLoading}
 						<span class="loading-spinner"></span>
 					{:else if profile!.paused}
-						<Icon name="play" size={14} /> Resume Internet
+						<Icon name="play" size={14} />Resume Internet
 					{:else}
 						<Icon name="pause" size={14} /> Pause Internet
 					{/if}
