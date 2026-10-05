@@ -63,8 +63,12 @@ describe('DataUsageMiniCard', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: '30d' }));
 
-		await waitFor(() => expect(seenCadences).toContain('daily'));
-		expect(seenCadences.length).toBeGreaterThan(1);
+		// Wait for the *second* request specifically - both the mount fetch and
+		// the post-click refetch use cadence 'daily' (`windowFor('30d')` maps to
+		// daily too), so `toContain('daily')` is already true from the mount
+		// fetch and would resolve before the refetch lands. Assert on the count
+		// directly so this only passes once the second request has arrived.
+		await waitFor(() => expect(seenCadences.length).toBeGreaterThan(1));
 	});
 
 	it('renders an upsell notice — not an error — on a 402', async () => {
