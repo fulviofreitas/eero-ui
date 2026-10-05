@@ -12,8 +12,26 @@ import { vi, beforeAll, afterEach, afterAll } from 'vitest';
 import { server } from './mocks/server';
 
 // Start MSW server before all tests
-beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
-afterEach(() => server.resetHandlers());
+// msw 3 renamed `onUnhandledRequest` to `onUnhandledFrame` (it now also covers
+// non-HTTP network frames such as WebSocket connections); the string values
+// ('warn', 'bypass', 'error') are unchanged.
+beforeAll(() => server.listen({ onUnhandledFrame: 'warn' }));
+afterEach(async () => {
+	// msw 3's request matching now resolves on a macrotask tick against
+	// whatever handler set is active *at resolution time*, not the one active
+	// when `fetch()` was called (msw 2 bound synchronously to the request-time
+	// handlers). A component unmounted at the end of a test but whose fetch promise is
+	// still in flight (no AbortController wired up) would otherwise have its
+	// response matched against the *next* test's `server.use()` overrides,
+	// corrupting shared Svelte stores with stale/wrong-test data one test
+	// later. One `setTimeout(0)` tick is enough to let in-flight requests bind
+	// to their handler before the next test calls `server.use()`.
+	// Under fake timers that setTimeout would never fire, so a test that forgot
+	// `vi.useRealTimers()` would hang the whole run here; restore them first.
+	if (vi.isFakeTimers()) vi.useRealTimers();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	server.resetHandlers();
+});
 afterAll(() => server.close());
 
 // Mock browser APIs not available in jsdom
