@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.0.4](https://github.com/fulviofreitas/eero-ui/compare/v6.0.3...v6.0.4) (2026-10-05)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump brace-expansion from 5.0.7 to 5.0.12 in /frontend ([#425](https://github.com/fulviofreitas/eero-ui/issues/425)) ([65673d0](https://github.com/fulviofreitas/eero-ui/commit/65673d031f64e40eb407a6e9fa9e0cf6e300a7fa))
+
 ## [6.0.3](https://github.com/fulviofreitas/eero-ui/compare/v6.0.2...v6.0.3) (2026-09-29)
 
 ### 🐛 Bug Fixes
