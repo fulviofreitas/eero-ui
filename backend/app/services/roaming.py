@@ -24,6 +24,31 @@ Design constraints that drive the shape of this code:
   change. If there is no previous state, or several candidate states all
   differ, fall back to a deterministic order: connected before offline,
   then by node name.
+- A ``CONNECTED`` sample with an empty ``source_eero`` label means
+  "connected, but which node is unknown" -- not "connected to a node
+  named ''". While the device was already connected, such a sample must
+  not create a move or reset the carried node: the last known node is
+  carried forward and no event is emitted. Only when the device was
+  previously offline (or this is the very first sample) does a blank
+  label still produce a genuine reconnect, to an unresolved node (see
+  ``resolve_node``).
+
+Known resolution limits (eero-ui#431 follow-up, documented rather than
+silently accepted):
+
+- Two hops that land inside the same ``step`` window are indistinguishable
+  from a single hop. ``_collapse_timestamps``' tiebreak can only impose a
+  deterministic *order* on same-timestamp samples (connected before
+  offline, then by node name) -- it has no way to recover which sample was
+  actually observed first, so an A -> B -> A bounce entirely inside one
+  step can collapse into zero or one transition instead of two.
+- A move between two eeros that share the same ``location`` string is
+  invisible to this module: ``source_eero`` IS the location string, so two
+  nodes with identical locations produce identical ``DeviceState.node``
+  values and nothing here can tell them apart. ``routes/metrics.py``'s
+  ``_resolve_roaming_entities`` reflects the same ambiguity one layer up --
+  it resolves a shared location to ``eero_id=None`` rather than guessing
+  which of the two nodes a transition actually involved.
 """
 
 from __future__ import annotations
@@ -226,17 +251,38 @@ def _emit_transitions(device_id: str, samples: list[_Sample]) -> list[Transition
     previous: _Sample | None = None
 
     for sample in collapsed:
-        if previous is not None and sample.state != previous.state:
-            if previous.state.connected and sample.state.connected:
+        state = sample.state
+
+        if (
+            state.connected
+            and not state.node
+            and previous is not None
+            and previous.state.connected
+        ):
+            # "Connected, node unknown" while already connected: carry the
+            # last known node forward rather than treating the blank label
+            # as a move to node "" (see module docstring). Advance
+            # ``previous`` to this later timestamp so a subsequent real
+            # transition's ``previous_seen`` reflects this observation,
+            # but keep its node -- no event is emitted for this sample.
+            previous = _Sample(
+                timestamp=sample.timestamp,
+                state=previous.state,
+                labels=sample.labels,
+            )
+            continue
+
+        if previous is not None and state != previous.state:
+            if previous.state.connected and state.connected:
                 event_type: Literal["move", "disconnect", "reconnect"] = "move"
                 from_node: str | None = previous.state.node
-                to_node: str | None = sample.state.node
-            elif previous.state.connected and not sample.state.connected:
+                to_node: str | None = state.node
+            elif previous.state.connected and not state.connected:
                 event_type = "disconnect"
                 from_node, to_node = previous.state.node, None
             else:
                 event_type = "reconnect"
-                from_node, to_node = None, sample.state.node
+                from_node, to_node = None, state.node
 
             transitions.append(
                 Transition(
@@ -323,7 +369,7 @@ class RoamingNode(BaseModel):
 
 
 def resolve_node(
-    label: str | None, node_id_by_location: dict[str, str]
+    label: str | None, node_id_by_location: dict[str, str | None]
 ) -> RoamingNode | None:
     """Build a ``RoamingNode`` from a ``source_eero`` label, or ``None``.
 
@@ -334,8 +380,9 @@ def resolve_node(
             node" (no ``source_eero`` label observed).
         node_id_by_location: Current eeros' ids keyed by their normalized
             ``location``, so a node still on the network resolves to its
-            id; a node that disappeared resolves to ``eero_id=None`` with
-            the label as its name.
+            id; a node that disappeared, or whose location string is
+            shared by more than one current eero, resolves to
+            ``eero_id=None`` with the label as its name.
 
     Returns:
         A ``RoamingNode``, or ``None`` if ``label`` is ``None``.

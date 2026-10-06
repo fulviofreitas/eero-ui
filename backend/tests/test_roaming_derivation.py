@@ -232,6 +232,59 @@ class TestOfflineNodeLabelIgnored:
         assert derive_transitions(result) == []
 
 
+class TestConnectedWithUnknownNodeIsNotAMove:
+    """A connected sample with an empty source_eero label ("connected, node
+    unknown") must carry the last known node forward rather than emit a
+    move or reset the node (eero-ui#431 follow-up, fix 7)."""
+
+    def test_known_then_blank_then_same_known_node_yields_no_event(self) -> None:
+        # A, "", A -- the blank in the middle is a continuation of A, not a
+        # move to "" and back.
+        result = [
+            _series("device-1", [(100.0, "1")], source_eero="A"),
+            _series("device-1", [(200.0, "1")], source_eero=""),
+            _series("device-1", [(300.0, "1")], source_eero="A"),
+        ]
+
+        assert derive_transitions(result) == []
+
+    def test_known_then_blank_then_different_node_yields_one_move(self) -> None:
+        # A, "", B -- exactly one move, from the last known node (A) to B.
+        result = [
+            _series("device-1", [(100.0, "1")], source_eero="A"),
+            _series("device-1", [(200.0, "1")], source_eero=""),
+            _series("device-1", [(300.0, "1")], source_eero="B"),
+        ]
+
+        transitions = derive_transitions(result)
+
+        assert len(transitions) == 1
+        t = transitions[0]
+        assert t.event_type == "move"
+        assert t.from_node == "A"
+        assert t.to_node == "B"
+        assert t.timestamp == 300.0
+
+    def test_offline_then_blank_is_still_a_reconnect_to_unknown_node(self) -> None:
+        # offline, "" -- unlike the connected case above, a blank sample
+        # right after an offline one is a genuine reconnect (to_node ""),
+        # not a continuation -- there is no "last known node" to carry.
+        result = [
+            _series("device-1", [(100.0, "0")], source_eero="A"),
+            _series("device-1", [(200.0, "1")], source_eero=""),
+        ]
+
+        transitions = derive_transitions(result)
+
+        assert len(transitions) == 1
+        t = transitions[0]
+        assert t.event_type == "reconnect"
+        assert t.from_node is None
+        assert t.to_node == ""
+        assert t.timestamp == 200.0
+        assert t.previous_seen == 100.0
+
+
 class TestTwoDevicesInterleaved:
     def test_sorted_newest_first_with_stable_device_id_tiebreak(self) -> None:
         # Both devices move to a new node at the exact same timestamp.

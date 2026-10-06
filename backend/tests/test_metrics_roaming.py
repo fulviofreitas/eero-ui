@@ -58,11 +58,53 @@ def make_eero(eero_id="eero-bedroom", location="Bedroom"):
     }
 
 
+def make_network(network_id=NETWORK_ID):
+    """Build a minimal raw network dict (eero-api shape), for ownership checks."""
+    return {"url": f"/2.2/networks/{network_id}"}
+
+
+def make_vm_instant_response(count):
+    """Build a VictoriaMetrics instant-query (``count(...)``) success envelope."""
+    if count == 0:
+        return {"status": "success", "data": {"result": []}}
+    return {
+        "status": "success",
+        "data": {"result": [{"metric": {}, "value": [FIXED_NOW, str(count)]}]},
+    }
+
+
 @pytest.fixture(autouse=True)
 def _fixed_now():
     """Deterministic ``end``/``start`` window for every test in this module."""
     with patch("app.routes.metrics._now", return_value=FIXED_NOW):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _default_network_ownership(mock_eero_client):
+    """Default ``get_networks`` to include ``NETWORK_ID`` (the ownership check
+    added ahead of every VictoriaMetrics query). Tests exercising ownership
+    itself override ``get_networks`` within their own test body.
+    """
+    mock_eero_client.get_networks = AsyncMock(
+        return_value=make_raw_response([make_network()])
+    )
+
+
+@pytest.fixture(autouse=True)
+def _default_vm_instant_count():
+    """Default the pre-flight instant-count query (fix 2) to a small,
+    non-zero count so every test exercising the range-query path doesn't
+    also have to mock the instant query. Tests exercising the instant-count
+    path itself (zero count, over-cap count, instant-query failures)
+    override ``query`` within their own ``with patch(...)`` block, which
+    takes precedence for the duration of that block.
+    """
+    with patch(
+        "app.routes.metrics.victoria_client.query",
+        new=AsyncMock(return_value=make_vm_instant_response(1)),
+    ) as mocked:
+        yield mocked
 
 
 class TestHappyPathAndPromQL:
@@ -410,6 +452,332 @@ class TestVictoriaMetricsFailures:
             )
 
         assert response.status_code == 503
+
+    async def test_range_query_http_status_error_returns_503(
+        self, auth_client, authenticated_client
+    ):
+        """``raise_for_status()`` raising (e.g. VM returns a 422) must map
+        to 503, not escape as an unhandled 500 (fix 1)."""
+        import httpx
+
+        request = httpx.Request("GET", "http://victoria-metrics/api/v1/query_range")
+        error = httpx.HTTPStatusError(
+            "422 Unprocessable Content",
+            request=request,
+            response=httpx.Response(422, request=request),
+        )
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(side_effect=error),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 503
+
+    async def test_range_query_value_error_returns_503(
+        self, auth_client, authenticated_client
+    ):
+        """A bad JSON body (``response.json()`` raising) must map to 503,
+        not escape as an unhandled 500 (fix 1)."""
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(side_effect=ValueError("Expecting value: line 1 column 1")),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 503
+
+    async def test_instant_count_query_http_status_error_returns_503(
+        self, auth_client, authenticated_client
+    ):
+        """Same mapping applies to the pre-flight instant count query
+        (fix 2)."""
+        import httpx
+
+        request = httpx.Request("GET", "http://victoria-metrics/api/v1/query")
+        error = httpx.HTTPStatusError(
+            "422 Unprocessable Content",
+            request=request,
+            response=httpx.Response(422, request=request),
+        )
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(side_effect=error),
+            ),
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(),
+            ) as mocked_query_range,
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 503
+        mocked_query_range.assert_not_called()
+
+    async def test_instant_count_query_value_error_returns_503(
+        self, auth_client, authenticated_client
+    ):
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(
+                    side_effect=ValueError("Expecting value: line 1 column 1")
+                ),
+            ),
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(),
+            ) as mocked_query_range,
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 503
+        mocked_query_range.assert_not_called()
+
+
+class TestInstantCountShortCircuit:
+    """The pre-flight instant count (fix 2) bounds work before the range query."""
+
+    async def test_zero_count_skips_range_query_and_name_resolution(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
+
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(return_value=make_vm_instant_response(0)),
+            ),
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(),
+            ) as mocked_query_range,
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["events"] == []
+        assert body["top_roamers"] == []
+        assert body["total_events"] == 0
+        mocked_query_range.assert_not_called()
+        authenticated_client.get_devices.assert_not_awaited()
+        authenticated_client.get_eeros.assert_not_awaited()
+
+    async def test_over_cap_count_is_rejected_before_range_query(
+        self, auth_client, authenticated_client
+    ):
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(return_value=make_vm_instant_response(2001)),
+            ),
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(),
+            ) as mocked_query_range,
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 422
+        assert "narrow the range" in response.json()["detail"]
+        mocked_query_range.assert_not_called()
+
+    async def test_instant_query_promql_matches_selector_and_range(
+        self, auth_client, authenticated_client
+    ):
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(return_value=make_vm_instant_response(1)),
+            ) as mocked_query,
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(return_value=make_vm_response([])),
+            ),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+        promql, kwargs = mocked_query.call_args.args[0], mocked_query.call_args.kwargs
+        assert promql == (
+            "count(count_over_time(eero_device_connected"
+            f'{{network_id="{NETWORK_ID}"}}[{DEFAULT_RANGE_SECONDS}s]))'
+        )
+        assert kwargs["time"] == str(FIXED_NOW)
+
+
+class TestNetworkOwnership:
+    """``network_id`` must belong to the authenticated account (fix 3)."""
+
+    async def test_foreign_network_id_is_404_and_vm_never_queried(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_networks = AsyncMock(
+            return_value=make_raw_response([make_network("some-other-network")])
+        )
+
+        with (
+            patch(
+                "app.routes.metrics.victoria_client.query",
+                new=AsyncMock(),
+            ) as mocked_query,
+            patch(
+                "app.routes.metrics.victoria_client.query_range",
+                new=AsyncMock(),
+            ) as mocked_query_range,
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 404
+        mocked_query.assert_not_called()
+        mocked_query_range.assert_not_called()
+
+    async def test_own_network_id_is_allowed(self, auth_client, authenticated_client):
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value=make_vm_response([])),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+
+    async def test_networks_listing_failure_fails_closed(
+        self, auth_client, authenticated_client
+    ):
+        """An SDK failure listing networks propagates to the global
+        exception-handler mapping (fail closed), never a bare 500."""
+        from eero.exceptions import EeroAuthenticationException
+
+        authenticated_client.get_networks = AsyncMock(
+            side_effect=EeroAuthenticationException("session dead")
+        )
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(),
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 401
+        mocked_query_range.assert_not_called()
+
+
+class TestNameResolutionNeverFailsTheRoute:
+    """Fix 4: a junk SDK payload falls back to VM labels instead of 500ing."""
+
+    async def test_junk_device_and_eero_payloads_fall_back_to_labels(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_devices = AsyncMock(
+            return_value=make_raw_response(["junk"])
+        )
+        authenticated_client.get_eeros = AsyncMock(
+            return_value=make_raw_response(["junk"])
+        )
+        result = [
+            make_series("dev-1", "Living Room", 1000, name="Label Name", mac="aa:bb"),
+            make_series("dev-1", "Bedroom", 2000, name="Label Name", mac="aa:bb"),
+        ]
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value=make_vm_response(result)),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+        event = response.json()["events"][0]
+        assert event["device_name"] == "Label Name"
+        assert event["mac"] == "aa:bb"
+        assert event["to_node"] == {"name": "Bedroom", "eero_id": None}
+
+
+class TestDuplicateEeroLocations:
+    """Fix 5: two current eeros sharing a location resolve to eero_id None."""
+
+    async def test_shared_location_resolves_to_none_not_last_wins(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(
+            return_value=make_raw_response(
+                [
+                    make_eero(eero_id="eero-1", location="Hallway"),
+                    make_eero(eero_id="eero-2", location="Hallway"),
+                ]
+            )
+        )
+        result = [
+            make_series("dev-1", "Living Room", 1000),
+            make_series("dev-1", "Hallway", 2000),
+        ]
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value=make_vm_response(result)),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+        event = response.json()["events"][0]
+        assert event["to_node"] == {"name": "Hallway", "eero_id": None}
+
+
+class TestSkipNameResolutionWhenNoEvents:
+    """Fix 6: SDK name-resolution calls are skipped for an empty result."""
+
+    async def test_no_transitions_skips_device_and_eero_sdk_calls(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        authenticated_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
+        # A single sample yields no transitions and no top roamers.
+        result = [make_series("dev-1", "Living Room", 1000)]
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value=make_vm_response(result)),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/roaming", params={"network_id": NETWORK_ID}
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["events"] == []
+        assert body["top_roamers"] == []
+        authenticated_client.get_devices.assert_not_awaited()
+        authenticated_client.get_eeros.assert_not_awaited()
 
 
 class TestAuth:
