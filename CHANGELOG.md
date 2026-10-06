@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.1.0](https://github.com/fulviofreitas/eero-ui/compare/v6.0.6...v6.1.0) (2026-10-06)
+
+### ✨ Features
+
+* **network:** device roaming events derived from collector history ([#441](https://github.com/fulviofreitas/eero-ui/issues/441)) ([0c83e10](https://github.com/fulviofreitas/eero-ui/commit/0c83e102ba8da3dcbaa0df22dcaa926bd1e0fe04)), closes [#431](https://github.com/fulviofreitas/eero-ui/issues/431)
+
 ## [6.0.6](https://github.com/fulviofreitas/eero-ui/compare/v6.0.5...v6.0.6) (2026-10-06)
 
 ### 🐛 Bug Fixes
