@@ -430,7 +430,7 @@ async def _resolve_roaming_entities(
             for location, ids in ids_by_location.items()
         }
         return device_by_id, node_id_by_location
-    except Exception as exc:  # noqa: BLE001 - name resolution is best-effort only
+    except Exception as exc:  # name resolution is best-effort only
         _LOGGER.warning(
             "Failed to resolve device/eero names for roaming events on network "
             "%s: %s",
@@ -563,7 +563,7 @@ def _build_roaming_event(
 async def get_roaming_events(
     request: Request,
     network_id: str = Query(..., description="Network to query roaming events for"),
-    range: str = Query(  # noqa: A002 - matches the frontend's query param name
+    range: str = Query(  # shadows the builtin to match the query param name
         "24h", description="Time window: one of 1h, 6h, 24h, 7d"
     ),
     device_id: str | None = Query(None, description="Scope results to a single device"),

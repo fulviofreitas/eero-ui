@@ -156,7 +156,7 @@ def _parse_value(raw: Any) -> float | None:
         value = float(raw)
     except (TypeError, ValueError):
         return None
-    if value != value:  # NaN never equals itself.
+    if math.isnan(value):
         return None
     return value
 
