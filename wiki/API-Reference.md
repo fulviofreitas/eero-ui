@@ -150,7 +150,7 @@ Each route depends on its own gate constant in `networks.py` (`_SQM_GATE`, `_DHC
 |---|---|---|---|---|---|---|
 | `GET` | `/api/devices` | — | — | — | `list[DeviceSummary]` | |
 | `GET` | `/api/devices/{device_id}` | — | — | — | `DeviceDetail` | |
-| `POST` | `/api/devices/{device_id}/block` | experimental | 10/minute `experimental_writes` | — | `DeviceAction` | MAC resolved server-side; `422` if the device has no MAC; unverified |
+| `POST` | `/api/devices/{device_id}/block` | — | 10/minute `device_writes` | — | `DeviceAction` | MAC resolved server-side; `422` if the device has no MAC; verified (live-verified 2026-10-06) |
 | `POST` | `/api/devices/{device_id}/unblock` | — | — | — | `DeviceAction` | MAC resolved server-side; `422` without MAC; verified |
 | `PUT` | `/api/devices/{device_id}/nickname` | — | — | `NicknameRequest {nickname}` | `DeviceAction` | stripped; `422` on control/format characters; verified |
 | `PUT` | `/api/devices/{device_id}/type` | — | 10/minute `device_type` | `DeviceTypeRequest {device_type}` | `DeviceAction` | `422` unknown type; verified |
