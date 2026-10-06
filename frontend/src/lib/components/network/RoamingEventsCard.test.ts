@@ -14,6 +14,12 @@
  * - device mode hides the device column/summary and requests device_id
  * - truncated footnote
  * - resolution formatting (3.5 min / 30 s)
+ * - an error on a same-scope refetch (range change) is shown as a banner
+ *   above the still-visible stale table, rather than hiding the failure
+ *   behind data that may no longer be current
+ * - top-roamer chips expose aria-pressed, toggling with the selection
+ * - the from/to change cell carries accessible " to " text between the two
+ *   node names, not just the aria-hidden arrow glyph
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -240,5 +246,61 @@ describe('RoamingEventsCard', () => {
 		render(RoamingEventsCard, { props: { networkId: 'network-123' } });
 
 		await waitFor(() => expect(screen.getByText(/~30 s/)).toBeInTheDocument());
+	});
+
+	it('shows an error banner above the stale table when a same-scope refetch fails', async () => {
+		render(RoamingEventsCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getAllByText('Kitchen iPad').length).toBeGreaterThan(0));
+
+		server.use(
+			http.get('/api/metrics/roaming', () => HttpResponse.json({ detail: 'boom' }, { status: 500 }))
+		);
+
+		// A range change is a same-scope refetch - the store keeps the stale
+		// `data` in place while it fails, rather than clearing it.
+		await fireEvent.click(screen.getByRole('button', { name: '7d' }));
+
+		await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('boom'), {
+			timeout: 5000
+		});
+		// The stale table from the previous successful load is still visible
+		// underneath the banner.
+		expect(screen.getAllByText('Kitchen iPad', { selector: 'a' }).length).toBeGreaterThan(0);
+	});
+
+	it('toggles aria-pressed on the selected top-roamer chip', async () => {
+		render(RoamingEventsCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('Most roaming devices')).toBeInTheDocument());
+
+		const findChip = () => screen.getByRole('button', { name: /Kitchen iPad \(14\)/ });
+		expect(findChip()).toHaveAttribute('aria-pressed', 'false');
+
+		await fireEvent.click(findChip());
+
+		// Selecting a top roamer is a device-scope change, so the store clears
+		// `data` while the filtered request loads - the whole top-roamers strip
+		// (including this chip) briefly unmounts and remounts as a new element
+		// once the response lands. Re-query rather than holding a stale node.
+		await waitFor(() => expect(findChip()).toHaveAttribute('aria-pressed', 'true'));
+	});
+
+	it('carries accessible "to" text between the from/to node names', async () => {
+		render(RoamingEventsCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getAllByText('Kitchen iPad').length).toBeGreaterThan(0));
+
+		// First fixture event: Living Room -> Office.
+		const fromLink = screen
+			.getAllByText('Living Room')
+			.map((el) => el.closest('a'))
+			.find((a): a is HTMLAnchorElement => a !== null);
+		const cell = fromLink?.closest('.change-cell');
+		expect(cell).not.toBeNull();
+
+		const text = cell?.textContent ?? '';
+		expect(text).toContain('Living Room');
+		expect(text).toContain('Office');
+		expect(text.indexOf(' to ')).toBeGreaterThan(-1);
+		expect(text.indexOf('Living Room')).toBeLessThan(text.indexOf(' to '));
+		expect(text.indexOf(' to ')).toBeLessThan(text.indexOf('Office'));
 	});
 });

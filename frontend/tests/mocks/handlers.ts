@@ -21,8 +21,10 @@ import type { RoamingResponse } from '#lib/api/types.js';
 export const roamingFixture: RoamingResponse = {
 	network_id: 'network-123',
 	range: '24h',
-	start: '2026-10-05T12:00:00Z',
-	end: '2026-10-06T12:00:00Z',
+	// Epoch seconds (backend contract): 2026-10-05T12:00:00Z .. 2026-10-06T12:00:00Z,
+	// the window the events below (which stay ISO) fall within.
+	start: 1791201600,
+	end: 1791288000,
 	resolution_seconds: 60,
 	total_events: 5,
 	truncated: false,

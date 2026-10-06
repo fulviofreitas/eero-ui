@@ -10,10 +10,15 @@
  * - a 422 keeps the backend's own detail message
  * - a 503 maps to a fixed "unavailable" message
  * - a 401 surfaces like any other store (generic message, no special-casing)
+ * - a scope change (new networkId or deviceId) clears `data` synchronously,
+ *   before the new response resolves, so the UI never shows another
+ *   network's/device's events while the new scope loads
+ * - a same-scope refetch (range change) keeps the stale `data` in place
+ *   while loading, to avoid a flicker
  * - clear resets to the initial state
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { http, HttpResponse } from 'msw';
 import { roamingStore, ROAMING_RANGE_OPTIONS } from './roaming';
@@ -198,6 +203,87 @@ describe('roamingStore', () => {
 		const state = get(roamingStore);
 		expect(state.error).toBe('Not authenticated');
 		expect(state.loading).toBe(false);
+	});
+
+	it('clears data synchronously on a networkId scope change, before the response resolves', async () => {
+		server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+		await roamingStore.fetch('network-123');
+		expect(get(roamingStore).data).not.toBeNull();
+
+		let release: (() => void) | undefined;
+		server.use(
+			http.get('/api/metrics/roaming', async () => {
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				return HttpResponse.json({ ...roamingFixture, network_id: 'network-456' });
+			})
+		);
+
+		const fetchPromise = roamingStore.fetch('network-456');
+		// Cleared immediately - the synchronous part of `fetch` runs before the
+		// first `await`, so this holds even without waiting for anything.
+		expect(get(roamingStore).data).toBeNull();
+		expect(get(roamingStore).error).toBeNull();
+		expect(get(roamingStore).loading).toBe(true);
+
+		await vi.waitFor(() => expect(release).toBeDefined());
+		release!();
+		await fetchPromise;
+
+		expect(get(roamingStore).data?.network_id).toBe('network-456');
+	});
+
+	it('clears data synchronously on a deviceId scope change', async () => {
+		server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+		await roamingStore.fetch('network-123', { deviceId: 'd1' });
+		expect(get(roamingStore).data).not.toBeNull();
+
+		let release: (() => void) | undefined;
+		server.use(
+			http.get('/api/metrics/roaming', async () => {
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				return HttpResponse.json(roamingFixture);
+			})
+		);
+
+		const fetchPromise = roamingStore.fetch('network-123', { deviceId: 'd2' });
+		expect(get(roamingStore).data).toBeNull();
+		expect(get(roamingStore).loading).toBe(true);
+
+		await vi.waitFor(() => expect(release).toBeDefined());
+		release!();
+		await fetchPromise;
+	});
+
+	it('keeps stale data in place while loading on a same-scope range change', async () => {
+		server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+		await roamingStore.fetch('network-123', { range: '24h' });
+		expect(get(roamingStore).data).not.toBeNull();
+
+		let release: (() => void) | undefined;
+		server.use(
+			http.get('/api/metrics/roaming', async () => {
+				await new Promise<void>((resolve) => {
+					release = resolve;
+				});
+				return HttpResponse.json({ ...roamingFixture, range: '7d' });
+			})
+		);
+
+		const fetchPromise = roamingStore.fetch('network-123', { range: '7d' });
+		// Same scope (networkId/deviceId unchanged) - the previous data is kept
+		// visible while the new range loads, rather than flashing empty/skeleton.
+		expect(get(roamingStore).data).not.toBeNull();
+		expect(get(roamingStore).loading).toBe(true);
+
+		await vi.waitFor(() => expect(release).toBeDefined());
+		release!();
+		await fetchPromise;
+
+		expect(get(roamingStore).data?.range).toBe('7d');
 	});
 
 	it('clear resets to the initial state', async () => {

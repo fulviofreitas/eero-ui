@@ -147,6 +147,7 @@
 	<span class="change-cell">
 		{@render nodeRef(row.from_node)}
 		<span class="change-arrow" aria-hidden="true">&rarr;</span>
+		<span class="sr-only"> to </span>
 		{@render nodeRef(row.to_node)}
 	</span>
 {/snippet}
@@ -169,6 +170,7 @@
 						type="button"
 						class="top-roamer-chip"
 						class:active={selectedDeviceId === roamer.device_id}
+						aria-pressed={selectedDeviceId === roamer.device_id}
 						onclick={() => selectTopRoamer(roamer.device_id, roamer.device_name)}
 					>
 						{roamer.device_name} <span class="text-muted">({roamer.moves})</span>
@@ -185,8 +187,17 @@
 		</p>
 	{/if}
 
-	{#if roamingState.error && events.length === 0}
+	{#if roamingState.error}
+		<!--
+			Shown whenever an error is set, even when stale `data` from the same scope is still
+			around (a failed retry/range-change) - as a banner above the stale table rather than
+			hiding the failure behind data that may no longer be current.
+		-->
 		<ErrorState message={roamingState.error} onRetry={retry} />
+	{/if}
+
+	{#if roamingState.error && events.length === 0}
+		<!-- No stale data to fall back to - the error above is the whole story. -->
 	{:else if roamingState.loading && events.length === 0}
 		<Skeleton variant="table-rows" rows={5} columns={isDeviceMode ? 3 : 4} />
 	{:else if events.length === 0}

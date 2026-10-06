@@ -66,6 +66,12 @@ function createRoamingStore() {
 		 * network. `opts.range` defaults to the store's current range (or
 		 * `'24h'` on first call); `opts.deviceId` narrows to one device's
 		 * history, or pass `null`/omit to clear a previous filter.
+		 *
+		 * A change of `networkId` or `deviceId` is a scope change: the
+		 * previous `data` is cleared immediately (before the request even
+		 * resolves), so the UI never shows another network's/device's events
+		 * while the new scope loads. A same-scope refetch (range change,
+		 * retry) keeps the stale `data` in place to avoid a flicker.
 		 */
 		async fetch(networkId: string, opts: RoamingFetchOptions = {}): Promise<void> {
 			const token = ++requestToken;
@@ -73,8 +79,17 @@ function createRoamingStore() {
 			const current = get({ subscribe });
 			const range = opts.range ?? current.range;
 			const deviceId = opts.deviceId !== undefined ? opts.deviceId : current.deviceId;
+			const isScopeChange = networkId !== current.networkId || deviceId !== current.deviceId;
 
-			update((s) => ({ ...s, networkId, range, deviceId, loading: true, error: null }));
+			update((s) => ({
+				...s,
+				networkId,
+				range,
+				deviceId,
+				loading: true,
+				error: null,
+				...(isScopeChange ? { data: null } : {})
+			}));
 
 			try {
 				const data = await api.metrics.roaming(networkId, range, deviceId ?? undefined);

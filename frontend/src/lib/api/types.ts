@@ -1591,8 +1591,10 @@ export interface RoamingTopRoamer {
 export interface RoamingResponse {
 	network_id: string;
 	range: RoamingRange;
-	start: string;
-	end: string;
+	/** Epoch seconds. */
+	start: number;
+	/** Epoch seconds. */
+	end: number;
 	resolution_seconds: number;
 	total_events: number;
 	/** `true` when `total_events` exceeds the number of `events` returned (capped at 500). */
