@@ -43,6 +43,7 @@
 	import NetworkPasswordCard from '#lib/components/network/NetworkPasswordCard.svelte';
 	import NotificationsCard from '#lib/components/network/NotificationsCard.svelte';
 	import ContentFilterCard from '#lib/components/network/ContentFilterCard.svelte';
+	import RoamingEventsCard from '#lib/components/network/RoamingEventsCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -73,7 +74,8 @@
 		{ id: 'wifi', label: 'Wi-Fi & Guest' },
 		{ id: 'dns', label: 'DNS' },
 		{ id: 'advanced', label: 'Advanced' },
-		{ id: 'diagnostics', label: 'Diagnostics' }
+		{ id: 'diagnostics', label: 'Diagnostics' },
+		{ id: 'roaming', label: 'Roaming' }
 	];
 
 	onMount(() => {
@@ -388,6 +390,17 @@
 
 					<section class="network-charts"><SpeedtestChart {networkId} /></section>
 				{/if}
+			{:else if activeTab === 'roaming'}
+				<div
+					class="roaming-tab"
+					role="tabpanel"
+					id="tabpanel-roaming"
+					aria-labelledby="tab-roaming"
+				>
+					{#if networkId}
+						<RoamingEventsCard {networkId} />
+					{/if}
+				</div>
 			{/if}
 		</div>
 
@@ -445,6 +458,10 @@
 	}
 
 	.diagnostics-full {
+		margin-top: var(--space-4);
+	}
+
+	.roaming-tab {
 		margin-top: var(--space-4);
 	}
 

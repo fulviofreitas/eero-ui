@@ -13,6 +13,7 @@
 		devicesStore,
 		DEVICE_FILTERS_STORAGE_KEY,
 		entitlementsStore,
+		roamingStore,
 		userEmail,
 		userName,
 		userRole
@@ -96,6 +97,7 @@
 		devicesStore.clear();
 		networksStore.clear();
 		entitlementsStore.clear();
+		roamingStore.clear();
 		if (typeof localStorage !== 'undefined') {
 			localStorage.removeItem('commandPalette:recent');
 			localStorage.removeItem(DEVICE_FILTERS_STORAGE_KEY);

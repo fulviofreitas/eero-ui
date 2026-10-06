@@ -72,6 +72,27 @@ Every `/api/metrics/*` route requires an authenticated dashboard session; there 
 | `GET /api/metrics/speedtest/history?start&end&step[&network_id]` | download/upload series |
 | `GET /api/metrics/devices/{device_id}/signal?start&end&step` | signal strength and connection score |
 | `GET /api/metrics/network/client_count?start&end&step` | total, wireless and wired counts |
+| `GET /api/metrics/roaming?network_id&range[&device_id]` | device roaming events (see below) |
+
+### Roaming events
+
+The roaming view (network page → Roaming tab, and the device page) is derived entirely from the existing `eero_device_connected` history. It adds no series, no labels and no storage. For each `device_id`, consecutive samples are compared:
+
+| Before → after | Event |
+|---|---|
+| connected on node A → connected on node B | `move` |
+| connected on node A → offline (`0`) | `disconnect` |
+| offline → connected on node B | `reconnect` |
+
+- **Grouped by `device_id` only.** Any label change starts a new VictoriaMetrics series, so a device rename or a connection-type change must not read as a move.
+- **Resolution is one collection cycle.** The query is `last_over_time(eero_device_connected{…}[<step>s])` over `query_range`, with `step = max(collection interval, range / 2880)` — 60 s at the default interval for ranges up to 24 h, about 3.5 min for 7 d. An event is stamped at the first sample where the new state was seen. `previous_seen` is the last sample in the old state, so the change happened between the two.
+- **Gaps are not offline.** A missing sample (collector down, device absent from the API list) changes nothing; only an observed `0` is a disconnect. A connected sample with an empty `source_eero` keeps the last known node.
+- **Names.** Devices resolve through the current device list (`display_name` → nickname → hostname), then the series' `name` label, then the MAC. `source_eero` already holds the eero *location*. It is linked to an eero only when exactly one current eero has that location; a removed node keeps its label as plain text.
+- **Known limits.**
+  - Two hops inside one step window collapse into one.
+  - Moves between two nodes that share a location string are invisible.
+  - Renaming an eero's location makes every device on it look like it moved once.
+- **Bounds.** Before the range query, an instant `count(count_over_time(…))` rejects ranges holding more than 2,000 series (`422`). At most 500 events are returned, newest first. `top_roamers` (up to 5, by move count) is computed on the full list.
 
 The raw PromQL passthroughs (`/api/metrics/query`, `/query_range`) were removed in 6.0. Query VictoriaMetrics directly from inside the container if you need ad-hoc PromQL:
 
@@ -81,7 +102,7 @@ docker exec eero-ui curl -s 'http://127.0.0.1:8428/api/v1/query?query=eero_up'
 
 ## Pointing at an external VictoriaMetrics
 
-`EERO_DASHBOARD_VICTORIA_METRICS_URL` is used for both the write and the read path, so setting it to another VictoriaMetrics instance moves collection and charts there together. The embedded instance still starts inside the container and simply sits idle; making it optional is not in scope. Whatever you point at must accept `POST /api/v1/import` and expose `/api/v1/query_range` and `/health`.
+`EERO_DASHBOARD_VICTORIA_METRICS_URL` is used for both the write and the read path, so setting it to another VictoriaMetrics instance moves collection and charts there together. The embedded instance still starts inside the container and simply sits idle; making it optional is not in scope. Whatever you point at must accept `POST /api/v1/import` and expose `/api/v1/query`, `/api/v1/query_range` and `/health`.
 
 ## Running the exporter (optional, decoupled)
 
