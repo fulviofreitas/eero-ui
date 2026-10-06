@@ -109,7 +109,10 @@
 	});
 
 	let events = $derived(roamingState.data?.events ?? []);
-	let topRoamers = $derived(roamingState.data?.top_roamers ?? []);
+	// Sourced from the store's `leaderboard`, not `data.top_roamers`: a
+	// device-filtered response's `top_roamers` reflects only the selected
+	// device, so rendering from `data` would collapse the strip to one chip.
+	let topRoamers = $derived(roamingState.leaderboard ?? []);
 
 	let emptyMessage = $derived(
 		isDeviceMode

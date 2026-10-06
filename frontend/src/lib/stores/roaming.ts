@@ -16,7 +16,7 @@
 
 import { writable, get } from 'svelte/store';
 import { api, ApiClientError } from '#lib/api/client.js';
-import type { RoamingResponse, RoamingRange } from '#lib/api/types.js';
+import type { RoamingResponse, RoamingRange, RoamingTopRoamer } from '#lib/api/types.js';
 
 export interface RoamingFetchOptions {
 	range?: RoamingRange;
@@ -25,6 +25,17 @@ export interface RoamingFetchOptions {
 
 interface RoamingState {
 	data: RoamingResponse | null;
+	/**
+	 * Network-wide "most roaming devices" summary, set only from an
+	 * unfiltered (deviceId: null) response and preserved across a
+	 * device-filtered fetch for the same network/range - the backend
+	 * computes `top_roamers` from whatever scope was requested, so a
+	 * device-filtered response's `top_roamers` reflects just that device
+	 * and must never overwrite this. Reset to `null` on a network change,
+	 * a range change, or `clear()`, so a stale leaderboard never lingers
+	 * into a scope it wasn't computed for.
+	 */
+	leaderboard: RoamingTopRoamer[] | null;
 	range: RoamingRange;
 	deviceId: string | null;
 	networkId: string | null;
@@ -35,6 +46,7 @@ interface RoamingState {
 
 const initialState: RoamingState = {
 	data: null,
+	leaderboard: null,
 	range: '24h',
 	deviceId: null,
 	networkId: null,
@@ -80,6 +92,11 @@ function createRoamingStore() {
 			const range = opts.range ?? current.range;
 			const deviceId = opts.deviceId !== undefined ? opts.deviceId : current.deviceId;
 			const isScopeChange = networkId !== current.networkId || deviceId !== current.deviceId;
+			// A network or range change invalidates the leaderboard - it was
+			// computed for a different scope and must not leak into the new
+			// one. A device-filter change alone (same network/range) keeps it.
+			const isLeaderboardInvalidatingChange =
+				networkId !== current.networkId || range !== current.range;
 
 			update((s) => ({
 				...s,
@@ -88,7 +105,8 @@ function createRoamingStore() {
 				deviceId,
 				loading: true,
 				error: null,
-				...(isScopeChange ? { data: null } : {})
+				...(isScopeChange ? { data: null } : {}),
+				...(isLeaderboardInvalidatingChange ? { leaderboard: null } : {})
 			}));
 
 			try {
@@ -97,7 +115,16 @@ function createRoamingStore() {
 					// A newer request has since been issued - discard this result.
 					return;
 				}
-				update((s) => ({ ...s, data, loading: false, lastUpdated: new Date() }));
+				update((s) => ({
+					...s,
+					data,
+					loading: false,
+					lastUpdated: new Date(),
+					// Only an unfiltered (network-scope) response reflects the
+					// true network-wide leaderboard - a device-filtered
+					// response's `top_roamers` is scoped to that one device.
+					...(deviceId == null ? { leaderboard: data.top_roamers } : {})
+				}));
 			} catch (error) {
 				if (token !== requestToken) {
 					return;

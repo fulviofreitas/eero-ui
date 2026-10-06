@@ -16,6 +16,10 @@
  * - a same-scope refetch (range change) keeps the stale `data` in place
  *   while loading, to avoid a flicker
  * - clear resets to the initial state
+ * - `leaderboard` (the network-wide "most roaming devices" summary) is set
+ *   only from an unfiltered response, survives a device-filtered fetch for
+ *   the same network/range, and is reset on a network change, a range
+ *   change, and `clear()`
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -34,6 +38,7 @@ describe('roamingStore', () => {
 		const state = get(roamingStore);
 		expect(state).toEqual({
 			data: null,
+			leaderboard: null,
 			range: '24h',
 			deviceId: null,
 			networkId: null,
@@ -296,12 +301,106 @@ describe('roamingStore', () => {
 
 		expect(get(roamingStore)).toEqual({
 			data: null,
+			leaderboard: null,
 			range: '24h',
 			deviceId: null,
 			networkId: null,
 			loading: false,
 			error: null,
 			lastUpdated: null
+		});
+	});
+
+	describe('leaderboard', () => {
+		it('is set from an unfiltered (network-scope) fetch', async () => {
+			server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+
+			await roamingStore.fetch('network-123');
+
+			expect(get(roamingStore).leaderboard).toEqual(roamingFixture.top_roamers);
+		});
+
+		it('is preserved across a device-filtered fetch for the same network/range', async () => {
+			server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+			await roamingStore.fetch('network-123');
+			const leaderboardBefore = get(roamingStore).leaderboard;
+			expect(leaderboardBefore).not.toBeNull();
+
+			server.use(
+				http.get('/api/metrics/roaming', ({ request }) => {
+					const deviceId = new URL(request.url).searchParams.get('device_id');
+					return HttpResponse.json({
+						...roamingFixture,
+						// Mirrors the real backend: a device-filtered response's
+						// `top_roamers` reflects only the requested device.
+						top_roamers: roamingFixture.top_roamers.filter((r) => r.device_id === deviceId),
+						events: roamingFixture.events.filter((e) => e.device_id === deviceId)
+					});
+				})
+			);
+
+			await roamingStore.fetch('network-123', { deviceId: 'd1' });
+
+			expect(get(roamingStore).leaderboard).toEqual(leaderboardBefore);
+			expect(get(roamingStore).data?.top_roamers).toEqual([
+				{ device_id: 'd1', device_name: 'Kitchen iPad', moves: 14 }
+			]);
+		});
+
+		it('is reset to null on a range change', async () => {
+			server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+			await roamingStore.fetch('network-123');
+			expect(get(roamingStore).leaderboard).toEqual(roamingFixture.top_roamers);
+
+			let release: (() => void) | undefined;
+			server.use(
+				http.get('/api/metrics/roaming', async () => {
+					await new Promise<void>((resolve) => {
+						release = resolve;
+					});
+					return HttpResponse.json({ ...roamingFixture, range: '7d' });
+				})
+			);
+
+			const fetchPromise = roamingStore.setRange('7d');
+			expect(get(roamingStore).leaderboard).toBeNull();
+
+			await vi.waitFor(() => expect(release).toBeDefined());
+			release!();
+			await fetchPromise;
+		});
+
+		it('is reset to null on a network change', async () => {
+			server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+			await roamingStore.fetch('network-123');
+			expect(get(roamingStore).leaderboard).toEqual(roamingFixture.top_roamers);
+
+			let release: (() => void) | undefined;
+			server.use(
+				http.get('/api/metrics/roaming', async () => {
+					await new Promise<void>((resolve) => {
+						release = resolve;
+					});
+					return HttpResponse.json({ ...roamingFixture, network_id: 'network-456' });
+				})
+			);
+
+			const fetchPromise = roamingStore.fetch('network-456');
+			expect(get(roamingStore).leaderboard).toBeNull();
+
+			await vi.waitFor(() => expect(release).toBeDefined());
+			release!();
+			await fetchPromise;
+		});
+
+		it('is reset to null by clear()', async () => {
+			server.use(http.get('/api/metrics/roaming', () => HttpResponse.json(roamingFixture)));
+			await roamingStore.fetch('network-123');
+			expect(get(roamingStore).leaderboard).toEqual(roamingFixture.top_roamers);
+
+			roamingStore.clear();
+
+			expect(get(roamingStore).leaderboard).toBeNull();
 		});
 	});
 });
