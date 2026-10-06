@@ -30,28 +30,37 @@ def make_device(dev_id="device-1", mac="aa:bb:cc:dd:ee:ff", network_id="network-
 class TestBlockDevice:
     """Tests for POST /api/devices/{device_id}/block.
 
-    Unverified write (phase-6.0-revamp.md § 5): gated behind
-    ``require_experimental_writes`` (decision 6a). Every test below opts
-    into ``experimental_writes_enabled`` except the one asserting the
-    default-disabled 403.
+    Verified write: live-verified 2026-10-06 on eero-ui 6.0.5 / eero-api
+    8.0.5 (live-verification-record.md, Step 6) and no longer gated behind
+    ``require_experimental_writes``. None of the tests below opt into
+    ``experimental_writes_enabled``; the first one proves the write works
+    with the flag at its default (off).
     """
 
-    async def test_disabled_by_default_returns_403_experimental_disabled(
+    async def test_block_works_with_experimental_writes_disabled(
         self, auth_client, authenticated_client
     ):
+        """Block succeeds even though ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
+        defaults to off - it was lifted from the experimental gate."""
         authenticated_client.get_device = AsyncMock(
             return_value=make_raw_response(make_device())
         )
-        authenticated_client.block_device = AsyncMock()
+        authenticated_client.block_device = AsyncMock(
+            return_value=make_raw_response({})
+        )
 
         response = await auth_client.post("/api/devices/device-1/block")
 
-        assert response.status_code == 403
-        assert response.json()["type"] == "experimental_disabled"
-        authenticated_client.block_device.assert_not_called()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["action"] == "block"
+        authenticated_client.block_device.assert_called_once_with(
+            "aa:bb:cc:dd:ee:ff", network_id="network-123"
+        )
 
     async def test_block_resolves_mac_and_calls_sdk(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self, auth_client, authenticated_client
     ):
         """Block resolves the device's MAC, then calls block_device with it."""
         authenticated_client.get_device = AsyncMock(
@@ -75,7 +84,7 @@ class TestBlockDevice:
         )
 
     async def test_block_device_without_mac_returns_422(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self, auth_client, authenticated_client
     ):
         """A device with no known MAC is rejected before any block call."""
         device_without_mac = make_device()
@@ -91,9 +100,7 @@ class TestBlockDevice:
         assert response.json()["detail"] == "Device has no known MAC address."
         authenticated_client.block_device.assert_not_called()
 
-    async def test_block_device_not_found(
-        self, auth_client, authenticated_client, experimental_writes_enabled
-    ):
+    async def test_block_device_not_found(self, auth_client, authenticated_client):
         """EeroNotFoundException while resolving the MAC maps to 404."""
         authenticated_client.get_device = AsyncMock(
             side_effect=EeroNotFoundException("device", "device-1")
