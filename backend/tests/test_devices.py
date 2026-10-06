@@ -27,6 +27,14 @@ def make_device(dev_id="device-1", mac="aa:bb:cc:dd:ee:ff", network_id="network-
     }
 
 
+def _arm_block_mocks(client, device=None):
+    """Point ``get_device`` at ``device`` (default fixture) and make ``block_device`` succeed."""
+    client.get_device = AsyncMock(
+        return_value=make_raw_response(device if device is not None else make_device())
+    )
+    client.block_device = AsyncMock(return_value=make_raw_response({}))
+
+
 class TestBlockDevice:
     """Tests for POST /api/devices/{device_id}/block.
 
@@ -42,12 +50,7 @@ class TestBlockDevice:
     ):
         """Block succeeds even though ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``
         defaults to off - it was lifted from the experimental gate."""
-        authenticated_client.get_device = AsyncMock(
-            return_value=make_raw_response(make_device())
-        )
-        authenticated_client.block_device = AsyncMock(
-            return_value=make_raw_response({})
-        )
+        _arm_block_mocks(authenticated_client)
 
         response = await auth_client.post("/api/devices/device-1/block")
 
@@ -63,12 +66,7 @@ class TestBlockDevice:
         self, auth_client, authenticated_client
     ):
         """Block resolves the device's MAC, then calls block_device with it."""
-        authenticated_client.get_device = AsyncMock(
-            return_value=make_raw_response(make_device())
-        )
-        authenticated_client.block_device = AsyncMock(
-            return_value=make_raw_response({})
-        )
+        _arm_block_mocks(authenticated_client)
 
         response = await auth_client.post("/api/devices/device-1/block")
 

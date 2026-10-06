@@ -409,7 +409,7 @@ wheels = [
 
 [[package]]
 name = "eero-ui-backend"
-version = "6.0.2"
+version = "6.0.5"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },

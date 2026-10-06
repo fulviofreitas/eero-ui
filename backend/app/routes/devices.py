@@ -364,7 +364,9 @@ async def block_device(
 
 
 @router.post("/{device_id}/unblock", response_model=DeviceAction)
+@limiter.shared_limit("10/minute", scope="device_writes")
 async def unblock_device(
+    request: Request,
     device_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
