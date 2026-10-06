@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.1.1](https://github.com/fulviofreitas/eero-ui/compare/v6.1.0...v6.1.1) (2026-10-06)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump multidict from 6.7.0 to 6.9.1 in /backend ([#439](https://github.com/fulviofreitas/eero-ui/issues/439)) ([72b9485](https://github.com/fulviofreitas/eero-ui/commit/72b9485b2498ae46ce4ee862d1f1913e71e15498))
+
 ## [6.1.0](https://github.com/fulviofreitas/eero-ui/compare/v6.0.6...v6.1.0) (2026-10-06)
 
 ### ✨ Features
