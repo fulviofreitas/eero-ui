@@ -332,9 +332,8 @@ async def _resolve_device_mac(
 @router.post(
     "/{device_id}/block",
     response_model=DeviceAction,
-    dependencies=[Depends(require_experimental_writes)],
 )
-@limiter.shared_limit("10/minute", scope="experimental_writes")
+@limiter.shared_limit("10/minute", scope="device_writes")
 async def block_device(
     request: Request,
     device_id: str,
@@ -343,9 +342,13 @@ async def block_device(
 ) -> DeviceAction:
     """Block a device from the network.
 
-    Unverified write (phase-6.0-revamp.md § 5): gated behind
-    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` (decision 6a). ``unblock_device``
-    is not gated - it is in the SDK's verified-write allowlist.
+    Verified write: live-verified 2026-10-06 on eero-ui 6.0.5 / eero-api
+    8.0.5 (see the context repo's live-verification-record.md, Step 6) - a
+    throwaway device lost and regained connectivity across a block/unblock
+    pair, both POSTs returned 200 with a successful read-back, and no mesh
+    reboot was observed. No longer gated behind
+    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES``. ``unblock_device`` shares the
+    same verification and was already ungated.
     """
     mac = await _resolve_device_mac(client, device_id, network_id)
     raw_result = await client.block_device(mac, network_id=network_id)
@@ -361,7 +364,9 @@ async def block_device(
 
 
 @router.post("/{device_id}/unblock", response_model=DeviceAction)
+@limiter.shared_limit("10/minute", scope="device_writes")
 async def unblock_device(
+    request: Request,
     device_id: str,
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),

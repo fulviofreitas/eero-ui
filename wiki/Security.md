@@ -69,7 +69,7 @@ The dashboard authenticates with an httpOnly cookie, which a browser attaches au
 
 | Gate | Env var | Covers |
 |---|---|---|
-| Experimental | `EERO_DASHBOARD_EXPERIMENTAL_WRITES` | every write not verified end-to-end: block device, profile CRUD/pause/assign/schedules, notifications, DDNS, backup access points, node/port actions, Thread, forwards, reservations, content filter, account name/consents, eero location, and every settings-class write (SQM, DHCP, connection mode, NAT, WPA3, security, MLO, fast transition, Passpoint, proxied nodes, power saving, subnets, WAN, firmware apply, network password) |
+| Experimental | `EERO_DASHBOARD_EXPERIMENTAL_WRITES` | every write not verified end-to-end: profile CRUD/pause/assign/schedules, notifications, DDNS, backup access points, node/port actions, Thread, forwards, reservations, content filter, account name/consents, eero location, and every settings-class write (SQM, DHCP, connection mode, NAT, WPA3, security, MLO, fast transition, Passpoint, proxied nodes, power saving, subnets, WAN, firmware apply, network password). Block device was live-verified 2026-10-06 and is no longer gated here. |
 | Account identity | `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` (in addition to the above) | account e-mail and phone change and verify |
 
 Closed gates answer `403` with `type: "experimental_disabled"` or `type: "account_identity_disabled"`. Settings-class routes in `networks.py` depend on their own gate constant each, so a single family can be opened after live verification without opening the rest.
