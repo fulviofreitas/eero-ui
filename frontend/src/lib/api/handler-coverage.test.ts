@@ -293,7 +293,8 @@ describe('api client handler coverage', () => {
 			() => api.account.verifyEmail('123456'),
 			() => api.account.setPhone('+15551234567'),
 			() => api.account.verifyPhone('123456'),
-			() => api.account.getSmsCountries()
+			() => api.account.getSmsCountries(),
+			() => api.metrics.roaming('network-123')
 		];
 
 		// Every call is allowed to reject (e.g. a fixture returns a shape a
@@ -311,6 +312,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(136);
+		expect(countLeafMethods(api)).toBe(137);
 	});
 });

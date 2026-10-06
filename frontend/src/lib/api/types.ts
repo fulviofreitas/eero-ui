@@ -1552,3 +1552,53 @@ export interface NetworkPasswordUpdateResponse {
 export interface NetworkPasswordClearRequest {
 	confirm_open_network: true;
 }
+
+// ============================================
+// Device roaming events (eero-ui#431): GET /metrics/roaming
+// ============================================
+
+export type RoamingEventType = 'move' | 'disconnect' | 'reconnect';
+
+export type RoamingRange = '1h' | '6h' | '24h' | '7d';
+
+/** A from/to eero node reference on a roaming event. `eero_id` is null for a removed node. */
+export interface RoamingNode {
+	name: string;
+	eero_id: string | null;
+}
+
+export interface RoamingEvent {
+	/** First sample in the new state. */
+	timestamp: string;
+	/** Last sample in the old state. */
+	previous_seen: string;
+	device_id: string;
+	device_name: string;
+	mac: string | null;
+	event_type: RoamingEventType;
+	/** Null for a `reconnect` event. */
+	from_node: RoamingNode | null;
+	/** Null for a `disconnect` event. */
+	to_node: RoamingNode | null;
+}
+
+export interface RoamingTopRoamer {
+	device_id: string;
+	device_name: string;
+	moves: number;
+}
+
+export interface RoamingResponse {
+	network_id: string;
+	range: RoamingRange;
+	start: string;
+	end: string;
+	resolution_seconds: number;
+	total_events: number;
+	/** `true` when `total_events` exceeds the number of `events` returned (capped at 500). */
+	truncated: boolean;
+	/** Newest first. */
+	events: RoamingEvent[];
+	/** Up to 5, by move count. */
+	top_roamers: RoamingTopRoamer[];
+}

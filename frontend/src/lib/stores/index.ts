@@ -22,6 +22,7 @@ export * from './networks';
 export * from './notifications';
 export * from './powerSavingSchedules';
 export * from './profileSchedules';
+export * from './roaming';
 export * from './securityWan';
 export * from './speedtests';
 export * from './topology';

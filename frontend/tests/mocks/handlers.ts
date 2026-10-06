@@ -10,6 +10,80 @@
  */
 
 import { http, HttpResponse } from 'msw';
+import type { RoamingResponse } from '#lib/api/types.js';
+
+/**
+ * Default fixture for `GET /api/metrics/roaming` (eero-ui#431). Covers all
+ * three event types, including a `reconnect` (no `from_node`), a
+ * `disconnect` (no `to_node`) and a `move` through a node that has since
+ * been removed from the network (`to_node.eero_id: null`).
+ */
+export const roamingFixture: RoamingResponse = {
+	network_id: 'network-123',
+	range: '24h',
+	start: '2026-10-05T12:00:00Z',
+	end: '2026-10-06T12:00:00Z',
+	resolution_seconds: 60,
+	total_events: 5,
+	truncated: false,
+	events: [
+		{
+			timestamp: '2026-10-06T11:58:00Z',
+			previous_seen: '2026-10-06T11:57:00Z',
+			device_id: 'd1',
+			device_name: 'Kitchen iPad',
+			mac: 'aa:bb:cc:dd:ee:01',
+			event_type: 'move',
+			from_node: { name: 'Living Room', eero_id: 'e1' },
+			to_node: { name: 'Office', eero_id: null }
+		},
+		{
+			timestamp: '2026-10-06T11:40:00Z',
+			previous_seen: '2026-10-06T11:35:00Z',
+			device_id: 'd2',
+			device_name: 'Laptop',
+			mac: 'aa:bb:cc:dd:ee:02',
+			event_type: 'disconnect',
+			from_node: { name: 'Office', eero_id: 'e2' },
+			to_node: null
+		},
+		{
+			timestamp: '2026-10-06T11:20:00Z',
+			previous_seen: '2026-10-06T10:00:00Z',
+			device_id: 'd2',
+			device_name: 'Laptop',
+			mac: 'aa:bb:cc:dd:ee:02',
+			event_type: 'reconnect',
+			from_node: null,
+			to_node: { name: 'Office', eero_id: 'e2' }
+		},
+		{
+			timestamp: '2026-10-06T10:00:00Z',
+			previous_seen: '2026-10-06T09:30:00Z',
+			device_id: 'd1',
+			device_name: 'Kitchen iPad',
+			mac: 'aa:bb:cc:dd:ee:01',
+			event_type: 'move',
+			from_node: { name: 'Bedroom', eero_id: 'e3' },
+			to_node: { name: 'Living Room', eero_id: 'e1' }
+		},
+		{
+			timestamp: '2026-10-06T08:00:00Z',
+			previous_seen: '2026-10-06T07:00:00Z',
+			device_id: 'd3',
+			device_name: 'Smart TV',
+			mac: null,
+			event_type: 'move',
+			from_node: { name: 'Living Room', eero_id: 'e1' },
+			to_node: { name: 'Bedroom', eero_id: 'e3' }
+		}
+	],
+	top_roamers: [
+		{ device_id: 'd1', device_name: 'Kitchen iPad', moves: 14 },
+		{ device_id: 'd3', device_name: 'Smart TV', moves: 6 },
+		{ device_id: 'd2', device_name: 'Laptop', moves: 2 }
+	]
+};
 
 export const handlers = [
 	// ============================================
@@ -1573,6 +1647,25 @@ export const handlers = [
 	http.put('/api/profiles/:profileId/blocked-applications', async ({ request }) => {
 		const body = (await request.json()) as { applications: string[] };
 		return HttpResponse.json({ applications: body.applications });
+	}),
+
+	// ============================================
+	// Metrics (eero-ui#431)
+	// ============================================
+	http.get('/api/metrics/roaming', ({ request }) => {
+		const url = new URL(request.url);
+		const range = url.searchParams.get('range') ?? '24h';
+		const deviceId = url.searchParams.get('device_id');
+
+		if (deviceId) {
+			return HttpResponse.json({
+				...roamingFixture,
+				range,
+				events: roamingFixture.events.filter((e) => e.device_id === deviceId)
+			});
+		}
+
+		return HttpResponse.json({ ...roamingFixture, range });
 	}),
 
 	// ============================================

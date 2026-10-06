@@ -1671,6 +1671,28 @@ export const api = {
 		/** The SMS country-code catalogue, for the phone country picker. Verified read. */
 		getSmsCountries: () =>
 			fetchWithHandling<import('./types').SmsCountriesResponse>('/account/sms-countries')
+	},
+
+	// Metrics (eero-ui#431). Not scoped under `/networks/{id}/...` - the
+	// backend's own collector resource lives at `/metrics/*`, taking
+	// `network_id` as a query parameter instead of a path segment.
+	metrics: {
+		/**
+		 * Device roaming events for a network, newest first (eero-ui#431).
+		 * `range` defaults to `'24h'` server-side; `deviceId` narrows to one
+		 * device's history (the per-device tab). Verified read; can 422 when
+		 * the range has too many series to return - the backend's message
+		 * ("narrow the range or filter a device") is surfaced via
+		 * `ApiClientError.detail`.
+		 */
+		roaming: (networkId: string, range?: import('./types').RoamingRange, deviceId?: string) =>
+			fetchWithHandling<import('./types').RoamingResponse>('/metrics/roaming', {
+				params: {
+					network_id: networkId,
+					...(range && { range }),
+					...(deviceId && { device_id: deviceId })
+				}
+			})
 	}
 };
 
