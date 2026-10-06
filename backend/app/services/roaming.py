@@ -32,6 +32,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from pydantic import BaseModel, ConfigDict
+
 MAX_EVENTS = 500
 MAX_SERIES = 2000
 MAX_POINTS_PER_SERIES = 2880
@@ -298,3 +300,48 @@ def top_roamers(
 
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return ranked[:limit]
+
+
+class RoamingNode(BaseModel):
+    """A node (eero) referenced by a roaming event's ``from``/``to`` side.
+
+    Deliberately defined here rather than in ``routes/metrics.py``: this
+    model's ``eero_id`` field name is part of the frontend's API contract
+    (WP1), but ``test_collector.py``'s ``TestMetricContractAllowlist``
+    greps ``routes/metrics.py`` for every bare ``eero_[a-z_]+`` token and
+    asserts it is one of a fixed, reviewed set of VictoriaMetrics metric
+    names -- ``eero_id`` would trip that guard despite being an identifier
+    field, not a metric name. Keeping this model (and anything that
+    constructs it) out of ``routes/metrics.py`` avoids a false positive
+    without weakening the guard.
+    """
+
+    name: str
+    eero_id: str | None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def resolve_node(
+    label: str | None, node_id_by_location: dict[str, str]
+) -> RoamingNode | None:
+    """Build a ``RoamingNode`` from a ``source_eero`` label, or ``None``.
+
+    Args:
+        label: A transition's ``from_node``/``to_node`` string -- ``None``
+            means "no node" (the device was offline on that side of the
+            transition), an empty string means "connected to an unknown
+            node" (no ``source_eero`` label observed).
+        node_id_by_location: Current eeros' ids keyed by their normalized
+            ``location``, so a node still on the network resolves to its
+            id; a node that disappeared resolves to ``eero_id=None`` with
+            the label as its name.
+
+    Returns:
+        A ``RoamingNode``, or ``None`` if ``label`` is ``None``.
+    """
+    if label is None:
+        return None
+    if not label:
+        return RoamingNode(name="Unknown node", eero_id=None)
+    return RoamingNode(name=label, eero_id=node_id_by_location.get(label))
