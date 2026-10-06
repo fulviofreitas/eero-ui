@@ -19,6 +19,7 @@
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
+	import RoamingEventsCard from '#lib/components/network/RoamingEventsCard.svelte';
 
 	let device = $state<DeviceDetail | null>(null);
 	let loading = $state(true);
@@ -285,6 +286,12 @@
 				{/if}
 			</div>
 		{/if}
+
+		{#if device.id && device.network_id}
+			<section class="device-roaming">
+				<RoamingEventsCard networkId={device.network_id} deviceId={device.id} />
+			</section>
+		{/if}
 	{/if}
 </div>
 
@@ -297,6 +304,10 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
+		margin-top: var(--space-4);
+	}
+
+	.device-roaming {
 		margin-top: var(--space-4);
 	}
 

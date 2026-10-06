@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../tests/mocks/server';
-import { authStore, networksStore, devicesStore } from '$stores';
+import { authStore, networksStore, devicesStore, roamingStore } from '$stores';
 import Layout from './+layout.svelte';
 
 async function renderAuthenticatedLayout() {
@@ -43,6 +43,7 @@ describe('root layout - session reset on logout', () => {
 		authStore.logout().catch(() => {});
 		networksStore.clear();
 		devicesStore.clear();
+		roamingStore.clear();
 		localStorage.clear();
 		vi.clearAllMocks();
 	});
@@ -52,6 +53,11 @@ describe('root layout - session reset on logout', () => {
 
 		await devicesStore.fetch();
 		expect(devicesStore).toBeDefined();
+
+		await roamingStore.fetch('network-123');
+		let roamingStateBefore: { data: unknown } | undefined;
+		roamingStore.subscribe((s) => (roamingStateBefore = s))();
+		expect(roamingStateBefore?.data).not.toBeNull();
 
 		localStorage.setItem('commandPalette:recent', JSON.stringify([{ id: 'device:dev-1' }]));
 		localStorage.setItem('eero-ui:device-filters', JSON.stringify({ search: 'laptop' }));
@@ -64,6 +70,13 @@ describe('root layout - session reset on logout', () => {
 		let devicesState: { devices: unknown[] } | undefined;
 		devicesStore.subscribe((s) => (devicesState = s))();
 		expect(devicesState?.devices).toEqual([]);
+
+		// Roaming events are gone - back to the store's initial state, not just an empty list.
+		let roamingStateAfter: { data: unknown; networkId: unknown; deviceId: unknown } | undefined;
+		roamingStore.subscribe((s) => (roamingStateAfter = s))();
+		expect(roamingStateAfter?.data).toBeNull();
+		expect(roamingStateAfter?.networkId).toBeNull();
+		expect(roamingStateAfter?.deviceId).toBeNull();
 
 		// Session-scoped localStorage caches are gone.
 		expect(localStorage.getItem('commandPalette:recent')).toBeNull();
