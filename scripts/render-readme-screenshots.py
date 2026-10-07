@@ -41,6 +41,7 @@ import subprocess  # nosec B404 - fixed argv, no shell, dev-tooling only
 import sys
 import threading
 import time
+import urllib.request
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -1517,7 +1518,7 @@ def _make_spa_handler(build_dir: Path) -> type[http.server.BaseHTTPRequestHandle
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(build_dir), **kwargs)
 
-        def log_message(self, format: str, *args: Any) -> None:
+        def log_message(self, fmt: str, *args: Any) -> None:
             pass
 
         def translate_path(self, path: str) -> str:
@@ -1744,8 +1745,6 @@ def cmd_shots(args: argparse.Namespace) -> None:
         # Give the server a beat to be reachable.
         for _ in range(20):
             try:
-                import urllib.request
-
                 urllib.request.urlopen(base_url, timeout=1)
                 break
             except Exception:  # noqa: BLE001
