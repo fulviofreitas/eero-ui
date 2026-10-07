@@ -931,8 +931,8 @@ export interface SecuritySettingsResponse {
 	 * R1: not yet declared on `SecuritySettingsResponse` in
 	 * backend/app/routes/networks.py (the `GET /{network_id}/security` handler only returns the
 	 * fields above) - the write side (`PUT /{network_id}/passpoint`) reads it straight off the
-	 * raw network envelope instead. Typed here (optional) so `WifiSecurityControls.svelte` reads
-	 * it without an `as unknown as` cast; it will read as `undefined` until the backend model
+	 * raw network envelope instead. Typed here (optional) so `SecurityWanCard.svelte` reads it
+	 * without an `as unknown as` cast; it will read as `undefined` until the backend model
 	 * gains the field.
 	 */
 	passpoint?: boolean;
@@ -972,9 +972,8 @@ export interface AdvancedNetworkSettings {
 	 * `nat_port_randomization`, `mlo_mode` or `proxied_nodes_enabled` yet; their write endpoints
 	 * (`update_nat_port_randomization`, `update_mlo_mode`) read the raw network envelope directly
 	 * for the no-op guard rather than through this model. Typed here (optional) so
-	 * `NetworkSettingsControls.svelte`/`WifiSecurityControls.svelte` read them without an
-	 * `as unknown as` cast; they will read as `undefined`/`null` until the backend model is
-	 * extended to include them.
+	 * `SecurityWanCard.svelte` reads them without an `as unknown as` cast; they will read as
+	 * `undefined`/`null` until the backend model is extended to include them.
 	 */
 	nat_port_randomization?: boolean;
 	mlo_mode?: 'disabled' | 'single' | 'multi' | null;

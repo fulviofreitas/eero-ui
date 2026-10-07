@@ -32,8 +32,6 @@
 	import BackupInternetCard from '#lib/components/network/BackupInternetCard.svelte';
 	import ForwardsReservationsCard from '#lib/components/network/ForwardsReservationsCard.svelte';
 	import SecurityWanCard from '#lib/components/network/SecurityWanCard.svelte';
-	import NetworkSettingsControls from '#lib/components/network/NetworkSettingsControls.svelte';
-	import WifiSecurityControls from '#lib/components/network/WifiSecurityControls.svelte';
 	import PowerSavingControls from '#lib/components/network/PowerSavingControls.svelte';
 	import PowerSavingSchedulesCard from '#lib/components/network/PowerSavingSchedulesCard.svelte';
 	import SubnetsControls from '#lib/components/network/SubnetsControls.svelte';
@@ -333,12 +331,6 @@
 					</div>
 					<div class="advanced-full">
 						<SecurityWanCard {networkId}>
-							{#snippet networkControls()}
-								<NetworkSettingsControls {networkId} silent />
-							{/snippet}
-							{#snippet wifiSecurityControls()}
-								<WifiSecurityControls {networkId} silent />
-							{/snippet}
 							{#snippet powerThreadControls()}
 								<PowerSavingControls {networkId} silent />
 							{/snippet}

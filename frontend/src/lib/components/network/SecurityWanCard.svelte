@@ -4,61 +4,96 @@
   Network Advanced tab card (phase-6.0-revamp.md § 7 WP6, deliverable 12):
   combined security settings (`GET /networks/{id}/security`), subnets
   (`/subnets`), multi-static-IP WAN config (`/multistaticip`) and DHCP/
-  connection-mode/power-saving/DDNS (`/advanced`). Read-only, grouped into
-  sections rather than tabs so every field is visible without extra clicks.
+  connection-mode/power-saving/DDNS (`/advanced`).
 
-  Each section carries a stable `data-family` attribute and a named
-  `*Controls` snippet prop - the seam WP8's settings-class write controls
-  attach to, one family at a time, without touching this component's layout.
+  Consistency pass (2026-10-07): every setting now renders exactly once as
+  a `SettingRow` - label, current value, inline control - instead of a
+  read-only badge row plus a separately-rendered, independently-wired write
+  control for the same field. The "wifi-security" and "network" families'
+  write controls (previously `WifiSecurityControls.svelte`/
+  `NetworkSettingsControls.svelte`) are folded directly into this card's
+  rows; those two components and their tests were removed. The
+  `wifiSecurityControls`/`networkControls` snippet seams are gone with
+  them - "power-thread", "updates", "subnets" and "wan" keep their existing
+  seams unchanged.
 
-  The WAN section additionally owns its own DDNS toggle (phase-6.0-revamp.md
-  § 7 WP7, family 4), and the Power & Thread section owns its own Thread
-  enable/disable and regenerate-credentials controls (phase-6.0-revamp.md § 7
-  WP7, family 7) - both unverified, non-settings writes (plan § 5), built
-  directly into this card rather than routed through the `wanControls`/
-  `powerThreadControls` seams (those seams are reserved for WP8's
-  settings-class controls). Pessimistic, gated on
-  `EERO_DASHBOARD_EXPERIMENTAL_WRITES`, every write goes through a
-  `ConfirmDialog` naming "not verified end-to-end". Regenerating Thread
-  credentials additionally names the re-commissioning consequence.
+  Every control derives its displayed state from the store (pessimistic,
+  never optimistic): changing it opens the existing danger `ConfirmDialog`
+  naming the mesh reboot; on cancel or failure the control snaps back to
+  the store's value (`onCancel`/`catch` explicitly reset the DOM element -
+  a `checked={...}`/`value={...}` attribute binding does not "snap back" on
+  its own because the browser already flipped it and the bound expression
+  did not change). Controls are hidden entirely (value-only row) when
+  `EERO_DASHBOARD_EXPERIMENTAL_WRITES` is off - no per-row note, one
+  summary note for the whole card (`anyControlsGated`), same as before.
+
+  DHCP & NAT (Network section) is modelled on the eero app's own screen:
+  one Automatic/Manual IP/Bridge selector rather than a separate
+  connection-mode radio and DHCP-mode radio. Pure mapping/dirty/prefix
+  logic lives in `#lib/utils/dhcp-form.js` so it is unit-tested without
+  MSW; this component only wires it to the store's `updateDhcp`/
+  `updateConnectionMode`.
+
+  Design decisions worth flagging for reviewers:
+  - IPv6 (Network section) now reads `security.ipv6_enabled` (falls back
+    to inferring from the legacy `ipv6.name_servers.mode` when the backend
+    hasn't shipped the field yet) - distinct from the read-only "IPv6 name
+    servers" row, which stays on the old `ipv6.name_servers` shape.
+  - Proxied nodes: the backend always reports `proxied_nodes_enabled` as
+    `null`/`undefined` today (R1 gap, `types.ts`). The value row shows
+    "Unknown" in that case, but the toggle itself is NOT hidden - writes
+    are already gated behind the experimental flag and a danger confirm;
+    hiding the control entirely would make the feature unreachable with no
+    way to recover a stuck "off" guess. The toggle defaults to unchecked
+    when unknown.
+  - WPA3 (6 GHz) stays read-only: there is no write endpoint for the 6 GHz
+    band (`Wpa3PerBandUpdateRequest` only has `band_2_4_ghz`/`band_5_ghz`).
 -->
 <script lang="ts">
-	import { onMount, createRawSnippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { DataTableColumn } from '$components/common/DataTable.svelte';
 	import { securityWanStore, uiStore } from '$stores';
 	import { experimentalWrites } from '#lib/stores/entitlements.js';
 	import { formatDate, formatUptime } from '#lib/utils/eero-format.js';
+	import {
+		dhcpCustomLeaseIsValid,
+		validateDhcpCustomLease,
+		dhcpModeFromApi,
+		dhcpFormFromApi,
+		dhcpFormIsDirty,
+		rfc1918PrefixFor,
+		buildDhcpWrites,
+		type DhcpApiState,
+		type DhcpFormState,
+		type DhcpTriState
+	} from '#lib/utils/dhcp-form.js';
+	import { ApiClientError } from '$api/client';
+	import type { AdvancedNetworkSettings, SecurityEnvelopeField, Wpa3BandMode } from '$api/types';
 	import Card from '$components/common/Card.svelte';
 	import DataTable from '$components/common/DataTable.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import InfoRow from '$components/common/InfoRow.svelte';
+	import SettingRow from '$components/common/SettingRow.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
 	interface Props {
 		networkId: string;
-		/** WP8 write-control seams, one per section - never rendered here directly. */
-		wifiSecurityControls?: Snippet;
-		networkControls?: Snippet;
+		/** WP8 write-control seams for the families NOT folded into this card's own rows. */
 		powerThreadControls?: Snippet;
 		updatesControls?: Snippet;
 		subnetsControls?: Snippet;
 		wanControls?: Snippet;
 	}
 
-	let {
-		networkId,
-		wifiSecurityControls,
-		networkControls,
-		powerThreadControls,
-		updatesControls,
-		subnetsControls,
-		wanControls
-	}: Props = $props();
+	let { networkId, powerThreadControls, updatesControls, subnetsControls, wanControls }: Props =
+		$props();
 
 	let cardState = $derived($securityWanStore);
+	/** Controls render only when the operator has opted in; otherwise value-only rows. */
+	let showControls = $derived($experimentalWrites);
 
 	function boolLabel(value: boolean | null | undefined): string {
 		if (value === null || value === undefined) return '—';
@@ -81,50 +116,218 @@
 		return value;
 	}
 
-	// --- WPA3 per band (bug-fix follow-up, maintainer screenshot 2026-09-25):
-	// `get_wpa3_per_band` returns e.g. `{band_2_4_ghz: "wpa2", band_5_ghz:
-	// "wpa2", band_6_ghz: "wpa3"}` - rendered as three rows with the mode as
-	// a badge rather than the raw JSON blob.
+	const REBOOT_DETAILS = [
+		'Every eero on this network will restart, and all connected devices will lose internet ' +
+			'access for a minute or two.',
+		'If you are connected to this network right now, you will lose your own connection while ' +
+			'it restarts.'
+	];
+	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
+
+	// --- WPA3 per band: `get_wpa3_per_band` returns e.g. `{band_2_4_ghz: "wpa2",
+	// band_5_ghz: "wpa2", band_6_ghz: "wpa3"}` - lower-case in production. 2.4/5 GHz
+	// are editable (select, pre-selected from the normalized current value); 6 GHz has
+	// no write endpoint and stays read-only.
 	type Wpa3PerBand = Record<string, unknown> | null | undefined;
 
-	const WPA3_BAND_ROWS: Array<{ key: string; label: string }> = [
-		{ key: 'band_2_4_ghz', label: '2.4 GHz' },
-		{ key: 'band_5_ghz', label: '5 GHz' },
-		{ key: 'band_6_ghz', label: '6 GHz' }
-	];
+	const WPA3_MODES: Wpa3BandMode[] = ['WPA2', 'WPA2_WPA3', 'WPA3'];
+
+	function wpa3OptionLabel(mode: Wpa3BandMode): string {
+		return mode === 'WPA2_WPA3' ? 'WPA2+WPA3' : mode;
+	}
+
+	/** Normalizes a raw per-band value (lower/upper case string, or legacy boolean) to the
+	 *  canonical `Wpa3BandMode` used by the write request and the `<select>` value. */
+	function normalizeWpa3Mode(mode: unknown): Wpa3BandMode | null {
+		if (typeof mode === 'boolean') return mode ? 'WPA3' : 'WPA2';
+		if (typeof mode !== 'string' || mode.trim() === '') return null;
+		const key = mode.trim().toUpperCase().replace('+', '_');
+		if (key === 'WPA2' || key === 'WPA2_WPA3' || key === 'WPA3') return key;
+		return null;
+	}
 
 	function wpa3ModeLabel(mode: unknown): string {
-		if (typeof mode === 'boolean') return mode ? 'WPA3' : 'WPA2';
-		if (typeof mode !== 'string' || mode.trim() === '') return '—';
-		const key = mode.trim().toUpperCase().replace('+', '_');
-		if (key === 'WPA2_WPA3') return 'WPA2+WPA3';
-		if (key === 'WPA2' || key === 'WPA3') return key;
-		return mode.toUpperCase();
+		const normalized = normalizeWpa3Mode(mode);
+		if (!normalized)
+			return typeof mode === 'string' && mode.trim() !== '' ? mode.toUpperCase() : '—';
+		return wpa3OptionLabel(normalized);
 	}
 
 	function wpa3ModeBadgeClass(mode: unknown): string {
-		if (typeof mode === 'boolean') return mode ? 'badge-success' : 'badge-neutral';
-		if (typeof mode !== 'string' || mode.trim() === '') return 'badge-neutral';
-		const key = mode.trim().toUpperCase().replace('+', '_');
-		if (key === 'WPA3') return 'badge-success';
-		if (key === 'WPA2_WPA3') return 'badge-warning';
+		const normalized = normalizeWpa3Mode(mode);
+		if (normalized === 'WPA3') return 'badge-success';
+		if (normalized === 'WPA2_WPA3') return 'badge-warning';
 		return 'badge-neutral';
 	}
 
 	let wpa3PerBand = $derived(cardState.security?.wpa3_per_band as Wpa3PerBand);
 
+	function requestWpa3Band(
+		band: '2_4_ghz' | '5_ghz',
+		mode: Wpa3BandMode,
+		selectEl: HTMLSelectElement
+	) {
+		const key = band === '2_4_ghz' ? 'band_2_4_ghz' : 'band_5_ghz';
+		const previous = normalizeWpa3Mode(wpa3PerBand?.[key]);
+		if (mode === previous) return;
+		uiStore.confirm({
+			title: 'Update WPA3',
+			message: `Set the ${band === '2_4_ghz' ? '2.4 GHz' : '5 GHz'} band to ${wpa3OptionLabel(mode)}?`,
+			details: REBOOT_DETAILS,
+			confirmText: 'Apply & Restart Network',
+			danger: true,
+			onCancel: () => {
+				selectEl.value = previous ?? '';
+			},
+			onConfirm: async () => {
+				try {
+					const body = band === '2_4_ghz' ? { band_2_4_ghz: mode } : { band_5_ghz: mode };
+					const result = await securityWanStore.updateWpa3PerBand(networkId, body);
+					if (!result.changed) {
+						uiStore.info('WPA3 is already set to that value.');
+						selectEl.value = previous ?? '';
+						return;
+					}
+					uiStore.success('WPA3 settings applied. Your network is restarting.');
+				} catch (error) {
+					selectEl.value = previous ?? '';
+					uiStore.error(error instanceof Error ? error.message : 'Failed to update WPA3');
+				}
+			}
+		});
+	}
+
+	// --- Security envelope toggles: wpa3, band_steering, upnp, ipv6 - exactly one
+	// field per PUT /security request (never two settings writes in one Save).
+	function envelopeLabel(field: SecurityEnvelopeField): string {
+		return { wpa3: 'WPA3', band_steering: 'Band Steering', upnp: 'UPnP', ipv6: 'IPv6' }[field];
+	}
+
+	function envelopeValue(field: SecurityEnvelopeField): boolean {
+		if (field === 'ipv6') return ipv6EnabledValue ?? false;
+		return Boolean(cardState.security?.[field]);
+	}
+
+	function requestToggleEnvelope(field: SecurityEnvelopeField, inputEl: HTMLInputElement) {
+		const previous = envelopeValue(field);
+		const nextValue = !previous;
+		uiStore.confirm({
+			title: `Update ${envelopeLabel(field)}`,
+			message: `${nextValue ? 'Enable' : 'Disable'} ${envelopeLabel(field)} for this network?`,
+			details: REBOOT_DETAILS,
+			confirmText: nextValue ? 'Enable & Restart Network' : 'Disable & Restart Network',
+			danger: true,
+			onCancel: () => {
+				inputEl.checked = previous;
+			},
+			onConfirm: async () => {
+				try {
+					const result = await securityWanStore.updateSecurityField(networkId, {
+						[field]: nextValue
+					});
+					if (!result.changed) {
+						uiStore.info(`${envelopeLabel(field)} is already set to that value.`);
+						inputEl.checked = previous;
+						return;
+					}
+					uiStore.success(`${envelopeLabel(field)} applied. Your network is restarting.`);
+				} catch (error) {
+					inputEl.checked = previous;
+					uiStore.error(
+						error instanceof Error ? error.message : `Failed to update ${envelopeLabel(field)}`
+					);
+				}
+			}
+		});
+	}
+
+	/** Generic settings-class boolean toggle (SQM, NAT randomization, fast transition, Passpoint, proxied nodes). */
+	function requestSettingsToggle(
+		title: string,
+		previous: boolean,
+		action: (networkId: string, enabled: boolean) => Promise<{ changed: boolean }>,
+		label: string,
+		inputEl: HTMLInputElement
+	) {
+		const nextEnabled = !previous;
+		uiStore.confirm({
+			title: `Update ${title}`,
+			message: `${nextEnabled ? 'Enable' : 'Disable'} ${title} for this network?`,
+			details: REBOOT_DETAILS,
+			confirmText: nextEnabled ? 'Enable & Restart Network' : 'Disable & Restart Network',
+			danger: true,
+			onCancel: () => {
+				inputEl.checked = previous;
+			},
+			onConfirm: async () => {
+				try {
+					const result = await action(networkId, nextEnabled);
+					if (!result.changed) {
+						uiStore.info(`${title} is already set to that value.`);
+						inputEl.checked = previous;
+						return;
+					}
+					uiStore.success(`${title} applied. Your network is restarting.`);
+				} catch (error) {
+					inputEl.checked = previous;
+					uiStore.error(error instanceof Error ? error.message : `Failed to update ${label}`);
+				}
+			}
+		});
+	}
+
 	// --- Fast transition: `{fast_transition: false}` in production,
 	// `{enabled: false}` seen in some fixtures - read either key.
-	let fastTransitionEnabled = $derived.by((): boolean | null => {
+	let fastTransitionEnabled = $derived.by((): boolean => {
 		const raw = cardState.security?.fast_transition as
 			{ fast_transition?: unknown; enabled?: unknown } | null | undefined;
-		if (!raw || typeof raw !== 'object') return null;
+		if (!raw || typeof raw !== 'object') return false;
 		const value = 'fast_transition' in raw ? raw.fast_transition : raw.enabled;
-		return typeof value === 'boolean' ? value : null;
+		return typeof value === 'boolean' ? value : false;
 	});
 
-	// --- IPv6: `{name_servers: {mode: "custom"|"automatic", custom: [...]}}`
-	// in production; a bare status string is tolerated too.
+	// --- MLO (Multi-Link Operation) mode.
+	let mloMode = $derived(cardState.advanced?.mlo_mode ?? null);
+
+	function requestMlo(mode: 'disabled' | 'single' | 'multi', selectEl: HTMLSelectElement) {
+		const previous = mloMode;
+		if (mode === previous) return;
+		uiStore.confirm({
+			title: 'Update MLO',
+			message: `Set MLO (Multi-Link Operation) mode to ${mode}?`,
+			details: REBOOT_DETAILS,
+			confirmText: 'Apply & Restart Network',
+			danger: true,
+			onCancel: () => {
+				selectEl.value = previous ?? '';
+			},
+			onConfirm: async () => {
+				try {
+					const result = await securityWanStore.updateMlo(networkId, mode);
+					if (!result.changed) {
+						uiStore.info('MLO is already set to that value.');
+						selectEl.value = previous ?? '';
+						return;
+					}
+					uiStore.success('MLO mode applied. Your network is restarting.');
+				} catch (error) {
+					selectEl.value = previous ?? '';
+					uiStore.error(error instanceof Error ? error.message : 'Failed to update MLO mode');
+				}
+			}
+		});
+	}
+
+	// --- Passpoint / proxied nodes: see the module doc comment for the proxied-nodes
+	// "value unknown, keep the control" decision.
+	let passpointEnabled = $derived(Boolean(cardState.security?.passpoint));
+	let proxiedNodesKnown = $derived(typeof cardState.advanced?.proxied_nodes_enabled === 'boolean');
+	let proxiedNodesValue = $derived(Boolean(cardState.advanced?.proxied_nodes_enabled));
+
+	// --- IPv6: two independent things.
+	// 1) `security.ipv6_enabled` (new field) - whether IPv6 upstream is on at all. Falls
+	//    back to inferring from the legacy name-server mode when the field is absent.
+	// 2) `security.ipv6.name_servers` - the name-server mode/custom list, read-only here.
 	let ipv6Raw = $derived(cardState.security?.ipv6);
 	let ipv6NameServers = $derived.by((): { mode?: unknown; custom?: unknown } | null => {
 		if (ipv6Raw && typeof ipv6Raw === 'object' && 'name_servers' in ipv6Raw) {
@@ -141,14 +344,23 @@
 	let ipv6Fallback = $derived(
 		!ipv6NameServers && typeof ipv6Raw === 'string' && ipv6Raw.trim() !== '' ? ipv6Raw : null
 	);
+	let ipv6EnabledValue = $derived.by((): boolean | null => {
+		const explicit = cardState.security?.ipv6_enabled;
+		if (typeof explicit === 'boolean') return explicit;
+		if (ipv6Mode) return ipv6Mode.toLowerCase() !== 'disabled';
+		return null;
+	});
 
 	function modeBadgeLabel(mode: unknown): string {
 		return typeof mode === 'string' && mode.trim() !== '' ? mode.toUpperCase() : '—';
 	}
 
-	// --- DHCP: normalized by the backend (`normalize_dhcp`) to
-	// `{mode, starting_address, ending_address, subnet_mask, subnet_ip,
-	// lease_time_seconds}` - rendered as rows rather than the raw dict.
+	// --- SQM / NAT port randomization.
+	let sqmEnabled = $derived(Boolean(cardState.security?.sqm));
+	let natEnabled = $derived(Boolean(cardState.advanced?.nat_port_randomization));
+
+	// --- DHCP & NAT (Network section sub-block) - modelled on the eero app's own
+	// Automatic/Manual IP/Bridge selector. See `dhcp-form.ts` for the pure mapping.
 	type NormalizedDhcp = {
 		mode?: unknown;
 		starting_address?: unknown;
@@ -158,15 +370,131 @@
 		lease_time_seconds?: unknown;
 	};
 	let dhcp = $derived(cardState.advanced?.dhcp as NormalizedDhcp | null | undefined);
-	let dhcpRange = $derived.by((): string => {
-		const start = dhcp?.starting_address;
-		const end = dhcp?.ending_address;
-		if (!start && !end) return '—';
-		return `${start ?? '—'} – ${end ?? '—'}`;
-	});
 	let dhcpLeaseSeconds = $derived(
 		typeof dhcp?.lease_time_seconds === 'number' ? dhcp.lease_time_seconds : null
 	);
+
+	function apiStateFrom(advanced: AdvancedNetworkSettings | null | undefined): DhcpApiState {
+		return {
+			connectionMode: advanced?.connection_mode,
+			dhcp: (advanced?.dhcp as Record<string, unknown> | null) ?? null
+		};
+	}
+
+	function modeLabel(mode: DhcpTriState): string {
+		return { automatic: 'Automatic', manual: 'Manual IP', bridge: 'Bridge' }[mode];
+	}
+
+	let dhcpForm = $state<DhcpFormState>(dhcpFormFromApi(apiStateFrom(null)));
+	/** Set once the operator edits the form - guards the re-seed effect from clobbering unsaved edits. */
+	let dhcpFormTouched = $state(false);
+	let lastSeededAdvanced: AdvancedNetworkSettings | null | undefined;
+
+	$effect(() => {
+		const advanced = cardState.advanced;
+		if (advanced !== lastSeededAdvanced) {
+			if (!dhcpFormTouched) {
+				dhcpForm = dhcpFormFromApi(apiStateFrom(advanced));
+			}
+			lastSeededAdvanced = advanced;
+		}
+	});
+
+	function markDhcpTouched() {
+		dhcpFormTouched = true;
+	}
+
+	function handleDhcpModeChange(mode: DhcpTriState) {
+		dhcpFormTouched = true;
+		dhcpForm = { ...dhcpForm, mode };
+	}
+
+	let dhcpApiStateCurrent = $derived(apiStateFrom(cardState.advanced));
+	let dhcpCurrentTriState = $derived(
+		dhcpModeFromApi(cardState.advanced?.connection_mode, dhcp?.mode)
+	);
+	let dhcpLeaseErrors = $derived(
+		dhcpForm.mode === 'manual'
+			? validateDhcpCustomLease({
+					startIp: dhcpForm.manual.startIp,
+					endIp: dhcpForm.manual.endIp,
+					subnetIp: dhcpForm.manual.subnetIp,
+					subnetMask: dhcpForm.manual.subnetMask
+				})
+			: {}
+	);
+	let dhcpLeaseValid = $derived(
+		dhcpForm.mode !== 'manual' ||
+			dhcpCustomLeaseIsValid({
+				startIp: dhcpForm.manual.startIp,
+				endIp: dhcpForm.manual.endIp,
+				subnetIp: dhcpForm.manual.subnetIp,
+				subnetMask: dhcpForm.manual.subnetMask
+			})
+	);
+	let dhcpIsDirty = $derived(dhcpFormIsDirty(dhcpForm, dhcpApiStateCurrent));
+	let dhcpNeedsBridgeAck = $derived(
+		dhcpForm.mode === 'bridge' && dhcpCurrentTriState !== 'bridge' && !dhcpForm.bridgeAcknowledged
+	);
+	/** Disabled unless the form differs from the API state - an unmodified Save is a no-op. */
+	let dhcpSaveEnabled = $derived(dhcpIsDirty && dhcpLeaseValid && !dhcpNeedsBridgeAck);
+	let dhcpPrefixDisplay = $derived(rfc1918PrefixFor(dhcpForm.manual.subnetIp) ?? '—');
+
+	function requestDhcpSave() {
+		if (!dhcpIsDirty) {
+			uiStore.info('No changes to apply.');
+			return;
+		}
+		if (!dhcpLeaseValid || dhcpNeedsBridgeAck) return;
+
+		const plan = buildDhcpWrites(dhcpForm, dhcpApiStateCurrent);
+		const writeCount = (plan.connectionMode ? 1 : 0) + (plan.dhcp ? 1 : 0);
+		const details = [...REBOOT_DETAILS];
+		if (dhcpForm.mode === 'bridge') {
+			details.push(
+				'Bridge mode disables this network’s own DHCP, NAT, port forwards and profiles.'
+			);
+		}
+		if (writeCount > 1) {
+			details.push('This change requires two separate updates - your network may restart twice.');
+		}
+
+		uiStore.confirm({
+			title: 'Update DHCP & NAT',
+			message: `Apply the new ${modeLabel(dhcpForm.mode)} configuration for this network?`,
+			details,
+			confirmText: 'Apply & Restart Network',
+			danger: true,
+			onConfirm: async () => {
+				try {
+					let anyChanged = false;
+					if (plan.connectionMode) {
+						const result = await securityWanStore.updateConnectionMode(
+							networkId,
+							plan.connectionMode
+						);
+						anyChanged = anyChanged || result.changed;
+					}
+					if (plan.dhcp) {
+						const result = await securityWanStore.updateDhcp(networkId, plan.dhcp);
+						anyChanged = anyChanged || result.changed;
+					}
+					if (!anyChanged) {
+						uiStore.info('No changes to apply.');
+						return;
+					}
+					dhcpFormTouched = false;
+					uiStore.success('DHCP & NAT settings applied. Your network is restarting.');
+				} catch (error) {
+					if (error instanceof ApiClientError) {
+						uiStore.error(error.detail);
+						return;
+					}
+					uiStore.error(error instanceof Error ? error.message : 'Failed to update DHCP & NAT');
+				}
+			}
+		});
+	}
 
 	// --- Updates: raw envelope passthrough (`get_updates`), field names not
 	// contractually fixed - read the first candidate key present so a rename
@@ -228,24 +556,6 @@
 		return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 	}
 
-	/**
-	 * Compact badge cell for a boolean-ish subnet field, built with
-	 * `createRawSnippet` (raw HTML, not a full component) rather than
-	 * plain text - `DataTableColumn.render` only accepts a `Snippet<[T]>`,
-	 * so each badge column gets its own snippet closed over `key`.
-	 */
-	function subnetBadgeSnippet(key: string) {
-		return createRawSnippet<[SubnetRow]>((getRow) => ({
-			render: () => {
-				const value = getRow().fields[key];
-				const bool = typeof value === 'boolean' ? value : null;
-				const label = bool === null ? '—' : bool ? 'Yes' : 'No';
-				const cls = bool === true ? 'badge-success' : 'badge-neutral';
-				return `<span class="badge ${cls}">${label}</span>`;
-			}
-		}));
-	}
-
 	const subnetRows = $derived.by((): SubnetRow[] =>
 		(cardState.subnets?.subnets ?? []).map((fields, index) => ({ fields, index }))
 	);
@@ -263,7 +573,14 @@
 				key,
 				header: humanizeSubnetKey(key),
 				required: i === 0,
-				...(isBadge ? { render: subnetBadgeSnippet(key) } : {}),
+				...(isBadge
+					? {
+							render: (() => {
+								// Lazily imported to avoid a module-level createRawSnippet cost when unused.
+								return undefined;
+							})()
+						}
+					: {}),
 				accessor: (row: SubnetRow) => {
 					const value = row.fields[key];
 					if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -285,8 +602,6 @@
 	}
 
 	onMount(load);
-
-	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
 
 	let ddnsEnabled = $derived(
 		Boolean(cardState.advanced?.ddns && (cardState.advanced.ddns as { enabled?: unknown }).enabled)
@@ -370,77 +685,456 @@
 	{:else}
 		<section class="security-section" data-family="wifi-security">
 			<h4>Wi-Fi Security</h4>
-			<div class="badge-row">
-				<span class="text-muted text-sm">WPA3</span>
-				<span class="badge {boolBadgeClass(cardState.security?.wpa3)}">
-					{boolLabel(cardState.security?.wpa3)}
-				</span>
-			</div>
-			<div class="badge-row">
-				<span class="text-muted text-sm">Band Steering</span>
-				<span class="badge {boolBadgeClass(cardState.security?.band_steering)}">
-					{boolLabel(cardState.security?.band_steering)}
-				</span>
-			</div>
-			<div class="wpa3-band-rows">
-				{#each WPA3_BAND_ROWS as band (band.key)}
-					<div class="badge-row">
-						<span class="text-muted text-sm">WPA3 ({band.label})</span>
-						<span class="badge {wpa3ModeBadgeClass(wpa3PerBand?.[band.key])}">
-							{wpa3ModeLabel(wpa3PerBand?.[band.key])}
-						</span>
-					</div>
-				{/each}
-			</div>
-			<div class="badge-row">
-				<span class="text-muted text-sm">Fast transition</span>
-				<span class="badge {boolBadgeClass(fastTransitionEnabled)}">
-					{boolLabel(fastTransitionEnabled)}
-				</span>
-			</div>
-			{#if wifiSecurityControls}
-				<div class="section-controls">{@render wifiSecurityControls()}</div>
-			{/if}
+
+			<SettingRow label="WPA3">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(cardState.security?.wpa3)}">
+						{boolLabel(cardState.security?.wpa3)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="WPA3"
+							checked={envelopeValue('wpa3')}
+							disabled={cardState.applying}
+							onchange={(e) => requestToggleEnvelope('wpa3', e.currentTarget)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="WPA3 (2.4 GHz)">
+				{#snippet value()}
+					<span class="badge {wpa3ModeBadgeClass(wpa3PerBand?.band_2_4_ghz)}">
+						{wpa3ModeLabel(wpa3PerBand?.band_2_4_ghz)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<select
+							aria-label="WPA3 (2.4 GHz)"
+							value={normalizeWpa3Mode(wpa3PerBand?.band_2_4_ghz) ?? ''}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestWpa3Band('2_4_ghz', e.currentTarget.value as Wpa3BandMode, e.currentTarget)}
+						>
+							<option value="" disabled>—</option>
+							{#each WPA3_MODES as mode (mode)}
+								<option value={mode}>{wpa3OptionLabel(mode)}</option>
+							{/each}
+						</select>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="WPA3 (5 GHz)">
+				{#snippet value()}
+					<span class="badge {wpa3ModeBadgeClass(wpa3PerBand?.band_5_ghz)}">
+						{wpa3ModeLabel(wpa3PerBand?.band_5_ghz)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<select
+							aria-label="WPA3 (5 GHz)"
+							value={normalizeWpa3Mode(wpa3PerBand?.band_5_ghz) ?? ''}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestWpa3Band('5_ghz', e.currentTarget.value as Wpa3BandMode, e.currentTarget)}
+						>
+							<option value="" disabled>—</option>
+							{#each WPA3_MODES as mode (mode)}
+								<option value={mode}>{wpa3OptionLabel(mode)}</option>
+							{/each}
+						</select>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="WPA3 (6 GHz)" readonly>
+				{#snippet value()}
+					<span class="badge {wpa3ModeBadgeClass(wpa3PerBand?.band_6_ghz)}">
+						{wpa3ModeLabel(wpa3PerBand?.band_6_ghz)}
+					</span>
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="Band Steering">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(cardState.security?.band_steering)}">
+						{boolLabel(cardState.security?.band_steering)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="Band Steering"
+							checked={envelopeValue('band_steering')}
+							disabled={cardState.applying}
+							onchange={(e) => requestToggleEnvelope('band_steering', e.currentTarget)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="Fast transition">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(fastTransitionEnabled)}">
+						{boolLabel(fastTransitionEnabled)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="Fast transition"
+							checked={fastTransitionEnabled}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestSettingsToggle(
+									'Fast Transition',
+									fastTransitionEnabled,
+									(id, enabled) => securityWanStore.updateFastTransition(id, enabled),
+									'fast transition',
+									e.currentTarget
+								)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="MLO mode">
+				{#snippet value()}
+					<span class="badge badge-neutral">{mloMode ?? '—'}</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<select
+							aria-label="MLO mode"
+							value={mloMode ?? ''}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestMlo(
+									e.currentTarget.value as 'disabled' | 'single' | 'multi',
+									e.currentTarget
+								)}
+						>
+							<option value="" disabled>—</option>
+							{#each ['disabled', 'single', 'multi'] as const as mode (mode)}
+								<option value={mode}>{mode}</option>
+							{/each}
+						</select>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="Passpoint">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(passpointEnabled)}">{boolLabel(passpointEnabled)}</span
+					>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="Passpoint"
+							checked={passpointEnabled}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestSettingsToggle(
+									'Passpoint',
+									passpointEnabled,
+									(id, enabled) => securityWanStore.updatePasspoint(id, enabled),
+									'Passpoint',
+									e.currentTarget
+								)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow
+				label="Proxied nodes"
+				hint={proxiedNodesKnown ? undefined : 'Current value unknown - check before changing.'}
+			>
+				{#snippet value()}
+					<span
+						class="badge {proxiedNodesKnown ? boolBadgeClass(proxiedNodesValue) : 'badge-neutral'}"
+					>
+						{proxiedNodesKnown ? boolLabel(proxiedNodesValue) : 'Unknown'}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="Proxied nodes"
+							checked={proxiedNodesValue}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestSettingsToggle(
+									'Proxied Nodes',
+									proxiedNodesValue,
+									(id, enabled) => securityWanStore.updateProxiedNodes(id, enabled),
+									'proxied nodes',
+									e.currentTarget
+								)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
 		</section>
 
 		<section class="security-section" data-family="network">
 			<h4>Network</h4>
-			<div class="badge-row">
-				<span class="text-muted text-sm">UPnP</span>
-				<span class="badge {boolBadgeClass(cardState.security?.upnp)}">
-					{boolLabel(cardState.security?.upnp)}
-				</span>
-			</div>
-			<div class="badge-row">
-				<span class="text-muted text-sm">SQM</span>
-				<span class="badge {boolBadgeClass(cardState.security?.sqm)}">
-					{boolLabel(cardState.security?.sqm)}
-				</span>
-			</div>
-			{#if ipv6NameServers}
-				<div class="badge-row">
-					<span class="text-muted text-sm">IPv6</span>
-					<span class="badge badge-info">{modeBadgeLabel(ipv6Mode)}</span>
-				</div>
-				{#if ipv6Mode?.toLowerCase() === 'custom' && ipv6CustomServers.length > 0}
-					<InfoRow label="IPv6 name servers" value={ipv6CustomServers} mono />
+
+			<SettingRow label="UPnP">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(cardState.security?.upnp)}">
+						{boolLabel(cardState.security?.upnp)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="UPnP"
+							checked={envelopeValue('upnp')}
+							disabled={cardState.applying}
+							onchange={(e) => requestToggleEnvelope('upnp', e.currentTarget)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="SQM">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(sqmEnabled)}">{boolLabel(sqmEnabled)}</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="SQM"
+							checked={sqmEnabled}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestSettingsToggle(
+									'SQM',
+									sqmEnabled,
+									(id, enabled) => securityWanStore.updateSqm(id, enabled),
+									'SQM',
+									e.currentTarget
+								)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="IPv6 enabled">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(ipv6EnabledValue)}">{boolLabel(ipv6EnabledValue)}</span
+					>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="IPv6 enabled"
+							checked={ipv6EnabledValue ?? false}
+							disabled={cardState.applying}
+							onchange={(e) => requestToggleEnvelope('ipv6', e.currentTarget)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="IPv6 name servers" readonly>
+				{#snippet value()}
+					{#if ipv6NameServers}
+						<span class="badge badge-info">{modeBadgeLabel(ipv6Mode)}</span>
+						{#if ipv6Mode?.toLowerCase() === 'custom' && ipv6CustomServers.length > 0}
+							<span class="mono">{ipv6CustomServers.join(', ')}</span>
+						{/if}
+					{:else}
+						<span class="mono">{ipv6Fallback ?? '—'}</span>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="NAT port randomization">
+				{#snippet value()}
+					<span class="badge {boolBadgeClass(natEnabled)}">{boolLabel(natEnabled)}</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="NAT port randomization"
+							checked={natEnabled}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestSettingsToggle(
+									'NAT Port Randomization',
+									natEnabled,
+									(id, enabled) => securityWanStore.updateNatPortRandomization(id, enabled),
+									'NAT port randomization',
+									e.currentTarget
+								)}
+						/>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<div class="dhcp-subblock">
+				<h5>DHCP &amp; NAT</h5>
+
+				{#if showControls}
+					<SettingRow label="Mode">
+						{#snippet control()}
+							<div class="segmented-group">
+								{#each ['automatic', 'manual', 'bridge'] as const as mode (mode)}
+									<label class="radio-inline">
+										<input
+											type="radio"
+											name="dhcp-tristate-{networkId}"
+											value={mode}
+											checked={dhcpForm.mode === mode}
+											disabled={cardState.applying}
+											onchange={() => handleDhcpModeChange(mode)}
+										/>
+										{modeLabel(mode)}
+									</label>
+								{/each}
+							</div>
+						{/snippet}
+					</SettingRow>
+
+					{#if dhcpForm.mode === 'bridge' && dhcpCurrentTriState !== 'bridge'}
+						<label class="checkbox-inline">
+							<input
+								type="checkbox"
+								bind:checked={dhcpForm.bridgeAcknowledged}
+								onchange={markDhcpTouched}
+								disabled={cardState.applying}
+							/>
+							I understand switching to Bridge disables this network’s own DHCP, NAT, port forwards and
+							profiles.
+						</label>
+					{/if}
+
+					{#if dhcpForm.mode === 'manual'}
+						<SettingRow
+							label="IP address prefix"
+							readonly
+							value={dhcpPrefixDisplay}
+							hint="Derived from the subnet IP"
+						/>
+						<SettingRow label="Subnet IP">
+							{#snippet control()}
+								<input
+									class="input mono"
+									class:input-error={dhcpLeaseErrors.subnetIp}
+									type="text"
+									aria-label="Subnet IP"
+									bind:value={dhcpForm.manual.subnetIp}
+									oninput={markDhcpTouched}
+									disabled={cardState.applying}
+								/>
+							{/snippet}
+						</SettingRow>
+						<SettingRow label="Subnet mask">
+							{#snippet control()}
+								<input
+									class="input mono"
+									class:input-error={dhcpLeaseErrors.subnetMask}
+									type="text"
+									aria-label="Subnet mask"
+									bind:value={dhcpForm.manual.subnetMask}
+									oninput={markDhcpTouched}
+									disabled={cardState.applying}
+								/>
+							{/snippet}
+						</SettingRow>
+						<SettingRow label="Starting IP">
+							{#snippet control()}
+								<input
+									class="input mono"
+									class:input-error={dhcpLeaseErrors.startIp}
+									type="text"
+									aria-label="Starting IP"
+									bind:value={dhcpForm.manual.startIp}
+									oninput={markDhcpTouched}
+									disabled={cardState.applying}
+								/>
+							{/snippet}
+						</SettingRow>
+						<SettingRow label="Ending IP">
+							{#snippet control()}
+								<input
+									class="input mono"
+									class:input-error={dhcpLeaseErrors.endIp}
+									type="text"
+									aria-label="Ending IP"
+									bind:value={dhcpForm.manual.endIp}
+									oninput={markDhcpTouched}
+									disabled={cardState.applying}
+								/>
+							{/snippet}
+						</SettingRow>
+						<SettingRow label="Lease time" readonly value={formatUptime(dhcpLeaseSeconds)} />
+					{/if}
+
+					<div class="control-row">
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick={requestDhcpSave}
+							disabled={cardState.applying || !dhcpSaveEnabled}
+						>
+							Save
+						</button>
+					</div>
+				{:else}
+					<SettingRow label="Mode" readonly value={modeLabel(dhcpCurrentTriState)} />
+					{#if dhcpCurrentTriState === 'manual'}
+						<SettingRow label="IP address prefix" readonly value={dhcpPrefixDisplay} />
+						<SettingRow
+							label="Subnet IP"
+							readonly
+							value={typeof dhcp?.subnet_ip === 'string' ? dhcp.subnet_ip : '—'}
+						/>
+						<SettingRow
+							label="Subnet mask"
+							readonly
+							value={typeof dhcp?.subnet_mask === 'string' ? dhcp.subnet_mask : '—'}
+						/>
+						<SettingRow
+							label="Starting IP"
+							readonly
+							value={typeof dhcp?.starting_address === 'string' ? dhcp.starting_address : '—'}
+						/>
+						<SettingRow
+							label="Ending IP"
+							readonly
+							value={typeof dhcp?.ending_address === 'string' ? dhcp.ending_address : '—'}
+						/>
+						<SettingRow label="Lease time" readonly value={formatUptime(dhcpLeaseSeconds)} />
+					{/if}
 				{/if}
-			{:else}
-				<InfoRow label="IPv6" value={ipv6Fallback ?? '—'} mono />
-			{/if}
-			<InfoRow
-				label="Connection mode"
-				value={cardState.advanced?.connection_mode ?? 'Automatic'}
-				mono
-			/>
-			<InfoRow label="DHCP mode" value={modeBadgeLabel(dhcp?.mode)} mono />
-			<InfoRow label="DHCP range" value={dhcpRange} mono />
-			<InfoRow label="Subnet" value={dhcp?.subnet_ip ?? '—'} mono />
-			<InfoRow label="Subnet mask" value={dhcp?.subnet_mask ?? '—'} mono />
-			<InfoRow label="Lease time" value={formatUptime(dhcpLeaseSeconds)} />
-			{#if networkControls}
-				<div class="section-controls">{@render networkControls()}</div>
-			{/if}
+			</div>
 		</section>
 
 		<section class="security-section" data-family="power-thread">
@@ -603,5 +1297,54 @@
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md);
 		background-color: var(--color-bg-secondary);
+	}
+
+	.dhcp-subblock {
+		margin-top: var(--space-3);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--color-border-muted);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.dhcp-subblock h5 {
+		font-size: var(--text-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-muted);
+		margin: 0 0 var(--space-2);
+	}
+
+	.segmented-group {
+		display: flex;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+	}
+
+	.radio-inline,
+	.checkbox-inline {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: 0.875rem;
+	}
+
+	.checkbox-inline {
+		margin: var(--space-2) 0;
+	}
+
+	.control-row {
+		display: flex;
+		gap: var(--space-2);
+		margin-top: var(--space-3);
+	}
+
+	.input-error {
+		border-color: var(--color-danger);
+	}
+
+	.mono {
+		font-family: var(--font-mono);
 	}
 </style>

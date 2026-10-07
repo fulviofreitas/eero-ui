@@ -10,6 +10,8 @@
  * network's first host) excluded from `[start_ip, end_ip]`.
  */
 
+import type { DhcpCustomLease } from '$api/types';
+
 export interface DhcpCustomLeaseForm {
 	startIp: string;
 	endIp: string;
@@ -24,12 +26,28 @@ function ipv4ToInt(value: string): number | null {
 	if (parts.length !== 4) return null;
 	let result = 0;
 	for (const part of parts) {
-		if (!/^\d{1,3}$/.test(part)) return null;
+		// Reject leading zeros (e.g. "010") - ambiguous octal-looking input, not a valid
+		// dotted-quad octet on its own ("0" itself is fine).
+		if (!/^(0|[1-9]\d{0,2})$/.test(part)) return null;
 		const n = Number(part);
 		if (n < 0 || n > 255) return null;
 		result = result * 256 + n;
 	}
 	return result;
+}
+
+function maskFor(prefixLen: number): number {
+	return prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
+}
+
+/** Loose IPv4 string equality: compares parsed values when both parse, else trimmed strings. */
+function ipEquals(a: unknown, b: unknown): boolean {
+	const aStr = typeof a === 'string' ? a.trim() : '';
+	const bStr = typeof b === 'string' ? b.trim() : '';
+	const aInt = ipv4ToInt(aStr);
+	const bInt = ipv4ToInt(bStr);
+	if (aInt !== null && bInt !== null) return aInt === bInt;
+	return aStr === bStr;
 }
 
 function maskToPrefixLen(mask: string): number | null {
@@ -49,7 +67,6 @@ function isRfc1918(networkInt: number, prefixLen: number): boolean {
 	const ten = 10 << 24;
 	const tenTwelve = ((172 << 24) | (16 << 16)) >>> 0;
 	const oneNineTwo = ((192 << 24) | (168 << 16)) >>> 0;
-	const maskFor = (bits: number) => (bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0);
 	if ((networkInt & maskFor(8)) === (ten & maskFor(8)) && prefixLen >= 8) return true;
 	if ((networkInt & maskFor(12)) === (tenTwelve & maskFor(12)) && prefixLen >= 12) return true;
 	if ((networkInt & maskFor(16)) === (oneNineTwo & maskFor(16)) && prefixLen >= 16) return true;
@@ -106,4 +123,197 @@ export function validateDhcpCustomLease(form: DhcpCustomLeaseForm): DhcpCustomLe
 
 export function dhcpCustomLeaseIsValid(form: DhcpCustomLeaseForm): boolean {
 	return Object.keys(validateDhcpCustomLease(form)).length === 0;
+}
+
+// ============================================
+// DHCP & NAT tri-state form (consistency pass, 2026-10-07)
+//
+// Models the "DHCP & NAT" sub-block the way the eero app does: one
+// Automatic/Manual IP/Bridge selector rather than a separate connection-mode
+// radio and DHCP-mode radio. Pure helpers only - no store/API access - so
+// every transition can be unit-tested without MSW.
+// ============================================
+
+export type DhcpTriState = 'automatic' | 'manual' | 'bridge';
+
+export interface DhcpManualForm {
+	subnetIp: string;
+	subnetMask: string;
+	startIp: string;
+	endIp: string;
+}
+
+export interface DhcpFormState {
+	mode: DhcpTriState;
+	manual: DhcpManualForm;
+	bridgeAcknowledged: boolean;
+}
+
+/** Shape read off `AdvancedNetworkSettings` - loose/defensive, mirrors the backend's own fields. */
+export interface DhcpApiState {
+	connectionMode: string | null | undefined;
+	dhcp:
+		| {
+				mode?: unknown;
+				subnet_ip?: unknown;
+				subnet_mask?: unknown;
+				starting_address?: unknown;
+				ending_address?: unknown;
+				lease_time_seconds?: unknown;
+		  }
+		| Record<string, unknown>
+		| null
+		| undefined;
+}
+
+export interface DhcpWritePlan {
+	connectionMode?: { mode: 'BRIDGE' | 'NAT'; acknowledge_disables_routing?: boolean };
+	dhcp?: { mode: 'automatic' | 'manual'; custom?: DhcpCustomLease };
+}
+
+function dhcpModeFieldIsManual(dhcpMode: unknown): boolean {
+	return (
+		typeof dhcpMode === 'string' && ['custom', 'manual'].includes(dhcpMode.trim().toLowerCase())
+	);
+}
+
+/**
+ * Derives the tri-state selector value from the API's own `connection_mode` (case-insensitive -
+ * `"BRIDGE"`/`"bridge"`) and `dhcp.mode` (`"custom"`, `"manual"` or `"automatic"`). Bridge wins
+ * over the DHCP mode field, mirroring the eero app: a bridged network has no DHCP of its own.
+ */
+export function dhcpModeFromApi(
+	connectionMode: string | null | undefined,
+	dhcpMode: unknown
+): DhcpTriState {
+	if (typeof connectionMode === 'string' && connectionMode.trim().toLowerCase() === 'bridge') {
+		return 'bridge';
+	}
+	return dhcpModeFieldIsManual(dhcpMode) ? 'manual' : 'automatic';
+}
+
+/** The RFC1918 block (`/8`, `/12` or `/16`) containing `subnetIp`, or `null` outside all three. */
+export function rfc1918PrefixFor(subnetIp: string | null | undefined): string | null {
+	if (typeof subnetIp !== 'string') return null;
+	const value = ipv4ToInt(subnetIp.trim());
+	if (value === null) return null;
+
+	const ten = 10 << 24;
+	const tenTwelve = ((172 << 24) | (16 << 16)) >>> 0;
+	const oneNineTwo = ((192 << 24) | (168 << 16)) >>> 0;
+
+	if ((value & maskFor(8)) >>> 0 === (ten & maskFor(8)) >>> 0) return '10.0.0.0/8';
+	if ((value & maskFor(12)) >>> 0 === tenTwelve) return '172.16.0.0/12';
+	if ((value & maskFor(16)) >>> 0 === oneNineTwo) return '192.168.0.0/16';
+	return null;
+}
+
+/** Prefills the tri-state form from the current API state. `bridgeAcknowledged` always starts false. */
+export function dhcpFormFromApi(api: DhcpApiState): DhcpFormState {
+	const dhcp = (api.dhcp ?? {}) as Record<string, unknown>;
+	return {
+		mode: dhcpModeFromApi(api.connectionMode, dhcp.mode),
+		manual: {
+			subnetIp: typeof dhcp.subnet_ip === 'string' ? dhcp.subnet_ip : '',
+			subnetMask: typeof dhcp.subnet_mask === 'string' ? dhcp.subnet_mask : '',
+			startIp: typeof dhcp.starting_address === 'string' ? dhcp.starting_address : '',
+			endIp: typeof dhcp.ending_address === 'string' ? dhcp.ending_address : ''
+		},
+		bridgeAcknowledged: false
+	};
+}
+
+/** Does the target manual lease (ignoring mode/Bridge) differ from the API's current DHCP fields? */
+function manualFieldsDiffer(form: DhcpFormState, api: DhcpApiState): boolean {
+	const dhcp = (api.dhcp ?? {}) as Record<string, unknown>;
+	return (
+		!ipEquals(form.manual.subnetIp, dhcp.subnet_ip) ||
+		!ipEquals(form.manual.subnetMask, dhcp.subnet_mask) ||
+		!ipEquals(form.manual.startIp, dhcp.starting_address) ||
+		!ipEquals(form.manual.endIp, dhcp.ending_address)
+	);
+}
+
+/**
+ * Does the target DHCP config (mode + manual fields, ignoring Bridge) differ from what the API
+ * currently reports for DHCP? Used to decide whether a DHCP write is needed when leaving Bridge,
+ * where the mode comparison alone is meaningless (the API's DHCP fields predate the Bridge
+ * switch and may already match the target).
+ */
+function dhcpPortionDiffers(form: DhcpFormState, api: DhcpApiState): boolean {
+	const dhcp = (api.dhcp ?? {}) as Record<string, unknown>;
+	const apiIsManual = dhcpModeFieldIsManual(dhcp.mode);
+	const formIsManual = form.mode === 'manual';
+	if (apiIsManual !== formIsManual) return true;
+	return formIsManual && manualFieldsDiffer(form, api);
+}
+
+/**
+ * Is the form dirty relative to the API state? Drives the Save button's `disabled` state - an
+ * unmodified form must never be able to issue a write (plan requirement: "unmodified Save is
+ * disabled and a no-op").
+ */
+export function dhcpFormIsDirty(form: DhcpFormState, api: DhcpApiState): boolean {
+	const currentMode = dhcpModeFromApi(
+		api.connectionMode,
+		(api.dhcp as Record<string, unknown> | null)?.mode
+	);
+	if (form.mode !== currentMode) return true;
+	if (form.mode === 'manual') return manualFieldsDiffer(form, api);
+	return false;
+}
+
+/**
+ * Builds the write plan for the tri-state form. At most one `connection-mode` write and one
+ * `dhcp` write - never more than two requests, and only the writes actually needed:
+ *
+ * - Automatic/Manual IP -> Bridge: one `connection-mode` write (`BRIDGE`).
+ * - Bridge -> Automatic/Manual IP: `connection-mode` (`NAT`), plus `dhcp` only if the target DHCP
+ *   config differs from what the API already holds for DHCP.
+ * - Automatic <-> Manual IP (no Bridge either side): one `dhcp` write.
+ */
+export function buildDhcpWrites(form: DhcpFormState, api: DhcpApiState): DhcpWritePlan {
+	const plan: DhcpWritePlan = {};
+	const currentMode = dhcpModeFromApi(
+		api.connectionMode,
+		(api.dhcp as Record<string, unknown> | null)?.mode
+	);
+
+	if (form.mode === 'bridge') {
+		if (currentMode !== 'bridge') {
+			plan.connectionMode = { mode: 'BRIDGE', acknowledge_disables_routing: true };
+		}
+		return plan;
+	}
+
+	if (currentMode === 'bridge') {
+		plan.connectionMode = { mode: 'NAT' };
+		if (dhcpPortionDiffers(form, api)) {
+			plan.dhcp = dhcpTargetBody(form);
+		}
+		return plan;
+	}
+
+	if (dhcpPortionDiffers(form, api)) {
+		plan.dhcp = dhcpTargetBody(form);
+	}
+	return plan;
+}
+
+function dhcpTargetBody(form: DhcpFormState): {
+	mode: 'automatic' | 'manual';
+	custom?: DhcpCustomLease;
+} {
+	if (form.mode === 'manual') {
+		return {
+			mode: 'manual',
+			custom: {
+				start_ip: form.manual.startIp.trim(),
+				end_ip: form.manual.endIp.trim(),
+				subnet_ip: form.manual.subnetIp.trim(),
+				subnet_mask: form.manual.subnetMask.trim()
+			}
+		};
+	}
+	return { mode: 'automatic' };
 }
