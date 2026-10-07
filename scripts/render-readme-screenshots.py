@@ -34,14 +34,12 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
+import os
 import random
 import re
-import socket
 import subprocess  # nosec B404 - fixed argv, no shell, dev-tooling only
 import sys
 import threading
-import time
-import urllib.request
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -52,7 +50,8 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUILD_DIR = REPO_ROOT / "frontend" / "build"
 DEFAULT_OUT_DIR = REPO_ROOT / "docs" / "screenshots" / "readme"
-CHROMIUM_PATH = "/usr/bin/chromium"
+# Override with SCREENSHOT_CHROMIUM=/path/to/chromium; empty means Playwright's own browser.
+CHROMIUM_PATH = os.environ.get("SCREENSHOT_CHROMIUM", "/usr/bin/chromium") or None
 
 # Fixed "now" so every run (and every image) is byte-for-byte reproducible.
 NOW = datetime(2026, 10, 7, 12, 0, 0, tzinfo=timezone.utc)
@@ -859,11 +858,43 @@ def _route_client_count_history(params, query, body):
     )
 
 
+def _route_speedtests(params, query, body):
+    limit = int((query.get("limit") or ["1"])[0])
+    return _json_response(200, SPEEDTESTS[:limit])
+
+
+def _route_device_detail(params, query, body):
+    details = FIXTURES["device_details"]
+    return _json_response(200, details.get(params["device_id"], details["d01"]))
+
+
+def _route_eero_detail(params, query, body):
+    details = FIXTURES["eero_details"]
+    return _json_response(200, details.get(params["eero_id"], details["e1"]))
+
+
+def _route_profile_detail(params, query, body):
+    profiles = FIXTURES["profiles"]
+    match = next(
+        (pr for pr in profiles if pr["id"] == params["profile_id"]), profiles[0]
+    )
+    return _json_response(200, match)
+
+
+def _fixed(status: int, payload: Any) -> Handler:
+    """Route handler that always answers ``status`` with ``payload``."""
+
+    def handler(params, query, body):
+        return _json_response(status, payload)
+
+    return handler
+
+
 ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/health",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "status": "healthy",
@@ -876,7 +907,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/auth/status",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "authenticated": True,
@@ -894,17 +925,17 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks",
-        lambda p, q, b: _json_response(200, FIXTURES["network_summary"]),
+        _fixed(200, FIXTURES["network_summary"]),
     ),
     (
         "GET",
         "/api/networks/{network_id}",
-        lambda p, q, b: _json_response(200, FIXTURES["network_detail"]),
+        _fixed(200, FIXTURES["network_detail"]),
     ),
     (
         "GET",
         "/api/networks/{network_id}/entitlements",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "features": [
@@ -929,21 +960,17 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/speedtests",
-        lambda p, q, b: _json_response(
-            200, SPEEDTESTS[: int((q.get("limit") or ["1"])[0])]
-        ),
+        _route_speedtests,
     ),
     (
         "POST",
         "/api/networks/{network_id}/speedtest",
-        lambda p, q, b: _json_response(
-            202, {"status": "started", "started_at": _iso(NOW)}
-        ),
+        _fixed(202, {"status": "started", "started_at": _iso(NOW)}),
     ),
     (
         "GET",
         "/api/networks/{network_id}/dns",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "ipv4": {"mode": "custom", "servers": ["1.1.1.1", "1.0.0.1"]},
@@ -981,7 +1008,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/guest",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "enabled": True,
@@ -997,7 +1024,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/data-usage/breakdown",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "download_bytes": None,
@@ -1031,7 +1058,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/data-usage/devices",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "download_bytes": None,
@@ -1074,7 +1101,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/permissions",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "permissions": {"can_manage_devices": True, "can_manage_members": True},
@@ -1086,7 +1113,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/members",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "members": [
@@ -1100,7 +1127,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/invites",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "invites": [
@@ -1119,7 +1146,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/backup-internet",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "enabled": True,
@@ -1139,7 +1166,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/backup-access-points",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "access_points": [
@@ -1159,7 +1186,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/security",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "wpa3": True,
@@ -1188,7 +1215,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/subnets",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "subnets": [
@@ -1223,7 +1250,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/multistaticip",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "configured": False,
@@ -1234,7 +1261,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/advanced",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "dhcp": {
@@ -1257,7 +1284,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/notifications",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "settings": {
@@ -1272,7 +1299,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/notifications/history",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "history": [
@@ -1295,7 +1322,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/forwards",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "forwards": [
@@ -1324,7 +1351,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/reservations",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "reservations": [
@@ -1346,48 +1373,34 @@ ROUTES: list[tuple[str, str, Handler]] = [
             },
         ),
     ),
-    ("GET", "/api/devices", lambda p, q, b: _json_response(200, FIXTURES["devices"])),
+    ("GET", "/api/devices", _fixed(200, FIXTURES["devices"])),
     (
         "GET",
         "/api/devices/{device_id}",
-        lambda p, q, b: _json_response(
-            200,
-            FIXTURES["device_details"].get(
-                p["device_id"], FIXTURES["device_details"]["d01"]
-            ),
-        ),
+        _route_device_detail,
     ),
-    ("GET", "/api/eeros", lambda p, q, b: _json_response(200, FIXTURES["eeros"])),
+    ("GET", "/api/eeros", _fixed(200, FIXTURES["eeros"])),
     (
         "GET",
         "/api/eeros/{eero_id}",
-        lambda p, q, b: _json_response(
-            200,
-            FIXTURES["eero_details"].get(p["eero_id"], FIXTURES["eero_details"]["e1"]),
-        ),
+        _route_eero_detail,
     ),
     ("GET", "/api/eeros/{eero_id}/connections", _route_eero_connections),
-    ("GET", "/api/profiles", lambda p, q, b: _json_response(200, FIXTURES["profiles"])),
+    ("GET", "/api/profiles", _fixed(200, FIXTURES["profiles"])),
     (
         "GET",
         "/api/profiles/{profile_id}",
-        lambda p, q, b: _json_response(
-            200,
-            next(
-                (pr for pr in FIXTURES["profiles"] if pr["id"] == p["profile_id"]),
-                FIXTURES["profiles"][0],
-            ),
-        ),
+        _route_profile_detail,
     ),
     (
         "GET",
         "/api/metrics/roaming",
-        lambda p, q, b: _json_response(200, FIXTURES["roaming"]),
+        _fixed(200, FIXTURES["roaming"]),
     ),
     (
         "GET",
         "/api/networks/{network_id}/content-filter",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "allowed_list": ["example-homework.example.com"],
@@ -1398,19 +1411,17 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/profiles/{profile_id}/schedules",
-        lambda p, q, b: _json_response(200, []),
+        _fixed(200, []),
     ),
     (
         "GET",
         "/api/profiles/{profile_id}/blocked-applications",
-        lambda p, q, b: _json_response(
-            200, {"applications": ["com.example.socialapp"]}
-        ),
+        _fixed(200, {"applications": ["com.example.socialapp"]}),
     ),
     (
         "GET",
         "/api/networks/{network_id}/power-saving/schedules",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "schedules": [],
@@ -1420,7 +1431,7 @@ ROUTES: list[tuple[str, str, Handler]] = [
     (
         "GET",
         "/api/networks/{network_id}/scan",
-        lambda p, q, b: _json_response(
+        _fixed(
             200,
             {
                 "scan": [
@@ -1531,16 +1542,12 @@ def _make_spa_handler(build_dir: Path) -> type[http.server.BaseHTTPRequestHandle
     return SpaHandler
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("localhost", 0))
-        return s.getsockname()[1]
-
-
 def start_static_server(build_dir: Path) -> tuple[http.server.ThreadingHTTPServer, int]:
-    port = _free_port()
+    # Port 0: the OS assigns a free port to the listening socket itself, so there is
+    # no window between choosing a port and binding it.
     handler = _make_spa_handler(build_dir)
-    server = http.server.ThreadingHTTPServer(("localhost", port), handler)
+    server = http.server.ThreadingHTTPServer(("localhost", 0), handler)
+    port = server.server_address[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, port
@@ -1697,7 +1704,7 @@ def _run_captures(base_url: str, out_dir: Path) -> list[Path]:
                                 {"width": viewport["width"], "height": capture_height}
                             )
                             page.wait_for_timeout(150)
-                        page.screenshot(path=str(dest))
+                        page.screenshot(path=str(dest), animations="disabled")
                         if capture_height != viewport["height"]:
                             page.set_viewport_size(viewport)
                         written.append(dest)
@@ -1742,13 +1749,7 @@ def cmd_shots(args: argparse.Namespace) -> None:
     server, port = start_static_server(build_dir)
     try:
         base_url = f"http://localhost:{port}"
-        # Give the server a beat to be reachable.
-        for _ in range(20):
-            try:
-                urllib.request.urlopen(base_url, timeout=1)
-                break
-            except Exception:  # noqa: BLE001
-                time.sleep(0.25)
+        # The socket is already bound and listening, so no readiness poll is needed.
         written = _run_captures(base_url, out_dir)
     finally:
         server.shutdown()

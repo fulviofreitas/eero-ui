@@ -539,7 +539,9 @@ export function transformToTopology(
 	});
 
 	// Group devices by their connected eero
-	const devicesByEero = groupDevicesByEero(devices, eeros);
+	// Gateway first, matching calculateHierarchyLayout's sizing pass: groupDevicesByEero assigns
+	// a device to the first eero it matches, so both passes must see the same order.
+	const devicesByEero = groupDevicesByEero(devices, gateway ? [gateway, ...leafEeros] : eeros);
 
 	// Add device nodes and edges
 	Object.entries(devicesByEero).forEach(([eeroId, eeroDevices]) => {
