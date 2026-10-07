@@ -10,7 +10,6 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Tabs from '$components/common/Tabs.svelte';
 	import Button from '$components/common/Button.svelte';
-	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '#lib/components/network/DnsSettingsCard.svelte';
 	import OverviewCard from '#lib/components/network/OverviewCard.svelte';
 	import HardwareFeaturesCard from '#lib/components/network/HardwareFeaturesCard.svelte';
@@ -376,8 +375,6 @@
 						<EventsCard {networkId} />
 						<ChannelUtilizationCard {networkId} />
 					</div>
-
-					<section class="network-charts"><SpeedtestChart {networkId} /></section>
 				{/if}
 			{:else if activeTab === 'roaming'}
 				<div
@@ -446,10 +443,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
 		gap: var(--space-4);
-	}
-
-	.network-charts {
-		margin-top: var(--space-4);
 	}
 
 	.network-technical {
