@@ -249,16 +249,19 @@ def _diurnal_bytes(hour: int, rng: random.Random, base: float) -> float:
     return base * peak * quiet * rng.uniform(0.85, 1.15)
 
 
-def _build_data_usage(days: int = 30) -> dict[str, Any]:
-    rng = random.Random(RNG_SEED + 2)
+def _build_data_usage(
+    days: int = 30, scale: float = 1.0, seed: int = 0
+) -> dict[str, Any]:
+    """Daily usage for one entity; ``scale`` is its share of the whole network."""
+    rng = random.Random(RNG_SEED + 2 + seed)
     values = []
     total_down = 0.0
     total_up = 0.0
     for d in range(days, 0, -1):
         day = NOW - timedelta(days=d)
         weekday_factor = 1.25 if day.weekday() >= 5 else 1.0
-        down = _diurnal_bytes(20, rng, 42_000_000_000) * weekday_factor
-        up = _diurnal_bytes(20, rng, 6_500_000_000) * weekday_factor
+        down = _diurnal_bytes(20, rng, 42_000_000_000) * weekday_factor * scale
+        up = _diurnal_bytes(20, rng, 6_500_000_000) * weekday_factor * scale
         total_down += down
         total_up += up
         values.append(
@@ -679,8 +682,48 @@ def _json_response(status: int, body: Any) -> tuple[int, Any]:
     return status, body
 
 
+# Share of the network's traffic per entity kind, so a phone is not shown moving
+# as much data as the whole house.
+_USAGE_SCALE = {"network": 1.0, "eero": 0.3, "profile": 0.25, "device": 0.02}
+
+
+def _windowed_usage(query, scale: float, seed: int) -> dict[str, Any]:
+    """Usage for the requested ``start``/``end`` window (the 24h/7d/30d selector)."""
+    usage = _build_data_usage(scale=scale, seed=seed) if scale != 1.0 else DATA_USAGE
+    start = (query.get("start") or [None])[0]
+    end = (query.get("end") or [None])[0]
+    if not start or not end:
+        return usage
+    lo = datetime.fromisoformat(start.replace("Z", "+00:00"))
+    hi = datetime.fromisoformat(end.replace("Z", "+00:00"))
+    values = [
+        v
+        for v in usage["values"]
+        if lo - timedelta(days=1)
+        < datetime.fromisoformat(v["time"].replace("Z", "+00:00"))
+        <= hi
+    ]
+    return {
+        "download_bytes": sum(v["download"] for v in values),
+        "upload_bytes": sum(v["upload"] for v in values),
+        "values": values,
+        "raw": {},
+    }
+
+
 def _route_data_usage(params, query, body):
-    return _json_response(200, DATA_USAGE)
+    return _json_response(200, _windowed_usage(query, _USAGE_SCALE["network"], 0))
+
+
+def _usage_route(kind: str, key: str):
+    def route(params, query, body):
+        seed = _stable_hash(f"{kind}:{params.get(key, '')}") % 1000
+        jitter = 0.6 + (seed % 80) / 100
+        return _json_response(
+            200, _windowed_usage(query, _USAGE_SCALE[kind] * jitter, seed)
+        )
+
+    return route
 
 
 def _route_insights(params, query, body):
@@ -1005,13 +1048,21 @@ ROUTES: list[tuple[str, str, Handler]] = [
             },
         ),
     ),
-    ("GET", "/api/networks/{network_id}/data-usage/devices/{mac}", _route_data_usage),
+    (
+        "GET",
+        "/api/networks/{network_id}/data-usage/devices/{mac}",
+        _usage_route("device", "mac"),
+    ),
     ("GET", "/api/networks/{network_id}/data-usage/eeros/summary", _route_data_usage),
-    ("GET", "/api/networks/{network_id}/data-usage/eeros/{eero_id}", _route_data_usage),
+    (
+        "GET",
+        "/api/networks/{network_id}/data-usage/eeros/{eero_id}",
+        _usage_route("eero", "eero_id"),
+    ),
     (
         "GET",
         "/api/networks/{network_id}/data-usage/profiles/{profile_id}",
-        _route_data_usage,
+        _usage_route("profile", "profile_id"),
     ),
     ("GET", "/api/networks/{network_id}/events", _route_events),
     (
