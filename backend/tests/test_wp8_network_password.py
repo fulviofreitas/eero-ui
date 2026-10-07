@@ -10,6 +10,7 @@ confirmed live, so it carries the same danger-dialog contract:
 possible - the API never returns a password to compare against.
 """
 
+import logging
 from unittest.mock import AsyncMock
 
 
@@ -54,17 +55,31 @@ class TestSetNetworkPassword:
         )
 
     async def test_password_never_logged_or_echoed(
-        self, auth_client, authenticated_client, experimental_writes_enabled
+        self, auth_client, authenticated_client, experimental_writes_enabled, caplog
     ):
         authenticated_client.set_network_password = AsyncMock(
             return_value=make_raw_response({})
         )
-
-        response = await auth_client.put(
-            "/api/networks/network-123/password", json={"password": "correct-horse"}
+        authenticated_client.clear_network_password = AsyncMock(
+            return_value=make_raw_response({})
         )
 
+        with caplog.at_level(logging.WARNING):
+            response = await auth_client.put(
+                "/api/networks/network-123/password",
+                json={"password": "correct-horse"},
+            )
+            clear_response = await auth_client.request(
+                "DELETE",
+                "/api/networks/network-123/password",
+                json={"confirm_open_network": True},
+            )
+
         assert "correct-horse" not in response.text
+        assert clear_response.status_code == 200
+        # Both routes log a warning; it names the network, never the value.
+        assert "network-123" in caplog.text
+        assert "correct-horse" not in caplog.text
 
     async def test_too_short_password_rejected(
         self, auth_client, authenticated_client, experimental_writes_enabled

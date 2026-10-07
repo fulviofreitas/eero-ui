@@ -2630,7 +2630,7 @@ async def set_network_password_route(
         )
 
     _LOGGER.warning(
-        "Setting network password for network %s - disconnects every client while "
+        "Changing Wi-Fi passphrase for network %s - disconnects every client while "
         "it takes effect",
         network_id,
     )
@@ -2665,8 +2665,8 @@ async def clear_network_password_route(
         )
 
     _LOGGER.warning(
-        "Clearing network password for network %s - disconnects every client while "
-        "it takes effect",
+        "Removing Wi-Fi passphrase for network %s (opens the network) - disconnects "
+        "every client while it takes effect",
         network_id,
     )
     raw_result = await client.clear_network_password(network_id)
