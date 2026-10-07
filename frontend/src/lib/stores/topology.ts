@@ -229,7 +229,16 @@ interface LayoutPositions {
 	gateway: { x: number; y: number } | null;
 	eeros: Map<string, { x: number; y: number }>;
 	devices: Map<string, { x: number; y: number }>;
+	/**
+	 * Hierarchy only: where each eero's device grid is centred, relative to that eero's own
+	 * node. Lets the gateway's directly-attached devices sit in the shared device row instead of
+	 * landing on top of the leaf-eero row.
+	 */
+	deviceAnchors?: Map<string, { x: number; y: number }>;
 }
+
+/** Devices per row in the hierarchy layout's per-eero device grid. */
+const HIERARCHY_DEVICES_PER_ROW = 3;
 
 function calculateLayoutPositions(
 	gateway: EeroSummary | undefined,
@@ -250,30 +259,66 @@ function calculateLayoutPositions(
 	}
 }
 
+/**
+ * Top-down tree: gateway, then a row of leaf eeros, then one shared device row.
+ *
+ * Every eero (the gateway included, when it has its own clients) owns a column as wide as its
+ * device grid, so neighbouring grids never overlap - the previous fixed `eeroSpacingX` was
+ * narrower than a four-wide grid, and the gateway's clients were drawn at the leaf-eero row.
+ */
 function calculateHierarchyLayout(
 	gateway: EeroSummary | undefined,
 	leafEeros: EeroSummary[],
-	_devices: DeviceSummary[]
+	devices: DeviceSummary[]
 ): LayoutPositions {
 	const positions: LayoutPositions = {
 		gateway: null,
 		eeros: new Map(),
-		devices: new Map()
+		devices: new Map(),
+		deviceAnchors: new Map()
 	};
 
-	const totalWidth = Math.max(leafEeros.length, 1) * LAYOUT.eeroSpacingX;
-	const gatewayX = LAYOUT.startX + totalWidth / 2;
+	const allEeros = gateway ? [gateway, ...leafEeros] : leafEeros;
+	const groups = groupDevicesByEero(devices, allEeros);
+	const columnWidth = (eeroId: string) => {
+		const count = groups[eeroId]?.length ?? 0;
+		const gridWidth =
+			Math.min(Math.max(count, 1), HIERARCHY_DEVICES_PER_ROW) * LAYOUT.deviceSpacingX;
+		return Math.max(gridWidth, LAYOUT.eeroSpacingX);
+	};
+
+	const gatewayHasDevices = gateway ? (groups[gateway.id]?.length ?? 0) > 0 : false;
+	// The gateway's own column sits in the middle, directly under the gateway, so its edges do
+	// not cut across the leaf eeros' edges.
+	const leafIds = leafEeros.map((e) => e.id);
+	const half = Math.ceil(leafIds.length / 2);
+	const columns =
+		gateway && gatewayHasDevices
+			? [...leafIds.slice(0, half), gateway.id, ...leafIds.slice(half)]
+			: leafIds;
+
+	const centres = new Map<string, number>();
+	let cursor = LAYOUT.startX;
+	for (const id of columns) {
+		const width = columnWidth(id);
+		centres.set(id, cursor + width / 2);
+		cursor += width;
+	}
+	const spanCentre = columns.length > 0 ? (LAYOUT.startX + cursor) / 2 : LAYOUT.startX;
+
+	leafEeros.forEach((eero) => {
+		positions.eeros.set(eero.id, { x: centres.get(eero.id)!, y: LAYOUT.eeroY });
+		positions.deviceAnchors!.set(eero.id, { x: 0, y: LAYOUT.deviceY - LAYOUT.eeroY });
+	});
 
 	if (gateway) {
-		positions.gateway = { x: gatewayX, y: LAYOUT.gatewayY };
-	}
-
-	leafEeros.forEach((eero, index) => {
-		positions.eeros.set(eero.id, {
-			x: LAYOUT.startX + index * LAYOUT.eeroSpacingX,
-			y: LAYOUT.eeroY
+		positions.gateway = { x: spanCentre, y: LAYOUT.gatewayY };
+		const column = centres.get(gateway.id);
+		positions.deviceAnchors!.set(gateway.id, {
+			x: column !== undefined ? column - spanCentre : 0,
+			y: LAYOUT.deviceY - LAYOUT.gatewayY
 		});
-	});
+	}
 
 	return positions;
 }
@@ -416,7 +461,7 @@ function groupDevicesByEero(
 	return groups;
 }
 
-function transformToTopology(
+export function transformToTopology(
 	eeros: EeroSummary[],
 	devices: DeviceSummary[],
 	layoutType: LayoutType = 'hierarchy'
@@ -494,7 +539,9 @@ function transformToTopology(
 	});
 
 	// Group devices by their connected eero
-	const devicesByEero = groupDevicesByEero(devices, eeros);
+	// Gateway first, matching calculateHierarchyLayout's sizing pass: groupDevicesByEero assigns
+	// a device to the first eero it matches, so both passes must see the same order.
+	const devicesByEero = groupDevicesByEero(devices, gateway ? [gateway, ...leafEeros] : eeros);
 
 	// Add device nodes and edges
 	Object.entries(devicesByEero).forEach(([eeroId, eeroDevices]) => {
@@ -510,7 +557,7 @@ function transformToTopology(
 		allDevices.forEach((device, index) => {
 			// Calculate position RELATIVE to parent eero (not absolute)
 			// When using parentId, position is an offset from the parent node
-			const devicesPerRow = 4;
+			const devicesPerRow = HIERARCHY_DEVICES_PER_ROW;
 			const row = Math.floor(index / devicesPerRow);
 			const col = index % devicesPerRow;
 
@@ -537,11 +584,13 @@ function transformToTopology(
 				relX = Math.cos(angle) * radius;
 				relY = Math.sin(angle) * radius + 30;
 			} else {
-				// Default hierarchy layout - devices below eero in a grid
+				// Default hierarchy layout - devices in a grid centred on the eero's column, in the
+				// shared device row (see calculateHierarchyLayout)
+				const anchor = positions.deviceAnchors?.get(eeroId) ?? { x: 0, y: 180 };
 				const offsetX =
 					(col - (Math.min(allDevices.length, devicesPerRow) - 1) / 2) * LAYOUT.deviceSpacingX;
-				relX = offsetX;
-				relY = 180 + row * LAYOUT.deviceSpacingY; // Offset below parent
+				relX = anchor.x + offsetX;
+				relY = anchor.y + row * LAYOUT.deviceSpacingY;
 			}
 
 			const deviceId = device.mac || device.id || `device-${index}`;

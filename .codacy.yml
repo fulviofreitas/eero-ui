@@ -25,16 +25,24 @@ exclude_paths:
 engines:
   # pytest requires bare `assert` (B101) and uses literal placeholder
   # credentials in fixtures (B105/B106). Bandit is meaningful on app/ only.
+  # The README screenshot renderer is offline dev tooling: its `random` is a
+  # seeded generator for reproducible synthetic fixtures (B311, not crypto),
+  # `"has_password": True` is fixture data (B105), and it runs a fixed
+  # `npx`/`npm` argv (B603/B607) and polls its own localhost server (B310).
   bandit:
     exclude_paths:
       - "backend/tests/**"
+      - "scripts/render-readme-screenshots.py"
 
   # pytest fixture injection shadows module-level fixture names by design
   # (W0621); f-string logging (W1203) is the project's logging style and is
-  # covered by ruff's G rules where we want them.
+  # covered by ruff's G rules where we want them. The screenshot renderer's
+  # route table is a list of lambdas, which pylint misreads as `return`
+  # outside a function (E0104); ruff lints that script in CI instead.
   pylintpython3:
     exclude_paths:
       - "backend/tests/**"
+      - "scripts/render-readme-screenshots.py"
 
   # Prospector re-runs Bandit (duplicating every B101) and runs pyright in a
   # container without the project's dependencies installed, so every
