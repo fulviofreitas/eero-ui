@@ -44,6 +44,7 @@
 	import NotificationsCard from '#lib/components/network/NotificationsCard.svelte';
 	import ContentFilterCard from '#lib/components/network/ContentFilterCard.svelte';
 	import RoamingEventsCard from '#lib/components/network/RoamingEventsCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -285,7 +286,7 @@
 					id="tabpanel-overview"
 					aria-labelledby="tab-overview"
 				>
-					<OverviewCard {network} networkId={networkId ?? ''} />
+					<OverviewCard {network} />
 					<HardwareFeaturesCard {network} />
 					<LocationPremiumCard {network} />
 				</div>
@@ -404,6 +405,12 @@
 			{/if}
 		</div>
 
+		<!-- Last block on every tab, outside the tab content (consistency pass). Network has no
+		     "API URL" field in NetworkSummary/NetworkDetail, so only the Network ID row shows. -->
+		<section class="network-technical">
+			<TechnicalCard ids={[{ label: 'Network ID', value: networkId }]} />
+		</section>
+
 		<NetworkRenameModal
 			open={showRenameModal}
 			value={renameValue}
@@ -454,7 +461,11 @@
 	}
 
 	.network-charts {
-		margin-top: var(--space-6);
+		margin-top: var(--space-4);
+	}
+
+	.network-technical {
+		margin-top: var(--space-4);
 	}
 
 	.diagnostics-full {

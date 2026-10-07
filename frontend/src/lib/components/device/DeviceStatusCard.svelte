@@ -1,8 +1,10 @@
 <!--
   DeviceStatusCard
 
-  Device detail "Status", "Activity" and "Technical" sections. Extracted from
-  routes/devices/[id]/+page.svelte (WP5 decomposition).
+  Device detail "Status" and "Activity" sections. Extracted from
+  routes/devices/[id]/+page.svelte (WP5 decomposition). The "Technical" section that used to
+  live here moved to the shared TechnicalCard (consistency pass), rendered as the last block
+  on the page.
 -->
 <script lang="ts">
 	import type { DeviceDetail } from '$api/types';
@@ -86,17 +88,6 @@
 	</div>
 </section>
 
-<section class="card info-card wide-card">
-	<h2>Technical</h2>
-	<div class="info-list technical-list">
-		<InfoRow label="Device ID" value={device.id || '—'} mono />
-		<InfoRow label="Network ID" value={device.network_id || '—'} mono />
-		{#if device.url}
-			<InfoRow label="API URL" value={device.url} mono />
-		{/if}
-	</div>
-</section>
-
 <style>
 	.info-card h2 {
 		font-size: 0.875rem;
@@ -159,15 +150,5 @@
 	.status-muted {
 		color: var(--color-text-secondary);
 		background-color: var(--color-bg-tertiary);
-	}
-
-	.wide-card {
-		grid-column: 1 / -1;
-	}
-
-	.technical-list {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: var(--space-2) var(--space-6);
 	}
 </style>

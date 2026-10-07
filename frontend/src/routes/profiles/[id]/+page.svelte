@@ -10,7 +10,6 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import ProfileStatusCard from '#lib/components/profile/ProfileStatusCard.svelte';
-	import ProfileTechnicalCard from '#lib/components/profile/ProfileTechnicalCard.svelte';
 	import ProfileDevicesSection from '#lib/components/profile/ProfileDevicesSection.svelte';
 	import ProfileSchedulesCard from '#lib/components/profile/ProfileSchedulesCard.svelte';
 	import ProfileContentFilterCard from '#lib/components/profile/ProfileContentFilterCard.svelte';
@@ -18,6 +17,7 @@
 	import ProfileRenameModal from '#lib/components/profile/ProfileRenameModal.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let profile = $state<ProfileSummary | null>(null);
@@ -246,8 +246,6 @@
 
 		<ProfileStatusCard paused={profile.paused} />
 
-		<ProfileTechnicalCard {profile} networkId={$selectedNetworkId} />
-
 		{#if profile.id}
 			<div class="info-grid premium-grid">
 				<PremiumGate feature="Profile insights">
@@ -285,6 +283,14 @@
 			</PremiumGate>
 		{/if}
 
+		<TechnicalCard
+			ids={[
+				{ label: 'Profile ID', value: profile.id },
+				{ label: 'Network ID', value: $selectedNetworkId }
+			]}
+			apiUrl={profile.url}
+		/>
+
 		<ProfileRenameModal
 			open={showRenameModal}
 			value={renameValue}
@@ -299,6 +305,11 @@
 <style>
 	.profile-detail-page {
 		max-width: 1000px;
+		/* Standard vertical rhythm between stacked page blocks (consistency pass) - no child
+		   needs its own margin-top/margin-bottom. */
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 
 	.error-state {
@@ -335,10 +346,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
 		gap: var(--space-4);
-	}
-
-	.premium-grid {
-		margin-top: var(--space-4);
 	}
 
 	@media (max-width: 768px) {

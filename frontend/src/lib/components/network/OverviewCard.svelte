@@ -1,10 +1,11 @@
 <!--
   OverviewCard
 
-  Network detail "Overview", "Connection" and "Technical" sections. Extracted from
+  Network detail "Overview" and "Connection" sections. Extracted from
   routes/network/[id]/+page.svelte (WP5 decomposition). Uses the shared InfoRow primitive in
   place of the bespoke `dt`/`dd` `.info-row` markup that was duplicated across this file,
-  devices/[id] and profiles/[id].
+  devices/[id] and profiles/[id]. The "Technical" section that used to live here moved to the
+  shared TechnicalCard (consistency pass), rendered as the last block on the page.
 -->
 <script lang="ts">
 	import type { NetworkDetail } from '$api/types';
@@ -13,10 +14,9 @@
 
 	interface Props {
 		network: NetworkDetail;
-		networkId: string;
 	}
 
-	let { network, networkId }: Props = $props();
+	let { network }: Props = $props();
 
 	function formatDate(dateStr: string | null): string {
 		if (!dateStr) return '—';
@@ -85,13 +85,6 @@
 	</div>
 </section>
 
-<section class="card info-card wide-card">
-	<h2>Technical</h2>
-	<div class="info-list technical-list">
-		<InfoRow label="Network ID" value={networkId || '—'} mono />
-	</div>
-</section>
-
 <style>
 	.info-card {
 		display: flex;
@@ -126,15 +119,5 @@
 	.badge-row-label {
 		color: var(--color-text-secondary);
 		font-size: 0.875rem;
-	}
-
-	.wide-card {
-		grid-column: 1 / -1;
-	}
-
-	.technical-list {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: var(--space-2) var(--space-6);
 	}
 </style>

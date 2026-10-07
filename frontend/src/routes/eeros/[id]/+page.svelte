@@ -14,10 +14,10 @@
 	import EeroPerformanceHistoryCard from '#lib/components/eero/EeroPerformanceHistoryCard.svelte';
 	import EeroRadiosCard from '#lib/components/eero/EeroRadiosCard.svelte';
 	import EeroPortsCard from '#lib/components/eero/EeroPortsCard.svelte';
-	import EeroTechnicalCard from '#lib/components/eero/EeroTechnicalCard.svelte';
 	import EeroActionsCard from '#lib/components/eero/EeroActionsCard.svelte';
 	import EeroConnectionsCard from '#lib/components/eero/EeroConnectionsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let eero: EeroDetail | null = $state(null);
@@ -251,7 +251,6 @@
 			<EeroPerformanceHistoryCard {eero} />
 			<EeroRadiosCard {eero} />
 			<EeroPortsCard eeroId={eero.id} ports={eero.ethernet_ports} />
-			<EeroTechnicalCard {eero} networkId={$selectedNetworkId} />
 			<EeroActionsCard
 				eeroId={eero.id}
 				ledOn={eero.led_on}
@@ -274,6 +273,13 @@
 					/>
 				</PremiumGate>
 			{/if}
+			<TechnicalCard
+				ids={[
+					{ label: 'Eero ID', value: eero.id },
+					{ label: 'Network ID', value: $selectedNetworkId }
+				]}
+				apiUrl={eero.url}
+			/>
 		</div>
 	{/if}
 </div>

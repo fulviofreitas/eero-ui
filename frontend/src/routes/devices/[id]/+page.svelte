@@ -15,6 +15,7 @@
 	import DeviceIdentificationCard from '#lib/components/device/DeviceIdentificationCard.svelte';
 	import DeviceConnectionCard from '#lib/components/device/DeviceConnectionCard.svelte';
 	import DeviceStatusCard from '#lib/components/device/DeviceStatusCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import DeviceSecondaryWanToggle from '#lib/components/device/DeviceSecondaryWanToggle.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
@@ -292,23 +293,31 @@
 				<RoamingEventsCard networkId={device.network_id} deviceId={device.id} />
 			</section>
 		{/if}
+
+		<TechnicalCard
+			ids={[
+				{ label: 'Device ID', value: device.id },
+				{ label: 'Network ID', value: device.network_id }
+			]}
+			apiUrl={device.url}
+		/>
 	{/if}
 </div>
 
 <style>
 	.device-detail-page {
 		max-width: 1200px;
+		/* Standard vertical rhythm between stacked page blocks (consistency pass) - no child
+		   needs its own margin-top/margin-bottom. */
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 
 	.skeleton-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
-		margin-top: var(--space-4);
-	}
-
-	.device-roaming {
-		margin-top: var(--space-4);
 	}
 
 	.error-state {
@@ -330,14 +339,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
-	}
-
-	.device-charts {
-		margin-top: var(--space-6);
-	}
-
-	.premium-grid {
-		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {
