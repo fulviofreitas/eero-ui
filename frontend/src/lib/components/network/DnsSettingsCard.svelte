@@ -98,7 +98,6 @@
 	let valid = $derived(form ? formIsValid(form) : false);
 	let serversDirty = $derived(settings && form ? isFormDirty(settings, form) : false);
 	let cachingDirty = $derived(settings ? caching !== settings.caching : false);
-	let dirty = $derived(serversDirty || cachingDirty);
 	// Enabled when servers are dirty+valid OR caching is dirty (plan § consistency pass) - an
 	// in-progress, not-yet-valid servers edit must never block an otherwise-ready caching save.
 	let canSave = $derived(((serversDirty && valid) || cachingDirty) && !dnsState.applying);

@@ -35,7 +35,9 @@
 
 	function entityHref(connection: EeroConnection): string | null {
 		if (!connection.id) return null;
-		return connection.entity_type === 'eero' ? `/eeros/${connection.id}` : `/devices/${connection.id}`;
+		return connection.entity_type === 'eero'
+			? `/eeros/${connection.id}`
+			: `/devices/${connection.id}`;
 	}
 
 	function displayName(connection: EeroConnection): string {
@@ -101,8 +103,7 @@
 							<span>{displayName(connection)}</span>
 						{/if}
 						{#if connection.device_type}
-							<span class="connection-device-type text-muted text-sm"
-								>{connection.device_type}</span
+							<span class="connection-device-type text-muted text-sm">{connection.device_type}</span
 							>
 						{/if}
 					</div>
