@@ -16,6 +16,7 @@
 	} from '$components/common/DataTable.svelte';
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		devices: ProfileDevice[];
@@ -88,15 +89,16 @@
 {/snippet}
 
 {#snippet deviceActionsCell(device: ProfileDevice)}
-	<button
-		class="btn btn-xs {device.paused ? 'btn-primary' : 'btn-warning'}"
+	<Button
+		size="sm"
+		variant={device.paused ? 'primary' : 'warning'}
 		onclick={(e) => {
 			e.stopPropagation();
 			onPauseDevice(device);
 		}}
 	>
 		{device.paused ? 'Resume' : 'Pause'}
-	</button>
+	</Button>
 {/snippet}
 
 <section class="devices-section">
@@ -134,7 +136,7 @@
 						This profile has {deviceCount} assigned devices, but they may not be in the current device
 						cache.
 					</p>
-					<button class="btn btn-secondary btn-sm" onclick={onRefresh}> Refresh </button>
+					<Button onclick={onRefresh}>Refresh</Button>
 				{:else}
 					<p class="text-sm text-muted">Assign devices to this profile using the Eero app.</p>
 				{/if}
@@ -195,17 +197,18 @@
 					</div>
 
 					<div class="device-actions">
-						<button
-							class="btn btn-sm {device.paused ? 'btn-primary' : 'btn-warning'}"
+						<Button
+							size="sm"
+							variant={device.paused ? 'primary' : 'warning'}
+							icon={device.paused ? 'play' : 'pause'}
 							onclick={(e) => {
 								e.preventDefault();
 								e.stopPropagation();
 								onPauseDevice(device);
 							}}
 						>
-							<Icon name={device.paused ? 'play' : 'pause'} size={12} />
 							{device.paused ? 'Resume' : 'Pause'}
-						</button>
+						</Button>
 					</div>
 				</a>
 			{/each}
@@ -400,17 +403,8 @@
 		border-top: 1px solid var(--color-border-muted);
 	}
 
-	.device-actions .btn {
+	.device-actions :global(.btn) {
 		flex: 1;
-	}
-
-	.btn-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	.btn-warning:hover:not(:disabled) {
-		background-color: #e0a820;
 	}
 
 	.devices-list {
@@ -463,11 +457,6 @@
 	.device-name-cell div {
 		display: flex;
 		flex-direction: column;
-	}
-
-	.btn-xs {
-		padding: var(--space-1) var(--space-2);
-		font-size: 0.75rem;
 	}
 
 	.badge-success {

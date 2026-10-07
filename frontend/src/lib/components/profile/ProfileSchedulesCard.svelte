@@ -26,6 +26,7 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 	import ProfileScheduleModal from './ProfileScheduleModal.svelte';
 
 	interface Props {
@@ -157,27 +158,16 @@
 <Card title="Schedules">
 	{#snippet actions()}
 		<ExperimentalGate>
-			<button
-				class="btn btn-secondary btn-sm"
-				onclick={requestBedtime}
-				disabled={scheduleState.applying}
-			>
-				Add Bedtime
-			</button>
-			<button
-				class="btn btn-secondary btn-sm"
+			<Button onclick={requestBedtime} disabled={scheduleState.applying}>Add Bedtime</Button>
+			<Button
 				onclick={requestClearAll}
 				disabled={scheduleState.applying || scheduleState.schedules.length === 0}
 			>
 				Clear All
-			</button>
-			<button
-				class="btn btn-primary btn-sm"
-				onclick={openCreateModal}
-				disabled={scheduleState.applying}
-			>
+			</Button>
+			<Button variant="primary" onclick={openCreateModal} disabled={scheduleState.applying}>
 				Add Schedule
-			</button>
+			</Button>
 		</ExperimentalGate>
 	{/snippet}
 
@@ -208,20 +198,21 @@
 						<td>
 							<ExperimentalGate>
 								<div class="row-actions">
-									<button
-										class="btn btn-secondary btn-sm"
+									<Button
+										size="sm"
 										onclick={() => openEditModal(schedule)}
 										disabled={scheduleState.applying}
 									>
 										Edit
-									</button>
-									<button
-										class="btn btn-danger btn-sm"
+									</Button>
+									<Button
+										size="sm"
+										variant="danger"
 										onclick={() => requestDelete(schedule)}
 										disabled={scheduleState.applying}
 									>
 										Delete
-									</button>
+									</Button>
 								</div>
 							</ExperimentalGate>
 						</td>

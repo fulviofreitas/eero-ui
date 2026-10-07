@@ -27,6 +27,7 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -214,13 +215,9 @@
 			<div class="badge-row">
 				<h4>Pending Invites</h4>
 				<ExperimentalGate>
-					<button
-						class="btn btn-secondary btn-sm"
-						onclick={requestCancelPendingAdmin}
-						disabled={cardState.applying}
-					>
+					<Button onclick={requestCancelPendingAdmin} disabled={cardState.applying}>
 						Cancel Pending Admin Invites
-					</button>
+					</Button>
 				</ExperimentalGate>
 			</div>
 
@@ -231,9 +228,7 @@
 						<option value="admin">Admin</option>
 						<option value="owner">Owner</option>
 					</select>
-					<button type="submit" class="btn btn-primary btn-sm" disabled={cardState.applying}>
-						Send Invite
-					</button>
+					<Button type="submit" variant="primary" disabled={cardState.applying}>Send Invite</Button>
 				</form>
 			</ExperimentalGate>
 
@@ -265,31 +260,29 @@
 					bind:value={renameValue}
 					placeholder="New nickname"
 				/>
-				<button
-					class="btn btn-primary btn-sm"
+				<Button
+					size="sm"
+					variant="primary"
 					onclick={() => requestRenameInvite(row)}
 					disabled={cardState.applying || !renameValue.trim()}
 				>
 					Save
-				</button>
-				<button class="btn btn-secondary btn-sm" onclick={cancelRenameInvite}> Cancel </button>
+				</Button>
+				<Button size="sm" onclick={cancelRenameInvite}>Cancel</Button>
 			</div>
 		{:else}
 			<div class="row-actions">
-				<button
-					class="btn btn-secondary btn-sm"
-					onclick={() => startRenameInvite(row)}
-					disabled={cardState.applying}
-				>
+				<Button size="sm" onclick={() => startRenameInvite(row)} disabled={cardState.applying}>
 					Rename
-				</button>
-				<button
-					class="btn btn-danger btn-sm"
+				</Button>
+				<Button
+					size="sm"
+					variant="danger"
 					onclick={() => requestDeleteInvite(row)}
 					disabled={cardState.applying}
 				>
 					Cancel
-				</button>
+				</Button>
 			</div>
 		{/if}
 	</ExperimentalGate>

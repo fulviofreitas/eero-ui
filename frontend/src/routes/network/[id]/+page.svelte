@@ -9,7 +9,7 @@
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Tabs from '$components/common/Tabs.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '#lib/components/network/DnsSettingsCard.svelte';
 	import OverviewCard from '#lib/components/network/OverviewCard.svelte';
@@ -239,16 +239,16 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
+				<Button onclick={() => fetchNetwork(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/')}>Back to Dashboard</Button>
 			</div>
 		</div>
 	{:else if !network}
 		<div class="empty-state">
 			<p>No network data available.</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
+				<Button onclick={() => fetchNetwork(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/')}>Back to Dashboard</Button>
 			</div>
 		</div>
 	{:else}
@@ -262,13 +262,11 @@
 				<StatusBadge status={network!.status === 'online' ? 'connected' : 'disconnected'} />
 			{/snippet}
 			{#snippet actions()}
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)} disabled={loading}>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
+				<Button icon="refresh" onclick={() => fetchNetwork(true)} disabled={loading}>
+					Refresh
+				</Button>
 				<ExperimentalGate>
-					<button class="btn btn-secondary" onclick={openRenameNetworkModal} disabled={loading}>
-						<Icon name="edit" size={14} /> Rename
-					</button>
+					<Button icon="edit" onclick={openRenameNetworkModal} disabled={loading}>Rename</Button>
 				</ExperimentalGate>
 			{/snippet}
 		</DetailHeader>

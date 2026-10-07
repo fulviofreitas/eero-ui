@@ -33,6 +33,7 @@
 	import Icon from '$components/common/Icon.svelte';
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import Dropdown, { type DropdownItem } from '$components/common/Dropdown.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	/** Above this many filtered rows, DataTable renders VirtualBody instead of its own `<tbody>`. */
 	const VIRTUALIZE_THRESHOLD = 60;
@@ -478,18 +479,13 @@
 		</div>
 		<div class="header-right">
 			<!-- Selection Mode Toggle -->
-			<button
-				class="btn btn-sm"
-				class:btn-primary={$selectionMode}
-				class:btn-secondary={!$selectionMode}
+			<Button
+				variant={$selectionMode ? 'primary' : 'secondary'}
+				icon={$selectionMode ? 'x' : 'checkbox-on'}
 				onclick={toggleSelectionMode}
 			>
-				{#if $selectionMode}
-					<Icon name="x" size={14} /> Cancel Selection
-				{:else}
-					<Icon name="checkbox-on" size={14} /> Select
-				{/if}
-			</button>
+				{$selectionMode ? 'Cancel Selection' : 'Select'}
+			</Button>
 
 			<!-- Profile Assignment (only in selection mode) -->
 			{#if $selectionMode && selectedCount > 0}
@@ -497,51 +493,42 @@
 					label={`Assign to Profile (${selectedCount})`}
 					items={profileItems}
 					disabled={assigningProfile}
-					triggerClass="btn btn-primary btn-sm dropdown-trigger"
+					triggerClass="btn btn-primary dropdown-trigger"
 				>
 					{#snippet trigger()}
 						<Icon name="folder" size={14} /> Assign to Profile ({selectedCount})
 					{/snippet}
 				</Dropdown>
 
-				<button
-					class="btn btn-danger btn-sm"
-					onclick={handleBulkBlock}
-					disabled={bulkActionRunning}
-				>
-					<Icon name="x" size={14} /> Block selected
-				</button>
-				<button
-					class="btn btn-secondary btn-sm"
+				<Button variant="danger" icon="x" onclick={handleBulkBlock} disabled={bulkActionRunning}>
+					Block selected
+				</Button>
+				<Button
+					variant="secondary"
+					icon="check"
 					onclick={handleBulkUnblock}
 					disabled={bulkActionRunning}
 				>
-					<Icon name="check" size={14} /> Unblock selected
-				</button>
+					Unblock selected
+				</Button>
 			{/if}
 
 			<!-- Reset filters -->
 			{#if hasActiveFilters}
-				<button class="btn btn-secondary btn-sm" onclick={clearFilters}>
-					<Icon name="x" size={14} /> Reset filters
-				</button>
+				<Button icon="x" onclick={clearFilters}>Reset filters</Button>
 			{/if}
 
 			<!-- Export -->
 			<ExportMenu data={$filteredDevices} filename="devices" disabled={$isDevicesLoading} />
 
-			<button
-				class="btn btn-secondary btn-sm"
+			<Button
+				icon="refresh"
+				loading={refreshing}
 				onclick={handleRefresh}
-				disabled={refreshing || $isDevicesLoading}
+				disabled={$isDevicesLoading}
 			>
-				{#if refreshing}
-					<span class="loading-spinner"></span>
-				{:else}
-					<Icon name="refresh" size={14} />
-				{/if}
 				Refresh
-			</button>
+			</Button>
 		</div>
 	</div>
 
@@ -666,7 +653,7 @@
 		{#if $filteredDevices.length === 0 && !$isDevicesLoading && hasActiveFilters}
 			<EmptyState title="No devices match your filters.">
 				{#snippet action()}
-					<button class="btn btn-secondary btn-sm" onclick={clearFilters}>Clear filters</button>
+					<Button onclick={clearFilters}>Clear filters</Button>
 				{/snippet}
 			</EmptyState>
 		{:else}

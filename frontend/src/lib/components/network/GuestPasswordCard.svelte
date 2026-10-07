@@ -13,6 +13,7 @@
 	import { ApiClientError } from '$api/client';
 	import Icon from '$components/common/Icon.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -136,13 +137,7 @@
 		<Skeleton variant="text" lines={2} />
 	{:else if guestState.error && !status}
 		<p class="text-danger text-sm">{guestState.error}</p>
-		<button
-			type="button"
-			class="btn btn-secondary btn-sm"
-			onclick={() => guestPasswordStore.fetch(networkId)}
-		>
-			Retry
-		</button>
+		<Button type="button" onclick={() => guestPasswordStore.fetch(networkId)}>Retry</Button>
 	{:else if status}
 		<div class="guest-password-status">
 			<Icon name={status.has_password ? 'check' : 'x'} size={16} />
@@ -159,23 +154,17 @@
 				disabled={guestState.applying}
 				autocomplete="new-password"
 			/>
-			<button
+			<Button
 				type="button"
-				class="btn btn-secondary btn-sm"
 				aria-pressed={showPassword}
-				aria-label={showPassword ? 'Hide password' : 'Show password'}
+				label={showPassword ? 'Hide password' : 'Show password'}
 				onclick={() => (showPassword = !showPassword)}
 			>
 				{showPassword ? 'Hide' : 'Show'}
-			</button>
-			<button
-				type="button"
-				class="btn btn-secondary btn-sm"
-				onclick={handleGenerate}
-				disabled={guestState.applying}
-			>
+			</Button>
+			<Button type="button" onclick={handleGenerate} disabled={guestState.applying}>
 				Generate
-			</button>
+			</Button>
 		</div>
 
 		{#if validationError}
@@ -186,19 +175,23 @@
 		{/if}
 
 		<div class="guest-password-actions">
-			<button
+			<Button
 				type="button"
-				class="btn btn-secondary"
 				onclick={requestClearPassword}
-				disabled={guestState.applying || !status.has_password}
+				disabled={!status.has_password}
+				loading={guestState.applying}
 			>
-				{#if guestState.applying}<span class="loading-spinner"></span>{/if}
 				Clear
-			</button>
-			<button type="button" class="btn btn-primary" onclick={requestSetPassword} disabled={!canSet}>
-				{#if guestState.applying}<span class="loading-spinner"></span>{/if}
+			</Button>
+			<Button
+				type="button"
+				variant="primary"
+				onclick={requestSetPassword}
+				disabled={!canSet}
+				loading={guestState.applying}
+			>
 				Set Password
-			</button>
+			</Button>
 		</div>
 	{/if}
 </section>

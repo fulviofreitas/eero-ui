@@ -32,6 +32,7 @@
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 	import BackupAccessPointModal from './BackupAccessPointModal.svelte';
 	import { formatBytes } from '#lib/utils/format-bytes.js';
 	import { formatRelativeTime } from '#lib/utils/format-datetime.js';
@@ -321,13 +322,9 @@
 					{cardState.status?.enabled ? 'Enabled' : 'Disabled'}
 				</span>
 				<ExperimentalGate>
-					<button
-						class="btn btn-secondary btn-sm"
-						onclick={requestToggleEnabled}
-						disabled={cardState.applying}
-					>
+					<Button onclick={requestToggleEnabled} disabled={cardState.applying}>
 						{cardState.status?.enabled ? 'Disable' : 'Enable'}
-					</button>
+					</Button>
 				</ExperimentalGate>
 			</div>
 		</section>
@@ -370,27 +367,15 @@
 				<h4>Backup Access Points</h4>
 				<ExperimentalGate>
 					<div class="ap-header-actions">
-						<button
-							class="btn btn-secondary btn-sm"
-							onclick={requestDiscover}
-							disabled={cardState.applying}
-						>
-							Discover
-						</button>
-						<button
-							class="btn btn-secondary btn-sm"
-							onclick={requestCheck}
-							disabled={cardState.applying}
-						>
-							Check Connectivity
-						</button>
-						<button
-							class="btn btn-primary btn-sm"
+						<Button onclick={requestDiscover} disabled={cardState.applying}>Discover</Button>
+						<Button onclick={requestCheck} disabled={cardState.applying}>Check Connectivity</Button>
+						<Button
+							variant="primary"
 							onclick={() => openAddApModal()}
 							disabled={cardState.applying}
 						>
 							Add Access Point
-						</button>
+						</Button>
 					</div>
 				</ExperimentalGate>
 			</div>
@@ -417,13 +402,13 @@
 						{#each cardState.discovered as ssid, i (ssid.uuid ?? ssid.ssid ?? i)}
 							<li>
 								<span>{ssid.ssid ?? 'Unknown SSID'}</span>
-								<button
-									class="btn btn-secondary btn-sm"
+								<Button
+									size="sm"
 									onclick={() => openAddApModal(ssid)}
 									disabled={cardState.applying}
 								>
 									Use this SSID
-								</button>
+								</Button>
 							</li>
 						{/each}
 					</ul>
@@ -482,34 +467,19 @@
 {#snippet apActionsCell(row: BackupAccessPoint)}
 	<ExperimentalGate>
 		<div class="row-actions">
-			<button
-				class="btn btn-secondary btn-sm"
-				onclick={() => moveAp(row, -1)}
-				disabled={cardState.applying}
-			>
-				Up
-			</button>
-			<button
-				class="btn btn-secondary btn-sm"
-				onclick={() => moveAp(row, 1)}
-				disabled={cardState.applying}
-			>
-				Down
-			</button>
-			<button
-				class="btn btn-secondary btn-sm"
-				onclick={() => openEditApModal(row)}
-				disabled={cardState.applying}
-			>
+			<Button size="sm" onclick={() => moveAp(row, -1)} disabled={cardState.applying}>Up</Button>
+			<Button size="sm" onclick={() => moveAp(row, 1)} disabled={cardState.applying}>Down</Button>
+			<Button size="sm" onclick={() => openEditApModal(row)} disabled={cardState.applying}>
 				Edit
-			</button>
-			<button
-				class="btn btn-danger btn-sm"
+			</Button>
+			<Button
+				size="sm"
+				variant="danger"
 				onclick={() => requestDeleteAp(row)}
 				disabled={cardState.applying}
 			>
 				Delete
-			</button>
+			</Button>
 		</div>
 	</ExperimentalGate>
 {/snippet}

@@ -31,6 +31,7 @@
 		type DnsFormState
 	} from '#lib/utils/dns-form.js';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Button from '$components/common/Button.svelte';
 	import DnsProviderPicker from './DnsProviderPicker.svelte';
 
 	interface Props {
@@ -213,7 +214,7 @@
 		<Skeleton variant="text" lines={4} />
 	{:else if dnsState.error && !settings}
 		<p class="text-danger text-sm">{dnsState.error}</p>
-		<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}> Retry </button>
+		<Button type="button" onclick={handleRefresh}>Retry</Button>
 	{:else if settings && form}
 		{#if justApplied}
 			<div class="dns-applying" role="status">
@@ -222,9 +223,7 @@
 					Eeros typically finish rebooting within a few minutes. This page will not update on its
 					own while the mesh is offline.
 				</p>
-				<button type="button" class="btn btn-secondary btn-sm" onclick={handleRefresh}>
-					Refresh Status
-				</button>
+				<Button type="button" onclick={handleRefresh}>Refresh Status</Button>
 			</div>
 		{:else}
 			<div class="dns-mode-select" role="radiogroup" aria-label="DNS mode">
@@ -349,12 +348,15 @@
 			{/if}
 
 			<div class="dns-actions">
-				<button type="button" class="btn btn-primary" disabled={!canSave} onclick={requestSave}>
-					{#if dnsState.applying}
-						<span class="loading-spinner"></span>
-					{/if}
+				<Button
+					type="button"
+					variant="primary"
+					disabled={!canSave}
+					loading={dnsState.applying}
+					onclick={requestSave}
+				>
 					Save
-				</button>
+				</Button>
 			</div>
 		{/if}
 	{/if}

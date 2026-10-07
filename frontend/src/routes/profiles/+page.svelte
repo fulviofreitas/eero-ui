@@ -20,6 +20,7 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Modal from '$components/common/Modal.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	let profiles: ProfileSummary[] = $state([]);
 	let loading = $state(true);
@@ -150,17 +151,8 @@
 				</button>
 			</div>
 			<ExportMenu data={profiles} filename="profiles" disabled={loading} />
-			<button class="btn btn-secondary" onclick={() => fetchProfiles(true)} disabled={loading}>
-				{#if loading}
-					<span class="loading-spinner"></span>
-				{:else}
-					<Icon name="refresh" size={14} />
-				{/if}
-				Refresh
-			</button>
-			<button class="btn btn-primary" onclick={() => (showCreateModal = true)}>
-				+ New profile
-			</button>
+			<Button icon="refresh" onclick={() => fetchProfiles(true)} {loading}>Refresh</Button>
+			<Button variant="primary" onclick={() => (showCreateModal = true)}>+ New profile</Button>
 		</div>
 	</header>
 
@@ -257,20 +249,17 @@
 				disabled={creating}
 			/>
 			<div class="modal-actions">
-				<button
-					type="button"
-					class="btn btn-secondary"
-					onclick={() => (showCreateModal = false)}
-					disabled={creating}
-				>
+				<Button type="button" onclick={() => (showCreateModal = false)} disabled={creating}>
 					Cancel
-				</button>
-				<button type="submit" class="btn btn-primary" disabled={creating || !newProfileName.trim()}>
-					{#if creating}
-						<span class="loading-spinner"></span>
-					{/if}
+				</Button>
+				<Button
+					type="submit"
+					variant="primary"
+					disabled={!newProfileName.trim()}
+					loading={creating}
+				>
 					Create
-				</button>
+				</Button>
 			</div>
 		</form>
 	</Modal>
@@ -368,15 +357,6 @@
 
 	.pause-icon {
 		font-size: 1rem;
-	}
-
-	.btn-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	.btn-warning:hover:not(:disabled) {
-		background-color: #e0a820;
 	}
 
 	.header-right {

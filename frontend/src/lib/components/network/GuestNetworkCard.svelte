@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
 	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		enabled: boolean;
@@ -27,16 +28,9 @@
 			</span>
 			<span class="guest-label">{enabled ? 'Enabled' : 'Disabled'}</span>
 		</div>
-		<button
-			class="btn {enabled ? 'btn-secondary' : 'btn-primary'}"
-			onclick={onToggle}
-			disabled={loading}
-		>
-			{#if loading}
-				<span class="loading-spinner"></span>
-			{/if}
+		<Button variant={enabled ? 'secondary' : 'primary'} onclick={onToggle} {loading}>
 			{enabled ? 'Disable' : 'Enable'} Guest Network
-		</button>
+		</Button>
 	</div>
 </section>
 

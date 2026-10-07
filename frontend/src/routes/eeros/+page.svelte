@@ -19,6 +19,7 @@
 	import EmptyState from '$components/common/EmptyState.svelte';
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	let eeros: EeroSummary[] = $state([]);
 	let loading = $state(true);
@@ -165,14 +166,7 @@
 				</button>
 			</div>
 			<ExportMenu data={eeros} filename="eeros" disabled={loading} />
-			<button class="btn btn-secondary" onclick={() => fetchEeros(true)} disabled={loading}>
-				{#if loading}
-					<span class="loading-spinner"></span>
-				{:else}
-					<Icon name="refresh" size={14} />
-				{/if}
-				Refresh
-			</button>
+			<Button icon="refresh" onclick={() => fetchEeros(true)} {loading}>Refresh</Button>
 		</div>
 	</header>
 

@@ -8,7 +8,7 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import EeroStatusClientsCard from '#lib/components/eero/EeroStatusClientsCard.svelte';
 	import EeroNetworkHardwareCard from '#lib/components/eero/EeroNetworkHardwareCard.svelte';
 	import EeroPerformanceHistoryCard from '#lib/components/eero/EeroPerformanceHistoryCard.svelte';
@@ -219,8 +219,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchEero(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/eeros')}> Back to Eeros </button>
+				<Button onclick={() => fetchEero(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/eeros')}>Back to Eeros</Button>
 			</div>
 		</div>
 	{:else if eero}
@@ -239,9 +239,9 @@
 				<StatusBadge status={eero!.status || 'unknown'} />
 			{/snippet}
 			{#snippet actions()}
-				<button class="btn btn-secondary" onclick={() => fetchEero(true)} disabled={actionLoading}>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
+				<Button icon="refresh" onclick={() => fetchEero(true)} disabled={actionLoading}>
+					Refresh
+				</Button>
 			{/snippet}
 		</DetailHeader>
 

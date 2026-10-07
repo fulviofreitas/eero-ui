@@ -15,6 +15,7 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import EventsTable from '$components/common/EventsTable.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -58,14 +59,7 @@
 			/>
 		{:else if cardState.hasMore && cardState.events.length > 0}
 			<div class="load-more">
-				<button
-					type="button"
-					class="btn btn-secondary btn-sm"
-					onclick={loadMore}
-					disabled={cardState.loadingMore}
-				>
-					{cardState.loadingMore ? 'Loading…' : 'Load older'}
-				</button>
+				<Button type="button" onclick={loadMore} loading={cardState.loadingMore}>Load older</Button>
 			</div>
 		{/if}
 	{/if}

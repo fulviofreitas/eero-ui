@@ -21,6 +21,7 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -164,13 +165,13 @@
 						placeholder="example.com"
 						aria-label="Domain to allow"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={cardState.applying || !allowDomainValue.trim()}
 					>
 						Allow
-					</button>
+					</Button>
 				</form>
 			</ExperimentalGate>
 			{#if cardState.allowedList.length === 0}
@@ -181,13 +182,14 @@
 						<li class="domain-row">
 							<span>{domainLabel(entry)}</span>
 							<ExperimentalGate>
-								<button
-									class="btn btn-danger btn-sm"
+								<Button
+									size="sm"
+									variant="danger"
 									onclick={() => requestUnallow(entry)}
 									disabled={cardState.applying}
 								>
 									Remove
-								</button>
+								</Button>
 							</ExperimentalGate>
 						</li>
 					{/each}
@@ -207,13 +209,13 @@
 						placeholder="example.com"
 						aria-label="Domain to block"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={cardState.applying || !blockDomainValue.trim()}
 					>
 						Block
-					</button>
+					</Button>
 				</form>
 			</ExperimentalGate>
 			{#if cardState.blockedList.length === 0}
@@ -224,13 +226,14 @@
 						<li class="domain-row">
 							<span>{domainLabel(entry)}</span>
 							<ExperimentalGate>
-								<button
-									class="btn btn-danger btn-sm"
+								<Button
+									size="sm"
+									variant="danger"
 									onclick={() => requestUnblock(entry)}
 									disabled={cardState.applying}
 								>
 									Remove
-								</button>
+								</Button>
 							</ExperimentalGate>
 						</li>
 					{/each}

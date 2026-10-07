@@ -21,6 +21,7 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		profileId: string;
@@ -121,13 +122,13 @@
 					placeholder="Application identifier"
 					aria-label="Application identifier"
 				/>
-				<button
+				<Button
 					type="submit"
-					class="btn btn-primary btn-sm"
+					variant="primary"
 					disabled={cardState.applying || !newAppValue.trim()}
 				>
 					Block
-				</button>
+				</Button>
 			</form>
 		</ExperimentalGate>
 		{#if cardState.applications.length === 0}

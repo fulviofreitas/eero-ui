@@ -78,6 +78,7 @@
 	import InfoRow from '$components/common/InfoRow.svelte';
 	import SettingRow from '$components/common/SettingRow.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -1098,14 +1099,14 @@
 					{/if}
 
 					<div class="control-row">
-						<button
+						<Button
 							type="button"
-							class="btn btn-primary"
+							variant="primary"
 							onclick={requestDhcpSave}
 							disabled={cardState.applying || !dhcpSaveEnabled}
 						>
 							Save
-						</button>
+						</Button>
 					</div>
 				{:else}
 					<SettingRow label="Mode" readonly value={modeLabel(dhcpCurrentTriState)} />
@@ -1153,20 +1154,16 @@
 			{/if}
 			<ExperimentalGate silent>
 				<div class="thread-buttons">
-					<button
-						class="btn btn-secondary btn-sm"
-						onclick={requestToggleThread}
-						disabled={cardState.applying}
-					>
+					<Button onclick={requestToggleThread} disabled={cardState.applying}>
 						{threadEnabled ? 'Disable Thread' : 'Enable Thread'}
-					</button>
-					<button
-						class="btn btn-danger btn-sm"
+					</Button>
+					<Button
+						variant="danger"
 						onclick={requestRegenerateThreadCredentials}
 						disabled={cardState.applying}
 					>
 						Regenerate Credentials
-					</button>
+					</Button>
 				</div>
 			</ExperimentalGate>
 			{#if powerThreadControls}
@@ -1231,13 +1228,9 @@
 			{/if}
 			<InfoRow label="Dynamic DNS" value={cardState.advanced?.ddns} mono />
 			<ExperimentalGate silent>
-				<button
-					class="btn btn-secondary btn-sm"
-					onclick={requestToggleDdns}
-					disabled={cardState.applying}
-				>
+				<Button onclick={requestToggleDdns} disabled={cardState.applying}>
 					{ddnsEnabled ? 'Disable Dynamic DNS' : 'Enable Dynamic DNS'}
-				</button>
+				</Button>
 			</ExperimentalGate>
 			{#if wanControls}
 				<div class="section-controls">{@render wanControls()}</div>

@@ -8,7 +8,7 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import ProfileStatusCard from '#lib/components/profile/ProfileStatusCard.svelte';
 	import ProfileDevicesSection from '#lib/components/profile/ProfileDevicesSection.svelte';
 	import ProfileSchedulesCard from '#lib/components/profile/ProfileSchedulesCard.svelte';
@@ -198,8 +198,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchProfile(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/profiles')}> Back to Profiles </button>
+				<Button onclick={() => fetchProfile(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/profiles')}>Back to Profiles</Button>
 			</div>
 		</div>
 	{:else if profile}
@@ -214,33 +214,24 @@
 				<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
 			{/snippet}
 			{#snippet actions()}
-				<button
-					class="btn btn-secondary"
-					onclick={() => fetchProfile(true)}
-					disabled={actionLoading}><Icon name="refresh" size={14} />Refresh</button
-				>
+				<Button icon="refresh" onclick={() => fetchProfile(true)} disabled={actionLoading}>
+					Refresh
+				</Button>
 
-				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}
-					><Icon name="edit" size={14} />Rename</button
-				>
+				<Button icon="edit" onclick={openRenameModal} disabled={actionLoading}>Rename</Button>
 
-				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}
-					>Delete</button
-				>
+				<Button variant="danger" onclick={handleDeleteProfile} disabled={actionLoading}>
+					Delete
+				</Button>
 
-				<button
-					class="btn {profile!.paused ? 'btn-primary' : 'btn-warning'}"
+				<Button
+					variant={profile!.paused ? 'primary' : 'warning'}
+					icon={profile!.paused ? 'play' : 'pause'}
 					onclick={handleTogglePause}
-					disabled={actionLoading}
+					loading={actionLoading}
 				>
-					{#if actionLoading}
-						<span class="loading-spinner"></span>
-					{:else if profile!.paused}
-						<Icon name="play" size={14} />Resume Internet
-					{:else}
-						<Icon name="pause" size={14} /> Pause Internet
-					{/if}
-				</button>
+					{profile!.paused ? 'Resume Internet' : 'Pause Internet'}
+				</Button>
 			{/snippet}
 		</DetailHeader>
 
@@ -326,20 +317,6 @@
 	.error-actions {
 		display: flex;
 		gap: var(--space-3);
-	}
-
-	.btn-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	.btn-danger {
-		background-color: var(--color-danger);
-		color: white;
-	}
-
-	.btn-danger:hover:not(:disabled) {
-		opacity: 0.85;
 	}
 
 	.info-grid {

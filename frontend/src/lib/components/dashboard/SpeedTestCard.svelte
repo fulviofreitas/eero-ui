@@ -7,6 +7,7 @@
 <script lang="ts">
 	import type { NetworkDetail, SpeedTestResult } from '$api/types';
 	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
+	import Button from '#lib/components/common/Button.svelte';
 
 	interface Props {
 		network: NetworkDetail;
@@ -59,13 +60,7 @@
 	<div class="card stat-card speed-card">
 		<div class="stat-header">
 			<span class="stat-label">Speed Test</span>
-			<button class="btn btn-secondary btn-sm" onclick={onRunTest} disabled={loading}>
-				{#if loading}
-					<span class="loading-spinner"></span>
-				{:else}
-					Run Test
-				{/if}
-			</button>
+			<Button onclick={onRunTest} {loading}>Run Test</Button>
 		</div>
 		{#if loading}
 			<p class="text-muted text-sm" role="status">

@@ -15,6 +15,7 @@
 <script lang="ts">
 	import { devicesStore, uiStore } from '$stores';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		deviceId: string;
@@ -63,13 +64,7 @@
 </script>
 
 <ExperimentalGate>
-	<button
-		type="button"
-		class="btn btn-secondary btn-sm"
-		onclick={requestToggle}
-		disabled={applying}
-	>
-		{#if applying}<span class="loading-spinner"></span>{/if}
+	<Button type="button" onclick={requestToggle} loading={applying}>
 		{denied ? 'Allow Secondary WAN Access' : 'Deny Secondary WAN Access'}
-	</button>
+	</Button>
 </ExperimentalGate>

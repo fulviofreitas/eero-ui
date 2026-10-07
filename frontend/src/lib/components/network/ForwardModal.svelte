@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
 	import Modal from '$components/common/Modal.svelte';
+	import Button from '$components/common/Button.svelte';
 	import type { ForwardSummary } from '$api/types';
 	import { isPrivateIpv4, isValidPort } from '#lib/utils/network-forms.js';
 
@@ -132,15 +133,8 @@
 		</label>
 
 		<div class="modal-actions">
-			<button type="button" class="btn btn-secondary" onclick={onClose} disabled={submitting}>
-				Cancel
-			</button>
-			<button type="submit" class="btn btn-primary" disabled={submitting || !valid}>
-				{#if submitting}
-					<span class="loading-spinner"></span>
-				{/if}
-				Save
-			</button>
+			<Button type="button" onclick={onClose} disabled={submitting}>Cancel</Button>
+			<Button type="submit" variant="primary" disabled={!valid} loading={submitting}>Save</Button>
 		</div>
 	</form>
 </Modal>
