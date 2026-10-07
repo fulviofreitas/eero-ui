@@ -23,6 +23,7 @@
 	import { ApiClientError } from '$api/client';
 	import Card from '$components/common/Card.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	let account = $derived($authStore);
 	let writeState = $derived($accountStore);
@@ -217,13 +218,9 @@
 					aria-label="Display name"
 					maxlength={64}
 				/>
-				<button
-					type="submit"
-					class="btn btn-primary btn-sm"
-					disabled={writeState.applying || !nameValue.trim()}
-				>
+				<Button type="submit" variant="primary" disabled={writeState.applying || !nameValue.trim()}>
 					Save
-				</button>
+				</Button>
 			</form>
 		</ExperimentalGate>
 	</section>
@@ -239,9 +236,9 @@
 							? 'Opted in'
 							: 'Opted out'}
 				</span>
-				<button class="btn btn-secondary btn-sm" onclick={requestToggleConsent}>
+				<Button onclick={requestToggleConsent}>
 					{writeState.marketingEmailsConsent ? 'Opt Out' : 'Opt In'}
-				</button>
+				</Button>
 			</div>
 		</ExperimentalGate>
 	</section>
@@ -261,20 +258,14 @@
 						disabled={writeState.applying}
 						placeholder="Verification code"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={writeState.applying || !emailCode.trim()}
 					>
 						Verify
-					</button>
-					<button
-						type="button"
-						class="btn btn-secondary btn-sm"
-						onclick={() => accountStore.cancelEmailChange()}
-					>
-						Cancel
-					</button>
+					</Button>
+					<Button type="button" onclick={() => accountStore.cancelEmailChange()}>Cancel</Button>
 				</form>
 			{:else}
 				<form class="inline-form" onsubmit={(e) => (e.preventDefault(), requestEmailChange())}>
@@ -286,14 +277,14 @@
 						placeholder="New e-mail address"
 						aria-label="New e-mail address"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={writeState.applying || !emailValue.trim()}
-						aria-label="Change e-mail"
+						label="Change e-mail"
 					>
 						Change
-					</button>
+					</Button>
 				</form>
 			{/if}
 		</ExperimentalGate>
@@ -314,20 +305,14 @@
 						disabled={writeState.applying}
 						placeholder="Verification code"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={writeState.applying || !phoneCode.trim()}
 					>
 						Verify
-					</button>
-					<button
-						type="button"
-						class="btn btn-secondary btn-sm"
-						onclick={() => accountStore.cancelPhoneChange()}
-					>
-						Cancel
-					</button>
+					</Button>
+					<Button type="button" onclick={() => accountStore.cancelPhoneChange()}>Cancel</Button>
 				</form>
 			{:else}
 				<form class="inline-form" onsubmit={(e) => (e.preventDefault(), requestPhoneChange())}>
@@ -355,14 +340,14 @@
 						placeholder="New phone number"
 						aria-label="New phone number"
 					/>
-					<button
+					<Button
 						type="submit"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						disabled={writeState.applying || !phoneValue.trim()}
-						aria-label="Change phone number"
+						label="Change phone number"
 					>
 						Change
-					</button>
+					</Button>
 				</form>
 			{/if}
 		</ExperimentalGate>

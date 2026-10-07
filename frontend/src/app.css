@@ -52,6 +52,12 @@
 	--color-success-bg: rgba(63, 185, 80, 0.15);
 	--color-warning: #d29922;
 	--color-warning-bg: rgba(210, 153, 34, 0.15);
+	/* .btn-warning fill + hover. Base --color-warning (#d29922) measures 8.32:1 against
+	   --color-bg-primary (#0d1117) and only 2.52:1 against white, so the fill needs a dark
+	   foreground - reuse the same --color-on-accent token, which already encodes exactly that
+	   "text colour for a light filled background" rule per theme. --color-warning-hover is one
+	   step darker, mirroring --color-accent-hover. */
+	--color-warning-hover: #b8831a;
 	--color-danger: #f85149;
 	--color-danger-bg: rgba(248, 81, 73, 0.15);
 	--color-danger-hover: #da3633;
@@ -89,6 +95,10 @@
 	   accent is 7.49:1. Light theme's accent (#0969da) is already fine with white (5.19:1), so
 	   only the dark value changes below. */
 	--color-on-accent: var(--color-bg-primary);
+	/* Text colour for the .btn-warning fill - same "dark on light" rule as --color-on-accent
+	   above, computed independently (8.32:1 on --color-warning), kept as its own token since it
+	   is conceptually tied to --color-warning, not --color-accent. */
+	--color-on-warning: var(--color-bg-primary);
 
 	/* Spacing Scale */
 	--space-1: 0.25rem;
@@ -203,6 +213,10 @@
 	   measures 5.02:1 on white, 4.74:1 on --color-bg-secondary (#f6f8fa). */
 	--color-warning: #8a5d00;
 	--color-warning-bg: rgba(154, 103, 0, 0.1);
+	/* Light theme's warning fill (#8a5d00) already clears AA with white text (5.76:1), the
+	   inverse of dark theme - so --color-warning-hover darkens further and --color-on-warning
+	   (below, with --color-on-accent) stays white. */
+	--color-warning-hover: #6e4a00;
 	--color-danger: #cf222e;
 	--color-danger-bg: rgba(207, 34, 46, 0.1);
 	--color-danger-hover: #a40e26;
@@ -224,6 +238,8 @@
 	--color-accent-hover: #0550ae;
 	/* Light theme's accent already clears AA with white text (5.19:1) - no change needed. */
 	--color-on-accent: #ffffff;
+	/* Light theme's warning fill also clears AA with white text (5.76:1) - see dark theme. */
+	--color-on-warning: #ffffff;
 
 	/* Chart series palette - adjusted for light bg */
 	--chart-1: #0969da;
@@ -382,16 +398,26 @@ code {
 	border-bottom: 1px solid var(--color-border-muted);
 }
 
-/* Button */
+/* Button
+ *
+ * One size scale, enforced here rather than per call site: `.btn` (md, default) and `.btn-sm`
+ * each get an explicit min-height and line-height, so a button's rendered height never depends
+ * on whether a call site happened to pass an icon, a longer label, or wrap text. Icon sizing is
+ * likewise enforced here (`.btn svg` / `.btn-sm svg`) rather than left to each call site's own
+ * `size` prop on <Icon>/<svg> - a CSS width/height always wins over the element's own width/
+ * height attribute, so this is sufficient even though <Icon> still accepts a `size` prop for use
+ * outside buttons. See Button.svelte for the component that should be used at every call site.
+ */
 .btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: var(--space-2);
+	min-height: 2.25rem;
 	padding: var(--space-2) var(--space-4);
 	font-size: 0.875rem;
 	font-weight: 500;
-	line-height: 1.5;
+	line-height: 1.25;
 	border: 1px solid transparent;
 	border-radius: var(--radius-md);
 	cursor: pointer;
@@ -400,6 +426,12 @@ code {
 		border-color var(--transition-fast),
 		color var(--transition-fast);
 	white-space: nowrap;
+}
+
+.btn svg {
+	width: 1rem;
+	height: 1rem;
+	flex-shrink: 0;
 }
 
 .btn:disabled {
@@ -435,6 +467,15 @@ code {
 	background-color: var(--color-danger-fill-hover);
 }
 
+.btn-warning {
+	background-color: var(--color-warning);
+	color: var(--color-on-warning);
+}
+
+.btn-warning:hover:not(:disabled) {
+	background-color: var(--color-warning-hover);
+}
+
 .btn-ghost {
 	background: transparent;
 	color: var(--color-text-secondary);
@@ -446,8 +487,62 @@ code {
 }
 
 .btn-sm {
+	min-height: 1.875rem;
 	padding: var(--space-1) var(--space-3);
 	font-size: 0.8125rem;
+}
+
+.btn-sm svg {
+	width: 0.875rem;
+	height: 0.875rem;
+}
+
+/* Switch - a checkbox with role="switch" (boolean setting rows) */
+input[type='checkbox'][role='switch'] {
+	appearance: none;
+	position: relative;
+	width: 2.25rem;
+	height: 1.25rem;
+	margin: 0;
+	flex-shrink: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background-color: var(--color-bg-tertiary);
+	cursor: pointer;
+	transition:
+		background-color var(--transition-fast),
+		border-color var(--transition-fast);
+}
+
+input[type='checkbox'][role='switch']::before {
+	content: '';
+	position: absolute;
+	top: 1px;
+	left: 1px;
+	width: calc(1.25rem - 4px);
+	height: calc(1.25rem - 4px);
+	border-radius: 50%;
+	background-color: var(--color-text-secondary);
+	transition: transform var(--transition-fast);
+}
+
+input[type='checkbox'][role='switch']:checked {
+	background-color: var(--color-accent);
+	border-color: var(--color-accent);
+}
+
+input[type='checkbox'][role='switch']:checked::before {
+	background-color: var(--color-on-accent);
+	transform: translateX(1rem);
+}
+
+input[type='checkbox'][role='switch']:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+input[type='checkbox'][role='switch']:focus-visible {
+	box-shadow: var(--focus-ring);
 }
 
 /* Input */

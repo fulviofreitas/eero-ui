@@ -37,10 +37,6 @@
 </section>
 
 <style>
-	.status-card {
-		margin-bottom: var(--space-6);
-	}
-
 	.status-card.paused {
 		border-color: var(--color-warning);
 		background-color: rgba(245, 180, 50, 0.05);

@@ -44,7 +44,7 @@
 	label="Export"
 	{items}
 	disabled={disabled || data.length === 0}
-	triggerClass="btn btn-secondary btn-sm dropdown-trigger"
+	triggerClass="btn btn-secondary dropdown-trigger"
 >
 	{#snippet trigger()}
 		<Icon name="download" size={14} /> Export

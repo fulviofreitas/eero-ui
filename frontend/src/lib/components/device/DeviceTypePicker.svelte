@@ -13,6 +13,7 @@
 	import { devicesStore } from '$stores';
 	import Icon from '$components/common/Icon.svelte';
 	import Dropdown, { type DropdownItem } from '$components/common/Dropdown.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		deviceType: string | null;
@@ -108,22 +109,10 @@
 				placeholder="e.g. smart_speaker"
 				disabled={changing}
 			/>
-			<button
-				type="button"
-				class="btn btn-primary btn-sm"
-				onclick={submitCustom}
-				disabled={changing}
-			>
+			<Button type="button" variant="primary" onclick={submitCustom} disabled={changing}>
 				Save
-			</button>
-			<button
-				type="button"
-				class="btn btn-secondary btn-sm"
-				onclick={() => (customOpen = false)}
-				disabled={changing}
-			>
-				Cancel
-			</button>
+			</Button>
+			<Button type="button" onclick={() => (customOpen = false)} disabled={changing}>Cancel</Button>
 		</div>
 		{#if customError}
 			<p class="device-type-error" role="alert">{customError}</p>

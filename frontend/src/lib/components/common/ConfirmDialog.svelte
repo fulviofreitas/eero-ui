@@ -7,6 +7,7 @@
 	import { confirmDialog, uiStore } from '$stores';
 	import { fade, scale } from 'svelte/transition';
 	import { trapFocus } from '#lib/utils/focusTrap.js';
+	import Button from './Button.svelte';
 
 	let loading = $state(false);
 
@@ -94,19 +95,16 @@
 			{/if}
 
 			<div class="modal-actions">
-				<button class="btn btn-secondary" onclick={handleCancel} disabled={loading}>
+				<Button onclick={handleCancel} disabled={loading}>
 					{$confirmDialog.cancelText || 'Cancel'}
-				</button>
-				<button
-					class="btn {$confirmDialog.danger ? 'btn-danger' : 'btn-primary'}"
+				</Button>
+				<Button
+					variant={$confirmDialog.danger ? 'danger' : 'primary'}
 					onclick={handleConfirm}
-					disabled={loading}
+					{loading}
 				>
-					{#if loading}
-						<span class="loading-spinner"></span>
-					{/if}
 					{$confirmDialog.confirmText || 'Confirm'}
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>
@@ -156,11 +154,5 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-3);
-	}
-
-	.loading-spinner {
-		width: 16px;
-		height: 16px;
-		border-width: 2px;
 	}
 </style>

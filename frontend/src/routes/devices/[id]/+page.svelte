@@ -9,12 +9,13 @@
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import BandwidthChart from '#lib/components/charts/BandwidthChart.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import DeviceProfileSelector from '#lib/components/device/DeviceProfileSelector.svelte';
 	import DeviceTypePicker from '#lib/components/device/DeviceTypePicker.svelte';
 	import DeviceIdentificationCard from '#lib/components/device/DeviceIdentificationCard.svelte';
 	import DeviceConnectionCard from '#lib/components/device/DeviceConnectionCard.svelte';
 	import DeviceStatusCard from '#lib/components/device/DeviceStatusCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import DeviceSecondaryWanToggle from '#lib/components/device/DeviceSecondaryWanToggle.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
@@ -195,8 +196,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchDevice(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/devices')}> Back to Devices </button>
+				<Button onclick={() => fetchDevice(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/devices')}>Back to Devices</Button>
 			</div>
 		</div>
 	{:else if device}
@@ -212,28 +213,20 @@
 				<span class="mono text-muted">{device!.mac || '—'}</span>
 			{/snippet}
 			{#snippet actions()}
-				<button class="btn btn-secondary" onclick={() => fetchDevice(true)} disabled={actionLoading}
-					><Icon name="refresh" size={14} />Refresh</button
-				>
+				<Button icon="refresh" onclick={() => fetchDevice(true)} disabled={actionLoading}>
+					Refresh
+				</Button>
 
-				<button class="btn btn-secondary" onclick={handleRename} disabled={actionLoading}
-					><Icon name="edit" size={14} />Rename</button
-				>
+				<Button icon="edit" onclick={handleRename} disabled={actionLoading}>Rename</Button>
 
 				{#if device!.blocked}
-					<button class="btn btn-primary" onclick={handleUnblock} disabled={actionLoading}>
-						{#if actionLoading}
-							<span class="loading-spinner"></span>
-						{/if}
-
-						<Icon name="check" size={14} />
+					<Button variant="primary" icon="check" onclick={handleUnblock} loading={actionLoading}>
 						Unblock
-					</button>
+					</Button>
 				{:else}
-					<button class="btn btn-danger" onclick={handleBlock} disabled={actionLoading}>
-						{#if actionLoading}<span class="loading-spinner"></span>{/if}
-						<Icon name="x" size={14} /> Block
-					</button>
+					<Button variant="danger" icon="x" onclick={handleBlock} loading={actionLoading}>
+						Block
+					</Button>
 				{/if}
 				{#if device!.id}
 					<DeviceSecondaryWanToggle deviceId={device!.id} />
@@ -292,23 +285,31 @@
 				<RoamingEventsCard networkId={device.network_id} deviceId={device.id} />
 			</section>
 		{/if}
+
+		<TechnicalCard
+			ids={[
+				{ label: 'Device ID', value: device.id },
+				{ label: 'Network ID', value: device.network_id }
+			]}
+			apiUrl={device.url}
+		/>
 	{/if}
 </div>
 
 <style>
 	.device-detail-page {
 		max-width: 1200px;
+		/* Standard vertical rhythm between stacked page blocks (consistency pass) - no child
+		   needs its own margin-top/margin-bottom. */
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 
 	.skeleton-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
-		margin-top: var(--space-4);
-	}
-
-	.device-roaming {
-		margin-top: var(--space-4);
 	}
 
 	.error-state {
@@ -330,14 +331,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
 		gap: var(--space-4);
-	}
-
-	.device-charts {
-		margin-top: var(--space-6);
-	}
-
-	.premium-grid {
-		margin-top: var(--space-6);
 	}
 
 	@media (max-width: 768px) {

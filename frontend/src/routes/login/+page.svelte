@@ -6,6 +6,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { authStore, isLoginPending, authError, isAuthLoading, authReason } from '$stores';
+	import Button from '$components/common/Button.svelte';
 
 	let identifier = $state('');
 	let code = $state('');
@@ -92,20 +93,19 @@
 					maxlength="6"
 				/>
 
-				<button
-					class="btn btn-primary btn-full"
+				<Button
+					variant="primary"
+					class="btn-full"
 					onclick={handleVerify}
-					disabled={$isAuthLoading || !code.trim()}
+					disabled={!code.trim()}
+					loading={$isAuthLoading}
 				>
-					{#if $isAuthLoading}
-						<span class="loading-spinner"></span>
-					{/if}
 					Verify
-				</button>
+				</Button>
 
-				<button class="btn btn-ghost btn-full" onclick={handleBack} disabled={$isAuthLoading}>
+				<Button variant="ghost" class="btn-full" onclick={handleBack} disabled={$isAuthLoading}>
 					← Back
-				</button>
+				</Button>
 			</div>
 		{:else}
 			<!-- Login step -->
@@ -127,16 +127,15 @@
 					autocomplete="email"
 				/>
 
-				<button
-					class="btn btn-primary btn-full"
+				<Button
+					variant="primary"
+					class="btn-full"
 					onclick={handleLogin}
-					disabled={$isAuthLoading || !identifier.trim()}
+					disabled={!identifier.trim()}
+					loading={$isAuthLoading}
 				>
-					{#if $isAuthLoading}
-						<span class="loading-spinner"></span>
-					{/if}
 					Continue
-				</button>
+				</Button>
 			</div>
 		{/if}
 
@@ -256,7 +255,9 @@
 		padding: var(--space-4);
 	}
 
-	.btn-full {
+	/* :global() - this class reaches the <button> rendered inside the Button component via its
+	   `class` prop, not an element in this component's own template. */
+	:global(.btn-full) {
 		width: 100%;
 	}
 

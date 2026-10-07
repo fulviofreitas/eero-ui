@@ -8,9 +8,8 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import ProfileStatusCard from '#lib/components/profile/ProfileStatusCard.svelte';
-	import ProfileTechnicalCard from '#lib/components/profile/ProfileTechnicalCard.svelte';
 	import ProfileDevicesSection from '#lib/components/profile/ProfileDevicesSection.svelte';
 	import ProfileSchedulesCard from '#lib/components/profile/ProfileSchedulesCard.svelte';
 	import ProfileContentFilterCard from '#lib/components/profile/ProfileContentFilterCard.svelte';
@@ -18,6 +17,7 @@
 	import ProfileRenameModal from '#lib/components/profile/ProfileRenameModal.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let profile = $state<ProfileSummary | null>(null);
@@ -198,8 +198,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchProfile(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/profiles')}> Back to Profiles </button>
+				<Button onclick={() => fetchProfile(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/profiles')}>Back to Profiles</Button>
 			</div>
 		</div>
 	{:else if profile}
@@ -214,39 +214,28 @@
 				<span class="text-muted">{devices.length} device{devices.length !== 1 ? 's' : ''}</span>
 			{/snippet}
 			{#snippet actions()}
-				<button
-					class="btn btn-secondary"
-					onclick={() => fetchProfile(true)}
-					disabled={actionLoading}><Icon name="refresh" size={14} />Refresh</button
-				>
+				<Button icon="refresh" onclick={() => fetchProfile(true)} disabled={actionLoading}>
+					Refresh
+				</Button>
 
-				<button class="btn btn-secondary" onclick={openRenameModal} disabled={actionLoading}
-					><Icon name="edit" size={14} />Rename</button
-				>
+				<Button icon="edit" onclick={openRenameModal} disabled={actionLoading}>Rename</Button>
 
-				<button class="btn btn-danger" onclick={handleDeleteProfile} disabled={actionLoading}
-					>Delete</button
-				>
+				<Button variant="danger" onclick={handleDeleteProfile} disabled={actionLoading}>
+					Delete
+				</Button>
 
-				<button
-					class="btn {profile!.paused ? 'btn-primary' : 'btn-warning'}"
+				<Button
+					variant={profile!.paused ? 'primary' : 'warning'}
+					icon={profile!.paused ? 'play' : 'pause'}
 					onclick={handleTogglePause}
-					disabled={actionLoading}
+					loading={actionLoading}
 				>
-					{#if actionLoading}
-						<span class="loading-spinner"></span>
-					{:else if profile!.paused}
-						<Icon name="play" size={14} />Resume Internet
-					{:else}
-						<Icon name="pause" size={14} /> Pause Internet
-					{/if}
-				</button>
+					{profile!.paused ? 'Resume Internet' : 'Pause Internet'}
+				</Button>
 			{/snippet}
 		</DetailHeader>
 
 		<ProfileStatusCard paused={profile.paused} />
-
-		<ProfileTechnicalCard {profile} networkId={$selectedNetworkId} />
 
 		{#if profile.id}
 			<div class="info-grid premium-grid">
@@ -285,6 +274,14 @@
 			</PremiumGate>
 		{/if}
 
+		<TechnicalCard
+			ids={[
+				{ label: 'Profile ID', value: profile.id },
+				{ label: 'Network ID', value: $selectedNetworkId }
+			]}
+			apiUrl={profile.url}
+		/>
+
 		<ProfileRenameModal
 			open={showRenameModal}
 			value={renameValue}
@@ -299,6 +296,11 @@
 <style>
 	.profile-detail-page {
 		max-width: 1000px;
+		/* Standard vertical rhythm between stacked page blocks (consistency pass) - no child
+		   needs its own margin-top/margin-bottom. */
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
 	}
 
 	.error-state {
@@ -317,28 +319,10 @@
 		gap: var(--space-3);
 	}
 
-	.btn-warning {
-		background-color: var(--color-warning);
-		color: var(--color-bg-primary);
-	}
-
-	.btn-danger {
-		background-color: var(--color-danger);
-		color: white;
-	}
-
-	.btn-danger:hover:not(:disabled) {
-		opacity: 0.85;
-	}
-
 	.info-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
 		gap: var(--space-4);
-	}
-
-	.premium-grid {
-		margin-top: var(--space-4);
 	}
 
 	@media (max-width: 768px) {

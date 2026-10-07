@@ -119,6 +119,52 @@ class TestNetworkSecurity:
         assert response.status_code == 200
         assert response.json()["passpoint"] is None
 
+    async def test_ipv6_enabled_read_from_ipv6_upstream(
+        self, auth_client, authenticated_client
+    ):
+        """Bug #5, probed live 2026-10-07: ``ipv6`` on this response is the
+        raw name-server object (``{"name_servers": {...}}``), not an
+        enable flag - ``ipv6_enabled`` must come from the network
+        envelope's ``ipv6_upstream`` key instead."""
+        authenticated_client.get_security_settings = AsyncMock(
+            return_value=make_raw_response(
+                {
+                    "ipv6": {
+                        "name_servers": {
+                            "mode": "custom",
+                            "custom": ["2606:4700:4700::1111"],
+                        }
+                    }
+                }
+            )
+        )
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response({"ipv6_upstream": True})
+        )
+
+        response = await auth_client.get("/api/networks/net-1/security")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ipv6_enabled"] is True
+        # ``ipv6`` itself is untouched - still the raw name-server object.
+        assert data["ipv6"]["name_servers"]["mode"] == "custom"
+
+    async def test_ipv6_enabled_false_when_upstream_disabled(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_security_settings = AsyncMock(
+            return_value=make_raw_response({"ipv6": {"name_servers": {}}})
+        )
+        authenticated_client.get_network = AsyncMock(
+            return_value=make_raw_response({"ipv6_upstream": False})
+        )
+
+        response = await auth_client.get("/api/networks/net-1/security")
+
+        assert response.status_code == 200
+        assert response.json()["ipv6_enabled"] is False
+
 
 class TestSubnets:
     """Tests for GET /api/networks/{network_id}/subnets."""
@@ -184,7 +230,7 @@ class TestAdvancedSettings:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["connection_mode"] == "bridge"
+        assert data["connection_mode"] == "BRIDGE"
         assert data["power_saving"] is True
         assert data["ddns"] == {"enabled": False}
         assert data["dhcp"]["starting_address"] == "10.0.0.10"

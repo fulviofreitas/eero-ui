@@ -59,7 +59,6 @@
 
 <style>
 	.profile-section {
-		margin-bottom: var(--space-6);
 		padding: var(--space-4);
 	}
 

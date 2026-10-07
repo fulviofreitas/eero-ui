@@ -540,11 +540,40 @@ export interface EeroLedBrightnessAction extends EeroAction {
 }
 
 /**
+ * One client/eero connection reported by an eero's own `connections` link
+ * (consistency pass, 2026-10-07; replaces the unfixtured `Record<string, unknown>` shape -
+ * see `backend/app/routes/eeros.py::EeroConnection`). `kind` distinguishes a wirelessly
+ * attached device from one reported via a physical port (`wired`); `entity_type`
+ * distinguishes a client device from a mesh eero reachable through this one. Wired-only
+ * fields (`port`, `is_upstream`, `negotiated_speed`) are `null` for wireless entries.
+ */
+export interface EeroConnection {
+	id: string | null;
+	url: string | null;
+	mac: string | null;
+	ip: string | null;
+	nickname: string | null;
+	hostname: string | null;
+	display_name: string | null;
+	connection_type: string | null;
+	band: string | null;
+	signal: unknown;
+	last_active: string | null;
+	kind: 'wireless' | 'wired' | null;
+	entity_type: 'client' | 'eero' | null;
+	device_type: string | null;
+	port: string | null;
+	is_upstream: boolean | null;
+	negotiated_speed: string | null;
+	location: string | null;
+	model_name: string | null;
+}
+
+/**
  * An eero's client connections (phase-6.0-revamp.md WP6, deliverable 5).
- * Unfixtured upstream - rendered defensively via GenericRecordList.
  */
 export interface EeroConnectionsResponse {
-	connections: Record<string, unknown>[];
+	connections: EeroConnection[];
 }
 
 /**
@@ -902,11 +931,18 @@ export interface SecuritySettingsResponse {
 	 * R1: not yet declared on `SecuritySettingsResponse` in
 	 * backend/app/routes/networks.py (the `GET /{network_id}/security` handler only returns the
 	 * fields above) - the write side (`PUT /{network_id}/passpoint`) reads it straight off the
-	 * raw network envelope instead. Typed here (optional) so `WifiSecurityControls.svelte` reads
-	 * it without an `as unknown as` cast; it will read as `undefined` until the backend model
+	 * raw network envelope instead. Typed here (optional) so `SecurityWanCard.svelte` reads it
+	 * without an `as unknown as` cast; it will read as `undefined` until the backend model
 	 * gains the field.
 	 */
 	passpoint?: boolean;
+	/**
+	 * Network-level IPv6 upstream on/off (derived from `ipv6_upstream` server-side), distinct
+	 * from `ipv6` which stays the name-server mode/custom envelope. Optional/nullable so a
+	 * backend that hasn't shipped the field yet degrades to "Unknown" in the UI rather than a
+	 * cast failure (consistency pass, 2026-10-07).
+	 */
+	ipv6_enabled?: boolean | null;
 }
 
 export interface NetworkSubnetsResponse {
@@ -919,7 +955,14 @@ export interface MultiStaticIpResponse {
 }
 
 export interface AdvancedNetworkSettings {
+	/**
+	 * Normalized server-side to `{mode, starting_address, ending_address, subnet_mask,
+	 * subnet_ip, lease_time_seconds}`; `mode` may read back as `"custom"`, `"manual"` or
+	 * `"automatic"` depending on backend version (consistency pass, 2026-10-07) - parse
+	 * defensively via `dhcp-form.ts::dhcpModeFromApi`, never compare the raw string directly.
+	 */
 	dhcp: Record<string, unknown> | null;
+	/** May read back upper- or lower-case (`"NAT"`/`"nat"`, `"BRIDGE"`/`"bridge"`) - compare case-insensitively. */
 	connection_mode: string | null;
 	power_saving: unknown;
 	ddns: unknown;
@@ -929,9 +972,8 @@ export interface AdvancedNetworkSettings {
 	 * `nat_port_randomization`, `mlo_mode` or `proxied_nodes_enabled` yet; their write endpoints
 	 * (`update_nat_port_randomization`, `update_mlo_mode`) read the raw network envelope directly
 	 * for the no-op guard rather than through this model. Typed here (optional) so
-	 * `NetworkSettingsControls.svelte`/`WifiSecurityControls.svelte` read them without an
-	 * `as unknown as` cast; they will read as `undefined`/`null` until the backend model is
-	 * extended to include them.
+	 * `SecurityWanCard.svelte` reads them without an `as unknown as` cast; they will read as
+	 * `undefined`/`null` until the backend model is extended to include them.
 	 */
 	nat_port_randomization?: boolean;
 	mlo_mode?: 'disabled' | 'single' | 'multi' | null;

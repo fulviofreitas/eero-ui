@@ -19,6 +19,7 @@
 <script lang="ts">
 	import { networkPasswordStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -156,23 +157,17 @@
 			disabled={passwordState.applying}
 			autocomplete="new-password"
 		/>
-		<button
+		<Button
 			type="button"
-			class="btn btn-secondary btn-sm"
 			aria-pressed={showPassword}
-			aria-label={showPassword ? 'Hide password' : 'Show password'}
+			label={showPassword ? 'Hide password' : 'Show password'}
 			onclick={() => (showPassword = !showPassword)}
 		>
 			{showPassword ? 'Hide' : 'Show'}
-		</button>
-		<button
-			type="button"
-			class="btn btn-secondary btn-sm"
-			onclick={handleGenerate}
-			disabled={passwordState.applying}
-		>
+		</Button>
+		<Button type="button" onclick={handleGenerate} disabled={passwordState.applying}>
 			Generate
-		</button>
+		</Button>
 	</div>
 
 	{#if validationError}
@@ -186,10 +181,15 @@
 	{/if}
 
 	<div class="network-password-actions">
-		<button type="button" class="btn btn-primary" onclick={requestSetPassword} disabled={!canSet}>
-			{#if passwordState.applying}<span class="loading-spinner"></span>{/if}
+		<Button
+			type="button"
+			variant="primary"
+			onclick={requestSetPassword}
+			disabled={!canSet}
+			loading={passwordState.applying}
+		>
 			Set Password
-		</button>
+		</Button>
 	</div>
 
 	<div class="network-password-clear">
@@ -197,15 +197,15 @@
 			<input type="checkbox" bind:checked={openAcknowledged} disabled={passwordState.applying} />
 			I understand clearing the password opens this network to anyone in range.
 		</label>
-		<button
+		<Button
 			type="button"
-			class="btn btn-danger"
+			variant="danger"
 			onclick={requestClearPassword}
 			disabled={!canClear}
+			loading={passwordState.applying}
 		>
-			{#if passwordState.applying}<span class="loading-spinner"></span>{/if}
 			Clear Password
-		</button>
+		</Button>
 	</div>
 </section>
 

@@ -9,10 +9,9 @@
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import Tabs from '$components/common/Tabs.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '#lib/components/network/DnsSettingsCard.svelte';
-	import DnsCachingCard from '#lib/components/network/DnsCachingCard.svelte';
 	import OverviewCard from '#lib/components/network/OverviewCard.svelte';
 	import HardwareFeaturesCard from '#lib/components/network/HardwareFeaturesCard.svelte';
 	import LocationPremiumCard from '#lib/components/network/LocationPremiumCard.svelte';
@@ -33,8 +32,6 @@
 	import BackupInternetCard from '#lib/components/network/BackupInternetCard.svelte';
 	import ForwardsReservationsCard from '#lib/components/network/ForwardsReservationsCard.svelte';
 	import SecurityWanCard from '#lib/components/network/SecurityWanCard.svelte';
-	import NetworkSettingsControls from '#lib/components/network/NetworkSettingsControls.svelte';
-	import WifiSecurityControls from '#lib/components/network/WifiSecurityControls.svelte';
 	import PowerSavingControls from '#lib/components/network/PowerSavingControls.svelte';
 	import PowerSavingSchedulesCard from '#lib/components/network/PowerSavingSchedulesCard.svelte';
 	import SubnetsControls from '#lib/components/network/SubnetsControls.svelte';
@@ -44,6 +41,7 @@
 	import NotificationsCard from '#lib/components/network/NotificationsCard.svelte';
 	import ContentFilterCard from '#lib/components/network/ContentFilterCard.svelte';
 	import RoamingEventsCard from '#lib/components/network/RoamingEventsCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -241,16 +239,16 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
+				<Button onclick={() => fetchNetwork(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/')}>Back to Dashboard</Button>
 			</div>
 		</div>
 	{:else if !network}
 		<div class="empty-state">
 			<p>No network data available.</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/')}> Back to Dashboard </button>
+				<Button onclick={() => fetchNetwork(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/')}>Back to Dashboard</Button>
 			</div>
 		</div>
 	{:else}
@@ -264,13 +262,11 @@
 				<StatusBadge status={network!.status === 'online' ? 'connected' : 'disconnected'} />
 			{/snippet}
 			{#snippet actions()}
-				<button class="btn btn-secondary" onclick={() => fetchNetwork(true)} disabled={loading}>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
+				<Button icon="refresh" onclick={() => fetchNetwork(true)} disabled={loading}>
+					Refresh
+				</Button>
 				<ExperimentalGate>
-					<button class="btn btn-secondary" onclick={openRenameNetworkModal} disabled={loading}>
-						<Icon name="edit" size={14} /> Rename
-					</button>
+					<Button icon="edit" onclick={openRenameNetworkModal} disabled={loading}>Rename</Button>
 				</ExperimentalGate>
 			{/snippet}
 		</DetailHeader>
@@ -285,7 +281,7 @@
 					id="tabpanel-overview"
 					aria-labelledby="tab-overview"
 				>
-					<OverviewCard {network} networkId={networkId ?? ''} />
+					<OverviewCard {network} />
 					<HardwareFeaturesCard {network} />
 					<LocationPremiumCard {network} />
 				</div>
@@ -312,7 +308,6 @@
 				<div class="info-grid" role="tabpanel" id="tabpanel-dns" aria-labelledby="tab-dns">
 					{#if networkId}
 						<DnsSettingsCard {networkId} />
-						<DnsCachingCard {networkId} />
 						<PremiumGate feature="Content filtering"><ContentFilterCard {networkId} /></PremiumGate>
 					{/if}
 					<PremiumDnsCard {network} />
@@ -334,12 +329,6 @@
 					</div>
 					<div class="advanced-full">
 						<SecurityWanCard {networkId}>
-							{#snippet networkControls()}
-								<NetworkSettingsControls {networkId} silent />
-							{/snippet}
-							{#snippet wifiSecurityControls()}
-								<WifiSecurityControls {networkId} silent />
-							{/snippet}
 							{#snippet powerThreadControls()}
 								<PowerSavingControls {networkId} silent />
 							{/snippet}
@@ -404,6 +393,12 @@
 			{/if}
 		</div>
 
+		<!-- Last block on every tab, outside the tab content (consistency pass). Network has no
+		     "API URL" field in NetworkSummary/NetworkDetail, so only the Network ID row shows. -->
+		<section class="network-technical">
+			<TechnicalCard ids={[{ label: 'Network ID', value: networkId }]} />
+		</section>
+
 		<NetworkRenameModal
 			open={showRenameModal}
 			value={renameValue}
@@ -454,7 +449,11 @@
 	}
 
 	.network-charts {
-		margin-top: var(--space-6);
+		margin-top: var(--space-4);
+	}
+
+	.network-technical {
+		margin-top: var(--space-4);
 	}
 
 	.diagnostics-full {

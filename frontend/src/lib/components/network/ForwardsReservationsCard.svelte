@@ -26,6 +26,7 @@
 	import ErrorState from '$components/common/ErrorState.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 	import ForwardModal from './ForwardModal.svelte';
 	import ReservationModal from './ReservationModal.svelte';
 
@@ -214,13 +215,9 @@
 			<div class="fr-header">
 				<h4>Port Forwards</h4>
 				<ExperimentalGate>
-					<button
-						class="btn btn-primary btn-sm"
-						onclick={openCreateForwardModal}
-						disabled={cardState.applying}
-					>
+					<Button variant="primary" onclick={openCreateForwardModal} disabled={cardState.applying}>
 						Add Forward
-					</button>
+					</Button>
 				</ExperimentalGate>
 			</div>
 
@@ -254,20 +251,21 @@
 								<td>
 									<ExperimentalGate>
 										<div class="row-actions">
-											<button
-												class="btn btn-secondary btn-sm"
+											<Button
+												size="sm"
 												onclick={() => openEditForwardModal(forward)}
 												disabled={cardState.applying}
 											>
 												Edit
-											</button>
-											<button
-												class="btn btn-danger btn-sm"
+											</Button>
+											<Button
+												size="sm"
+												variant="danger"
 												onclick={() => requestDeleteForward(forward)}
 												disabled={cardState.applying}
 											>
 												Delete
-											</button>
+											</Button>
 										</div>
 									</ExperimentalGate>
 								</td>
@@ -282,13 +280,13 @@
 			<div class="fr-header">
 				<h4>DHCP Reservations</h4>
 				<ExperimentalGate>
-					<button
-						class="btn btn-primary btn-sm"
+					<Button
+						variant="primary"
 						onclick={openCreateReservationModal}
 						disabled={cardState.applying}
 					>
 						Add Reservation
-					</button>
+					</Button>
 				</ExperimentalGate>
 			</div>
 
@@ -331,20 +329,21 @@
 												/>
 												Also delete forwards
 											</label>
-											<button
-												class="btn btn-secondary btn-sm"
+											<Button
+												size="sm"
 												onclick={() => openEditReservationModal(reservation)}
 												disabled={cardState.applying}
 											>
 												Edit
-											</button>
-											<button
-												class="btn btn-danger btn-sm"
+											</Button>
+											<Button
+												size="sm"
+												variant="danger"
 												onclick={() => requestDeleteReservation(reservation)}
 												disabled={cardState.applying}
 											>
 												Delete
-											</button>
+											</Button>
 										</div>
 									</ExperimentalGate>
 								</td>

@@ -16,6 +16,7 @@
 <script lang="ts">
 	import { securityWanStore, uiStore } from '$stores';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -75,22 +76,20 @@
 <ExperimentalGate {silent}>
 	<div class="power-saving-controls">
 		<div class="control-row">
-			<button
+			<Button
 				type="button"
-				class="btn btn-secondary btn-sm"
 				disabled={wanState.applying}
 				onclick={() => requestToggle('enable', 'Power Saving', !enabled)}
 			>
 				{enabled ? 'Disable Power Saving' : 'Enable Power Saving'}
-			</button>
-			<button
+			</Button>
+			<Button
 				type="button"
-				class="btn btn-secondary btn-sm"
 				disabled={wanState.applying}
 				onclick={() => requestToggle('schedule_enabled', 'Power Saving Schedule', !scheduleEnabled)}
 			>
 				{scheduleEnabled ? 'Disable Power Saving Schedule' : 'Enable Power Saving Schedule'}
-			</button>
+			</Button>
 		</div>
 	</div>
 </ExperimentalGate>

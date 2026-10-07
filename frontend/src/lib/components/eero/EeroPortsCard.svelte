@@ -19,6 +19,7 @@
 	import { PORT_ACTIONS, type PortAction } from '$api/types';
 	import { formatPortSpeed } from '#lib/utils/eero-format.js';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		eeroId: string;
@@ -129,16 +130,14 @@
 									<option value={action}>{PORT_ACTION_LABELS[action]}</option>
 								{/each}
 							</select>
-							<button
-								class="btn btn-secondary btn-sm"
+							<Button
+								size="sm"
 								onclick={() => requestPortAction(port.port_name, i)}
-								disabled={applyingPort === portKey(port.port_name, i) || !port.port_name}
+								disabled={!port.port_name}
+								loading={applyingPort === portKey(port.port_name, i)}
 							>
-								{#if applyingPort === portKey(port.port_name, i)}
-									<span class="loading-spinner"></span>
-								{/if}
 								Run
-							</button>
+							</Button>
 						</div>
 						{#if portErrors[portKey(port.port_name, i)]}
 							<p class="port-error text-danger text-sm" role="alert">

@@ -23,6 +23,7 @@
 	import { uiStore } from '$stores';
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 	import { NODE_ACTIONS, type NodeAction } from '$api/types';
 
 	interface Props {
@@ -116,19 +117,10 @@
 <section class="card detail-card actions-card">
 	<h2>Actions</h2>
 	<div class="action-buttons">
-		<button class="btn btn-secondary" onclick={onToggleLed} disabled={loading}>
-			{#if loading}
-				<span class="loading-spinner"></span>
-			{/if}
-			<Icon name={ledOn ? 'moon' : 'lightbulb'} size={14} />
+		<Button icon={ledOn ? 'moon' : 'lightbulb'} onclick={onToggleLed} {loading}>
 			{ledOn ? 'Turn LED Off' : 'Turn LED On'}
-		</button>
-		<button class="btn btn-danger" onclick={onReboot} disabled={loading}>
-			{#if loading}
-				<span class="loading-spinner"></span>
-			{/if}
-			<Icon name="refresh" size={14} /> Reboot Eero
-		</button>
+		</Button>
+		<Button variant="danger" icon="refresh" onclick={onReboot} {loading}>Reboot Eero</Button>
 	</div>
 
 	{#if onSetLedBrightness}
@@ -163,16 +155,7 @@
 						<option value={action}>{NODE_ACTION_LABELS[action]}</option>
 					{/each}
 				</select>
-				<button
-					class="btn btn-secondary btn-sm"
-					onclick={requestNodeAction}
-					disabled={nodeActionApplying}
-				>
-					{#if nodeActionApplying}
-						<span class="loading-spinner"></span>
-					{/if}
-					Run
-				</button>
+				<Button onclick={requestNodeAction} loading={nodeActionApplying}>Run</Button>
 			</div>
 		</div>
 	</ExperimentalGate>
@@ -188,13 +171,7 @@
 						bind:value={locationInput}
 						disabled={loading}
 					/>
-					<button
-						type="submit"
-						class="btn btn-secondary btn-sm"
-						disabled={loading || !locationInput.trim()}
-					>
-						Rename
-					</button>
+					<Button type="submit" disabled={loading || !locationInput.trim()}>Rename</Button>
 				</div>
 			</form>
 		</ExperimentalGate>

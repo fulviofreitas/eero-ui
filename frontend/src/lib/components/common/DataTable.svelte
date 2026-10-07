@@ -53,7 +53,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import EmptyState from './EmptyState.svelte';
 	import Skeleton from './Skeleton.svelte';
-	import Icon from './Icon.svelte';
+	import Button from './Button.svelte';
 	import { flipDuration } from '#lib/motion.js';
 
 	interface Props {
@@ -326,15 +326,15 @@
 <div class="data-table-toolbar">
 	{#if showColumnToggle && optionalColumns.length > 0}
 		<div class="column-toggle" bind:this={columnToggleEl}>
-			<button
+			<Button
 				type="button"
-				class="btn btn-secondary btn-sm"
+				icon="settings"
 				aria-haspopup="true"
 				aria-expanded={columnMenuOpen}
 				onclick={() => (columnMenuOpen = !columnMenuOpen)}
 			>
-				<Icon name="settings" size={14} /> Columns
-			</button>
+				Columns
+			</Button>
 			{#if columnMenuOpen}
 				<div class="column-menu" bind:this={columnMenuEl}>
 					{#each columns as col (col.key)}

@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
 	import Modal from '$components/common/Modal.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		open: boolean;
@@ -37,15 +38,10 @@
 			disabled={submitting}
 		/>
 		<div class="modal-actions">
-			<button type="button" class="btn btn-secondary" onclick={onClose} disabled={submitting}>
-				Cancel
-			</button>
-			<button type="submit" class="btn btn-primary" disabled={submitting || !value.trim()}>
-				{#if submitting}
-					<span class="loading-spinner"></span>
-				{/if}
+			<Button type="button" onclick={onClose} disabled={submitting}>Cancel</Button>
+			<Button type="submit" variant="primary" disabled={!value.trim()} loading={submitting}>
 				Save
-			</button>
+			</Button>
 		</div>
 	</form>
 </Modal>

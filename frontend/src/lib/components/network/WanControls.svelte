@@ -17,6 +17,7 @@
 	import { ApiClientError } from '$api/client';
 	import { isValidIpv4 } from '#lib/utils/ip-address.js';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 	import type { SecondaryWanDeviceEntry } from '$api/types';
 
 	interface Props {
@@ -232,14 +233,14 @@
 			{#if msipError}<p class="field-error">{msipError}</p>{/if}
 
 			<div class="control-row">
-				<button
+				<Button
 					type="button"
-					class="btn btn-primary btn-sm"
+					variant="primary"
 					onclick={requestMultiStaticIpSave}
 					disabled={wanState.applying || !msipValid}
 				>
 					Save Multi-Static-IP
-				</button>
+				</Button>
 			</div>
 		</div>
 
@@ -276,14 +277,14 @@
 						}
 					}}
 				/>
-				<button
+				<Button
 					type="button"
-					class="btn btn-primary btn-sm"
+					variant="primary"
 					onclick={requestSecondaryWanSave}
 					disabled={wanState.applying || pendingEntries.length === 0}
 				>
 					Apply Secondary WAN Access
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>

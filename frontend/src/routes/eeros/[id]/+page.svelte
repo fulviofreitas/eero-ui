@@ -8,16 +8,16 @@
 	import StatusBadge from '$components/common/StatusBadge.svelte';
 	import DetailHeader from '$components/common/DetailHeader.svelte';
 	import Skeleton from '$components/common/Skeleton.svelte';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import EeroStatusClientsCard from '#lib/components/eero/EeroStatusClientsCard.svelte';
 	import EeroNetworkHardwareCard from '#lib/components/eero/EeroNetworkHardwareCard.svelte';
 	import EeroPerformanceHistoryCard from '#lib/components/eero/EeroPerformanceHistoryCard.svelte';
 	import EeroRadiosCard from '#lib/components/eero/EeroRadiosCard.svelte';
 	import EeroPortsCard from '#lib/components/eero/EeroPortsCard.svelte';
-	import EeroTechnicalCard from '#lib/components/eero/EeroTechnicalCard.svelte';
 	import EeroActionsCard from '#lib/components/eero/EeroActionsCard.svelte';
 	import EeroConnectionsCard from '#lib/components/eero/EeroConnectionsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
+	import TechnicalCard from '$components/common/TechnicalCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 
 	let eero: EeroDetail | null = $state(null);
@@ -219,8 +219,8 @@
 		<div class="error-state">
 			<p class="text-danger">Error: {error}</p>
 			<div class="error-actions">
-				<button class="btn btn-secondary" onclick={() => fetchEero(true)}> Try Again </button>
-				<button class="btn btn-ghost" onclick={() => goto('/eeros')}> Back to Eeros </button>
+				<Button onclick={() => fetchEero(true)}>Try Again</Button>
+				<Button variant="ghost" onclick={() => goto('/eeros')}>Back to Eeros</Button>
 			</div>
 		</div>
 	{:else if eero}
@@ -239,9 +239,9 @@
 				<StatusBadge status={eero!.status || 'unknown'} />
 			{/snippet}
 			{#snippet actions()}
-				<button class="btn btn-secondary" onclick={() => fetchEero(true)} disabled={actionLoading}>
-					<Icon name="refresh" size={14} /> Refresh
-				</button>
+				<Button icon="refresh" onclick={() => fetchEero(true)} disabled={actionLoading}>
+					Refresh
+				</Button>
 			{/snippet}
 		</DetailHeader>
 
@@ -251,7 +251,6 @@
 			<EeroPerformanceHistoryCard {eero} />
 			<EeroRadiosCard {eero} />
 			<EeroPortsCard eeroId={eero.id} ports={eero.ethernet_ports} />
-			<EeroTechnicalCard {eero} networkId={$selectedNetworkId} />
 			<EeroActionsCard
 				eeroId={eero.id}
 				ledOn={eero.led_on}
@@ -274,6 +273,13 @@
 					/>
 				</PremiumGate>
 			{/if}
+			<TechnicalCard
+				ids={[
+					{ label: 'Eero ID', value: eero.id },
+					{ label: 'Network ID', value: $selectedNetworkId }
+				]}
+				apiUrl={eero.url}
+			/>
 		</div>
 	{/if}
 </div>

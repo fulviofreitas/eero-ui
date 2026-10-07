@@ -19,6 +19,7 @@
 	import { securityWanStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -226,15 +227,14 @@
 							disabled={wanState.applying}
 							autocomplete="new-password"
 						/>
-						<button
+						<Button
 							type="button"
-							class="btn btn-secondary btn-sm"
 							aria-pressed={showPassword}
-							aria-label={showPassword ? 'Hide password' : 'Show password'}
+							label={showPassword ? 'Hide password' : 'Show password'}
 							onclick={() => (showPassword = !showPassword)}
 						>
 							{showPassword ? 'Hide' : 'Show'}
-						</button>
+						</Button>
 					</div>
 				</div>
 
@@ -256,22 +256,22 @@
 				{/if}
 
 				<div class="control-row">
-					<button
+					<Button
 						type="button"
-						class="btn btn-primary btn-sm"
+						variant="primary"
 						onclick={requestSave}
 						disabled={wanState.applying}
 					>
 						Save Subnet
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
-						class="btn btn-danger btn-sm"
+						variant="danger"
 						onclick={requestDelete}
 						disabled={wanState.applying}
 					>
 						Delete Subnet
-					</button>
+					</Button>
 				</div>
 			{/if}
 		{/if}

@@ -12,12 +12,14 @@ from app.transformers import (
     extract_id_from_url,
     extract_list,
     normalize_device,
+    normalize_dhcp,
     normalize_dns,
     normalize_eero,
     normalize_network,
     normalize_profile,
     normalize_speed_test,
     normalize_status,
+    read_connection_mode,
 )
 
 
@@ -332,6 +334,71 @@ class TestNormalizeNetwork:
         raw = {"url": "/networks/1", "speed": {"date": "2026-01-01T00:00:00Z"}}
         result = normalize_network(raw)
         assert result["speed_test"] is None
+
+    def test_connection_mode_from_real_shape(self):
+        """Bug #3: the real API nests this as ``connection.mode``
+        (lowercase), not a top-level ``connection_mode`` key."""
+        raw = {"url": "/networks/1", "connection": {"mode": "nat"}}
+        result = normalize_network(raw)
+        assert result["connection_mode"] == "NAT"
+
+    def test_connection_mode_none_when_absent(self):
+        raw = {"url": "/networks/1"}
+        result = normalize_network(raw)
+        assert result["connection_mode"] is None
+
+
+class TestReadConnectionMode:
+    """Tests for the ``read_connection_mode`` helper (bug #3)."""
+
+    def test_reads_real_nested_shape(self):
+        assert read_connection_mode({"connection": {"mode": "nat"}}) == "NAT"
+        assert read_connection_mode({"connection": {"mode": "bridge"}}) == "BRIDGE"
+
+    def test_falls_back_to_legacy_top_level_key(self):
+        assert read_connection_mode({"connection_mode": "BRIDGE"}) == "BRIDGE"
+        assert read_connection_mode({"connection_mode": "nat"}) == "NAT"
+
+    def test_none_when_neither_shape_present(self):
+        assert read_connection_mode({}) is None
+
+    def test_nested_shape_takes_priority_over_legacy(self):
+        raw = {"connection": {"mode": "bridge"}, "connection_mode": "NAT"}
+        assert read_connection_mode(raw) == "BRIDGE"
+
+
+class TestNormalizeDhcp:
+    """Tests for the ``normalize_dhcp`` function (bug #4)."""
+
+    def test_keeps_mode_when_no_lease_range(self):
+        """``{"mode": "automatic", "custom": None}`` has no lease range but
+        must not drop the mode -- a no-op guard reading this back needs it."""
+        result = normalize_dhcp({"mode": "automatic", "custom": None})
+        assert result is not None
+        assert result["mode"] == "automatic"
+
+    def test_custom_mode_with_lease_range(self):
+        result = normalize_dhcp(
+            {
+                "mode": "custom",
+                "custom": {
+                    "start_ip": "10.0.4.20",
+                    "end_ip": "10.0.5.254",
+                    "subnet_ip": "10.0.4.0",
+                    "subnet_mask": "255.255.252.0",
+                },
+            }
+        )
+        assert result is not None
+        assert result["mode"] == "custom"
+        assert result["starting_address"] == "10.0.4.20"
+        assert result["ending_address"] == "10.0.5.254"
+
+    def test_none_when_dhcp_is_none(self):
+        assert normalize_dhcp(None) is None
+
+    def test_none_when_no_mode_and_no_lease_range(self):
+        assert normalize_dhcp({}) is None
 
 
 class TestNormalizeDevice:

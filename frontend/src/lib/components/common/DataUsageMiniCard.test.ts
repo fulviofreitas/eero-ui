@@ -4,6 +4,10 @@
  *
  * Coverage:
  * - loads and renders totals on mount for a device entity
+ * - renders the time-series chart (not the GenericRecordList fallback) for the real
+ *   `download_bytes`/`upload_bytes`/`values: [{time, download, upload}]` shape (consistency
+ *   pass, 2026-10-07 - confirms this card needed no change once the backend started
+ *   returning that shape)
  * - switching the range selector re-fetches with the new range
  * - a 402 renders the upsell notice, not an error
  * - a 5xx (after both GET retries) renders ErrorState with a working retry
@@ -45,6 +49,29 @@ describe('DataUsageMiniCard', () => {
 
 		await waitFor(() => expect(seenCadence).toBe('daily'));
 		await waitFor(() => expect(screen.getByText('2.0 KB')).toBeInTheDocument());
+	});
+
+	it('renders the time-series chart for an eero entity with multiple values points', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/data-usage/eeros/:eeroId', () =>
+				HttpResponse.json({
+					download_bytes: 1073741824,
+					upload_bytes: 104857600,
+					values: [
+						{ time: '2026-01-01T00:00:00Z', download: 536870912, upload: 52428800 },
+						{ time: '2026-01-02T00:00:00Z', download: 536870912, upload: 52428800 }
+					],
+					raw: {}
+				})
+			)
+		);
+
+		render(DataUsageMiniCard, {
+			props: { networkId: 'network-123', entity: 'eero', entityId: 'eero-1' }
+		});
+
+		await waitFor(() => expect(screen.getByText('1.0 GB')).toBeInTheDocument());
+		expect(screen.getByRole('img', { name: /latest/ })).toBeInTheDocument();
 	});
 
 	it('re-fetches with the new range when the selector changes', async () => {

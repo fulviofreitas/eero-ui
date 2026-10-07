@@ -31,6 +31,7 @@
 	import DeviceNode from './nodes/DeviceNode.svelte';
 	import GatewayNode from './nodes/GatewayNode.svelte';
 	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 	import type { IconName } from '#lib/icons/paths.js';
 
 	interface Props {
@@ -174,13 +175,14 @@
 			<span>Offline</span>
 		</label>
 
-		<button class="refresh-btn" onclick={refresh} disabled={$filteredTopology.loading}>
-			{#if $filteredTopology.loading}
-				<span class="loading-spinner small"></span>
-			{:else}
-				<Icon name="refresh" label="Refresh topology" />
-			{/if}
-		</button>
+		<Button
+			size="sm"
+			class="topology-refresh-btn"
+			icon="refresh"
+			label="Refresh topology"
+			onclick={refresh}
+			loading={$filteredTopology.loading}
+		/>
 	</div>
 
 	{#if $filteredTopology.loading && nodes.length === 0}
@@ -192,13 +194,13 @@
 		<div class="error-overlay">
 			<span class="error-icon"><Icon name="alert-triangle" size={36} /></span>
 			<span>{$filteredTopology.error}</span>
-			<button class="retry-btn" onclick={refresh}>Retry</button>
+			<Button variant="primary" onclick={refresh}>Retry</Button>
 		</div>
 	{:else if nodes.length === 0}
 		<div class="empty-overlay">
 			<span class="empty-icon"><Icon name="router" size={36} /></span>
 			<span>No topology data available</span>
-			<button class="retry-btn" onclick={refresh}>Refresh</button>
+			<Button variant="primary" onclick={refresh}>Refresh</Button>
 		</div>
 	{:else}
 		<!-- fitViewOptions padding 0.3: `.map-controls` floats absolutely at top:12px over the
@@ -333,8 +335,9 @@
 			</div>
 
 			<div class="details-actions">
-				<button
-					class="btn btn-sm btn-primary"
+				<Button
+					variant="primary"
+					class="details-actions-btn"
 					onclick={() => {
 						const data = $selectedNode?.data;
 						if (!data) return;
@@ -346,7 +349,7 @@
 					}}
 				>
 					View Details
-				</button>
+				</Button>
 			</div>
 		</div>
 	{/if}
@@ -491,33 +494,9 @@
 		color: var(--color-text-primary);
 	}
 
-	.refresh-btn {
-		background: var(--color-bg-tertiary);
-		border: 1px solid var(--color-border);
-		color: var(--color-text-secondary);
-		width: 28px;
-		height: 28px;
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition:
-			background-color var(--transition-fast),
-			border-color var(--transition-fast),
-			color var(--transition-fast);
+	/* Layout-only: positions the canonical Button at the toolbar's trailing edge. */
+	:global(.topology-refresh-btn) {
 		margin-left: auto;
-	}
-
-	.refresh-btn:hover:not(:disabled) {
-		background: var(--color-bg-secondary);
-		border-color: var(--color-accent);
-		color: var(--color-accent);
-	}
-
-	.refresh-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	/* Edge legend */
@@ -599,12 +578,6 @@
 		animation: spin 1s linear infinite;
 	}
 
-	.loading-spinner.small {
-		width: 14px;
-		height: 14px;
-		border-width: 2px;
-	}
-
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
@@ -617,23 +590,6 @@
 
 	.empty-icon {
 		color: var(--color-text-muted);
-	}
-
-	.retry-btn {
-		margin-top: 8px;
-		padding: 8px 20px;
-		background: var(--color-accent);
-		color: #ffffff;
-		border: none;
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		font-size: var(--text-sm);
-		font-weight: 500;
-		transition: background-color var(--transition-fast);
-	}
-
-	.retry-btn:hover {
-		background: var(--color-accent-hover);
 	}
 
 	/* Details panel */
@@ -735,32 +691,8 @@
 		border-top: 1px solid var(--color-border);
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		padding: 8px 16px;
-		border-radius: var(--radius-md);
-		font-size: var(--text-sm);
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color var(--transition-fast);
-		border: none;
+	/* Layout-only: the canonical Button fills the details panel's action row. */
+	:global(.details-actions-btn) {
 		width: 100%;
-	}
-
-	.btn-sm {
-		padding: 6px 12px;
-		font-size: var(--text-xs);
-	}
-
-	.btn-primary {
-		background: var(--color-accent);
-		color: #ffffff;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-accent-hover);
 	}
 </style>

@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import Button from './Button.svelte';
 
 	interface Props {
 		message: string;
@@ -19,10 +20,9 @@
 	<span class="error-icon"><Icon name="alert-triangle" size={32} /></span>
 	<p class="error-message">{message}</p>
 	{#if onRetry}
-		<button type="button" class="btn btn-secondary btn-sm" onclick={onRetry}>
-			<Icon name="refresh" size={14} />
+		<Button type="button" icon="refresh" onclick={onRetry}>
 			{retryLabel}
-		</button>
+		</Button>
 	{/if}
 </div>
 

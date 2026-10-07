@@ -25,6 +25,7 @@
 	import Skeleton from '$components/common/Skeleton.svelte';
 	import GenericRecordList from '$components/common/GenericRecordList.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -103,13 +104,9 @@
 						{cardState.hasUnread ? 'Unread notifications' : 'All caught up'}
 					</span>
 					<ExperimentalGate>
-						<button
-							class="btn btn-secondary btn-sm"
-							onclick={requestMarkRead}
-							disabled={cardState.applying || !cardState.hasUnread}
-						>
+						<Button onclick={requestMarkRead} disabled={cardState.applying || !cardState.hasUnread}>
 							Mark All Read
-						</button>
+						</Button>
 					</ExperimentalGate>
 				</div>
 			</div>
@@ -158,14 +155,9 @@
 				/>
 			{:else if cardState.hasMore && cardState.history.length > 0}
 				<div class="load-more">
-					<button
-						type="button"
-						class="btn btn-secondary btn-sm"
-						onclick={loadMore}
-						disabled={cardState.loadingMore}
-					>
-						{cardState.loadingMore ? 'Loading…' : 'Load older'}
-					</button>
+					<Button type="button" onclick={loadMore} loading={cardState.loadingMore}>
+						Load older
+					</Button>
 				</div>
 			{/if}
 		</section>

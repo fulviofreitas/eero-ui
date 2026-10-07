@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
 	import type { SpeedTestResult } from '$api/types';
-	import Icon from '$components/common/Icon.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		speedTest: SpeedTestResult | null;
@@ -34,14 +34,9 @@
 <section class="card info-card speed-test-card">
 	<div class="card-header-flex">
 		<h2>Speed Test</h2>
-		<button class="btn btn-primary btn-sm" onclick={onRunTest} disabled={loading}>
-			{#if loading}
-				<span class="loading-spinner"></span>
-				Running...
-			{:else}
-				<Icon name="play" size={12} /> Run Test
-			{/if}
-		</button>
+		<Button variant="primary" icon="play" onclick={onRunTest} {loading}>
+			{loading ? 'Running...' : 'Run Test'}
+		</Button>
 	</div>
 
 	{#if loading}

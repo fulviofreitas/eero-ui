@@ -23,6 +23,7 @@
 	import type { ProfileSummary } from '$api/types';
 	import { contentFilterStore, selectedNetworkId, uiStore } from '$stores';
 	import { isValidContentFilterDomain } from '#lib/utils/network-forms.js';
+	import Button from '$components/common/Button.svelte';
 	import Card from '$components/common/Card.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 
@@ -141,13 +142,13 @@
 					{/each}
 				</ul>
 			</div>
-			<button
+			<Button
 				type="submit"
-				class="btn btn-primary btn-sm"
+				variant="primary"
 				disabled={cardState.applying || !domainValue.trim() || selectedProfileIds.length === 0}
 			>
 				{mode === 'allow' ? 'Allow' : 'Block'} for Selected Profiles
-			</button>
+			</Button>
 		</form>
 	</ExperimentalGate>
 </Card>

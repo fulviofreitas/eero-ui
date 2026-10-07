@@ -50,7 +50,8 @@
 
 <style>
 	.detail-header {
-		margin-bottom: var(--space-6);
+		/* Standard vertical rhythm between stacked detail-page blocks (consistency pass). */
+		margin-bottom: var(--space-4);
 	}
 
 	.back-link {

@@ -1,5 +1,6 @@
 """Tests for the data-usage route family (WP6 deliverable 8)."""
 
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock
 
 
@@ -181,3 +182,133 @@ class TestProfileDataUsage:
             cadence="hourly",
             timezone=None,
         )
+
+
+class TestRealSeriesShape:
+    """Tests for the real API's ``series`` shape (bug #1, probed live
+    2026-10-07): there is no top-level ``download``/``upload``/``values``
+    key, only ``series: [{"type": "upload"|"download", "sum", "values":
+    [{"time", "value"}, ...]}]``.
+    """
+
+    _SERIES_PAYLOAD: ClassVar[dict[str, Any]] = {
+        "start": "2026-09-30T00:00:00Z",
+        "end": "2026-10-07T00:00:00Z",
+        "limit": "2026-06-30T00:00:00Z",
+        "series": [
+            {
+                "type": "upload",
+                "sum": 300,
+                "values": [
+                    {"time": "2026-10-01T00:00:00Z", "value": 100},
+                    {"time": "2026-10-02T00:00:00Z", "value": 200},
+                ],
+            },
+            {
+                "type": "download",
+                "sum": 900,
+                "values": [
+                    {"time": "2026-10-01T00:00:00Z", "value": 400},
+                    {"time": "2026-10-02T00:00:00Z", "value": 500},
+                ],
+            },
+        ],
+    }
+
+    async def test_network_data_usage_parses_series(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_data_usage = AsyncMock(
+            return_value=make_raw_response(self._SERIES_PAYLOAD)
+        )
+
+        response = await auth_client.get(
+            "/api/networks/net-1/data-usage",
+            params={"start": START, "end": END, "cadence": "daily"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["download_bytes"] == 900
+        assert data["upload_bytes"] == 300
+        assert data["values"] == [
+            {
+                "time": "2026-10-01T00:00:00Z",
+                "upload": 100,
+                "download": 400,
+            },
+            {
+                "time": "2026-10-02T00:00:00Z",
+                "upload": 200,
+                "download": 500,
+            },
+        ]
+
+    async def test_sum_falls_back_to_summing_values(
+        self, auth_client, authenticated_client
+    ):
+        """When ``sum`` is absent, fall back to summing ``values[].value``."""
+        payload = {
+            "series": [
+                {
+                    "type": "upload",
+                    "values": [
+                        {"time": "2026-10-01T00:00:00Z", "value": 10},
+                        {"time": "2026-10-02T00:00:00Z", "value": 20},
+                    ],
+                },
+                {
+                    "type": "download",
+                    "values": [
+                        {"time": "2026-10-01T00:00:00Z", "value": 30},
+                    ],
+                },
+            ]
+        }
+        authenticated_client.get_eero_data_usage = AsyncMock(
+            return_value=make_raw_response(payload)
+        )
+
+        response = await auth_client.get(
+            "/api/networks/net-1/data-usage/eeros/eero-1",
+            params={"start": START, "end": END, "cadence": "daily"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["upload_bytes"] == 30
+        assert data["download_bytes"] == 30
+
+    async def test_device_data_usage_parses_series(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_device_data_usage = AsyncMock(
+            return_value=make_raw_response(self._SERIES_PAYLOAD)
+        )
+
+        response = await auth_client.get(
+            "/api/networks/net-1/data-usage/devices/aa:bb:cc:dd:ee:ff",
+            params={"start": START, "end": END, "cadence": "daily"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["download_bytes"] == 900
+        assert data["upload_bytes"] == 300
+
+    async def test_profile_data_usage_parses_series(
+        self, auth_client, authenticated_client
+    ):
+        authenticated_client.get_profile_data_usage = AsyncMock(
+            return_value=make_raw_response(self._SERIES_PAYLOAD)
+        )
+
+        response = await auth_client.get(
+            "/api/networks/net-1/data-usage/profiles/profile-1",
+            params={"start": START, "end": END, "cadence": "daily"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["download_bytes"] == 900
+        assert data["upload_bytes"] == 300

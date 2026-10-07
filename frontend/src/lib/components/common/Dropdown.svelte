@@ -168,7 +168,7 @@
 	<button
 		type="button"
 		bind:this={triggerEl}
-		class={triggerClass ?? 'btn btn-secondary btn-sm dropdown-trigger'}
+		class={triggerClass ?? 'btn btn-secondary dropdown-trigger'}
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-label={trigger ? label : undefined}

@@ -16,6 +16,7 @@
 	import { securityWanStore, uiStore } from '$stores';
 	import { ApiClientError } from '$api/client';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
+	import Button from '$components/common/Button.svelte';
 
 	interface Props {
 		networkId: string;
@@ -65,15 +66,9 @@
 	<ExperimentalGate {silent}>
 		<div class="updates-controls">
 			{#if note}<p class="field-note">{note}</p>{/if}
-			<button
-				type="button"
-				class="btn btn-primary btn-sm"
-				onclick={requestApply}
-				disabled={wanState.applying}
-			>
-				{#if wanState.applying}<span class="loading-spinner"></span>{/if}
+			<Button type="button" variant="primary" onclick={requestApply} loading={wanState.applying}>
 				Apply Update
-			</button>
+			</Button>
 		</div>
 	</ExperimentalGate>
 {/if}
