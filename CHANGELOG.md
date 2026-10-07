@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.1.3](https://github.com/fulviofreitas/eero-ui/compare/v6.1.2...v6.1.3) (2026-10-07)
+
+### 🐛 Bug Fixes
+
+* **ui:** consistency pass across detail pages, DNS and Security & WAN ([#444](https://github.com/fulviofreitas/eero-ui/issues/444)) ([1e4e45e](https://github.com/fulviofreitas/eero-ui/commit/1e4e45e95af7b163c3b3699607d0f566a5b23088))
+
 ## [6.1.2](https://github.com/fulviofreitas/eero-ui/compare/v6.1.1...v6.1.2) (2026-10-07)
 
 ### 🐛 Bug Fixes
