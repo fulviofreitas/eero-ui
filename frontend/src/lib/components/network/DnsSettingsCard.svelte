@@ -72,7 +72,7 @@
 		if (
 			settings &&
 			settings !== seededFor &&
-			(!seededFor || (form && !isFormDirty(seededFor, form)))
+			(!seededFor || (form && (!isFormDirty(seededFor, form) || !isFormDirty(settings, form))))
 		) {
 			form = formFromSettings(settings);
 			seededFor = settings;
@@ -88,7 +88,7 @@
 		if (
 			settings &&
 			settings !== seededForCaching &&
-			(!seededForCaching || caching === seededForCaching.caching)
+			(!seededForCaching || caching === seededForCaching.caching || caching === settings.caching)
 		) {
 			caching = settings.caching;
 			seededForCaching = settings;

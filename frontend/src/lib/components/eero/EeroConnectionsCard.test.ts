@@ -139,6 +139,25 @@ describe('EeroConnectionsCard', () => {
 		expect(screen.queryByText('Unknown device')).not.toBeInTheDocument();
 	});
 
+	it('derives wired/wireless from connection_type on legacy rows without kind', async () => {
+		server.use(
+			http.get('/api/eeros/:eeroId/connections', () =>
+				HttpResponse.json({
+					connections: [
+						{ id: 'd1', display_name: 'NAS', kind: null, connection_type: 'wired' },
+						{ id: 'd2', display_name: 'Mystery', kind: null, connection_type: null }
+					]
+				})
+			)
+		);
+
+		render(EeroConnectionsCard, { props: { eeroId: 'eero-1' } });
+
+		await waitFor(() => expect(screen.getByText('NAS')).toBeInTheDocument());
+		expect(screen.getByText('Wired')).toBeInTheDocument();
+		expect(screen.queryByText(/^Wireless/)).not.toBeInTheDocument();
+	});
+
 	it('shows an empty state when there are no connections', async () => {
 		server.use(
 			http.get('/api/eeros/:eeroId/connections', () => HttpResponse.json({ connections: [] }))

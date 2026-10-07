@@ -70,4 +70,9 @@ describe('Button', () => {
 		render(Button, { props: { icon: 'refresh', label: 'Refresh devices' } });
 		expect(screen.getByRole('button', { name: 'Refresh devices' })).toBeInTheDocument();
 	});
+
+	it('keeps a native aria-label when no label prop is given', () => {
+		render(Button, { props: { icon: 'refresh', 'aria-label': 'Reload list' } });
+		expect(screen.getByRole('button', { name: 'Reload list' })).toBeInTheDocument();
+	});
 });

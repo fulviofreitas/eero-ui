@@ -30,14 +30,21 @@
 	let error: string | null = $state(null);
 	let unavailable = $state(false);
 
-	let wirelessCount = $derived(connections.filter((c) => c.kind === 'wireless').length);
-	let wiredCount = $derived(connections.filter((c) => c.kind === 'wired').length);
+	let wirelessCount = $derived(connections.filter((c) => kindOf(c) === 'wireless').length);
+	let wiredCount = $derived(connections.filter((c) => kindOf(c) === 'wired').length);
 
 	function entityHref(connection: EeroConnection): string | null {
 		if (!connection.id) return null;
 		return connection.entity_type === 'eero'
 			? `/eeros/${connection.id}`
 			: `/devices/${connection.id}`;
+	}
+
+	/** `kind` is null on legacy-shape rows - fall back to their `connection_type`. */
+	function kindOf(connection: EeroConnection): 'wired' | 'wireless' | null {
+		if (connection.kind) return connection.kind;
+		const type = connection.connection_type?.toLowerCase();
+		return type === 'wired' || type === 'wireless' ? type : null;
 	}
 
 	function displayName(connection: EeroConnection): string {
@@ -111,7 +118,7 @@
 						{/if}
 					</div>
 					<div class="connection-meta">
-						{#if connection.kind === 'wired'}
+						{#if kindOf(connection) === 'wired'}
 							<span class="badge badge-info">
 								Wired{connection.port ? ` · Port ${connection.port}` : ''}
 							</span>
@@ -123,7 +130,7 @@
 									>{connection.negotiated_speed}</span
 								>
 							{/if}
-						{:else}
+						{:else if kindOf(connection) === 'wireless'}
 							<span class="badge badge-success"
 								>Wireless{connection.band ? ` · ${connection.band}` : ''}</span
 							>

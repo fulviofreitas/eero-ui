@@ -454,6 +454,23 @@ describe('SecurityWanCard', () => {
 		expect(subnetsSection!.querySelector('th')?.textContent?.toLowerCase()).not.toContain('id');
 	});
 
+	it('renders boolean subnet fields as badges', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/subnets', () =>
+				HttpResponse.json({ subnets: [{ name: 'guest', enabled: true, lan_access: false }] })
+			)
+		);
+
+		render(SecurityWanCard, { props: { networkId: 'network-123' } });
+		await waitFor(() => expect(screen.getByText('UPnP')).toBeInTheDocument());
+
+		const subnetsSection = document.querySelector('[data-family="subnets"]')!;
+		await waitFor(() =>
+			expect(subnetsSection.querySelector('td .badge.badge-success')?.textContent).toBe('Yes')
+		);
+		expect(subnetsSection.querySelector('td .badge.badge-neutral')?.textContent).toBe('No');
+	});
+
 	it('gate-on: regenerating Thread credentials names the re-commissioning consequence', async () => {
 		await renderWithWrites(true);
 

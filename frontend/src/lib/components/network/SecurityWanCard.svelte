@@ -50,7 +50,7 @@
     band (`Wpa3PerBandUpdateRequest` only has `band_2_4_ghz`/`band_5_ghz`).
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, createRawSnippet } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { DataTableColumn } from '$components/common/DataTable.svelte';
@@ -566,6 +566,24 @@
 		(cardState.subnets?.subnets ?? []).map((fields, index) => ({ fields, index }))
 	);
 
+	/**
+	 * Compact badge cell for a boolean-ish subnet field, built with
+	 * `createRawSnippet` (raw HTML, not a full component) rather than
+	 * plain text - `DataTableColumn.render` only accepts a `Snippet<[T]>`,
+	 * so each badge column gets its own snippet closed over `key`.
+	 */
+	function subnetBadgeSnippet(key: string) {
+		return createRawSnippet<[SubnetRow]>((getRow) => ({
+			render: () => {
+				const value = getRow().fields[key];
+				const bool = typeof value === 'boolean' ? value : null;
+				const label = bool === null ? '—' : bool ? 'Yes' : 'No';
+				const cls = bool === true ? 'badge-success' : 'badge-neutral';
+				return `<span class="badge ${cls}">${label}</span>`;
+			}
+		}));
+	}
+
 	const subnetColumns = $derived.by((): DataTableColumn<SubnetRow>[] => {
 		const keys = new SvelteSet<string>();
 		for (const row of subnetRows) {
@@ -581,10 +599,7 @@
 				required: i === 0,
 				...(isBadge
 					? {
-							render: (() => {
-								// Lazily imported to avoid a module-level createRawSnippet cost when unused.
-								return undefined;
-							})()
+							render: subnetBadgeSnippet(key)
 						}
 					: {}),
 				accessor: (row: SubnetRow) => {

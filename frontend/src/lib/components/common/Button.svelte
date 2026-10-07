@@ -58,7 +58,7 @@
 	class={['btn', `btn-${variant}`, size === 'sm' && 'btn-sm', className].filter(Boolean).join(' ')}
 	disabled={isDisabled}
 	aria-busy={loading}
-	aria-label={label}
+	aria-label={label ?? rest['aria-label']}
 	onclick={(e) => onclick?.(e)}
 >
 	{#if loading}
