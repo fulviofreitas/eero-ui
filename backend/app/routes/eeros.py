@@ -2,7 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from eero import EeroClient
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -602,18 +602,35 @@ async def set_eero_led_brightness(
 
 
 class EeroConnection(BaseModel):
-    """One client connection reported by an eero's own ``connections`` link.
+    """One client/eero connection reported by an eero's own
+    ``connections`` link.
 
-    Security review, 2026-09-24 (L3): the upstream response shape is
-    unfixtured - no eero-api test fixture covers ``get_connections``'s
-    response body (SDK docstring: "Raw API response"). Fields below are
-    the allowlisted subset this backend expects, taken from the same
-    concepts ``normalize_device``/``normalize_eero`` already expose for a
-    connected client (id/url, mac, ip, nickname/hostname/display_name,
-    connection type, band, signal, last-seen), since a connection entry
-    describes a client attached to this eero. ``extra="ignore"`` drops
-    anything unexpected, and ``strip_sensitive_keys`` is applied to the
-    raw entry as a second layer before these fields are read off it.
+    The real API (probed live, 2026-10-07, network 3401709) has no
+    top-level ``connections`` key at all. Connections are reported in two
+    separate places on the ``get_connections`` response body:
+
+    - ``wireless_devices``: a flat list of
+      ``{"type": "CLIENT_DEVICE"|"EERO_DEVICE", "metadata": {"display_name",
+      "device_type", "url", ...}}`` entries (one per wirelessly-attached
+      device).
+    - ``ports.interfaces[]``: one entry per physical port, each carrying
+      ``connection_status: {"type": "EERO_DEVICE"|"CLIENT_DEVICE"|
+      "NOT_CONNECTED", "metadata": {...}}``, plus the port's own ``name``,
+      ``is_upstream`` and ``negotiated_speed``. ``NOT_CONNECTED`` ports are
+      skipped.
+
+    This route flattens both sources into one list, tagging each entry
+    with ``kind`` (``"wireless"``/``"wired"``) and ``entity_type``
+    (``"client"``/``"eero"``). A legacy top-level ``connections`` list (an
+    older/alternate shape, never observed live - security review,
+    2026-09-24, L3) is still read as a fallback when neither
+    ``wireless_devices`` nor ``ports`` is present, so any existing
+    fixture/consumer of that shape keeps working; entries from that path
+    leave ``kind``/``entity_type``/``device_type``/``port``/``is_upstream``/
+    ``negotiated_speed``/``location``/``model_name`` as ``None``.
+    ``extra="ignore"`` drops anything unexpected, and
+    ``strip_sensitive_keys`` is applied before these fields are read off
+    the raw entry.
     """
 
     id: str | None = None
@@ -627,6 +644,14 @@ class EeroConnection(BaseModel):
     band: str | None = None
     signal: Any = None
     last_active: str | None = None
+    kind: Literal["wireless", "wired"] | None = None
+    entity_type: Literal["client", "eero"] | None = None
+    device_type: str | None = None
+    port: str | None = None
+    is_upstream: bool | None = None
+    negotiated_speed: str | None = None
+    location: str | None = None
+    model_name: str | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -669,8 +694,70 @@ def _normalize_eero_connection(raw: dict[str, Any]) -> EeroConnection:
     )
 
 
+def _normalize_wireless_connection(entry: dict[str, Any]) -> EeroConnection:
+    """Normalize one ``wireless_devices[]`` entry (real API shape)."""
+    metadata = entry.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    url = metadata.get("url")
+    entity_type: Literal["client", "eero"] = (
+        "eero" if entry.get("type") == "EERO_DEVICE" else "client"
+    )
+    return EeroConnection(
+        id=extract_id_from_url(url),
+        url=url,
+        display_name=metadata.get("display_name"),
+        connection_type="wireless",
+        kind="wireless",
+        entity_type=entity_type,
+        device_type=metadata.get("device_type"),
+        location=metadata.get("location"),
+        model_name=metadata.get("model_name") or metadata.get("model"),
+    )
+
+
+def _normalize_port_connection(interface: dict[str, Any]) -> EeroConnection | None:
+    """Normalize one ``ports.interfaces[]`` entry (real API shape).
+
+    Returns ``None`` for a port whose ``connection_status.type`` is
+    ``NOT_CONNECTED`` (or anything else unrecognized) - there is no
+    attached device to report.
+    """
+    connection_status = interface.get("connection_status")
+    connection_status = connection_status if isinstance(connection_status, dict) else {}
+    status_type = connection_status.get("type")
+    if status_type not in ("EERO_DEVICE", "CLIENT_DEVICE"):
+        return None
+
+    metadata = connection_status.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    url = metadata.get("url")
+    entity_type: Literal["client", "eero"] = (
+        "eero" if status_type == "EERO_DEVICE" else "client"
+    )
+
+    negotiated_speed = interface.get("negotiated_speed")
+    is_upstream = interface.get("is_upstream")
+
+    return EeroConnection(
+        id=extract_id_from_url(url),
+        url=url,
+        display_name=metadata.get("display_name"),
+        connection_type="wired",
+        kind="wired",
+        entity_type=entity_type,
+        device_type=metadata.get("device_type"),
+        port=interface.get("name"),
+        is_upstream=is_upstream if isinstance(is_upstream, bool) else None,
+        negotiated_speed=(
+            negotiated_speed if isinstance(negotiated_speed, str) else None
+        ),
+        location=metadata.get("location"),
+        model_name=metadata.get("model_name") or metadata.get("model"),
+    )
+
+
 class EeroConnectionsResponse(BaseModel):
-    """An eero's client connections."""
+    """An eero's client/eero connections, wireless and wired combined."""
 
     connections: list[EeroConnection] = []
 
@@ -681,16 +768,43 @@ async def get_eero_connections(
     client: EeroClient = Depends(require_auth),
     network_id: str = Depends(get_network_id),
 ) -> EeroConnectionsResponse:
-    """Get an eero's client connections. Verified read."""
+    """Get an eero's wireless and wired connections. Verified read.
+
+    See ``EeroConnection``'s docstring for the real response shape
+    (``wireless_devices`` + ``ports.interfaces[]``) versus the legacy
+    top-level ``connections`` fallback.
+    """
     raw = await client.get_connections(eero_id, network_id=network_id)
-    connections = extract_list(raw, "connections")
-    return EeroConnectionsResponse(
-        connections=[
+    data = strip_sensitive_keys(extract_data(raw))
+
+    connections: list[EeroConnection] = []
+
+    wireless_devices = data.get("wireless_devices")
+    if isinstance(wireless_devices, list):
+        for entry in wireless_devices:
+            if isinstance(entry, dict):
+                connections.append(_normalize_wireless_connection(entry))
+
+    ports = data.get("ports")
+    if isinstance(ports, dict):
+        interfaces = ports.get("interfaces")
+        if isinstance(interfaces, list):
+            for interface in interfaces:
+                if not isinstance(interface, dict):
+                    continue
+                normalized = _normalize_port_connection(interface)
+                if normalized is not None:
+                    connections.append(normalized)
+
+    if not connections and "wireless_devices" not in data and "ports" not in data:
+        legacy = extract_list(raw, "connections")
+        connections = [
             _normalize_eero_connection(strip_sensitive_keys(c))
-            for c in connections
+            for c in legacy
             if isinstance(c, dict)
         ]
-    )
+
+    return EeroConnectionsResponse(connections=connections)
 
 
 # ---------------------------------------------------------------------------

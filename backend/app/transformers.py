@@ -451,6 +451,33 @@ def _normalize_network_speed_test(raw_speed: Any) -> dict[str, Any] | None:
     return result
 
 
+def read_connection_mode(raw: dict[str, Any]) -> str | None:
+    """Return the network's WAN connection mode as ``"NAT"``/``"BRIDGE"``.
+
+    The real API nests this as ``connection.mode`` with a lowercase value
+    (``"nat"``/``"bridge"``) -- there is no top-level ``connection_mode``
+    key. A legacy ``connection_mode`` top-level key is still accepted as a
+    fallback for any already-normalized/cached shape.
+
+    Args:
+        raw: Raw network data (the ``data`` envelope, not the full response).
+
+    Returns:
+        ``"NAT"``, ``"BRIDGE"``, or ``None`` if neither shape is present.
+    """
+    connection = raw.get("connection")
+    if isinstance(connection, dict):
+        mode = connection.get("mode")
+        if isinstance(mode, str) and mode:
+            return mode.upper()
+
+    legacy_mode = raw.get("connection_mode")
+    if isinstance(legacy_mode, str) and legacy_mode:
+        return legacy_mode.upper()
+
+    return None
+
+
 def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a raw network response to a consistent format.
 
@@ -522,7 +549,7 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
         "display_name": raw.get("display_name"),
         "wan_type": raw.get("wan_type"),
         "gateway_ip": raw.get("gateway_ip"),
-        "connection_mode": raw.get("connection_mode"),
+        "connection_mode": read_connection_mode(raw),
         "created_at": raw.get("created_at"),
         "geo_ip": raw.get("geo_ip"),
         "dns": raw.get("dns"),
@@ -1093,8 +1120,15 @@ def normalize_dhcp(dhcp: dict[str, Any] | None) -> dict[str, Any] | None:
         or 86400,
     }
 
-    # Only return if we have at least some data
-    if result["starting_address"] or result["ending_address"] or result["subnet_mask"]:
+    # Return whenever we have a lease range OR a mode (e.g. {"mode":
+    # "automatic", "custom": null} has no lease range but must not drop the
+    # mode -- a caller reading this back for a no-op guard needs it).
+    if (
+        result["starting_address"]
+        or result["ending_address"]
+        or result["subnet_mask"]
+        or result["mode"]
+    ):
         return result
 
     return None

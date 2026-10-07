@@ -44,6 +44,7 @@ from ..transformers import (
     normalize_network,
     normalize_speed_test,
     parse_iso8601,
+    read_connection_mode,
     strip_sensitive_keys,
     validate_path_id,
 )
@@ -1052,7 +1053,7 @@ class DhcpCustomLease(BaseModel):
 class DhcpUpdateRequest(BaseModel):
     """Request body for PUT /{network_id}/dhcp."""
 
-    mode: Literal["automatic", "manual"] | None = None
+    mode: Literal["automatic", "manual", "custom"] | None = None
     custom: DhcpCustomLease | None = None
 
     model_config = ConfigDict(extra="ignore")
@@ -1096,6 +1097,35 @@ def _reject_non_ipv4(value: str, field: str) -> ipaddress.IPv4Address:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field} must be a valid IPv4 address.",
         ) from exc
+
+
+def _dhcp_mode_matches(requested: str | None, current: Any) -> bool:
+    """Compare a requested DHCP mode against the wire value.
+
+    The API's wire value for a manual lease range is ``"custom"``
+    (``eero.api.dhcp``), while this route's request body (and the SDK's
+    caller-facing alias) also accepts ``"manual"`` for the same thing, so
+    ``"manual"`` and ``"custom"`` must compare equal here.
+    """
+    if requested is None:
+        return True
+    aliases = {"manual": "custom"}
+    return aliases.get(requested, requested) == aliases.get(current, current)
+
+
+def _dhcp_custom_field_matches(field: str, requested: Any, current: Any) -> bool:
+    """Compare one DHCP lease-range field, parsing IP-shaped fields as
+    ``ipaddress.IPv4Address`` so equivalent string spellings (e.g. leading
+    zeros) do not register as a spurious change.
+    """
+    if field in ("start_ip", "end_ip", "subnet_ip"):
+        try:
+            if current is None:
+                return False
+            return ipaddress.IPv4Address(requested) == ipaddress.IPv4Address(current)
+        except ValueError:
+            return requested == current
+    return requested == current
 
 
 def _validate_dhcp_custom_range(custom: DhcpCustomLease) -> None:
@@ -1189,9 +1219,10 @@ async def update_dhcp(
     )
 
     custom_payload = body.custom.model_dump() if body.custom is not None else None
-    mode_changed = body.mode is not None and body.mode != current_dhcp.get("mode")
+    mode_changed = not _dhcp_mode_matches(body.mode, current_dhcp.get("mode"))
     custom_changed = custom_payload is not None and any(
-        current_custom.get(k) != v for k, v in custom_payload.items()
+        not _dhcp_custom_field_matches(k, v, current_custom.get(k))
+        for k, v in custom_payload.items()
     )
 
     if not mode_changed and not custom_changed:
@@ -1273,7 +1304,7 @@ async def update_connection_mode(
         )
 
     raw_network = extract_data(await client.get_network(network_id))
-    current_mode = raw_network.get("connection_mode")
+    current_mode = read_connection_mode(raw_network)
 
     if body.mode == current_mode:
         return ConnectionModeResponse(
@@ -1292,7 +1323,7 @@ async def update_connection_mode(
     success = check_success(raw_result)
 
     raw_network = extract_data(await client.get_network(network_id))
-    new_mode = raw_network.get("connection_mode")
+    new_mode = read_connection_mode(raw_network)
     return ConnectionModeResponse(
         success=success,
         changed=True,
@@ -3202,19 +3233,87 @@ class DataUsageResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+def _sum_series_values(series_entry: dict[str, Any]) -> float | None:
+    """Return ``series_entry["sum"]`` if present, else sum ``values[].value``."""
+    total = series_entry.get("sum")
+    if isinstance(total, (int, float)):
+        return total
+    entry_values = series_entry.get("values")
+    if isinstance(entry_values, list):
+        running = 0.0
+        found = False
+        for item in entry_values:
+            if isinstance(item, dict) and isinstance(item.get("value"), (int, float)):
+                running += item["value"]
+                found = True
+        if found:
+            return running
+    return None
+
+
+def _merge_series_by_time(series_raw: list[Any]) -> list[dict[str, Any]]:
+    """Merge the real API's ``series: [{"type": "upload"|"download", "values": [...]}]``
+    shape into one list of ``{"time", "download", "upload"}`` entries, sorted by
+    ``time`` (the shape the frontend's ``deriveTimeSeries`` expects).
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    for series_entry in series_raw:
+        if not isinstance(series_entry, dict):
+            continue
+        series_type = series_entry.get("type")
+        if series_type not in ("upload", "download"):
+            continue
+        entry_values = series_entry.get("values")
+        if not isinstance(entry_values, list):
+            continue
+        for item in entry_values:
+            if not isinstance(item, dict):
+                continue
+            time_key = item.get("time")
+            if time_key is None:
+                continue
+            value = item.get("value")
+            bucket = merged.setdefault(time_key, {"time": time_key})
+            bucket[series_type] = value
+    return [merged[key] for key in sorted(merged.keys())]
+
+
 def _normalize_data_usage(raw: Any) -> DataUsageResponse:
     data = strip_sensitive_keys(extract_data(raw))
-    values_raw = data.get("values") or data.get("data_usage") or data.get("usage")
+
+    download_bytes: float | None = None
+    upload_bytes: float | None = None
     values: list[dict[str, Any]] = []
-    if isinstance(values_raw, list):
-        for entry in values_raw:
-            if isinstance(entry, dict):
-                values.append(entry)
-    return DataUsageResponse(
-        download_bytes=(
+
+    series_raw = data.get("series")
+    if isinstance(series_raw, list):
+        for series_entry in series_raw:
+            if not isinstance(series_entry, dict):
+                continue
+            series_type = series_entry.get("type")
+            if series_type == "download":
+                download_bytes = _sum_series_values(series_entry)
+            elif series_type == "upload":
+                upload_bytes = _sum_series_values(series_entry)
+        values = _merge_series_by_time(series_raw)
+
+    if download_bytes is None:
+        download_bytes = (
             data.get("download") or data.get("down") or data.get("download_bytes")
-        ),
-        upload_bytes=data.get("upload") or data.get("up") or data.get("upload_bytes"),
+        )
+    if upload_bytes is None:
+        upload_bytes = data.get("upload") or data.get("up") or data.get("upload_bytes")
+
+    if not values:
+        values_raw = data.get("values") or data.get("data_usage") or data.get("usage")
+        if isinstance(values_raw, list):
+            for entry in values_raw:
+                if isinstance(entry, dict):
+                    values.append(entry)
+
+    return DataUsageResponse(
+        download_bytes=download_bytes,
+        upload_bytes=upload_bytes,
         values=values,
         raw=data,
     )
@@ -3963,6 +4062,12 @@ class SecuritySettingsResponse(BaseModel):
     band_steering: bool | None = None
     upnp: bool | None = None
     ipv6: Any = None
+    # ``ipv6`` above carries the raw IPv6 name-server object
+    # (``{"name_servers": {...}}``), not an enable flag - the UI's IPv6
+    # toggle must read this field instead. Sourced from the network
+    # envelope's ``ipv6_upstream`` key, the same field the ``/security``
+    # PUT route's no-op guard already reads for its ``ipv6`` setting.
+    ipv6_enabled: bool | None = None
     wpa3_per_band: dict[str, Any] | None = None
     fast_transition: dict[str, Any] | None = None
     sqm: bool | None = None
@@ -4044,6 +4149,12 @@ async def get_network_security(
         result["passpoint"] = (
             coerce_bool(raw_passpoint, field_name="passpoint")
             if raw_passpoint is not None
+            else None
+        )
+        raw_ipv6_upstream = raw_network.get("ipv6_upstream")
+        result["ipv6_enabled"] = (
+            coerce_bool(raw_ipv6_upstream, field_name="ipv6_upstream")
+            if raw_ipv6_upstream is not None
             else None
         )
     except _PROPAGATE_FIRST:
