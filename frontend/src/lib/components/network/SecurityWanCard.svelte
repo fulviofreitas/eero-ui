@@ -382,6 +382,11 @@
 		};
 	}
 
+	/** Current API value for a DHCP lease field - shown beside its editable input. */
+	function dhcpApiValue(value: unknown): string {
+		return typeof value === 'string' && value.trim() !== '' ? value : '—';
+	}
+
 	function modeLabel(mode: DhcpTriState): string {
 		return { automatic: 'Automatic', manual: 'Manual IP', bridge: 'Bridge' }[mode];
 	}
@@ -1003,7 +1008,7 @@
 				<h5>DHCP &amp; NAT</h5>
 
 				{#if showControls}
-					<SettingRow label="Mode">
+					<SettingRow label="Mode" value={modeLabel(dhcpCurrentTriState)}>
 						{#snippet control()}
 							<div class="segmented-group">
 								{#each ['automatic', 'manual', 'bridge'] as const as mode (mode)}
@@ -1043,7 +1048,7 @@
 							value={dhcpPrefixDisplay}
 							hint="Derived from the subnet IP"
 						/>
-						<SettingRow label="Subnet IP">
+						<SettingRow label="Subnet IP" value={dhcpApiValue(dhcp?.subnet_ip)}>
 							{#snippet control()}
 								<input
 									class="input mono"
@@ -1056,7 +1061,7 @@
 								/>
 							{/snippet}
 						</SettingRow>
-						<SettingRow label="Subnet mask">
+						<SettingRow label="Subnet mask" value={dhcpApiValue(dhcp?.subnet_mask)}>
 							{#snippet control()}
 								<input
 									class="input mono"
@@ -1069,7 +1074,7 @@
 								/>
 							{/snippet}
 						</SettingRow>
-						<SettingRow label="Starting IP">
+						<SettingRow label="Starting IP" value={dhcpApiValue(dhcp?.starting_address)}>
 							{#snippet control()}
 								<input
 									class="input mono"
@@ -1082,7 +1087,7 @@
 								/>
 							{/snippet}
 						</SettingRow>
-						<SettingRow label="Ending IP">
+						<SettingRow label="Ending IP" value={dhcpApiValue(dhcp?.ending_address)}>
 							{#snippet control()}
 								<input
 									class="input mono"
@@ -1112,26 +1117,10 @@
 					<SettingRow label="Mode" readonly value={modeLabel(dhcpCurrentTriState)} />
 					{#if dhcpCurrentTriState === 'manual'}
 						<SettingRow label="IP address prefix" readonly value={dhcpPrefixDisplay} />
-						<SettingRow
-							label="Subnet IP"
-							readonly
-							value={typeof dhcp?.subnet_ip === 'string' ? dhcp.subnet_ip : '—'}
-						/>
-						<SettingRow
-							label="Subnet mask"
-							readonly
-							value={typeof dhcp?.subnet_mask === 'string' ? dhcp.subnet_mask : '—'}
-						/>
-						<SettingRow
-							label="Starting IP"
-							readonly
-							value={typeof dhcp?.starting_address === 'string' ? dhcp.starting_address : '—'}
-						/>
-						<SettingRow
-							label="Ending IP"
-							readonly
-							value={typeof dhcp?.ending_address === 'string' ? dhcp.ending_address : '—'}
-						/>
+						<SettingRow label="Subnet IP" readonly value={dhcpApiValue(dhcp?.subnet_ip)} />
+						<SettingRow label="Subnet mask" readonly value={dhcpApiValue(dhcp?.subnet_mask)} />
+						<SettingRow label="Starting IP" readonly value={dhcpApiValue(dhcp?.starting_address)} />
+						<SettingRow label="Ending IP" readonly value={dhcpApiValue(dhcp?.ending_address)} />
 						<SettingRow label="Lease time" readonly value={formatUptime(dhcpLeaseSeconds)} />
 					{/if}
 				{/if}

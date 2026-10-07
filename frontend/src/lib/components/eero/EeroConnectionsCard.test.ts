@@ -115,6 +115,30 @@ describe('EeroConnectionsCard', () => {
 		expect(screen.getByText('Upstream')).toBeInTheDocument();
 	});
 
+	it('names an eero entry by its location when the API sends no display name', async () => {
+		server.use(
+			http.get('/api/eeros/:eeroId/connections', () =>
+				HttpResponse.json({
+					connections: [
+						{
+							id: 'eero-3',
+							display_name: null,
+							location: 'Kitchen',
+							model_name: 'eero Max 7',
+							kind: 'wired',
+							entity_type: 'eero'
+						}
+					]
+				})
+			)
+		);
+
+		render(EeroConnectionsCard, { props: { eeroId: 'eero-1' } });
+
+		await waitFor(() => expect(screen.getByText('Kitchen')).toBeInTheDocument());
+		expect(screen.queryByText('Unknown device')).not.toBeInTheDocument();
+	});
+
 	it('shows an empty state when there are no connections', async () => {
 		server.use(
 			http.get('/api/eeros/:eeroId/connections', () => HttpResponse.json({ connections: [] }))

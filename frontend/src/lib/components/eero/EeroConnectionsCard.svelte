@@ -45,6 +45,9 @@
 			connection.display_name ||
 			connection.nickname ||
 			connection.hostname ||
+			// eero entries (wired upstream/downstream nodes) carry a location, not a display name.
+			connection.location ||
+			connection.model_name ||
 			connection.mac ||
 			'Unknown device'
 		);

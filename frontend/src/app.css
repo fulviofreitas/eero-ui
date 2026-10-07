@@ -497,6 +497,54 @@ code {
 	height: 0.875rem;
 }
 
+/* Switch - a checkbox with role="switch" (boolean setting rows) */
+input[type='checkbox'][role='switch'] {
+	appearance: none;
+	position: relative;
+	width: 2.25rem;
+	height: 1.25rem;
+	margin: 0;
+	flex-shrink: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background-color: var(--color-bg-tertiary);
+	cursor: pointer;
+	transition:
+		background-color var(--transition-fast),
+		border-color var(--transition-fast);
+}
+
+input[type='checkbox'][role='switch']::before {
+	content: '';
+	position: absolute;
+	top: 1px;
+	left: 1px;
+	width: calc(1.25rem - 4px);
+	height: calc(1.25rem - 4px);
+	border-radius: 50%;
+	background-color: var(--color-text-secondary);
+	transition: transform var(--transition-fast);
+}
+
+input[type='checkbox'][role='switch']:checked {
+	background-color: var(--color-accent);
+	border-color: var(--color-accent);
+}
+
+input[type='checkbox'][role='switch']:checked::before {
+	background-color: var(--color-on-accent);
+	transform: translateX(1rem);
+}
+
+input[type='checkbox'][role='switch']:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+input[type='checkbox'][role='switch']:focus-visible {
+	box-shadow: var(--focus-ring);
+}
+
 /* Input */
 .input {
 	width: 100%;
