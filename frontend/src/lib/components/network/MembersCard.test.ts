@@ -51,6 +51,39 @@ describe('MembersCard', () => {
 		expect(screen.getByText('pending')).toBeInTheDocument();
 	});
 
+	it('renders permissions as a vertical list, one per row', async () => {
+		server.use(
+			http.get('/api/networks/:networkId/permissions', () =>
+				HttpResponse.json({
+					permissions: {
+						can_manage_devices: true,
+						can_manage_members: true,
+						can_manage_guest_network: true
+					},
+					role: 'owner',
+					partial: false
+				})
+			)
+		);
+
+		const { container } = render(MembersCard, { props: { networkId: 'network-123' } });
+
+		await waitFor(() => expect(screen.getByText('can_manage_devices')).toBeInTheDocument());
+		expect(screen.getByText('can_manage_members')).toBeInTheDocument();
+		expect(screen.getByText('can_manage_guest_network')).toBeInTheDocument();
+
+		// One <li> per permission, each a direct child of the list (vertical stacking, one
+		// per row) rather than one <li> wrapping a row of chips.
+		const list = container.querySelector('ul.permission-list');
+		expect(list).not.toBeNull();
+
+		const items = list!.querySelectorAll(':scope > li');
+		expect(items.length).toBe(3);
+		expect(items[0].textContent).toContain('can_manage_devices');
+		expect(items[1].textContent).toContain('can_manage_members');
+		expect(items[2].textContent).toContain('can_manage_guest_network');
+	});
+
 	it('renders the partial note when any one source reports partial:true', async () => {
 		server.use(
 			http.get('/api/networks/:networkId/invites', () =>

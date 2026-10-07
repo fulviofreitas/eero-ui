@@ -318,11 +318,16 @@
 
 	.permission-list {
 		display: flex;
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: flex-start;
 		gap: var(--space-2);
 		list-style: none;
 		margin: 0;
 		padding: 0;
+	}
+
+	.permission-list li {
+		width: 100%;
 	}
 
 	.badge-row {
