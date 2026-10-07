@@ -44,7 +44,7 @@ services:
   # network/firewall — never publish it on a public or LAN-wide interface.
   #
   # eero-exporter:
-  #   image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0
+  #   image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.3.0
   #   container_name: eero-exporter
   #   ports:
   #     - "127.0.0.1:10052:10052"
