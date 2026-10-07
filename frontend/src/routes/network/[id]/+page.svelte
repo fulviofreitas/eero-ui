@@ -12,7 +12,6 @@
 	import Icon from '$components/common/Icon.svelte';
 	import SpeedtestChart from '#lib/components/charts/SpeedtestChart.svelte';
 	import DnsSettingsCard from '#lib/components/network/DnsSettingsCard.svelte';
-	import DnsCachingCard from '#lib/components/network/DnsCachingCard.svelte';
 	import OverviewCard from '#lib/components/network/OverviewCard.svelte';
 	import HardwareFeaturesCard from '#lib/components/network/HardwareFeaturesCard.svelte';
 	import LocationPremiumCard from '#lib/components/network/LocationPremiumCard.svelte';
@@ -313,7 +312,6 @@
 				<div class="info-grid" role="tabpanel" id="tabpanel-dns" aria-labelledby="tab-dns">
 					{#if networkId}
 						<DnsSettingsCard {networkId} />
-						<DnsCachingCard {networkId} />
 						<PremiumGate feature="Content filtering"><ContentFilterCard {networkId} /></PremiumGate>
 					{/if}
 					<PremiumDnsCard {network} />

@@ -6,6 +6,13 @@
  * toggle, mirroring the eero mobile app. These helpers translate between
  * the form shape and the API's `DnsSettings`/`DnsUpdateRequest` shapes, and
  * implement the dirty-check that gates the Save button.
+ *
+ * Consistency pass, 2026-10-07: DNS caching moved from its own standalone
+ * card/Save into this form (see `buildCombinedUpdateRequest` below) - one
+ * Save button, one PUT per submit. The backend still dispatches up to two
+ * SDK calls (servers, then caching) and each one independently reboots the
+ * mesh; when both pieces changed in the same submit, the confirm dialog
+ * says so explicitly rather than implying a single reboot.
  */
 
 import type { DnsFieldName, DnsSettings, DnsUpdateRequest } from '$api/types';
@@ -38,9 +45,10 @@ export function formFromSettings(settings: DnsSettings): DnsFormState {
  * so a purely textual re-formatting of an unchanged IPv6 address is never
  * reported as dirty.
  *
- * Caching is intentionally NOT part of this check - it is applied through
- * its own, independently-confirmed control. See `buildCachingUpdateRequest`
- * below for why.
+ * Caching is intentionally NOT part of this check - DnsSettingsCard tracks
+ * it as its own, separately-dirty field (`cachingDirty`) so the combined
+ * request only ever includes the pieces that actually changed. See
+ * `buildCombinedUpdateRequest` below.
  */
 export function isFormDirty(settings: DnsSettings, form: DnsFormState): boolean {
 	const loaded = formFromSettings(settings);
@@ -88,10 +96,11 @@ export function formIsValid(form: DnsFormState): boolean {
 }
 
 /**
- * Build the PUT payload for the servers form.
+ * Build the PUT payload for the servers half of the form.
  *
- * DELIBERATELY never includes a `caching` key. See `buildCachingUpdateRequest`
- * below for why.
+ * DELIBERATELY never includes a `caching` key - callers combine this with
+ * the caching toggle via `buildCombinedUpdateRequest` below, which decides
+ * whether each half belongs in the request at all.
  */
 export function buildUpdateRequest(form: DnsFormState): DnsUpdateRequest {
 	if (form.mode === 'automatic') {
@@ -115,23 +124,46 @@ export function buildUpdateRequest(form: DnsFormState): DnsUpdateRequest {
 }
 
 /**
- * Build the PUT payload for the standalone DNS caching toggle.
- *
- * SPLIT FROM THE SERVERS FORM ON PURPOSE (fulviofreitas/eero-api#127): the
- * eero-api SDK has no whole-state DNS write, so the backend dispatches one
- * PUT per changed aspect - servers (ipv4/ipv6 combined into one PUT) and
- * caching (always its own PUT). Every PUT to this resource reboots the
- * entire mesh. Bundling a caching change into the same submit as a servers
- * change could therefore queue up to 3 back-to-back reboots; eero-api's own
- * docs warn that a burst of writes like that can leave a network
- * unreachable until it's factory-reset from the app. Sending caching alone,
- * behind its own confirmation, caps any one submit at a single PUT/reboot.
- * Once eero-api#127 ships a real `set_dns_settings()` (one PUT for
- * everything), this split - and the sibling DnsCachingCard component -
- * should be reverted back into a single form/request.
+ * Build the PUT payload for the standalone DNS caching toggle, with no
+ * `ipv4`/`ipv6` keys. Used directly by `buildCombinedUpdateRequest` below,
+ * and kept exported in its own right for callers/tests that only care about
+ * the caching half.
  */
 export function buildCachingUpdateRequest(caching: boolean): DnsUpdateRequest {
 	return { caching };
+}
+
+/**
+ * Build the PUT payload for DnsSettingsCard's single Save button, which now
+ * covers both the servers form and the caching toggle (consistency pass,
+ * 2026-10-07 - this used to be two cards with two Saves; see
+ * `fulviofreitas/eero-api#127`, still open: the SDK has no whole-state DNS
+ * write, so the backend dispatches one SDK call per changed aspect -
+ * servers, then caching - and EACH ONE independently reboots the mesh).
+ *
+ * Only includes a half of the request if that half actually changed
+ * (`dirty.serversDirty`/`dirty.cachingDirty`), so:
+ * - servers-only change -> `{ipv4, ipv6}`, no `caching` key.
+ * - caching-only change -> `{caching}` alone, no `ipv4`/`ipv6` keys.
+ * - both changed -> one request carrying both; the caller's confirm dialog
+ *   is responsible for warning that this still means two separate SDK
+ *   writes server-side and the network may restart more than once.
+ */
+export function buildCombinedUpdateRequest(
+	form: DnsFormState,
+	caching: boolean,
+	dirty: { serversDirty: boolean; cachingDirty: boolean }
+): DnsUpdateRequest {
+	const request: DnsUpdateRequest = {};
+
+	if (dirty.serversDirty) {
+		Object.assign(request, buildUpdateRequest(form));
+	}
+	if (dirty.cachingDirty) {
+		request.caching = caching;
+	}
+
+	return request;
 }
 
 export function applyProvider(

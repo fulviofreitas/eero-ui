@@ -2,8 +2,8 @@
   PremiumDnsCard
 
   Network detail "Security & Filtering" section (premium DNS provider/policies summary — not
-  to be confused with DnsSettingsCard/DnsCachingCard, which own the actual DNS write forms).
-  Extracted from routes/network/[id]/+page.svelte (WP5 decomposition).
+  to be confused with DnsSettingsCard, which owns the actual DNS write form, servers and
+  caching both). Extracted from routes/network/[id]/+page.svelte (WP5 decomposition).
 -->
 <script lang="ts">
 	import type { NetworkDetail } from '$api/types';

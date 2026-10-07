@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import type { DnsSettings } from '$api/types';
 import {
 	buildCachingUpdateRequest,
+	buildCombinedUpdateRequest,
 	buildUpdateRequest,
 	formFromSettings,
 	formIsValid,
@@ -91,7 +92,7 @@ describe('isFormDirty', () => {
 		expect(isFormDirty(settings, form)).toBe(true);
 	});
 
-	it('is NOT dirty when only caching differs - caching has its own control now', () => {
+	it('is NOT dirty when only caching differs - DnsSettingsCard tracks caching separately', () => {
 		const settings = makeSettings({ caching: true });
 		const form: DnsFormState = {
 			mode: 'automatic',
@@ -218,5 +219,55 @@ describe('buildCachingUpdateRequest', () => {
 		const request = buildCachingUpdateRequest(true);
 		expect(request).not.toHaveProperty('ipv4');
 		expect(request).not.toHaveProperty('ipv6');
+	});
+});
+
+describe('buildCombinedUpdateRequest', () => {
+	const customForm: DnsFormState = {
+		mode: 'custom',
+		ipv4Primary: '1.1.1.1',
+		ipv4Secondary: '',
+		ipv6Primary: '',
+		ipv6Secondary: ''
+	};
+
+	it('includes only the servers half when only servers are dirty', () => {
+		const request = buildCombinedUpdateRequest(customForm, false, {
+			serversDirty: true,
+			cachingDirty: false
+		});
+		expect(request).toEqual({
+			ipv4: { mode: 'custom', servers: ['1.1.1.1'] },
+			ipv6: { mode: 'custom', servers: [] }
+		});
+		expect(request).not.toHaveProperty('caching');
+	});
+
+	it('includes only caching when only caching is dirty', () => {
+		const request = buildCombinedUpdateRequest(customForm, true, {
+			serversDirty: false,
+			cachingDirty: true
+		});
+		expect(request).toEqual({ caching: true });
+	});
+
+	it('includes both halves in one request when both are dirty', () => {
+		const request = buildCombinedUpdateRequest(customForm, true, {
+			serversDirty: true,
+			cachingDirty: true
+		});
+		expect(request).toEqual({
+			ipv4: { mode: 'custom', servers: ['1.1.1.1'] },
+			ipv6: { mode: 'custom', servers: [] },
+			caching: true
+		});
+	});
+
+	it('returns an empty request when neither half is dirty', () => {
+		const request = buildCombinedUpdateRequest(customForm, true, {
+			serversDirty: false,
+			cachingDirty: false
+		});
+		expect(request).toEqual({});
 	});
 });

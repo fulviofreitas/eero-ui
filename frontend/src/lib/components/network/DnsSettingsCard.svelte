@@ -1,18 +1,20 @@
 <!--
   DNS Settings Card
 
-  Editable DNS server configuration for a network. A write here reboots
-  every eero on the network, so this deliberately does NOT use optimistic
-  updates and always requires an explicit, detailed confirmation before
-  submitting.
+  Editable DNS server configuration AND the DNS caching toggle for a
+  network, under one Save button (consistency pass, 2026-10-07 - this card
+  and the now-removed sibling DnsCachingCard used to have separate Saves).
+  A write here reboots every eero on the network, so this deliberately does
+  NOT use optimistic updates and always requires an explicit, detailed
+  confirmation before submitting.
 
-  DNS caching is intentionally NOT configured here - it lives in the
-  sibling DnsCachingCard, with its own Save and its own confirmation. See
-  `buildCachingUpdateRequest` in dns-form.ts for why: the eero-api SDK has
-  no whole-state DNS write (fulviofreitas/eero-api#127), so servers and
-  caching are always separate PUTs, and each PUT reboots the mesh. Keeping
-  them as separate forms means one submit can never queue more than one
-  reboot. Revert this split once #127 ships a real whole-state write.
+  The eero-api SDK still has no whole-state DNS write (fulviofreitas/eero-api#127),
+  so the backend dispatches up to two SDK calls per submit - servers, then
+  caching - and each one independently reboots the mesh. One Save button
+  now sends one PUT either way; `buildCombinedUpdateRequest` (dns-form.ts)
+  only includes the half(s) that actually changed, and when BOTH changed
+  the confirm dialog says explicitly that this means two separate writes
+  and the network may restart more than once.
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -21,7 +23,7 @@
 	import type { DnsProvider } from '$api/types';
 	import {
 		applyProvider,
-		buildUpdateRequest,
+		buildCombinedUpdateRequest,
 		formFromSettings,
 		formIsValid,
 		isFormDirty,
@@ -38,28 +40,30 @@
 	let { networkId }: Props = $props();
 
 	let form = $state<DnsFormState | null>(null);
+	let caching = $state(false);
 	let submitError: string | null = $state(null);
 	let justApplied = $state(false);
 
 	let dnsState = $derived($dnsStore);
 	let settings = $derived(dnsState.settings);
 
-	// Seed the form on first load, and re-seed whenever the loaded settings
-	// object changes identity AFTERWARDS - but only while this form has no
-	// pending unsaved edit of its own. `dnsStore.settings` is shared with
-	// DnsCachingCard, and every write (from either card) replaces it with a
-	// brand-new object, even when ipv4/ipv6 are unchanged. Reseeding
-	// unconditionally on identity change would silently discard whatever
-	// the user was mid-typing here the moment the sibling card's write
-	// resolved. `!seededFor` carves out the one case where clobbering is
-	// correct and required: there is nothing to protect before the very
+	// Seed the servers half of the form on first load, and re-seed whenever
+	// the loaded settings object changes identity AFTERWARDS - but only
+	// while this half has no pending unsaved edit of its own. Every write
+	// (servers, caching, or both - see `submit` below) replaces
+	// `dnsStore.settings` with a brand-new object, even when this half is
+	// unchanged. Reseeding unconditionally on identity change would
+	// silently discard whatever the user was mid-typing here the moment a
+	// write resolved. `!seededFor` carves out the one case where clobbering
+	// is correct and required: there is nothing to protect before the very
 	// first load.
 	//
 	// The guard compares `form` against `seededFor` (the baseline we last
-	// synced from) via `isFormDirty`, rather than the `dirty` declaration
-	// below, on purpose: `dirty` itself reads `form`, so referencing it here
-	// would create a `dirty -> form -> dirty` cycle that Svelte's compiler
-	// rejects (reactive_declaration_cycle). Comparing against `seededFor` is
+	// synced from) via `isFormDirty`, rather than the `serversDirty`
+	// declaration below, on purpose: `serversDirty` itself reads `form`, so
+	// referencing it here would create a `serversDirty -> form ->
+	// serversDirty` cycle that Svelte's compiler rejects
+	// (reactive_declaration_cycle). Comparing against `seededFor` is
 	// equivalent (both express "has the user changed this since we last
 	// loaded it") without the cyclic dependency.
 	let seededFor: typeof settings = null;
@@ -74,10 +78,30 @@
 		}
 	});
 
+	// Same seed-once/protect-the-edit pattern as above, independently, for
+	// the caching toggle - it has its own dirty check and its own place in
+	// the combined request (`buildCombinedUpdateRequest`), so it is tracked
+	// against its own baseline rather than being folded into `seededFor`.
+	let seededForCaching: typeof settings = null;
+	$effect(() => {
+		if (
+			settings &&
+			settings !== seededForCaching &&
+			(!seededForCaching || caching === seededForCaching.caching)
+		) {
+			caching = settings.caching;
+			seededForCaching = settings;
+		}
+	});
+
 	let errors = $derived(form ? validateForm(form) : {});
 	let valid = $derived(form ? formIsValid(form) : false);
-	let dirty = $derived(settings && form ? isFormDirty(settings, form) : false);
-	let canSave = $derived(dirty && valid && !dnsState.applying);
+	let serversDirty = $derived(settings && form ? isFormDirty(settings, form) : false);
+	let cachingDirty = $derived(settings ? caching !== settings.caching : false);
+	let dirty = $derived(serversDirty || cachingDirty);
+	// Enabled when servers are dirty+valid OR caching is dirty (plan § consistency pass) - an
+	// in-progress, not-yet-valid servers edit must never block an otherwise-ready caching save.
+	let canSave = $derived(((serversDirty && valid) || cachingDirty) && !dnsState.applying);
 
 	let selectedProviderName = $derived(getSelectedProviderName(form, settings?.providers ?? []));
 
@@ -120,15 +144,26 @@
 	function requestSave() {
 		if (!form || !canSave) return;
 
+		const both = serversDirty && valid && cachingDirty;
+
 		uiStore.confirm({
 			title: 'Apply DNS Settings?',
 			message: 'This change reboots every eero on this network to take effect.',
-			details: [
-				'Every eero on this network will restart, and all connected devices will lose ' +
-					'internet access for a minute or two.',
-				'If you are connected to this network right now, you will lose your own ' +
-					'connection while it restarts.'
-			],
+			details: both
+				? [
+						'Servers and caching both changed - the backend applies them as two separate ' +
+							'DNS writes, so the network may restart more than once.',
+						'Every eero on this network will restart, and all connected devices will lose ' +
+							'internet access for a minute or two each time.',
+						'If you are connected to this network right now, you will lose your own ' +
+							'connection while it restarts.'
+					]
+				: [
+						'Every eero on this network will restart, and all connected devices will lose ' +
+							'internet access for a minute or two.',
+						'If you are connected to this network right now, you will lose your own ' +
+							'connection while it restarts.'
+					],
 			confirmText: 'Apply & Restart Network',
 			danger: true,
 			onConfirm: submit
@@ -139,7 +174,13 @@
 		if (!form) return;
 
 		submitError = null;
-		const body = buildUpdateRequest(form);
+		// `serversDirty && valid` (not `serversDirty` alone): canSave can be true purely from
+		// cachingDirty while an in-progress, not-yet-valid servers edit sits in the form - that
+		// half must never ride along into the request just because caching made Save clickable.
+		const body = buildCombinedUpdateRequest(form, caching, {
+			serversDirty: serversDirty && valid,
+			cachingDirty
+		});
 
 		try {
 			const result = await dnsStore.updateDns(networkId, body);
@@ -290,6 +331,11 @@
 				</div>
 			{/if}
 
+			<label class="dns-toggle-row">
+				<input type="checkbox" bind:checked={caching} disabled={dnsState.applying} />
+				<span>DNS Caching</span>
+			</label>
+
 			{#if settings.parent_ips.length > 0}
 				<dl class="info-list dns-upstream">
 					<div class="info-row">
@@ -325,6 +371,14 @@
 	.dns-mode-select {
 		display: flex;
 		gap: var(--space-5);
+	}
+
+	.dns-toggle-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: 0.875rem;
+		cursor: pointer;
 	}
 
 	.dns-radio {
