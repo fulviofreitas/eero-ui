@@ -206,32 +206,14 @@
     },
 
     // ==========================================================================
-    // 🔷 eero-prometheus-exporter image tag (docker-compose.yml, commented,
-    // optional/decoupled) - group minor/patch
+    // 🚫 eero-prometheus-exporter - not used by eero-ui, never tracked
     // ==========================================================================
-    // Tracked via the custom.regex manager below (docker-compose.yml, the
-    // commented-out `eero-exporter` service block). This container is NOT a
-    // runtime dependency of eero-ui; the pinned tag only documents a known-
-    // good version for operators who opt in to the standalone exporter.
+    // 6.0 removed the exporter. The tag in the commented-out docker-compose.yml
+    // service and the docs is a pointer for operators, not a dependency, so it
+    // has no regex manager and gets no PRs (#443 was closed for this).
     {
-      matchDepNames: ["ghcr.io/fulviofreitas/eero-prometheus-exporter"],
-      matchManagers: ["custom.regex"],
-      matchUpdateTypes: ["minor", "patch"],
-      groupName: "eero-exporter-doc-tag-minor-patch",
-      description: "eero-prometheus-exporter documented image tag minor/patch updates (auto-merge)",
-      automerge: true,
-      automergeType: "pr",
-      automergeStrategy: "squash",
-      addLabels: ["eero-packages"],
-      commitMessagePrefix: "docs(deps):",
-      commitMessageTopic: "eero-prometheus-exporter documented image tag",
-      prBodyNotes: [
-        "## 🔷 eero-prometheus-exporter Documented Tag Update",
-        "",
-        "This PR only bumps the version referenced in the commented-out, optional",
-        "`eero-exporter` service block in `docker-compose.yml`. eero-ui does not",
-        "depend on this container in any way — see the block's own comments.",
-      ],
+      matchPackageNames: ["ghcr.io/fulviofreitas/eero-prometheus-exporter"],
+      enabled: false,
     },
   ],
 
@@ -256,25 +238,6 @@
       datasourceTemplate: "github-releases",
       depNameTemplate: "VictoriaMetrics/VictoriaMetrics",
       extractVersionTemplate: "^(?<version>v\\d+\\.\\d+\\.\\d+)$",
-    },
-
-    // ==========================================================================
-    // 🔷 eero-prometheus-exporter image tag documented in docker-compose.yml
-    // ==========================================================================
-    // The service is fully commented out (optional, decoupled — see the block's
-    // own comments a few lines above). A regex manager matches raw file text
-    // regardless of YAML comment syntax, so this is safe to track even though
-    // the line starts with "#". Uses the "docker" datasource against GHCR so
-    // Renovate resolves real tags for ghcr.io/fulviofreitas/eero-prometheus-exporter.
-    {
-      customType: "regex",
-      managerFilePatterns: ["/^docker-compose\\.ya?ml$/"],
-      matchStrings: [
-        "#\\s*image:\\s*ghcr\\.io/fulviofreitas/eero-prometheus-exporter:(?<currentValue>\\d+\\.\\d+\\.\\d+)",
-      ],
-      datasourceTemplate: "docker",
-      depNameTemplate: "ghcr.io/fulviofreitas/eero-prometheus-exporter",
-      packageNameTemplate: "ghcr.io/fulviofreitas/eero-prometheus-exporter",
     },
   ],
 

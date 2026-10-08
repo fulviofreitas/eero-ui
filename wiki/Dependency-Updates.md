@@ -131,12 +131,13 @@ All major version updates (any dependency):
 
 ## Custom Managers (regex)
 
-Two versions have no native package manager, so `enabledManagers` includes `custom.regex` and `customManagers` defines one matcher each:
+The VictoriaMetrics binary has no native package manager, so `enabledManagers` includes `custom.regex` and `customManagers` defines one matcher for it:
 
 | Manager | Where it looks | Source of new versions | Why |
 |:--------|:---------------|:-----------------------|:----|
 | **VictoriaMetrics binary** | `Dockerfile` `ARG VM_VERSION=v1.96.0` in the `vm-downloader` stage | GitHub releases of `VictoriaMetrics/VictoriaMetrics` (v-prefixed tags, kept like-for-like via `extractVersionTemplate`) | The embedded time-series store was untracked before 6.0. Minor/patch auto-merge; majors go through the generic major-updates rule |
-| **eero-prometheus-exporter image tag** | the commented-out `eero-exporter` service in `docker-compose.yml` (`image: ghcr.io/fulviofreitas/eero-prometheus-exporter:4.0.0`) | ghcr.io tags | eero-ui does not run or depend on the exporter; this only keeps the documented known-good tag current for operators who opt in. Minor/patch auto-merge with a `docs(deps):` prefix |
+
+The `ghcr.io/fulviofreitas/eero-prometheus-exporter` tag in the commented-out `eero-exporter` service in `docker-compose.yml` is **not tracked**. eero-ui does not run or depend on the exporter, so the tag is only a pointer for operators. A package rule sets `enabled: false` for it so Renovate never opens PRs for it.
 
 ---
 
