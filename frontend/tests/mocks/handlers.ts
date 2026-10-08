@@ -101,7 +101,8 @@ export const handlers = [
 			user_phone: null,
 			user_role: null,
 			account_id: null,
-			premium_status: null
+			premium_status: null,
+			marketing_emails_consent: null
 		});
 	}),
 

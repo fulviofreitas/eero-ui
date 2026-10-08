@@ -9,9 +9,10 @@
  * propagate to the caller (the card component), which decides how to
  * surface them (a `account_identity_disabled` note vs. a plain error toast).
  *
- * There is no `fetch()` - the account's current name/email/phone/role come
- * from `authStore.checkStatus()` (`/auth/status`), which every write below
- * re-runs on success so the displayed value reflects the read-back.
+ * There is no `fetch()` - the account's current name/email/phone/role/
+ * marketing-consent come from `authStore.checkStatus()` (`/auth/status`),
+ * which every write below re-runs on success so the displayed value
+ * reflects the read-back rather than the requested value.
  */
 
 import { writable } from 'svelte/store';
@@ -27,13 +28,6 @@ interface AccountState {
 	phoneChangePending: boolean;
 	smsCountries: SmsCountriesResponse['countries'];
 	smsCountriesLoading: boolean;
-	/**
-	 * `null` until this session sets it - there is no `GET` for the
-	 * account's current consent value (`account.py` exposes only the
-	 * write), so this reflects "what we last told the server", not a
-	 * verified read-back.
-	 */
-	marketingEmailsConsent: boolean | null;
 }
 
 const initialState: AccountState = {
@@ -41,8 +35,7 @@ const initialState: AccountState = {
 	emailChangePending: false,
 	phoneChangePending: false,
 	smsCountries: [],
-	smsCountriesLoading: false,
-	marketingEmailsConsent: null
+	smsCountriesLoading: false
 };
 
 function createAccountStore() {
@@ -63,16 +56,16 @@ function createAccountStore() {
 		},
 
 		/**
-		 * Set the account's marketing-email consent. Pessimistic - there is
-		 * no read-back available (see `marketingEmailsConsent` doc), so the
-		 * requested value is recorded locally only after the write itself
-		 * succeeds.
+		 * Set the account's marketing-email consent. Pessimistic - re-checks
+		 * auth status on success so the displayed value reflects the eero
+		 * account's actual `consents.marketing_emails.consented`, not the
+		 * requested value.
 		 */
 		async setConsents(marketingEmails: boolean): Promise<void> {
 			update((s) => ({ ...s, applying: true }));
 			try {
 				await api.account.setConsents(marketingEmails);
-				update((s) => ({ ...s, marketingEmailsConsent: marketingEmails }));
+				await authStore.checkStatus();
 			} finally {
 				update((s) => ({ ...s, applying: false }));
 			}

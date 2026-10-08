@@ -23,6 +23,11 @@ export interface AuthStatus {
 	user_role: string | null;
 	account_id: string | null;
 	premium_status: string | null;
+	/**
+	 * Read back from the eero account's `consents.marketing_emails.consented`.
+	 * `null` when unknown (e.g. not authenticated).
+	 */
+	marketing_emails_consent: boolean | null;
 }
 
 export interface LoginRequest {

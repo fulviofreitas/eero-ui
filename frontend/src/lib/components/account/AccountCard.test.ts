@@ -22,7 +22,7 @@ import AccountCard from './AccountCard.svelte';
 import { accountStore, authStore, uiStore, confirmDialog } from '$stores';
 import { server } from '../../../../tests/mocks/server';
 
-function mockAuthenticated() {
+function mockAuthenticated(marketingEmailsConsent: boolean | null = null) {
 	server.use(
 		http.get('/api/auth/status', () =>
 			HttpResponse.json({
@@ -34,7 +34,8 @@ function mockAuthenticated() {
 				user_phone: '+15551234567',
 				user_role: 'owner',
 				account_id: 'account-1',
-				premium_status: null
+				premium_status: null,
+				marketing_emails_consent: marketingEmailsConsent
 			})
 		)
 	);
@@ -124,6 +125,68 @@ describe('AccountCard', () => {
 			await dialog!.onConfirm();
 
 			await waitFor(() => expect(get(uiStore).toasts.some((t) => t.type === 'success')).toBe(true));
+		});
+
+		it('pre-fills the Name input with the current name from authStore', async () => {
+			await enableExperimentalWrites();
+			render(AccountCard);
+
+			const input = screen.getByPlaceholderText('Display name') as HTMLInputElement;
+			expect(input.value).toBe('Test User');
+		});
+
+		describe('marketing consent', () => {
+			it('shows "Unknown" when the read-back value is null', async () => {
+				mockAuthenticated(null);
+				await authStore.checkStatus();
+				await enableExperimentalWrites();
+				render(AccountCard);
+
+				expect(screen.getByText('Unknown')).toBeInTheDocument();
+			});
+
+			it('shows "Opted in" and offers "Opt Out" when the read-back value is true', async () => {
+				mockAuthenticated(true);
+				await authStore.checkStatus();
+				await enableExperimentalWrites();
+				render(AccountCard);
+
+				expect(screen.getByText('Opted in')).toBeInTheDocument();
+				expect(screen.getByRole('button', { name: 'Opt Out' })).toBeInTheDocument();
+			});
+
+			it('shows "Opted out" and offers "Opt In" when the read-back value is false', async () => {
+				mockAuthenticated(false);
+				await authStore.checkStatus();
+				await enableExperimentalWrites();
+				render(AccountCard);
+
+				expect(screen.getByText('Opted out')).toBeInTheDocument();
+				expect(screen.getByRole('button', { name: 'Opt In' })).toBeInTheDocument();
+			});
+
+			it('toggling consent PUTs /api/account/consents then re-fetches /api/auth/status', async () => {
+				mockAuthenticated(false);
+				await authStore.checkStatus();
+				await enableExperimentalWrites();
+				render(AccountCard);
+
+				let putBody: unknown = null;
+				server.use(
+					http.put('/api/account/consents', async ({ request }) => {
+						putBody = await request.json();
+						return HttpResponse.json({ success: true });
+					})
+				);
+				mockAuthenticated(true);
+
+				await fireEvent.click(screen.getByRole('button', { name: 'Opt In' }));
+				const dialog = get(confirmDialog);
+				await dialog!.onConfirm();
+
+				await waitFor(() => expect(screen.getByText('Opted in')).toBeInTheDocument());
+				expect(putBody).toEqual({ marketing_emails: true });
+			});
 		});
 
 		it('requesting an e-mail change shows the identity detail and the code-entry step on success', async () => {

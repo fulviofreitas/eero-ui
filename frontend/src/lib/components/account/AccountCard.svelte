@@ -29,6 +29,8 @@
 	let writeState = $derived($accountStore);
 
 	let nameValue = $state('');
+	/** True once the operator has typed into the Name input - stops re-seeding from `authStore`. */
+	let nameTouched = $state(false);
 	let emailValue = $state('');
 	let emailCode = $state('');
 	let phoneValue = $state('');
@@ -43,8 +45,16 @@
 
 	let identityDisabledNote = $state<string | null>(null);
 
+	// `authStore.checkStatus()` may still be in flight when this component mounts (e.g. a direct
+	// navigation to /account), so the Name input is re-seeded whenever `userName` resolves/changes,
+	// as long as the operator has not started typing.
+	$effect(() => {
+		if (!nameTouched) {
+			nameValue = account.userName ?? '';
+		}
+	});
+
 	onMount(() => {
-		nameValue = account.userName ?? '';
 		accountStore.fetchSmsCountries();
 	});
 
@@ -94,7 +104,7 @@
 	}
 
 	function requestToggleConsent() {
-		const next = !writeState.marketingEmailsConsent;
+		const next = !account.marketingEmailsConsent;
 		uiStore.confirm({
 			title: 'Update Marketing Consent',
 			message: `${next ? 'Opt in to' : 'Opt out of'} marketing e-mails?`,
@@ -213,6 +223,7 @@
 					class="text-input"
 					type="text"
 					bind:value={nameValue}
+					oninput={() => (nameTouched = true)}
 					disabled={writeState.applying}
 					placeholder="Display name"
 					aria-label="Display name"
@@ -229,15 +240,15 @@
 		<h4>Marketing Consent</h4>
 		<ExperimentalGate>
 			<div class="badge-row-actions">
-				<span class="badge {writeState.marketingEmailsConsent ? 'badge-success' : 'badge-neutral'}">
-					{writeState.marketingEmailsConsent === null
-						? 'Unknown (no read-back available)'
-						: writeState.marketingEmailsConsent
+				<span class="badge {account.marketingEmailsConsent ? 'badge-success' : 'badge-neutral'}">
+					{account.marketingEmailsConsent === null
+						? 'Unknown'
+						: account.marketingEmailsConsent
 							? 'Opted in'
 							: 'Opted out'}
 				</span>
 				<Button onclick={requestToggleConsent}>
-					{writeState.marketingEmailsConsent ? 'Opt Out' : 'Opt In'}
+					{account.marketingEmailsConsent ? 'Opt Out' : 'Opt In'}
 				</Button>
 			</div>
 		</ExperimentalGate>
