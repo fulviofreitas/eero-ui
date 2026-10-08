@@ -19,6 +19,25 @@ def make_raw_response(data, code: int = 200):
     return {"meta": {"code": code}, "data": data}
 
 
+# ``GET /account`` ``data`` with the shape captured live on 2026-10-08
+# (eero-api 8.0.6) and synthetic values. Unrelated keys trimmed.
+LIVE_SHAPED_ACCOUNT = {
+    "name": "Test User",
+    "phone": {
+        "value": "+15555550100",
+        "country_code": "1",
+        "national_number": "5555550100",
+        "verified": True,
+    },
+    "email": {"value": "user@example.com", "verified": True},
+    "log_id": "0000000000000",
+    "networks": {"count": 1, "data": [{"url": "/2.2/networks/1", "name": "Home"}]},
+    "role": "full",
+    "premium_status": "not_subscribed",
+    "consents": {"marketing_emails": {"consented": True}},
+}
+
+
 class TestAuthStatus:
     """Tests for GET /api/auth/status."""
 
@@ -63,43 +82,65 @@ class TestAuthStatus:
         authenticated_client.clear_session_token.assert_awaited_once()
 
     async def test_status_authenticated(self, auth_client, authenticated_client):
-        """Returns user info when authenticated."""
-        # Arrange: mock account data as raw response
-        mock_account_data = {
-            "url": "/2.2/accounts/account-123",
-            "premium_status": "premium",
-            "users": [
-                {
-                    "email": "user@example.com",
-                    "name": "Test User",
-                    "phone": "+1234567890",
-                    "role": "owner",
-                }
-            ],
-        }
+        """Returns the profile from the real ``GET /account`` shape: top-level
+        ``name``, ``email``/``phone`` as ``{"value", ...}`` objects and consent
+        under ``consents.marketing_emails``. A guessed ``users[]`` fixture
+        kept this test green while the Account page showed "—" everywhere."""
         authenticated_client.get_account = AsyncMock(
-            return_value=make_raw_response(mock_account_data)
+            return_value=make_raw_response(LIVE_SHAPED_ACCOUNT)
         )
 
-        # Act
         response = await auth_client.get("/api/auth/status")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["authenticated"] is True
-        assert data["user_email"] == "user@example.com"
         assert data["user_name"] == "Test User"
-        assert data["account_id"] == "account-123"
-        assert data["premium_status"] == "premium"
+        assert data["user_email"] == "user@example.com"
+        assert data["user_phone"] == "+15555550100"
+        assert data["user_role"] == "full"
+        assert data["premium_status"] == "not_subscribed"
+        assert data["marketing_emails_consent"] is True
+        # The live account carries no ``url``, so there is no id to derive.
+        assert data["account_id"] is None
+
+    async def test_status_reads_consent_opt_out(
+        self, auth_client, authenticated_client
+    ):
+        """``consented: false`` is reported as false, not as unknown."""
+        account = {
+            **LIVE_SHAPED_ACCOUNT,
+            "consents": {"marketing_emails": {"consented": False}},
+        }
+        authenticated_client.get_account = AsyncMock(
+            return_value=make_raw_response(account)
+        )
+
+        response = await auth_client.get("/api/auth/status")
+
+        assert response.json()["marketing_emails_consent"] is False
+
+    async def test_status_account_probe_failure_keeps_session(
+        self, auth_client, authenticated_client
+    ):
+        """A non-auth failure of the probe stays authenticated with no profile."""
+        authenticated_client.get_account = AsyncMock(
+            side_effect=EeroNetworkException("timeout")
+        )
+
+        response = await auth_client.get("/api/auth/status")
+
+        data = response.json()
+        assert data["authenticated"] is True
+        assert data["reason"] is None
+        assert data["user_name"] is None
+        assert data["marketing_emails_consent"] is None
 
     async def test_status_with_int_preferred_network_id(
         self, auth_client, authenticated_client
     ):
         """An integer preferred id from the SDK does not 500 the status route (#415)."""
-        authenticated_client.get_account = AsyncMock(
-            return_value=make_raw_response({"users": []})
-        )
+        authenticated_client.get_account = AsyncMock(return_value=make_raw_response({}))
         authenticated_client.preferred_network_id = 12345678
 
         response = await auth_client.get("/api/auth/status")

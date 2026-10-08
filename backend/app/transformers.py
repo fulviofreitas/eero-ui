@@ -478,6 +478,46 @@ def read_connection_mode(raw: dict[str, Any]) -> str | None:
     return None
 
 
+def _contact_value(value: Any) -> str | None:
+    """Read an account contact field: ``{"value": ..., "verified": ...}`` or a
+    plain string."""
+    if isinstance(value, dict):
+        value = value.get("value")
+    return value if isinstance(value, str) and value else None
+
+
+def normalize_account(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the ``GET /account`` payload to the profile fields we show.
+
+    The profile is top-level on the account (captured live 2026-10-08):
+    ``name`` is a string, ``email`` is ``{"value", "verified"}``, ``phone`` is
+    ``{"value", "country_code", "national_number", "verified"}`` and marketing
+    consent is ``consents.marketing_emails.consented``. There is no ``users``
+    list and no ``url`` -- reading those left every field ``None``.
+
+    Args:
+        raw: Raw account data (the ``data`` envelope, not the full response).
+
+    Returns:
+        Dict with ``name``, ``email``, ``phone``, ``role``, ``premium_status``,
+        ``account_id`` and ``marketing_emails_consent``; absent values are
+        ``None``.
+    """
+    name = raw.get("name")
+    role = raw.get("role")
+    premium_status = raw.get("premium_status")
+    consented = get_nested(raw, "consents", "marketing_emails", "consented")
+    return {
+        "name": name if isinstance(name, str) and name else None,
+        "email": _contact_value(raw.get("email")),
+        "phone": _contact_value(raw.get("phone")),
+        "role": role if isinstance(role, str) and role else None,
+        "premium_status": premium_status if isinstance(premium_status, str) else None,
+        "account_id": extract_id_from_url(raw.get("url")),
+        "marketing_emails_consent": consented if isinstance(consented, bool) else None,
+    }
+
+
 def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize a raw network response to a consistent format.
 
