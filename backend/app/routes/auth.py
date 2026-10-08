@@ -1,6 +1,7 @@
 """Authentication routes for the Eero Dashboard."""
 
 import logging
+from typing import Any
 
 from eero import EeroClient
 from eero.exceptions import EeroAuthenticationException, EeroNetworkException
@@ -15,7 +16,7 @@ from ..deps import (
     get_eero_client,
     preferred_network_id_str,
 )
-from ..transformers import check_success, extract_data, extract_id_from_url
+from ..transformers import check_success, extract_data, normalize_account
 
 router = APIRouter()
 _LOGGER = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ class AuthStatusResponse(BaseModel):
     user_role: str | None = None
     account_id: str | None = None
     premium_status: str | None = None
+    # Read back from the account's ``consents.marketing_emails.consented``.
+    marketing_emails_consent: bool | None = None
 
 
 class LoginResponse(BaseModel):
@@ -84,12 +87,7 @@ async def get_auth_status(
       for a reason other than authentication, e.g. a transient network
       error - today's "authenticated but no account info" behaviour).
     """
-    user_email = None
-    user_name = None
-    user_phone = None
-    user_role = None
-    account_id = None
-    premium_status = None
+    account: dict[str, Any] = {}
     # is_authenticated is a property on EeroClient, not a method.
     # nosemgrep: python.lang.maintainability.is-function-without-parentheses.is-function-without-parentheses
     authenticated = client.is_authenticated
@@ -98,25 +96,9 @@ async def get_auth_status(
     if authenticated:
         try:
             raw_account = await client.get_account()
-            account = extract_data(raw_account)
-
-            # Extract account ID from URL
-            account_id = extract_id_from_url(account.get("url"))
-            premium_status = account.get("premium_status")
-
-            # Get users list
-            users = account.get("users", [])
-            if users and isinstance(users, list) and len(users) > 0:
-                # Get the first user (typically the owner)
-                user = users[0]
-                if isinstance(user, dict):
-                    user_email = user.get("email")
-                    user_name = user.get("name")
-                    user_phone = user.get("phone")
-                    user_role = user.get("role")
-
+            account = normalize_account(extract_data(raw_account))
             # Log minimal info - avoid PII in logs
-            _LOGGER.debug("Auth status check: authenticated, account_id=%s", account_id)
+            _LOGGER.debug("Auth status check: authenticated")
         except EeroAuthenticationException:
             _LOGGER.info("Auth status check: session expired, clearing stored token")
             await clear_client_session()
@@ -129,12 +111,13 @@ async def get_auth_status(
         authenticated=authenticated,
         reason=reason,
         preferred_network_id=preferred_network_id_str(client),
-        user_email=user_email,
-        user_name=user_name,
-        user_phone=user_phone,
-        user_role=user_role,
-        account_id=account_id,
-        premium_status=premium_status,
+        user_email=account.get("email"),
+        user_name=account.get("name"),
+        user_phone=account.get("phone"),
+        user_role=account.get("role"),
+        account_id=account.get("account_id"),
+        premium_status=account.get("premium_status"),
+        marketing_emails_consent=account.get("marketing_emails_consent"),
     )
 
 

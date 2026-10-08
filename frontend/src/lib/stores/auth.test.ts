@@ -13,7 +13,14 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { authStore, isAuthenticated, authError, isLoginPending, authReason } from './auth';
+import {
+	authStore,
+	isAuthenticated,
+	authError,
+	isLoginPending,
+	authReason,
+	marketingEmailsConsent
+} from './auth';
 import { server } from '../../../tests/mocks/server';
 import { http, HttpResponse } from 'msw';
 
@@ -37,7 +44,8 @@ describe('authStore', () => {
 						user_phone: '+1234567890',
 						user_role: 'owner',
 						account_id: 'account-123',
-						premium_status: 'premium'
+						premium_status: 'premium',
+						marketing_emails_consent: true
 					});
 				})
 			);
@@ -49,6 +57,30 @@ describe('authStore', () => {
 			expect(get(authStore).userEmail).toBe('user@test.com');
 			expect(get(authStore).userName).toBe('Test User');
 			expect(get(authReason)).toBeNull();
+			expect(get(marketingEmailsConsent)).toBe(true);
+		});
+
+		it('maps marketing_emails_consent: false from the status response', async () => {
+			server.use(
+				http.get('/api/auth/status', () => {
+					return HttpResponse.json({
+						authenticated: true,
+						reason: null,
+						preferred_network_id: 'net-123',
+						user_email: 'user@test.com',
+						user_name: 'Test User',
+						user_phone: '+1234567890',
+						user_role: 'owner',
+						account_id: 'account-123',
+						premium_status: 'premium',
+						marketing_emails_consent: false
+					});
+				})
+			);
+
+			await authStore.checkStatus();
+
+			expect(get(marketingEmailsConsent)).toBe(false);
 		});
 
 		it('sets authenticated to false when server returns unauthenticated', async () => {
@@ -197,12 +229,14 @@ describe('authStore', () => {
 						authenticated: true,
 						reason: null,
 						preferred_network_id: 'net-123',
-						user_email: 'user@test.com'
+						user_email: 'user@test.com',
+						marketing_emails_consent: true
 					});
 				})
 			);
 			await authStore.checkStatus();
 			expect(get(isAuthenticated)).toBe(true);
+			expect(get(marketingEmailsConsent)).toBe(true);
 
 			// Now logout
 			await authStore.logout();
@@ -210,6 +244,7 @@ describe('authStore', () => {
 			expect(get(isAuthenticated)).toBe(false);
 			expect(get(authStore).userEmail).toBeNull();
 			expect(get(authStore).loading).toBe(false);
+			expect(get(marketingEmailsConsent)).toBeNull();
 		});
 
 		it('succeeds even if API call fails', async () => {

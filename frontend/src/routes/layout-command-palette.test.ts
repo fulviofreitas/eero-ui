@@ -21,7 +21,8 @@ async function renderAuthenticatedLayout() {
 				user_phone: null,
 				user_role: 'owner',
 				account_id: 'acct-1',
-				premium_status: null
+				premium_status: null,
+				marketing_emails_consent: null
 			})
 		),
 		http.get('/api/networks', () => HttpResponse.json([])),

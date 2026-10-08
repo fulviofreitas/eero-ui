@@ -26,6 +26,8 @@ interface AuthState {
 	userRole: string | null;
 	accountId: string | null;
 	premiumStatus: string | null;
+	/** Read back from the eero account; `null` when unknown / not authenticated. */
+	marketingEmailsConsent: boolean | null;
 	loading: boolean;
 	error: string | null;
 	loginPending: boolean; // Waiting for verification code
@@ -44,6 +46,7 @@ const initialState: AuthState = {
 	userRole: null,
 	accountId: null,
 	premiumStatus: null,
+	marketingEmailsConsent: null,
 	loading: true,
 	error: null,
 	loginPending: false
@@ -73,6 +76,7 @@ function createAuthStore() {
 					userRole: status.user_role,
 					accountId: status.account_id,
 					premiumStatus: status.premium_status,
+					marketingEmailsConsent: status.marketing_emails_consent ?? null,
 					loading: false,
 					loginPending: false
 				}));
@@ -220,6 +224,7 @@ export const userRole = derived(authStore, ($auth) => $auth.userRole);
 export const accountId = derived(authStore, ($auth) => $auth.accountId);
 export const premiumStatus = derived(authStore, ($auth) => $auth.premiumStatus);
 export const authReason = derived(authStore, ($auth) => $auth.reason);
+export const marketingEmailsConsent = derived(authStore, ($auth) => $auth.marketingEmailsConsent);
 
 // Listen for 401 events from API client. `checkStatus()` re-probes
 // `/auth/status`, which the backend now clears the token before answering

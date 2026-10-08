@@ -11,6 +11,7 @@ from app.transformers import (
     extract_data,
     extract_id_from_url,
     extract_list,
+    normalize_account,
     normalize_device,
     normalize_dhcp,
     normalize_dns,
@@ -365,6 +366,58 @@ class TestReadConnectionMode:
     def test_nested_shape_takes_priority_over_legacy(self):
         raw = {"connection": {"mode": "bridge"}, "connection_mode": "NAT"}
         assert read_connection_mode(raw) == "BRIDGE"
+
+
+class TestNormalizeAccount:
+    """Tests for ``normalize_account`` against the live ``GET /account`` shape."""
+
+    def test_reads_top_level_profile(self):
+        raw = {
+            "name": "Test User",
+            "email": {"value": "user@example.com", "verified": True},
+            "phone": {
+                "value": "+15555550100",
+                "country_code": "1",
+                "national_number": "5555550100",
+                "verified": True,
+            },
+            "role": "full",
+            "premium_status": "not_subscribed",
+            "consents": {"marketing_emails": {"consented": False}},
+        }
+        assert normalize_account(raw) == {
+            "name": "Test User",
+            "email": "user@example.com",
+            "phone": "+15555550100",
+            "role": "full",
+            "premium_status": "not_subscribed",
+            "account_id": None,
+            "marketing_emails_consent": False,
+        }
+
+    def test_accepts_plain_string_contacts(self):
+        result = normalize_account({"email": "a@b.co", "phone": "+15555550100"})
+        assert result["email"] == "a@b.co"
+        assert result["phone"] == "+15555550100"
+
+    def test_guessed_users_list_is_not_the_profile(self):
+        """The shape the old code read. The live API has no ``users`` list."""
+        raw = {"users": [{"name": "X", "email": "x@y.co"}]}
+        assert normalize_account(raw)["name"] is None
+
+    def test_missing_or_malformed_fields_are_none(self):
+        raw = {
+            "name": "",
+            "email": {"verified": True},
+            "phone": None,
+            "consents": {"marketing_emails": {"consented": "yes"}},
+        }
+        result = normalize_account(raw)
+        assert result["name"] is None
+        assert result["email"] is None
+        assert result["phone"] is None
+        assert result["marketing_emails_consent"] is None
+        assert normalize_account({})["marketing_emails_consent"] is None
 
 
 class TestNormalizeDhcp:
