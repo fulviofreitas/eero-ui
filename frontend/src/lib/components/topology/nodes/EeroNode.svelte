@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeDetailLevel } from '#lib/stores/topology.js';
+	import type { LayoutType, NodeDetailLevel } from '#lib/stores/topology.js';
 	import Icon from '$components/common/Icon.svelte';
 
 	interface Props {
@@ -19,6 +19,7 @@
 			wired?: boolean;
 			ipAddress?: string;
 			detailLevel?: NodeDetailLevel;
+			layoutType?: LayoutType;
 		};
 		selected?: boolean;
 	}
@@ -44,7 +45,11 @@
 </script>
 
 <div class="eero-node {statusClass}" class:selected class:minimal={detailLevel === 'minimal'}>
-	<Handle type="target" position={Position.Top} class="handle" />
+	<Handle
+		type="target"
+		position={data.layoutType === 'horizontal' ? Position.Left : Position.Top}
+		class="handle"
+	/>
 
 	<div class="node-content">
 		<div class="node-header">
@@ -82,7 +87,11 @@
 		{/if}
 	</div>
 
-	<Handle type="source" position={Position.Bottom} class="handle" />
+	<Handle
+		type="source"
+		position={data.layoutType === 'horizontal' ? Position.Right : Position.Bottom}
+		class="handle"
+	/>
 </div>
 
 <style>
@@ -91,7 +100,8 @@
 		border: 2px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: 12px 16px;
-		min-width: 140px;
+		width: 180px;
+		box-sizing: border-box;
 		font-family: inherit;
 		transition:
 			border-color var(--transition-normal),
@@ -101,7 +111,6 @@
 
 	.eero-node.minimal {
 		padding: 8px 12px;
-		min-width: 100px;
 	}
 
 	.eero-node:hover {
@@ -146,7 +155,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 100px;
+		max-width: 130px;
 	}
 
 	.node-info {
