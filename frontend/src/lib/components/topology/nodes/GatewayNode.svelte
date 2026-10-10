@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeDetailLevel } from '#lib/stores/topology.js';
+	import type { LayoutType, NodeDetailLevel } from '#lib/stores/topology.js';
 	import Icon from '$components/common/Icon.svelte';
 
 	interface Props {
@@ -18,6 +18,7 @@
 			wired?: boolean;
 			ipAddress?: string;
 			detailLevel?: NodeDetailLevel;
+			layoutType?: LayoutType;
 		};
 		selected?: boolean;
 	}
@@ -29,7 +30,11 @@
 </script>
 
 <div class="gateway-node {statusClass}" class:selected class:minimal={detailLevel === 'minimal'}>
-	<Handle type="target" position={Position.Top} class="handle" />
+	<Handle
+		type="target"
+		position={data.layoutType === 'horizontal' ? Position.Left : Position.Top}
+		class="handle"
+	/>
 
 	<div class="gateway-badge">Gateway</div>
 
@@ -64,7 +69,11 @@
 		{/if}
 	</div>
 
-	<Handle type="source" position={Position.Bottom} class="handle" />
+	<Handle
+		type="source"
+		position={data.layoutType === 'horizontal' ? Position.Right : Position.Bottom}
+		class="handle"
+	/>
 </div>
 
 <style>
@@ -73,7 +82,8 @@
 		border: 2px solid var(--color-accent);
 		border-radius: var(--radius-xl);
 		padding: 14px 18px;
-		min-width: 150px;
+		width: 180px;
+		box-sizing: border-box;
 		font-family: inherit;
 		position: relative;
 		transition:
@@ -84,7 +94,6 @@
 
 	.gateway-node.minimal {
 		padding: 10px 14px;
-		min-width: 120px;
 	}
 
 	.gateway-node:hover {

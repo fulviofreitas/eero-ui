@@ -1,27 +1,19 @@
-/**
- * Topology Store
- *
- * Manages network topology data (nodes and edges) for visualization.
- */
-
+/** Network topology data, client grouping, and deterministic layout. */
 import { writable, derived } from 'svelte/store';
 import type { Node, Edge } from '@xyflow/svelte';
 import { api } from '$api/client';
 import type { EeroSummary, DeviceSummary } from '$api/types';
 
-// ============================================
-// Types
-// ============================================
-
-export type NodeType = 'gateway' | 'eero' | 'device';
+export type NodeType = 'gateway' | 'eero' | 'device' | 'clientGroup';
 export type EdgeQuality = 'excellent' | 'good' | 'fair' | 'poor';
+export type LayoutType = 'hierarchy' | 'radial' | 'horizontal' | 'force';
+export type NodeDetailLevel = 'minimal' | 'standard' | 'detailed';
 
 export interface TopologyNodeData extends Record<string, unknown> {
 	type: NodeType;
 	id: string;
 	label: string;
 	status: 'online' | 'offline';
-	// Eero-specific
 	meshQuality?: number;
 	deviceCount?: number;
 	model?: string;
@@ -29,7 +21,6 @@ export interface TopologyNodeData extends Record<string, unknown> {
 	wired?: boolean;
 	ipAddress?: string;
 	firmwareVersion?: string;
-	// Device-specific
 	signal?: number;
 	connectionType?: 'wired' | 'wireless';
 	ip?: string;
@@ -38,102 +29,68 @@ export interface TopologyNodeData extends Record<string, unknown> {
 	isBlocked?: boolean;
 	isPaused?: boolean;
 	profileName?: string;
+	eeroLabel?: string;
+	detailLevel?: NodeDetailLevel;
+	layoutType?: LayoutType;
 }
 
 export interface TopologyEdgeData extends Record<string, unknown> {
 	quality: EdgeQuality;
 	type: 'mesh' | 'client';
 	connectionType?: 'wired' | 'wireless';
+	/** Distance from the client's left handle to the shared branch above its group. */
+	branchOffset?: number;
+	previousRowOffset?: number;
+	horizontal?: boolean;
 }
 
 export interface TopologyState {
-	nodes: Node<TopologyNodeData>[];
-	edges: Edge<TopologyEdgeData>[];
+	eeros: EeroSummary[];
+	devices: DeviceSummary[];
 	loading: boolean;
 	error: string | null;
-	selectedNodeId: string | null;
 }
-
-export type LayoutType = 'hierarchy' | 'radial' | 'horizontal' | 'force';
-
-export type NodeDetailLevel = 'minimal' | 'standard' | 'detailed';
 
 export interface LayoutOptions {
 	showDevices: boolean;
 	showOfflineDevices: boolean;
-	groupByEero: boolean;
 	layoutType: LayoutType;
 	detailLevel: NodeDetailLevel;
 }
 
-// ============================================
-// Layout Constants
-// ============================================
-
-const LAYOUT = {
-	gatewayY: 50,
-	eeroY: 220,
-	deviceY: 420,
-	eeroSpacingX: 280,
-	deviceSpacingX: 140,
-	deviceSpacingY: 80,
-	startX: 100
-};
-
-// ============================================
-// Stores
-// ============================================
-
 const initialState: TopologyState = {
-	nodes: [],
-	edges: [],
+	eeros: [],
+	devices: [],
 	loading: false,
-	error: null,
-	selectedNodeId: null
+	error: null
 };
 
-const initialLayoutOptions: LayoutOptions = {
+const selectedNodeId = writable<string | null>(null);
+
+export const layoutOptionsStore = writable<LayoutOptions>({
 	showDevices: true,
 	showOfflineDevices: false,
-	groupByEero: true,
 	layoutType: 'hierarchy',
 	detailLevel: 'minimal'
-};
+});
 
 function createTopologyStore() {
 	const { subscribe, set, update } = writable<TopologyState>(initialState);
-
+	let request = 0;
 	return {
 		subscribe,
-
-		/**
-		 * Load topology data from API
-		 */
 		async loadTopology(): Promise<void> {
+			const currentRequest = ++request;
 			update((s) => ({ ...s, loading: true, error: null }));
-
 			try {
-				// Fetch eeros and devices in parallel
 				const [eeros, devices] = await Promise.all([
 					api.eeros.list(true),
 					api.devices.list({ refresh: true })
 				]);
-
-				// Get current layout type
-				let currentLayoutType: LayoutType = 'hierarchy';
-				layoutOptionsStore.subscribe((opts) => {
-					currentLayoutType = opts.layoutType;
-				})();
-
-				const { nodes, edges } = transformToTopology(eeros, devices, currentLayoutType);
-
-				update((s) => ({
-					...s,
-					nodes,
-					edges,
-					loading: false
-				}));
+				if (currentRequest !== request) return;
+				update((s) => ({ ...s, eeros, devices, loading: false }));
 			} catch (error) {
+				if (currentRequest !== request) return;
 				update((s) => ({
 					...s,
 					loading: false,
@@ -141,77 +98,87 @@ function createTopologyStore() {
 				}));
 			}
 		},
-
-		/**
-		 * Update node position (for drag-and-drop)
-		 */
-		updateNodePosition(nodeId: string, position: { x: number; y: number }): void {
-			update((s) => ({
-				...s,
-				nodes: s.nodes.map((node) => (node.id === nodeId ? { ...node, position } : node))
-			}));
-		},
-
-		/**
-		 * Select a node for the details panel
-		 */
 		selectNode(nodeId: string | null): void {
-			update((s) => ({ ...s, selectedNodeId: nodeId }));
+			selectedNodeId.set(nodeId);
 		},
-
-		/**
-		 * Clear the store
-		 */
 		clear(): void {
+			request++;
+			selectedNodeId.set(null);
 			set(initialState);
 		}
 	};
 }
 
 export const topologyStore = createTopologyStore();
-export const layoutOptionsStore = writable<LayoutOptions>(initialLayoutOptions);
 
-// Derived: selected node data
-export const selectedNode = derived(
-	topologyStore,
-	($store) => $store.nodes.find((n) => n.id === $store.selectedNodeId) ?? null
-);
-
-// Derived: filtered nodes based on layout options
+// Filter before laying out: hidden clients must not leave empty groups or large gaps.
 export const filteredTopology = derived(
 	[topologyStore, layoutOptionsStore],
-	([$topology, $options]) => {
-		let nodes = [...$topology.nodes];
-		let edges = [...$topology.edges];
-
-		// Filter out devices if not showing
-		if (!$options.showDevices) {
-			const deviceIds = new Set(nodes.filter((n) => n.data.type === 'device').map((n) => n.id));
-			nodes = nodes.filter((n) => n.data.type !== 'device');
-			edges = edges.filter((e) => !deviceIds.has(e.target));
-		}
-
-		// Filter out offline devices if not showing
-		if (!$options.showOfflineDevices) {
-			const offlineDeviceIds = new Set(
-				nodes
-					.filter((n) => n.data.type === 'device' && n.data.status === 'offline')
-					.map((n) => n.id)
-			);
-			nodes = nodes.filter((n) => n.data.type !== 'device' || n.data.status !== 'offline');
-			edges = edges.filter((e) => !offlineDeviceIds.has(e.target));
-		}
-
-		return { nodes, edges, loading: $topology.loading, error: $topology.error };
-	}
+	([$topology, $options]) => ({
+		...transformToTopology(
+			$topology.eeros,
+			$options.showDevices
+				? $topology.devices.filter((d) => $options.showOfflineDevices || d.connected)
+				: [],
+			$options.layoutType,
+			$options.detailLevel
+		),
+		loading: $topology.loading,
+		error: $topology.error
+	})
 );
 
-// Derived: loading state
+export const selectedNode = derived(
+	[selectedNodeId, filteredTopology],
+	([$id, $graph]) => $graph.nodes.find((n) => n.id === $id) ?? null
+);
 export const isTopologyLoading = derived(topologyStore, ($store) => $store.loading);
 
-// ============================================
-// Transform Functions
-// ============================================
+// These dimensions match the node components. Each group has a dedicated left-hand
+// connection gutter, so branches never pass through another client's card.
+const ROUTER_WIDTH = 180;
+const GROUP_WIDTH = 208;
+const GROUP_GAP = 24;
+const GROUP_HEADER = 64;
+const ROW_GAP = 18;
+const CLUSTER_GAP = 80;
+export const CLIENT_HEIGHT: Record<NodeDetailLevel, number> = {
+	minimal: 74,
+	standard: 104,
+	detailed: 132
+};
+
+interface ClientGroup {
+	connectionType: 'wired' | 'wireless';
+	devices: DeviceSummary[];
+}
+interface Cluster {
+	eero?: EeroSummary;
+	groups: ClientGroup[];
+	width: number;
+	height: number;
+	x: number;
+	y: number;
+	groupY: number;
+}
+
+function deviceLabel(device: DeviceSummary): string {
+	return (
+		device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device'
+	);
+}
+
+/** Prefer identity/location; a shared model name cannot identify a particular eero. */
+function connectedEero(device: DeviceSummary, eeros: EeroSummary[]): EeroSummary | undefined {
+	const name = device.connected_to_eero?.trim().toLowerCase();
+	if (!name) return;
+	const byId = eeros.find((e) => e.id.toLowerCase() === name);
+	if (byId) return byId;
+	const byLocation = eeros.filter((e) => e.location?.trim().toLowerCase() === name);
+	if (byLocation.length === 1) return byLocation[0];
+	const byModel = eeros.filter((e) => e.model.toLowerCase() === name);
+	if (byLocation.length === 0 && byModel.length === 1) return byModel[0];
+}
 
 function getMeshQuality(bars: number | null | undefined): EdgeQuality {
 	if (bars === null || bars === undefined) return 'fair';
@@ -221,444 +188,221 @@ function getMeshQuality(bars: number | null | undefined): EdgeQuality {
 	return 'poor';
 }
 
-// ============================================
-// Layout Position Calculations
-// ============================================
-
-interface LayoutPositions {
-	gateway: { x: number; y: number } | null;
-	eeros: Map<string, { x: number; y: number }>;
-	devices: Map<string, { x: number; y: number }>;
-	/**
-	 * Hierarchy only: where each eero's device grid is centred, relative to that eero's own
-	 * node. Lets the gateway's directly-attached devices sit in the shared device row instead of
-	 * landing on top of the leaf-eero row.
-	 */
-	deviceAnchors?: Map<string, { x: number; y: number }>;
-}
-
-/** Devices per row in the hierarchy layout's per-eero device grid. */
-const HIERARCHY_DEVICES_PER_ROW = 3;
-
-function calculateLayoutPositions(
-	gateway: EeroSummary | undefined,
-	leafEeros: EeroSummary[],
-	devices: DeviceSummary[],
-	layoutType: LayoutType
-): LayoutPositions {
-	switch (layoutType) {
-		case 'radial':
-			return calculateRadialLayout(gateway, leafEeros, devices);
-		case 'horizontal':
-			return calculateHorizontalLayout(gateway, leafEeros, devices);
-		case 'force':
-			return calculateForceLayout(gateway, leafEeros, devices);
-		case 'hierarchy':
-		default:
-			return calculateHierarchyLayout(gateway, leafEeros, devices);
-	}
-}
-
-/**
- * Top-down tree: gateway, then a row of leaf eeros, then one shared device row.
- *
- * Every eero (the gateway included, when it has its own clients) owns a column as wide as its
- * device grid, so neighbouring grids never overlap - the previous fixed `eeroSpacingX` was
- * narrower than a four-wide grid, and the gateway's clients were drawn at the leaf-eero row.
- */
-function calculateHierarchyLayout(
-	gateway: EeroSummary | undefined,
-	leafEeros: EeroSummary[],
-	devices: DeviceSummary[]
-): LayoutPositions {
-	const positions: LayoutPositions = {
-		gateway: null,
-		eeros: new Map(),
-		devices: new Map(),
-		deviceAnchors: new Map()
-	};
-
-	const allEeros = gateway ? [gateway, ...leafEeros] : leafEeros;
-	const groups = groupDevicesByEero(devices, allEeros);
-	const columnWidth = (eeroId: string) => {
-		const count = groups[eeroId]?.length ?? 0;
-		const gridWidth =
-			Math.min(Math.max(count, 1), HIERARCHY_DEVICES_PER_ROW) * LAYOUT.deviceSpacingX;
-		return Math.max(gridWidth, LAYOUT.eeroSpacingX);
-	};
-
-	const gatewayHasDevices = gateway ? (groups[gateway.id]?.length ?? 0) > 0 : false;
-	// The gateway's own column sits in the middle, directly under the gateway, so its edges do
-	// not cut across the leaf eeros' edges.
-	const leafIds = leafEeros.map((e) => e.id);
-	const half = Math.ceil(leafIds.length / 2);
-	const columns =
-		gateway && gatewayHasDevices
-			? [...leafIds.slice(0, half), gateway.id, ...leafIds.slice(half)]
-			: leafIds;
-
-	const centres = new Map<string, number>();
-	let cursor = LAYOUT.startX;
-	for (const id of columns) {
-		const width = columnWidth(id);
-		centres.set(id, cursor + width / 2);
-		cursor += width;
-	}
-	const spanCentre = columns.length > 0 ? (LAYOUT.startX + cursor) / 2 : LAYOUT.startX;
-
-	leafEeros.forEach((eero) => {
-		positions.eeros.set(eero.id, { x: centres.get(eero.id)!, y: LAYOUT.eeroY });
-		positions.deviceAnchors!.set(eero.id, { x: 0, y: LAYOUT.deviceY - LAYOUT.eeroY });
-	});
-
-	if (gateway) {
-		positions.gateway = { x: spanCentre, y: LAYOUT.gatewayY };
-		const column = centres.get(gateway.id);
-		positions.deviceAnchors!.set(gateway.id, {
-			x: column !== undefined ? column - spanCentre : 0,
-			y: LAYOUT.deviceY - LAYOUT.gatewayY
-		});
-	}
-
-	return positions;
-}
-
-function calculateRadialLayout(
-	gateway: EeroSummary | undefined,
-	leafEeros: EeroSummary[],
-	_devices: DeviceSummary[]
-): LayoutPositions {
-	const positions: LayoutPositions = {
-		gateway: null,
-		eeros: new Map(),
-		devices: new Map()
-	};
-
-	const centerX = 400;
-	const centerY = 300;
-	const eeroRadius = 200;
-
-	if (gateway) {
-		positions.gateway = { x: centerX, y: centerY };
-	}
-
-	const eeroAngleStep = (2 * Math.PI) / Math.max(leafEeros.length, 1);
-	leafEeros.forEach((eero, index) => {
-		const angle = index * eeroAngleStep - Math.PI / 2;
-		positions.eeros.set(eero.id, {
-			x: centerX + Math.cos(angle) * eeroRadius,
-			y: centerY + Math.sin(angle) * eeroRadius
-		});
-	});
-
-	return positions;
-}
-
-function calculateHorizontalLayout(
-	gateway: EeroSummary | undefined,
-	leafEeros: EeroSummary[],
-	_devices: DeviceSummary[]
-): LayoutPositions {
-	const positions: LayoutPositions = {
-		gateway: null,
-		eeros: new Map(),
-		devices: new Map()
-	};
-
-	const startX = 50;
-	const eeroX = 300;
-	const eeroSpacingY = 120;
-	const totalHeight = Math.max(leafEeros.length, 1) * eeroSpacingY;
-	const centerY = totalHeight / 2;
-
-	if (gateway) {
-		positions.gateway = { x: startX, y: centerY };
-	}
-
-	leafEeros.forEach((eero, index) => {
-		positions.eeros.set(eero.id, {
-			x: eeroX,
-			y: index * eeroSpacingY + 50
-		});
-	});
-
-	return positions;
-}
-
-function calculateForceLayout(
-	gateway: EeroSummary | undefined,
-	leafEeros: EeroSummary[],
-	_devices: DeviceSummary[]
-): LayoutPositions {
-	const positions: LayoutPositions = {
-		gateway: null,
-		eeros: new Map(),
-		devices: new Map()
-	};
-
-	// Simple force-directed simulation starting positions
-	const centerX = 400;
-	const centerY = 250;
-	const spread = 180;
-
-	if (gateway) {
-		positions.gateway = { x: centerX, y: centerY };
-	}
-
-	// Distribute eeros in a rough organic pattern
-	leafEeros.forEach((eero, index) => {
-		const angle = (index / leafEeros.length) * 2 * Math.PI + Math.random() * 0.3;
-		const radius = spread + Math.random() * 60;
-		positions.eeros.set(eero.id, {
-			x: centerX + Math.cos(angle) * radius,
-			y: centerY + Math.sin(angle) * radius
-		});
-	});
-
-	return positions;
-}
-
-function groupDevicesByEero(
-	devices: DeviceSummary[],
-	eeros: EeroSummary[]
-): Record<string, DeviceSummary[]> {
-	const groups: Record<string, DeviceSummary[]> = {};
-
-	// Initialize groups for each eero
-	eeros.forEach((eero) => {
-		groups[eero.id] = [];
-	});
-
-	// Add default group for ungrouped devices
-	groups['unknown'] = [];
-
-	// Group devices by connected eero
-	devices.forEach((device) => {
-		// Find which eero this device is connected to
-		const connectedEero = eeros.find(
-			(e) => e.location === device.connected_to_eero || e.model === device.connected_to_eero
-		);
-
-		if (connectedEero) {
-			groups[connectedEero.id].push(device);
-		} else if (device.connected_to_eero) {
-			// Try to match by name if we couldn't find by id
-			const matchedEero = eeros.find(
-				(e) =>
-					(e.location && e.location.toLowerCase() === device.connected_to_eero?.toLowerCase()) ||
-					(e.model && e.model.toLowerCase() === device.connected_to_eero?.toLowerCase())
-			);
-			if (matchedEero) {
-				groups[matchedEero.id].push(device);
-			} else {
-				groups['unknown'].push(device);
-			}
-		} else {
-			groups['unknown'].push(device);
-		}
-	});
-
-	return groups;
+function getQualityColor(quality: EdgeQuality): string {
+	return `var(--color-${{ excellent: 'success', good: 'accent', fair: 'warning', poor: 'danger' }[quality]})`;
 }
 
 export function transformToTopology(
 	eeros: EeroSummary[],
 	devices: DeviceSummary[],
-	layoutType: LayoutType = 'hierarchy'
+	layoutType: LayoutType = 'hierarchy',
+	detailLevel: NodeDetailLevel = 'minimal'
 ): { nodes: Node<TopologyNodeData>[]; edges: Edge<TopologyEdgeData>[] } {
 	const nodes: Node<TopologyNodeData>[] = [];
 	const edges: Edge<TopologyEdgeData>[] = [];
-
-	// Find gateway eero
 	const gateway = eeros.find((e) => e.is_gateway);
-	const leafEeros = eeros.filter((e) => !e.is_gateway);
-
-	// Calculate positions based on layout type
-	const positions = calculateLayoutPositions(gateway, leafEeros, devices, layoutType);
-
-	// Add gateway node
-	if (gateway && positions.gateway) {
-		nodes.push({
-			id: `eero-${gateway.id}`,
-			type: 'gateway',
-			position: positions.gateway,
-			data: {
-				type: 'gateway',
-				id: gateway.id,
-				label: gateway.location || gateway.model || 'Gateway',
-				status: gateway.status === 'green' ? 'online' : 'offline',
-				meshQuality: 5, // Gateway always has full signal
-				deviceCount: gateway.connected_clients_count,
-				model: gateway.model,
-				isGateway: true,
-				wired: gateway.wired,
-				ipAddress: gateway.ip_address || undefined,
-				firmwareVersion: gateway.firmware_version || undefined
-			}
-		});
+	const orderedEeros = [...eeros].sort(
+		(a, b) =>
+			Number(b.is_gateway) - Number(a.is_gateway) ||
+			(a.location || a.model).localeCompare(b.location || b.model) ||
+			a.id.localeCompare(b.id)
+	);
+	const byEero = new Map<string | undefined, DeviceSummary[]>();
+	for (const device of devices) {
+		const id = connectedEero(device, orderedEeros)?.id;
+		byEero.set(id, [...(byEero.get(id) ?? []), device]);
 	}
-
-	// Add leaf eero nodes
-	leafEeros.forEach((eero) => {
-		const eeroPos = positions.eeros.get(eero.id) || { x: 200, y: 200 };
-
-		nodes.push({
-			id: `eero-${eero.id}`,
-			type: 'eero',
-			position: eeroPos,
-			data: {
-				type: 'eero',
-				id: eero.id,
-				label: eero.location || eero.model || 'Eero',
-				status: eero.status === 'green' ? 'online' : 'offline',
-				meshQuality: eero.mesh_quality_bars || 0,
-				deviceCount: eero.connected_clients_count,
-				model: eero.model,
-				isGateway: false,
-				wired: eero.wired,
-				ipAddress: eero.ip_address || undefined,
-				firmwareVersion: eero.firmware_version || undefined
-			}
-		});
-
-		// Create mesh edge from gateway to leaf eero
-		if (gateway) {
-			edges.push({
-				id: `mesh-${gateway.id}-${eero.id}`,
-				source: `eero-${gateway.id}`,
-				target: `eero-${eero.id}`,
-				type: 'smoothstep',
-				animated: eero.mesh_quality_bars !== null && eero.mesh_quality_bars < 2,
-				style: `stroke: ${getQualityColor(getMeshQuality(eero.mesh_quality_bars))}; stroke-width: 2px;`,
-				data: {
-					quality: getMeshQuality(eero.mesh_quality_bars),
-					type: 'mesh'
-				}
+	const clientHeight = CLIENT_HEIGHT[detailLevel];
+	const groupHeight = (count: number) =>
+		GROUP_HEADER + count * (clientHeight + ROW_GAP) - ROW_GAP + 16;
+	const clusters: Cluster[] = [...orderedEeros, ...(byEero.has(undefined) ? [undefined] : [])].map(
+		(eero) => {
+			const clients = byEero.get(eero?.id) ?? [];
+			const groups: ClientGroup[] = (['wired', 'wireless'] as const).flatMap((connectionType) => {
+				const groupDevices = clients
+					.filter((d) => (d.wireless ? 'wireless' : 'wired') === connectionType)
+					.sort(
+						(a, b) =>
+							Number(b.connected) - Number(a.connected) ||
+							deviceLabel(a).localeCompare(deviceLabel(b))
+					);
+				return groupDevices.length ? [{ connectionType, devices: groupDevices }] : [];
 			});
+			return {
+				eero,
+				groups,
+				width: Math.max(ROUTER_WIDTH, groups.length * (GROUP_WIDTH + GROUP_GAP) - GROUP_GAP),
+				height: 200 + Math.max(0, ...groups.map((g) => groupHeight(g.devices.length))),
+				x: 0,
+				y: 0,
+				groupY: 200
+			};
 		}
-	});
+	);
+	const gatewayCluster = clusters.find((c) => c.eero === gateway && gateway !== undefined);
+	const leaves = clusters.filter((c) => c !== gatewayCluster);
 
-	// Group devices by their connected eero
-	// Gateway first, matching calculateHierarchyLayout's sizing pass: groupDevicesByEero assigns
-	// a device to the first eero it matches, so both passes must see the same order.
-	const devicesByEero = groupDevicesByEero(devices, gateway ? [gateway, ...leafEeros] : eeros);
-
-	// Add device nodes and edges
-	Object.entries(devicesByEero).forEach(([eeroId, eeroDevices]) => {
-		if (eeroDevices.length === 0) return;
-
-		const eeroNode = nodes.find((n) => n.id === `eero-${eeroId}`);
-		if (!eeroNode) return;
-
-		const connectedDevices = eeroDevices.filter((d) => d.connected);
-		const disconnectedDevices = eeroDevices.filter((d) => !d.connected);
-		const allDevices = [...connectedDevices, ...disconnectedDevices];
-
-		allDevices.forEach((device, index) => {
-			// Calculate position RELATIVE to parent eero (not absolute)
-			// When using parentId, position is an offset from the parent node
-			const devicesPerRow = HIERARCHY_DEVICES_PER_ROW;
-			const row = Math.floor(index / devicesPerRow);
-			const col = index % devicesPerRow;
-
-			let relX: number;
-			let relY: number;
-
-			if (layoutType === 'radial') {
-				// Devices fan out from their eero in a semicircle below
-				const angleSpread = Math.PI * 0.8; // 144 degrees spread
-				const startAngle = Math.PI / 2 - angleSpread / 2; // Start from bottom-left
-				const angleStep = allDevices.length > 1 ? angleSpread / (allDevices.length - 1) : 0;
-				const angle = startAngle + index * angleStep;
-				const radius = 100 + row * 50;
-				relX = Math.cos(angle) * radius;
-				relY = Math.sin(angle) * radius + 40; // Offset below the eero
-			} else if (layoutType === 'horizontal') {
-				// Devices to the right of their eero
-				relX = 180 + col * 90;
-				relY = (index - allDevices.length / 2) * 45;
-			} else if (layoutType === 'force') {
-				// Devices around their eero in a circle
-				const angle = (index / allDevices.length) * 2 * Math.PI;
-				const radius = 90 + row * 45;
-				relX = Math.cos(angle) * radius;
-				relY = Math.sin(angle) * radius + 30;
+	if (layoutType === 'hierarchy' || layoutType === 'horizontal') {
+		const eeroY = detailLevel === 'minimal' ? 160 : 220;
+		const clientsY = detailLevel === 'minimal' ? 280 : 420;
+		// Reserve a dedicated gateway-client column/row between leaf branches.
+		const columns = [...leaves];
+		if (gatewayCluster?.groups.length)
+			columns.splice(Math.ceil(leaves.length / 2), 0, gatewayCluster);
+		let cursor = 0;
+		for (const cluster of columns) {
+			if (layoutType === 'horizontal') {
+				cluster.x = cluster === gatewayCluster ? 0 : 300;
+				cluster.y = cursor;
+				cluster.groupY = 0;
+				cursor += Math.max(160, cluster.height - 200) + CLUSTER_GAP;
 			} else {
-				// Default hierarchy layout - devices in a grid centred on the eero's column, in the
-				// shared device row (see calculateHierarchyLayout)
-				const anchor = positions.deviceAnchors?.get(eeroId) ?? { x: 0, y: 180 };
-				const offsetX =
-					(col - (Math.min(allDevices.length, devicesPerRow) - 1) / 2) * LAYOUT.deviceSpacingX;
-				relX = anchor.x + offsetX;
-				relY = anchor.y + row * LAYOUT.deviceSpacingY;
+				cluster.x = cursor + (cluster.width - ROUTER_WIDTH) / 2;
+				cluster.y = cluster === gatewayCluster ? 0 : eeroY;
+				cluster.groupY = clientsY - cluster.y;
+				cursor += cluster.width + CLUSTER_GAP;
 			}
+		}
+		if (gatewayCluster && !gatewayCluster.groups.length) {
+			gatewayCluster.x =
+				layoutType === 'horizontal' ? 0 : Math.max(0, (cursor - CLUSTER_GAP - ROUTER_WIDTH) / 2);
+			gatewayCluster.y =
+				layoutType === 'horizontal' ? Math.max(0, (cursor - CLUSTER_GAP) / 2 - 40) : 0;
+		}
+	} else {
+		// Size the ring from whole client clusters, rather than just router cards.
+		const diameter =
+			Math.max(200, ...clusters.map((c) => Math.hypot(c.width, c.height))) + CLUSTER_GAP;
+		const radius = Math.max(
+			diameter,
+			diameter / (2 * Math.sin(Math.PI / Math.max(leaves.length, 2)))
+		);
+		leaves.forEach((cluster, index) => {
+			const angle =
+				(index * 2 * Math.PI) / leaves.length - Math.PI / 2 + (layoutType === 'force' ? 0.2 : 0);
+			const distance = radius + (layoutType === 'force' ? (index % 2) * 60 : 0);
+			cluster.x = Math.cos(angle) * distance;
+			cluster.y = Math.sin(angle) * distance;
+		});
+	}
 
-			const deviceId = device.mac || device.id || `device-${index}`;
-
+	for (const cluster of clusters) {
+		const { eero, groups } = cluster;
+		const eeroId = eero ? `eero-${eero.id}` : undefined;
+		const eeroLabel = eero ? eero.location || eero.model || 'Eero' : 'Unassigned clients';
+		if (eero && eeroId) {
 			nodes.push({
-				id: `device-${deviceId}`,
-				type: 'device',
-				parentId: `eero-${eeroId}`, // Link to parent eero - devices move with parent
-				position: { x: relX, y: relY }, // Position is now RELATIVE to parent
+				id: eeroId,
+				type: eero.is_gateway ? 'gateway' : 'eero',
+				position: { x: cluster.x, y: cluster.y },
+				zIndex: 0,
 				data: {
-					type: 'device',
-					id: deviceId,
-					label:
-						device.display_name ||
-						device.nickname ||
-						device.hostname ||
-						device.mac ||
-						'Unknown Device',
-					status: device.connected ? 'online' : 'offline',
-					signal: device.signal_strength || undefined,
-					connectionType: device.wireless ? 'wireless' : 'wired',
-					ip: device.ip || undefined,
-					mac: device.mac || undefined,
-					manufacturer: device.manufacturer || undefined,
-					isBlocked: device.blocked,
-					isPaused: device.paused,
-					profileName: device.profile_name || undefined
+					type: eero.is_gateway ? 'gateway' : 'eero',
+					id: eero.id,
+					label: eeroLabel,
+					status: eero.status === 'green' ? 'online' : 'offline',
+					meshQuality: eero.is_gateway ? 5 : (eero.mesh_quality_bars ?? 0),
+					deviceCount: eero.connected_clients_count,
+					model: eero.model,
+					isGateway: eero.is_gateway,
+					wired: eero.wired,
+					ipAddress: eero.ip_address || undefined,
+					firmwareVersion: eero.firmware_version || undefined,
+					detailLevel,
+					layoutType
 				}
 			});
-
-			// Create edge from eero to device
-			// Wired: solid green line, Wireless: dotted blue line
-			const isWired = !device.wireless;
-			const edgeStyle = device.connected
-				? isWired
-					? 'stroke: var(--color-success); stroke-width: 2px;' // Wired: solid
-					: 'stroke: var(--color-accent); stroke-width: 1.5px; stroke-dasharray: 6 3;' // Wireless: dotted
-				: 'stroke: var(--color-text-muted); stroke-width: 1px; stroke-dasharray: 4 2;'; // Offline: dashed
-
-			edges.push({
-				id: `client-${eeroId}-${deviceId}`,
-				source: `eero-${eeroId}`,
-				target: `device-${deviceId}`,
-				type: 'straight',
-				style: edgeStyle,
+			if (gateway && eero !== gateway) {
+				const quality = getMeshQuality(eero.mesh_quality_bars);
+				edges.push({
+					id: `mesh-${gateway.id}-${eero.id}`,
+					source: `eero-${gateway.id}`,
+					target: eeroId,
+					type: 'smoothstep',
+					zIndex: 0,
+					style: `stroke: ${getQualityColor(quality)}; stroke-width: 2px;`,
+					data: { quality, type: 'mesh' }
+				});
+			}
+		}
+		groups.forEach((group, groupIndex) => {
+			const groupX =
+				layoutType === 'horizontal'
+					? (cluster === gatewayCluster ? 560 : 260) + groupIndex * (GROUP_WIDTH + GROUP_GAP)
+					: (ROUTER_WIDTH - cluster.width) / 2 + groupIndex * (GROUP_WIDTH + GROUP_GAP);
+			const origin = eero ? { x: 0, y: 0 } : { x: cluster.x, y: cluster.y };
+			const groupId = `clients-${eero?.id ?? 'unassigned'}-${group.connectionType}`;
+			nodes.push({
+				id: groupId,
+				type: 'clientGroup',
+				parentId: eeroId,
+				position: { x: origin.x + groupX, y: origin.y + cluster.groupY },
+				width: GROUP_WIDTH,
+				height: groupHeight(group.devices.length),
+				zIndex: -1,
+				selectable: false,
+				draggable: false,
+				focusable: false,
 				data: {
-					quality: 'good',
-					type: 'client',
-					connectionType: isWired ? 'wired' : 'wireless'
+					type: 'clientGroup',
+					id: groupId,
+					label: group.connectionType === 'wired' ? 'Wired clients' : 'Wireless clients',
+					status: 'online',
+					connectionType: group.connectionType,
+					eeroLabel,
+					deviceCount: group.devices.length
 				}
+			});
+			group.devices.forEach((device, index) => {
+				const deviceId = device.mac || device.id || `${groupId}-${index}`;
+				nodes.push({
+					id: `device-${deviceId}`,
+					type: 'device',
+					parentId: eeroId,
+					position: {
+						x: origin.x + groupX + 32,
+						y: origin.y + cluster.groupY + GROUP_HEADER + index * (clientHeight + ROW_GAP)
+					},
+					draggable: false,
+					zIndex: 2,
+					data: {
+						type: 'device',
+						id: deviceId,
+						label: deviceLabel(device),
+						status: device.connected ? 'online' : 'offline',
+						signal: device.signal_strength ?? undefined,
+						connectionType: group.connectionType,
+						eeroLabel: eero ? eeroLabel : 'Unknown eero',
+						ip: device.ip || undefined,
+						mac: device.mac || undefined,
+						manufacturer: device.manufacturer || undefined,
+						isBlocked: device.blocked,
+						isPaused: device.paused,
+						profileName: device.profile_name || undefined,
+						detailLevel,
+						layoutType
+					}
+				});
+				if (!eeroId) return;
+				const color = group.connectionType === 'wired' ? 'success' : 'accent';
+				edges.push({
+					id: `client-${eero!.id}-${deviceId}`,
+					source: eeroId,
+					target: `device-${deviceId}`,
+					type: 'client',
+					zIndex: 1,
+					style: `stroke: var(--color-${device.connected ? color : 'text-muted'}); stroke-width: 1.5px;${group.connectionType === 'wireless' || !device.connected ? ' stroke-dasharray: 5 4;' : ''}`,
+					data: {
+						quality: 'good',
+						type: 'client',
+						connectionType: group.connectionType,
+						branchOffset: GROUP_HEADER + index * (clientHeight + ROW_GAP) + clientHeight / 2 + 24,
+						previousRowOffset: index > 0 ? clientHeight + ROW_GAP : undefined,
+						horizontal: layoutType === 'horizontal'
+					}
+				});
 			});
 		});
-	});
-
-	return { nodes, edges };
-}
-
-function getQualityColor(quality: EdgeQuality): string {
-	switch (quality) {
-		case 'excellent':
-			return 'var(--color-success)';
-		case 'good':
-			return 'var(--color-accent)';
-		case 'fair':
-			return 'var(--color-warning)';
-		case 'poor':
-			return 'var(--color-danger)';
-		default:
-			return 'var(--color-text-muted)';
 	}
+	return { nodes, edges };
 }
