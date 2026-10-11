@@ -31,6 +31,7 @@ implements):
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from collections import defaultdict
@@ -162,6 +163,8 @@ class MetricsCollector:
         self._error_counts: dict[str, int] = defaultdict(int)
         # Longest Retry-After seen since the last sleep; 0.0 when none.
         self._rate_limit_backoff = 0.0
+        # Set by the first rate-limited fetch; skips the rest of the cycle.
+        self._rate_limited_this_cycle = False
 
     @property
     def error_counts(self) -> dict[str, int]:
@@ -252,14 +255,24 @@ class MetricsCollector:
         the cycle continue" handling -- shared here rather than repeated in
         each ``_collect_*`` method.
 
+        Once a fetch is rate-limited, every later fetch in the same cycle is
+        skipped without contacting the cloud (and without counting another
+        error), so one limit costs one request rather than one per resource.
+
         Returns:
             ``(result, True)`` on success; ``(None, False)`` if the call
-            raised (the reason or "unknown" has already been counted).
+            raised (the reason or "unknown" has already been counted) or was
+            skipped after a rate limit.
         """
+        if self._rate_limited_this_cycle:
+            if inspect.iscoroutine(awaitable):
+                awaitable.close()  # never started; avoids "never awaited"
+            return None, False
         try:
             return await awaitable, True
         except EeroException as exc:
             if isinstance(exc, EeroRateLimitException):
+                self._rate_limited_this_cycle = True
                 self._note_rate_limit(exc)
             reason = _reason_for_exception(exc)
             _LOGGER.warning("Metrics collector failed to %s: %s", action, reason)
@@ -283,6 +296,7 @@ class MetricsCollector:
         cycle_start = time.monotonic()
         now_ms = int(time.time() * 1000)
         samples: list[Sample] = []
+        self._rate_limited_this_cycle = False
 
         try:
             client = await self._current_client()
