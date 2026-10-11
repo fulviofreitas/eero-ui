@@ -12,6 +12,7 @@ import logging
 from unittest.mock import AsyncMock
 
 import pytest
+from eero.exceptions import EeroRateLimitException
 
 from app import deps
 
@@ -147,6 +148,21 @@ class TestExceptionMapping:
 
         assert response.status_code == 429
         assert response.headers["retry-after"] == "60"
+
+    async def test_rate_limit_forwards_the_cloud_retry_after(
+        self, auth_client, authenticated_client
+    ):
+        """A parsed Retry-After from the eero cloud is forwarded, rounded up."""
+        authenticated_client.get_network = AsyncMock(
+            side_effect=EeroRateLimitException(
+                "slow down", status_code=429, retry_after=12.3
+            )
+        )
+
+        response = await auth_client.get("/api/networks/net-1")
+
+        assert response.status_code == 429
+        assert response.headers["retry-after"] == "13"
 
     async def test_validation_exception_maps_to_422(
         self, auth_client, authenticated_client, eero_exceptions

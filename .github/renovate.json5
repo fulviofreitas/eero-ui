@@ -141,12 +141,19 @@
     // eero-api v7.0.0 DNS fix, and the v8 migration). Cap at <9.0.0 so
     // Renovate never proposes a v9 major unattended; bump the cap by hand
     // once v9 has been evaluated against phase docs.
+    //
+    // rangeStrategy "bump": the requirement is a range (>=X,<9.0.0), so under
+    // the default strategy every in-range release is "already satisfied" and
+    // no PR opens - while the Docker build (`uv pip install .`, which ignores
+    // uv.lock) silently ships the newest one unreviewed. Bumping the floor
+    // turns each release into a reviewable PR that also refreshes uv.lock.
     {
       matchPackageNames: ["eero-api"],
       matchManagers: ["pep621", "poetry", "pip_requirements", "pip-compile"],
       groupName: "eero-api",
       description: "🟢 eero-api update",
       allowedVersions: "<9.0.0",
+      rangeStrategy: "bump",
       automerge: false,
       addLabels: ["eero-packages", "feature", "critical", "needs-review"],
       reviewers: ["fulviofreitas"],

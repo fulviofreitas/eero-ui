@@ -47,6 +47,8 @@ export interface VerifyResponse {
 	success: boolean;
 	message: string;
 	preferred_network_id: string | null;
+	/** False when the session was not saved and will not survive a restart. */
+	session_persisted?: boolean;
 }
 
 // ============================================

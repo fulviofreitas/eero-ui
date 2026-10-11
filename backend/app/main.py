@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -75,6 +76,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 _LOGGER = logging.getLogger(__name__)
+
+# Retry-After sent on a 429 when the eero cloud did not supply its own.
+_DEFAULT_RETRY_AFTER_SECONDS = 60
 
 
 @asynccontextmanager
@@ -317,11 +321,21 @@ async def eero_client_blocked_exception_handler(
 async def eero_rate_limit_exception_handler(
     request: Request, exc: EeroRateLimitException
 ) -> JSONResponse:
-    """The eero cloud rate-limited this account."""
+    """The eero cloud rate-limited this account.
+
+    Forwards the cloud's own ``Retry-After`` (eero-api >= 8.1.2 parses it
+    onto ``exc.retry_after``, capped at one day), rounded up to whole
+    seconds; falls back to 60 when the header was absent or unparseable.
+    """
+    retry_after = (
+        max(1, math.ceil(exc.retry_after))
+        if exc.retry_after is not None
+        else _DEFAULT_RETRY_AFTER_SECONDS
+    )
     return JSONResponse(
         status_code=429,
         content={"detail": "eero rate limit hit. Try again shortly."},
-        headers={"Retry-After": "60"},
+        headers={"Retry-After": str(retry_after)},
     )
 
 

@@ -14,6 +14,7 @@ from eero.exceptions import (
     EeroAPIException,
     EeroAuthenticationException,
     EeroNetworkException,
+    EeroRateLimitException,
 )
 
 from app.routes import metrics as metrics_route
@@ -179,6 +180,7 @@ class TestUnauthenticatedCycle:
             "auth",
             "api",
             "network",
+            "rate_limit",
             "write",
             "unknown",
         }
@@ -383,6 +385,7 @@ class TestSuccessfulCycle:
             "auth",
             "api",
             "network",
+            "rate_limit",
             "write",
             "unknown",
         }
@@ -520,6 +523,48 @@ class TestPartialFailure:
         assert errors["network"] == 1.0
         up = samples_by_name(written, "eero_up")
         assert up[0].value == 0.0
+
+    async def test_rate_limit_is_counted_and_backs_off_the_next_cycle(
+        self, autospec_client, fake_victoria
+    ):
+        autospec_client.get_devices = AsyncMock(
+            side_effect=EeroRateLimitException("slow down", retry_after=90.0)
+        )
+        collector = make_collector(autospec_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        errors = {
+            s.labels["reason"]: s.value
+            for s in samples_by_name(written, "eero_collector_errors_total")
+        }
+        assert errors["rate_limit"] == 1.0
+        assert collector.next_delay() == 90.0
+        # The backoff is consumed by one sleep; the cadence then returns to normal.
+        assert collector.next_delay() == 10.0
+
+    async def test_rate_limit_backoff_is_capped(self, autospec_client, fake_victoria):
+        autospec_client.get_devices = AsyncMock(
+            side_effect=EeroRateLimitException("slow down", retry_after=86400.0)
+        )
+        collector = make_collector(autospec_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        assert collector.next_delay() == 3600.0
+
+    async def test_rate_limit_without_retry_after_keeps_the_interval(
+        self, autospec_client, fake_victoria
+    ):
+        autospec_client.get_devices = AsyncMock(
+            side_effect=EeroRateLimitException("slow down")
+        )
+        collector = make_collector(autospec_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        assert collector.next_delay() == 10.0
 
 
 class TestWriteFailure:

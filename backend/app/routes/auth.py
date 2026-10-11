@@ -66,6 +66,9 @@ class VerifyResponse(BaseModel):
     success: bool
     message: str
     preferred_network_id: str | None = None
+    # False when the session works now but was not saved to disk, so it will
+    # not survive a restart (eero-api ``credentials_persisted``).
+    session_persisted: bool = True
 
 
 @router.get("/status", response_model=AuthStatusResponse)
@@ -174,6 +177,23 @@ async def verify(
         raw_result = await client.verify(verify_request.code)
         success = check_success(raw_result)
         if success:
+            # eero-api >= 8.1.8 reads each credential save back; False means
+            # the session works now but nothing on disk retained it, so the
+            # next container restart logs the user out.
+            if not client.credentials_persisted:
+                _LOGGER.warning(
+                    "Login succeeded but the session was not persisted; "
+                    "check that the cookie file directory is writable"
+                )
+                return VerifyResponse(
+                    success=True,
+                    message=(
+                        "Login successful, but the session could not be saved "
+                        "and will not survive a restart."
+                    ),
+                    preferred_network_id=preferred_network_id_str(client),
+                    session_persisted=False,
+                )
             return VerifyResponse(
                 success=True,
                 message="Login successful!",

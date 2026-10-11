@@ -248,6 +248,25 @@ class TestVerify:
         data = response.json()
         assert data["success"] is True
         assert data["preferred_network_id"] == "network-123"
+        assert data["message"] == "Login successful!"
+        assert data["session_persisted"] is True
+
+    async def test_verify_success_with_unpersisted_session_warns(
+        self, async_client, mock_eero_client
+    ):
+        """A login whose session was not saved still succeeds, but says so."""
+        mock_eero_client.verify = AsyncMock(return_value=make_raw_response({}))
+        mock_eero_client.credentials_persisted = False
+        mock_eero_client.preferred_network_id = "network-123"
+
+        response = await async_client.post("/api/auth/verify", json={"code": "123456"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["preferred_network_id"] == "network-123"
+        assert data["session_persisted"] is False
+        assert "will not survive a restart" in data["message"]
 
     async def test_verify_success_with_int_network_id(
         self, async_client, mock_eero_client

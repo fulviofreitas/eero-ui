@@ -392,21 +392,21 @@ wheels = [
 
 [[package]]
 name = "eero-api"
-version = "8.0.5"
+version = "8.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "keyring" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/98/47/9208fcd6e8e126729c39e61ede72dc2e0548e43407a4129442ce07b7880c/eero_api-8.0.5.tar.gz", hash = "sha256:f2be5cf029efc24fe0557140c25b1734012c3bdf2ca16392850a6a91291964cd", size = 128373, upload-time = "2026-09-29T07:01:57.468Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/0d/d6d33e7c5286c3875558faf9584bd23058e1b60037f01449c9beec2d55e4/eero_api-8.2.0.tar.gz", hash = "sha256:d56ddcfeda089b62827006f13d27def170b91c3a25230602c19b0007214a2ff3", size = 151259, upload-time = "2026-10-11T17:57:27.502Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/b1/1ba960f1fcede4797f737c46a7eb8e6cbad5b30ec0a3fa286fa77f1650c6/eero_api-8.0.5-py3-none-any.whl", hash = "sha256:5ca934a31eeff2b8ce460952388e54d11a3129223a30eb0d3fa12d33ac555fbf", size = 163236, upload-time = "2026-09-29T07:01:56.262Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/2a/c27c9a824e50bd8608b43c06c9e3937340581e9e6eef537ab4320cec7f5d/eero_api-8.2.0-py3-none-any.whl", hash = "sha256:16f7182de9ba3cc7b88307b8ae00dfcddbd72a86101f0d552ab1c695fdada43d", size = 179721, upload-time = "2026-10-11T17:57:26.271Z" },
 ]
 
 [[package]]
 name = "eero-ui-backend"
-version = "6.1.1"
+version = "6.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -435,7 +435,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", specifier = ">=8.0.5,<9.0.0" },
+    { name = "eero-api", specifier = ">=8.2.0,<9.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
