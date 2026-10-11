@@ -217,6 +217,19 @@ describe('authStore', () => {
 						preferred_network_id: 'net-123',
 						session_persisted: false
 					});
+				}),
+				http.get('/api/auth/status', () => {
+					return HttpResponse.json({
+						authenticated: true,
+						reason: null,
+						preferred_network_id: 'net-123',
+						user_email: 'user@test.com',
+						user_name: 'Test User',
+						user_phone: null,
+						user_role: 'owner',
+						account_id: 'account-123',
+						premium_status: null
+					});
 				})
 			);
 
