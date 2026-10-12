@@ -314,6 +314,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(137);
+		expect(countLeafMethods(api)).toBe(139);
 	});
 });
