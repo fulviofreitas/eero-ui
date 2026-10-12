@@ -6,6 +6,7 @@
 
 import { writable, derived } from 'svelte/store';
 import { api, ApiClientError } from '$api/client';
+import { uiStore } from './ui';
 
 // ============================================
 // Types
@@ -143,6 +144,9 @@ function createAuthStore() {
 						loading: false,
 						loginPending: false
 					}));
+					if (response.session_persisted === false) {
+						uiStore.warning(response.message, 10000);
+					}
 					// Fetch full user info after successful verification
 					await this.checkStatus();
 					return true;

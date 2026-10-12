@@ -21,6 +21,7 @@ import {
 	authReason,
 	marketingEmailsConsent
 } from './auth';
+import { toasts, uiStore } from './ui';
 import { server } from '../../../tests/mocks/server';
 import { http, HttpResponse } from 'msw';
 
@@ -29,6 +30,7 @@ describe('authStore', () => {
 		// Reset store state before each test
 		await authStore.logout();
 		authStore.clearError();
+		for (const toast of get(toasts)) uiStore.removeToast(toast.id);
 	});
 
 	describe('checkStatus', () => {
@@ -203,6 +205,44 @@ describe('authStore', () => {
 			expect(get(isAuthenticated)).toBe(true);
 			expect(get(isLoginPending)).toBe(false);
 			expect(get(authReason)).toBeNull();
+			expect(get(toasts)).toEqual([]);
+		});
+
+		it('warns when the session was not persisted', async () => {
+			server.use(
+				http.post('/api/auth/verify', () => {
+					return HttpResponse.json({
+						success: true,
+						message: 'Login successful, but the session could not be saved.',
+						preferred_network_id: 'net-123',
+						session_persisted: false
+					});
+				}),
+				http.get('/api/auth/status', () => {
+					return HttpResponse.json({
+						authenticated: true,
+						reason: null,
+						preferred_network_id: 'net-123',
+						user_email: 'user@test.com',
+						user_name: 'Test User',
+						user_phone: null,
+						user_role: 'owner',
+						account_id: 'account-123',
+						premium_status: null
+					});
+				})
+			);
+
+			const result = await authStore.verify('123456');
+
+			expect(result).toBe(true);
+			expect(get(isAuthenticated)).toBe(true);
+			const shown = get(toasts);
+			expect(shown).toHaveLength(1);
+			expect(shown[0]).toMatchObject({
+				type: 'warning',
+				message: 'Login successful, but the session could not be saved.'
+			});
 		});
 
 		it('sets error on invalid verification code', async () => {

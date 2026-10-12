@@ -206,6 +206,8 @@ describe('api client handler coverage', () => {
 					devices: [{ mac: 'aa:bb:cc:dd:ee:ff', secondary_wan_deny_access: true }]
 				}),
 			() => api.networks.applyNetworkUpdate('network-123'),
+			() => api.networks.setPreferredUpdateHour('network-123', 3),
+			() => api.networks.setHide5g('network-123', true),
 			() => api.networks.setNetworkPassword('network-123', 'correct-horse-battery'),
 			() => api.networks.clearNetworkPassword('network-123'),
 			() => api.devices.list(),
@@ -312,6 +314,6 @@ describe('api client handler coverage', () => {
 		// Guards the guard: if client.ts grows a new method, this fails until
 		// the call list above is updated too, instead of silently covering
 		// only a subset forever.
-		expect(countLeafMethods(api)).toBe(137);
+		expect(countLeafMethods(api)).toBe(139);
 	});
 });

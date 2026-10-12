@@ -1258,6 +1258,21 @@ export const api = {
 				{ method: 'POST', retries: 0 }
 			),
 
+		/** Set the hour of day (0-23, network timezone) firmware updates apply. */
+		setPreferredUpdateHour: (networkId: string, hour: number) =>
+			fetchWithHandling<import('./types').PreferredUpdateHourResponse>(
+				`/networks/${networkId}/updates/preferred-hour`,
+				{ method: 'PUT', body: { hour }, retries: 0 }
+			),
+
+		/** Temporarily hide (or un-hide) 5 GHz. Disconnects 5 GHz clients. */
+		setHide5g: (networkId: string, enabled: boolean) =>
+			fetchWithHandling<import('./types').Hide5gUpdateResponse>(`/networks/${networkId}/hide-5g`, {
+				method: 'PUT',
+				body: { enabled },
+				retries: 0
+			}),
+
 		/**
 		 * Set the network's Wi-Fi password. Not settings-class by § 5's own
 		 * table, but treated with the same danger-dialog contract - it

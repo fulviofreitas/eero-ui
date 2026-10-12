@@ -225,6 +225,7 @@ def mock_eero_client(_eero_client_autospec_template):
     """
     client = _LazyEeroClientClone(_eero_client_autospec_template)
     client.is_authenticated = False
+    client.credentials_persisted = True
     client.preferred_network_id = None
 
     # Async methods - all return raw responses

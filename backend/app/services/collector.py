@@ -31,6 +31,7 @@ implements):
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from collections import defaultdict
@@ -44,6 +45,7 @@ from eero.exceptions import (
     EeroAuthenticationException,
     EeroException,
     EeroNetworkException,
+    EeroRateLimitException,
     EeroTimeoutException,
 )
 
@@ -63,7 +65,12 @@ _LOGGER = logging.getLogger(__name__)
 # Every reason bucket eero_collector_errors_total{reason} can carry. Kept as
 # an explicit, closed set so the metric always emits the same label values
 # every cycle (see module docstring).
-_ERROR_REASONS = ("auth", "api", "network", "write", "unknown")
+_ERROR_REASONS = ("auth", "api", "network", "rate_limit", "write", "unknown")
+
+# Upper bound on how long a rate limit can push the next cycle out. The SDK
+# already caps a parsed ``Retry-After`` at one day; an hour keeps the
+# collector recovering on its own even if the cloud asks for far longer.
+_MAX_RATE_LIMIT_BACKOFF_SECONDS = 3600.0
 
 
 def _label(value: Any) -> str:
@@ -94,6 +101,8 @@ def _reason_for_exception(exc: Exception) -> str:
         return "write"
     if isinstance(exc, EeroAuthenticationException):
         return "auth"
+    if isinstance(exc, EeroRateLimitException):
+        return "rate_limit"
     if isinstance(exc, (EeroNetworkException, EeroTimeoutException)):
         return "network"
     if isinstance(exc, EeroAPIException):
@@ -152,6 +161,10 @@ class MetricsCollector:
         self._victoria = victoria_client
         self._interval_seconds = max(10, interval_seconds)
         self._error_counts: dict[str, int] = defaultdict(int)
+        # Longest Retry-After seen since the last sleep; 0.0 when none.
+        self._rate_limit_backoff = 0.0
+        # Set by the first rate-limited fetch; skips the rest of the cycle.
+        self._rate_limited_this_cycle = False
 
     @property
     def error_counts(self) -> dict[str, int]:
@@ -166,11 +179,38 @@ class MetricsCollector:
         """
         self._error_counts[reason] += 1
 
-    async def run_forever(self) -> None:
-        """Run collection cycles forever, sleeping ``interval_seconds`` between them.
+    def _note_rate_limit(self, exc: EeroRateLimitException) -> None:
+        """Remember the cloud's ``Retry-After`` so the next sleep honours it.
 
-        Intended to be wrapped in an ``asyncio.Task`` by the lifespan and
-        cancelled on shutdown; a cancellation propagates normally.
+        Args:
+            exc: The rate-limit exception; ``retry_after`` is ``None`` when the
+                response carried no usable ``Retry-After`` header.
+        """
+        if exc.retry_after is not None:
+            self._rate_limit_backoff = max(
+                self._rate_limit_backoff,
+                min(exc.retry_after, _MAX_RATE_LIMIT_BACKOFF_SECONDS),
+            )
+
+    def next_delay(self) -> float:
+        """Seconds to sleep before the next cycle, consuming any pending backoff.
+
+        Returns:
+            ``interval_seconds``, or a longer rate-limit backoff recorded
+            during the cycle that just ran.
+        """
+        delay = max(float(self._interval_seconds), self._rate_limit_backoff)
+        self._rate_limit_backoff = 0.0
+        return delay
+
+    async def run_forever(self) -> None:
+        """Run collection cycles forever, sleeping between them.
+
+        Sleeps ``interval_seconds``, or longer when the eero cloud
+        rate-limited the last cycle with a ``Retry-After`` (see
+        ``next_delay``). Intended to be wrapped in an ``asyncio.Task`` by the
+        lifespan and cancelled on shutdown; a cancellation propagates
+        normally.
         """
         while True:
             try:
@@ -180,7 +220,14 @@ class MetricsCollector:
                 _LOGGER.warning(
                     "Unhandled error in metrics collector cycle", exc_info=True
                 )
-            await asyncio.sleep(self._interval_seconds)
+            delay = self.next_delay()
+            if delay > self._interval_seconds:
+                _LOGGER.warning(
+                    "eero cloud rate-limited the metrics collector; "
+                    "next cycle in %.0f seconds",
+                    delay,
+                )
+            await asyncio.sleep(delay)
 
     async def _current_client(self) -> EeroClient:
         """Fetch the shared EeroClient instance from its dependency generator.
@@ -208,13 +255,25 @@ class MetricsCollector:
         the cycle continue" handling -- shared here rather than repeated in
         each ``_collect_*`` method.
 
+        Once a fetch is rate-limited, every later fetch in the same cycle is
+        skipped without contacting the cloud (and without counting another
+        error), so one limit costs one request rather than one per resource.
+
         Returns:
             ``(result, True)`` on success; ``(None, False)`` if the call
-            raised (the reason or "unknown" has already been counted).
+            raised (the reason or "unknown" has already been counted) or was
+            skipped after a rate limit.
         """
+        if self._rate_limited_this_cycle:
+            if inspect.iscoroutine(awaitable):
+                awaitable.close()  # never started; avoids "never awaited"
+            return None, False
         try:
             return await awaitable, True
         except EeroException as exc:
+            if isinstance(exc, EeroRateLimitException):
+                self._rate_limited_this_cycle = True
+                self._note_rate_limit(exc)
             reason = _reason_for_exception(exc)
             _LOGGER.warning("Metrics collector failed to %s: %s", action, reason)
             self._count_error(reason)
@@ -237,6 +296,7 @@ class MetricsCollector:
         cycle_start = time.monotonic()
         now_ms = int(time.time() * 1000)
         samples: list[Sample] = []
+        self._rate_limited_this_cycle = False
 
         try:
             client = await self._current_client()

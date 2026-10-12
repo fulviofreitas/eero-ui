@@ -105,6 +105,8 @@ Each route depends on its own gate constant in `networks.py` (`_SQM_GATE`, `_DHC
 | `PUT` | `/api/networks/{network_id}/multistaticip` | `MultiStaticIpRequest` | `MultiStaticIpUpdateResponse` | |
 | `PUT` | `/api/networks/{network_id}/secondary-wan` | `SecondaryWanConfigRequest` (bulk) | `SecondaryWanConfigResponse` | `422`; no no-op guard for the bulk form |
 | `POST` | `/api/networks/{network_id}/updates/apply` | — | `NetworkUpdateApplyResponse` | `409 {"type": "no_update_available"}` when nothing is pending; `409 {"type": "update_in_progress"}` when a previous apply is still within its window; reboots every node |
+| `PUT` | `/api/networks/{network_id}/updates/preferred-hour` | `PreferredUpdateHourRequest {hour: 0-23}` | `PreferredUpdateHourResponse` | `422` outside 0-23; no-op guard against `get_updates`; nothing restarts |
+| `PUT` | `/api/networks/{network_id}/hide-5g` | `Hide5gRequest {enabled}` | `Hide5gResponse` | no-op guard against `temporary_flags.hide_5g`; temporary flag the cloud expires; disconnects 5 GHz clients |
 | `PUT` | `/api/networks/{network_id}/password` | `NetworkPasswordRequest {password}` | `NetworkPasswordResponse` | limit 2/minute `network_password`; `422`; disconnects every client; never logged or echoed |
 | `DELETE` | `/api/networks/{network_id}/password` | `NetworkPasswordClearRequest {confirm_open_network: true}` | `NetworkPasswordResponse` | limit 2/minute `network_password`; `422` unless `confirm_open_network` is `true` — an empty-body `DELETE` can never open the network |
 

@@ -47,6 +47,8 @@ export interface VerifyResponse {
 	success: boolean;
 	message: string;
 	preferred_network_id: string | null;
+	/** False when the session was not saved and will not survive a restart. */
+	session_persisted?: boolean;
 }
 
 // ============================================
@@ -983,6 +985,13 @@ export interface AdvancedNetworkSettings {
 	nat_port_randomization?: boolean;
 	mlo_mode?: 'disabled' | 'single' | 'multi' | null;
 	proxied_nodes_enabled?: boolean;
+	/**
+	 * `temporary_flags.hide_5g` - true while 5 GHz is hidden. `null` only when the
+	 * envelope carries no `temporary_flags` object at all (state unknown).
+	 */
+	hide_5g?: boolean | null;
+	/** When the cloud will clear the hide-5 GHz flag on its own, if reported. */
+	hide_5g_expiration?: string | null;
 }
 
 /**
@@ -1580,6 +1589,29 @@ export interface NetworkUpdateApplyResponse {
 	changed: boolean;
 	reboot_expected: boolean;
 	scope: string;
+}
+
+/**
+ * PUT /networks/{id}/updates/preferred-hour. Moves when future firmware
+ * updates apply (0-23, network timezone) - nothing restarts.
+ */
+export interface PreferredUpdateHourResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	hour: number;
+}
+
+/**
+ * PUT /networks/{id}/hide-5g. A temporary flag the cloud expires on its own;
+ * no reboot, but every 5 GHz client disconnects while it takes effect.
+ */
+export interface Hide5gUpdateResponse {
+	success: boolean;
+	changed: boolean;
+	reboot_expected: boolean;
+	disconnects_clients: boolean;
+	enabled: boolean;
 }
 
 /** Request body for PUT /networks/{id}/password. Never logged, never echoed. */
