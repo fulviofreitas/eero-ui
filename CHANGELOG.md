@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.2.0](https://github.com/fulviofreitas/eero-ui/compare/v6.1.5...v6.2.0) (2026-10-12)
+
+### ✨ Features
+
+* **deps:** require eero-api 8.3.0; adopt rate-limit, session and new network controls ([#450](https://github.com/fulviofreitas/eero-ui/issues/450)) ([ed70196](https://github.com/fulviofreitas/eero-ui/commit/ed70196b4891e4c136453fd180e44ab8c23b27c6))
+
 ## [6.1.5](https://github.com/fulviofreitas/eero-ui/compare/v6.1.4...v6.1.5) (2026-10-08)
 
 ### 🐛 Bug Fixes
