@@ -19,7 +19,7 @@ Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared co
 | Operation | Was | Now (eero-api v8) |
 |---|---|---|
 | Run speed test | untested | **verified** (202; result read from history) |
-| Block device | untested | unverified (form `mac=`) — gated |
+| Block device | untested | **verified** (form `mac=`; live-verified 2026-10-06, no reboot) |
 | Unblock device | untested | **verified** |
 | Rename device | untested | **verified** |
 | Reboot eero | untested | **verified** (target node only) |
@@ -31,7 +31,7 @@ Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared co
 
 ### Verified writes (always available)
 
-`set_led`, `set_led_brightness`, `set_device_type`, `set_device_nickname`, `unblock_device`, `set_guest_network`, `set_guest_password`, `clear_guest_password`, `run_speed_test`, `reboot_eero`, `pause_device`. These use the optimistic pattern with a confirmation only where destructive.
+`set_led`, `set_led_brightness`, `set_device_type`, `set_device_nickname`, `block_device`, `unblock_device`, `set_guest_network`, `set_guest_password`, `clear_guest_password`, `run_speed_test`, `reboot_eero`, `pause_device`. These use the optimistic pattern with a confirmation only where destructive.
 
 ### Unverified, non-settings writes (gated)
 
@@ -39,7 +39,6 @@ Pessimistic UI, read-first with skip-when-unchanged, confirmation stating the ac
 
 | Family | Routes |
 |---|---|
-| Block device | `POST /api/devices/{id}/block` |
 | Profiles | create, rename, delete, assign devices, pause/unpause, schedules, bedtime, blocked applications |
 | Eero location | `PUT /api/eeros/{id}/location` |
 | Node / port actions | `POST /api/eeros/{id}/node-action`, `POST /api/eeros/{id}/ports/{n}/action` (`POWER_CYCLE_ALL_PORTS_AND_REBOOT` reboots the node) |

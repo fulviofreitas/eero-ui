@@ -10,9 +10,9 @@ The eero cloud rejected the stored token. The backend clears it, answers the fai
 
 If the session expires repeatedly right after logging in, check that the container can reach `api-user.e2ro.com` and that the clock is roughly correct.
 
-### `WARNING` lines from `eero.api` on every profile or block action
+### `WARNING` lines from `eero.api` on every profile action
 
-Expected. Since eero-api 8.0.2 the SDK logs one WARNING per call for every write it has not itself verified against a live network (`block_device`, `create_profile`, `rename_profile`, `pause_profile`, `set_profile_devices`, `delete_profile`, DNS writes, the settings-class writes). Do not suppress these lines — they are the audit trail that tells you which unverified writes were issued and when. The verified writes (LED, rename device, unblock, guest network, speed test, reboot) do not log them.
+Expected. Since eero-api 8.0.2 the SDK logs one WARNING per call for every write it has not itself verified against a live network (`create_profile`, `rename_profile`, `pause_profile`, `set_profile_devices`, `delete_profile`, DNS writes, the settings-class writes). Do not suppress these lines — they are the audit trail that tells you which unverified writes were issued and when. The verified writes (LED, rename device, block and unblock, guest network, speed test, reboot) do not log them.
 
 ### `403` with `"type": "experimental_disabled"`
 
