@@ -73,6 +73,8 @@ Every one of these is treated as rebooting every eero on the network (decision 5
 | Multi-static IP, secondary WAN (bulk and per device) | `PUT /api/networks/{id}/multistaticip`, `/secondary-wan`, `PUT /api/devices/{id}/secondary-wan-access` | bulk: none |
 | Firmware update apply | `POST /api/networks/{id}/updates/apply` | 409 `no_update_available` when nothing is pending |
 | Network Wi-Fi password set / clear | `PUT`/`DELETE /api/networks/{id}/password` | none (API never returns it); disconnects every client rather than rebooting |
+| Preferred update hour | `PUT /api/networks/{id}/updates/preferred-hour` | yes; nothing restarts |
+| Hide 5 GHz (temporary) | `PUT /api/networks/{id}/hide-5g` | yes; disconnects 5 GHz clients rather than rebooting |
 
 ### Known no-op
 

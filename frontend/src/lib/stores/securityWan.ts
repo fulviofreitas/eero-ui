@@ -36,6 +36,7 @@ import type {
 	DhcpUpdateRequest,
 	DhcpUpdateResponse,
 	FastTransitionUpdateResponse,
+	Hide5gUpdateResponse,
 	MloUpdateRequest,
 	MloUpdateResponse,
 	MultiStaticIpResponse,
@@ -47,6 +48,7 @@ import type {
 	PasspointUpdateResponse,
 	PowerSavingUpdateRequest,
 	PowerSavingUpdateResponse,
+	PreferredUpdateHourResponse,
 	ProxiedNodesUpdateResponse,
 	SecondaryWanConfigRequest,
 	SecondaryWanConfigResponse,
@@ -544,6 +546,49 @@ function createSecurityWanStore() {
 				update((s) => ({
 					...s,
 					error: error instanceof Error ? error.message : 'Failed to apply update'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Set the hour of day (0-23) firmware updates apply. */
+		async updatePreferredUpdateHour(
+			networkId: string,
+			hour: number
+		): Promise<PreferredUpdateHourResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setPreferredUpdateHour(networkId, hour)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update the update hour'
+				}));
+				throw error;
+			} finally {
+				update((s) => ({ ...s, applying: false }));
+			}
+		},
+
+		/** Temporarily hide (or un-hide) the 5 GHz band. */
+		async updateHide5g(networkId: string, enabled: boolean): Promise<Hide5gUpdateResponse> {
+			update((s) => ({ ...s, applying: true, error: null }));
+			try {
+				const result = await withSettingsLock(networkId, () =>
+					api.networks.setHide5g(networkId, enabled)
+				);
+				if (result.changed) await this.fetch(networkId);
+				return result;
+			} catch (error) {
+				update((s) => ({
+					...s,
+					error: error instanceof Error ? error.message : 'Failed to update 5 GHz visibility'
 				}));
 				throw error;
 			} finally {

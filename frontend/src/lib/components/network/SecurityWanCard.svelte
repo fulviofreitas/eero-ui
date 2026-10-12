@@ -319,6 +319,49 @@
 		});
 	}
 
+	// --- Hide 5 GHz (eero-api 8.3.0): a temporary flag the cloud clears on its own.
+	// No mesh restart, but every 5 GHz client drops while it takes effect.
+	let hide5g = $derived(cardState.advanced?.hide_5g ?? null);
+	let hide5gExpiration = $derived(cardState.advanced?.hide_5g_expiration ?? null);
+	const HIDE_5G_DETAILS = [
+		'Every device connected over 5 GHz will disconnect and has to reconnect on another band.',
+		'The eero cloud clears this temporary setting on its own after a while.',
+		NOT_VERIFIED_DETAIL
+	];
+
+	function requestHide5g(inputEl: HTMLInputElement) {
+		const previous = hide5g === true;
+		const nextEnabled = !previous;
+		uiStore.confirm({
+			title: nextEnabled ? 'Hide 5 GHz' : 'Show 5 GHz',
+			message: nextEnabled
+				? 'Temporarily hide the 5 GHz band on this network?'
+				: 'Make the 5 GHz band visible again?',
+			details: nextEnabled ? HIDE_5G_DETAILS : [NOT_VERIFIED_DETAIL],
+			confirmText: nextEnabled ? 'Hide 5 GHz' : 'Show 5 GHz',
+			danger: nextEnabled,
+			onCancel: () => {
+				inputEl.checked = previous;
+			},
+			onConfirm: async () => {
+				try {
+					const result = await securityWanStore.updateHide5g(networkId, nextEnabled);
+					if (!result.changed) {
+						uiStore.info(`5 GHz is already ${nextEnabled ? 'hidden' : 'visible'}.`);
+						inputEl.checked = previous;
+						return;
+					}
+					uiStore.success(nextEnabled ? '5 GHz hidden.' : '5 GHz visible again.');
+				} catch (error) {
+					inputEl.checked = previous;
+					uiStore.error(
+						error instanceof Error ? error.message : 'Failed to update 5 GHz visibility'
+					);
+				}
+			}
+		});
+	}
+
 	// --- Passpoint / proxied nodes: see the module doc comment for the proxied-nodes
 	// "value unknown, keep the control" decision.
 	let passpointEnabled = $derived(Boolean(cardState.security?.passpoint));
@@ -525,6 +568,54 @@
 		pick(updates, 'current_firmware', 'current_version', 'current') as string | undefined
 	);
 	let preferredUpdateHour = $derived(pick(updates, 'preferred_update_hour', 'update_hour', 'hour'));
+	/** The preferred hour as 0-23, or null when absent/unparseable. */
+	let preferredUpdateHourValue = $derived.by((): number | null => {
+		const raw = preferredUpdateHour;
+		const hour =
+			typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d+$/.test(raw) ? +raw : NaN;
+		return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+	});
+	const UPDATE_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+	/** `3` -> `"03:00–04:00"`: the one-hour window the update may start in. */
+	function formatUpdateHour(hour: number): string {
+		const pad = (h: number) => `${String(h % 24).padStart(2, '0')}:00`;
+		return `${pad(hour)}–${pad(hour + 1)}`;
+	}
+
+	function requestPreferredUpdateHour(hour: number, selectEl: HTMLSelectElement) {
+		const previous = preferredUpdateHourValue;
+		if (hour === previous) return;
+		const revert = () => {
+			selectEl.value = previous === null ? '' : String(previous);
+		};
+		uiStore.confirm({
+			title: 'Update hour',
+			message: `Apply future firmware updates between ${formatUpdateHour(hour)} (network time)?`,
+			details: [
+				'Nothing restarts now - this only moves when future updates are installed.',
+				NOT_VERIFIED_DETAIL
+			],
+			confirmText: 'Save',
+			onCancel: revert,
+			onConfirm: async () => {
+				try {
+					const result = await securityWanStore.updatePreferredUpdateHour(networkId, hour);
+					if (!result.changed) {
+						uiStore.info('The update hour is already set to that value.');
+						revert();
+						return;
+					}
+					uiStore.success('Update hour saved.');
+				} catch (error) {
+					revert();
+					uiStore.error(
+						error instanceof Error ? error.message : 'Failed to update the update hour'
+					);
+				}
+			}
+		});
+	}
 	let lastUpdateStarted = $derived(
 		pick(updates, 'last_update_started', 'started_at', 'last_started') as string | undefined
 	);
@@ -851,6 +942,29 @@
 								<option value={mode}>{mode}</option>
 							{/each}
 						</select>
+					{/if}
+				{/snippet}
+			</SettingRow>
+
+			<SettingRow label="Hide 5 GHz">
+				{#snippet value()}
+					<span class="badge {hide5g ? 'badge-warning' : 'badge-neutral'}">
+						{hide5g === null ? '—' : hide5g ? 'Hidden' : 'Visible'}
+					</span>
+					{#if hide5g && hide5gExpiration}
+						<span class="text-muted text-sm">until {formatDate(hide5gExpiration)}</span>
+					{/if}
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<input
+							type="checkbox"
+							role="switch"
+							aria-label="Hide 5 GHz"
+							checked={hide5g === true}
+							disabled={cardState.applying}
+							onchange={(e) => requestHide5g(e.currentTarget)}
+						/>
 					{/if}
 				{/snippet}
 			</SettingRow>
@@ -1185,7 +1299,29 @@
 			</div>
 			<InfoRow label="Target firmware" value={targetFirmware ?? '—'} mono />
 			<InfoRow label="Current firmware" value={currentFirmware ?? '—'} mono />
-			<InfoRow label="Preferred update hour" value={preferredUpdateHour ?? '—'} />
+			<SettingRow label="Preferred update hour">
+				{#snippet value()}
+					<span class="badge badge-neutral">
+						{preferredUpdateHourValue === null ? '—' : formatUpdateHour(preferredUpdateHourValue)}
+					</span>
+				{/snippet}
+				{#snippet control()}
+					{#if showControls}
+						<select
+							aria-label="Preferred update hour"
+							value={preferredUpdateHourValue === null ? '' : String(preferredUpdateHourValue)}
+							disabled={cardState.applying}
+							onchange={(e) =>
+								requestPreferredUpdateHour(Number(e.currentTarget.value), e.currentTarget)}
+						>
+							<option value="" disabled>—</option>
+							{#each UPDATE_HOURS as hour (hour)}
+								<option value={String(hour)}>{formatUpdateHour(hour)}</option>
+							{/each}
+						</select>
+					{/if}
+				{/snippet}
+			</SettingRow>
 			<InfoRow label="Last update started" value={formatDate(lastUpdateStarted)} />
 			<InfoRow label="Unresponsive eeros" value={unresponsiveEeroCount ?? '—'} />
 			<InfoRow label="Incomplete eeros" value={incompleteEeroCount ?? '—'} />

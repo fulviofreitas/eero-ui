@@ -612,6 +612,153 @@ describe('SecurityWanCard', () => {
 		});
 	});
 
+	describe('preferred update hour (eero-api 8.3.0)', () => {
+		function securityWithHour(hour: unknown) {
+			return http.get('/api/networks/:networkId/security', () =>
+				HttpResponse.json({
+					wpa3: true,
+					band_steering: true,
+					upnp: false,
+					ipv6: null,
+					wpa3_per_band: null,
+					fast_transition: null,
+					sqm: false,
+					thread: null,
+					updates: { has_update: false, preferred_update_hour: hour }
+				})
+			);
+		}
+
+		it('renders the hour as a one-hour window, read-only with the gate off', async () => {
+			server.use(securityWithHour(3));
+
+			await renderWithWrites(false);
+
+			expect(screen.getByText('03:00–04:00')).toBeInTheDocument();
+			expect(screen.queryByRole('combobox', { name: 'Preferred update hour' })).toBeNull();
+		});
+
+		it('gate-on: a new hour is confirmed first, then PUT once with that hour', async () => {
+			server.use(securityWithHour(3));
+			let receivedBody: unknown = null;
+			server.use(
+				http.put('/api/networks/:networkId/updates/preferred-hour', async ({ request }) => {
+					receivedBody = await request.json();
+					return HttpResponse.json({
+						success: true,
+						changed: true,
+						reboot_expected: false,
+						hour: 22
+					});
+				})
+			);
+
+			await renderWithWrites(true);
+			const select = screen.getByRole('combobox', {
+				name: 'Preferred update hour'
+			}) as HTMLSelectElement;
+			expect(select.value).toBe('3');
+
+			await fireEvent.change(select, { target: { value: '22' } });
+
+			const dialog = get(confirmDialog);
+			expect(dialog).not.toBeNull();
+			expect(dialog!.danger).toBeFalsy();
+			expect(receivedBody).toBeNull();
+
+			await dialog!.onConfirm();
+
+			expect(receivedBody).toEqual({ hour: 22 });
+		});
+
+		it('cancelling snaps the select back to the current hour', async () => {
+			server.use(securityWithHour(3));
+
+			await renderWithWrites(true);
+			const select = screen.getByRole('combobox', {
+				name: 'Preferred update hour'
+			}) as HTMLSelectElement;
+
+			await fireEvent.change(select, { target: { value: '22' } });
+			get(confirmDialog)!.onCancel?.();
+
+			expect(select.value).toBe('3');
+		});
+	});
+
+	describe('hide 5 GHz (eero-api 8.3.0)', () => {
+		function advancedWithHide5g(hide5g: boolean | null, expiration: string | null = null) {
+			return http.get('/api/networks/:networkId/advanced', () =>
+				HttpResponse.json({
+					dhcp: null,
+					connection_mode: 'router',
+					power_saving: false,
+					ddns: { enabled: false },
+					hide_5g: hide5g,
+					hide_5g_expiration: expiration
+				})
+			);
+		}
+
+		it('shows Hidden and hides the switch when the gate is off', async () => {
+			server.use(advancedWithHide5g(true));
+
+			await renderWithWrites(false);
+
+			await waitFor(() => expect(screen.getByText('Hidden')).toBeInTheDocument());
+			expect(screen.queryByRole('switch', { name: 'Hide 5 GHz' })).toBeNull();
+		});
+
+		it('gate-on: hiding is a danger confirm naming the 5 GHz disconnect', async () => {
+			server.use(advancedWithHide5g(false));
+			let receivedBody: unknown = null;
+			server.use(
+				http.put('/api/networks/:networkId/hide-5g', async ({ request }) => {
+					receivedBody = await request.json();
+					return HttpResponse.json({
+						success: true,
+						changed: true,
+						reboot_expected: false,
+						disconnects_clients: true,
+						enabled: true
+					});
+				})
+			);
+
+			await renderWithWrites(true);
+			const toggle = (await screen.findByRole('switch', {
+				name: 'Hide 5 GHz'
+			})) as HTMLInputElement;
+			expect(toggle.checked).toBe(false);
+
+			await fireEvent.click(toggle);
+
+			const dialog = get(confirmDialog);
+			expect(dialog).not.toBeNull();
+			expect(dialog!.danger).toBe(true);
+			expect(dialog!.details?.join(' ')).toMatch(/5 GHz will disconnect/);
+			expect(receivedBody).toBeNull();
+
+			await dialog!.onConfirm();
+
+			expect(receivedBody).toEqual({ enabled: true });
+		});
+
+		it('cancelling snaps the switch back', async () => {
+			server.use(advancedWithHide5g(false));
+
+			await renderWithWrites(true);
+			const toggle = (await screen.findByRole('switch', {
+				name: 'Hide 5 GHz'
+			})) as HTMLInputElement;
+
+			await fireEvent.click(toggle);
+			get(confirmDialog)!.onCancel?.();
+
+			expect(toggle.checked).toBe(false);
+		});
+	});
+
 	describe('DHCP & NAT tri-state', () => {
 		function advancedHandler(connectionMode: string, dhcp: Record<string, unknown>) {
 			return http.get('/api/networks/:networkId/advanced', () =>

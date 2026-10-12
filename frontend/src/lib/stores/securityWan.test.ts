@@ -319,6 +319,42 @@ describe('securityWanStore', () => {
 		});
 	});
 
+	describe('updatePreferredUpdateHour', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updatePreferredUpdateHour('network-123', 3);
+
+			expect(result.changed).toBe(true);
+			expect(result.hour).toBe(3);
+			expect(get(securityWanStore).applying).toBe(false);
+		});
+
+		it('surfaces a 403 experimental_disabled as a rejected promise', async () => {
+			server.use(
+				http.put('/api/networks/:networkId/updates/preferred-hour', () =>
+					HttpResponse.json(
+						{ type: 'experimental_disabled', detail: 'Experimental writes are disabled.' },
+						{ status: 403 }
+					)
+				)
+			);
+
+			await expect(
+				securityWanStore.updatePreferredUpdateHour('network-123', 3)
+			).rejects.toBeDefined();
+			expect(get(securityWanStore).error).not.toBeNull();
+		});
+	});
+
+	describe('updateHide5g', () => {
+		it('re-fetches the store and returns the backend changed flag', async () => {
+			const result = await securityWanStore.updateHide5g('network-123', true);
+
+			expect(result.changed).toBe(true);
+			expect(result.enabled).toBe(true);
+			expect(result.disconnects_clients).toBe(true);
+		});
+	});
+
 	describe('updatePasspoint', () => {
 		it('re-fetches the store and returns the backend changed flag', async () => {
 			const result = await securityWanStore.updatePasspoint('network-123', true);

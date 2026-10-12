@@ -808,6 +808,27 @@ export const handlers = [
 		});
 	}),
 
+	http.put('/api/networks/:networkId/updates/preferred-hour', async ({ request }) => {
+		const body = (await request.json()) as { hour: number };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: false,
+			hour: body.hour
+		});
+	}),
+
+	http.put('/api/networks/:networkId/hide-5g', async ({ request }) => {
+		const body = (await request.json()) as { enabled: boolean };
+		return HttpResponse.json({
+			success: true,
+			changed: true,
+			reboot_expected: false,
+			disconnects_clients: true,
+			enabled: body.enabled
+		});
+	}),
+
 	http.put('/api/networks/:networkId/password', async () => {
 		return HttpResponse.json({
 			success: true,

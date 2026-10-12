@@ -18,7 +18,7 @@ from eero.exceptions import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .._coercion import coerce_bool
 from ..config import settings
@@ -2599,6 +2599,162 @@ async def apply_network_update(
     return NetworkUpdateApplyResponse(success=success, changed=True, scope="all_nodes")
 
 
+# --- Preferred update hour (eero-api 8.3.0 ``set_preferred_update_hour``) -----
+# Not settings-class: it only moves when future firmware updates apply, so
+# nothing restarts and no client is disconnected. Still an unverified write
+# upstream, so it shares ``_UPDATES_GATE`` with ``apply_network_update``.
+
+
+def _parse_update_hour(value: Any) -> int | None:
+    """Read an hour of day (0-23) off the ``updates`` envelope, or None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    if isinstance(value, int) and 0 <= value <= 23:
+        return value
+    return None
+
+
+class PreferredUpdateHourRequest(BaseModel):
+    """Request body for PUT /{network_id}/updates/preferred-hour."""
+
+    hour: int = Field(ge=0, le=23)
+
+
+class PreferredUpdateHourResponse(BaseModel):
+    """Response for a preferred-update-hour write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = False
+    hour: int
+
+
+@router.put(
+    "/{network_id}/updates/preferred-hour",
+    response_model=PreferredUpdateHourResponse,
+    dependencies=[Depends(_UPDATES_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_preferred_update_hour(
+    request: Request,
+    network_id: str,
+    body: PreferredUpdateHourRequest,
+    client: EeroClient = Depends(require_auth),
+) -> PreferredUpdateHourResponse:
+    """Set the hour of day (network timezone) firmware updates are applied.
+
+    Reads ``get_updates`` first - the same envelope the Updates section
+    displays - and skips the write when the parsed hour already matches.
+    An unreadable current value always writes (unknown != equal).
+    """
+    raw = extract_data(await client.get_updates(network_id))
+    current = _parse_update_hour(raw.get("preferred_update_hour"))
+    if current == body.hour:
+        return PreferredUpdateHourResponse(success=True, changed=False, hour=current)
+
+    raw_result = await client.set_preferred_update_hour(
+        body.hour, network_id=network_id
+    )
+    success = check_success(raw_result)
+    return PreferredUpdateHourResponse(success=success, changed=True, hour=body.hour)
+
+
+# --- Hide 5 GHz (eero-api 8.3.0 ``set_hide_5g``) -------------------------------
+# A temporary flag the eero cloud expires on its own. Hiding 5 GHz
+# disconnects every 5 GHz client while it takes effect, so it carries the
+# same pessimistic, confirm-first contract as the network password - no
+# mesh reboot, but `disconnects_clients: true`.
+
+_HIDE_5G_GATE = require_experimental_writes
+
+
+def _hide_5g_flag(raw_network: dict[str, Any]) -> dict[str, Any]:
+    """Return the ``temporary_flags.hide_5g`` object, or ``{}`` when unset.
+
+    A live envelope with no temporary flags carries ``temporary_flags: {}``
+    (eeroctl live fixture ``security-show.json``), so an absent flag means
+    5 GHz is not hidden rather than "unknown".
+    """
+    flags = raw_network.get("temporary_flags")
+    flag = flags.get("hide_5g") if isinstance(flags, dict) else None
+    return flag if isinstance(flag, dict) else {}
+
+
+def _hide_5g_enabled(raw_network: dict[str, Any]) -> bool | None:
+    """Whether 5 GHz is currently hidden; None when the flag is unparseable."""
+    flags = raw_network.get("temporary_flags")
+    if not isinstance(flags, dict):
+        return None
+    if "hide_5g" not in flags:
+        return False
+    return coerce_bool(_hide_5g_flag(raw_network).get("value"), field_name="hide_5g")
+
+
+def _hide_5g_expiration(raw_network: dict[str, Any]) -> str | None:
+    """The flag's expiry timestamp, if the envelope carries one.
+
+    The SDK documents that the flag carries "its expiration" but not the
+    key name, so the plausible names are read in order; anything that is
+    not a string reads as None.
+    """
+    flag = _hide_5g_flag(raw_network)
+    for key in ("expiration", "expires_at", "expires", "expiration_date"):
+        value = flag.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+class Hide5gRequest(BaseModel):
+    """Request body for PUT /{network_id}/hide-5g."""
+
+    enabled: bool
+
+
+class Hide5gResponse(BaseModel):
+    """Response for a hide-5 GHz write."""
+
+    success: bool
+    changed: bool
+    reboot_expected: bool = False
+    disconnects_clients: bool = True
+    enabled: bool
+
+
+@router.put(
+    "/{network_id}/hide-5g",
+    response_model=Hide5gResponse,
+    dependencies=[Depends(_HIDE_5G_GATE)],
+)
+@limiter.shared_limit(_SETTINGS_WRITES_LIMIT, scope="settings_writes")
+async def update_hide_5g(
+    request: Request,
+    network_id: str,
+    body: Hide5gRequest,
+    client: EeroClient = Depends(require_auth),
+) -> Hide5gResponse:
+    """Temporarily hide (or un-hide) the network's 5 GHz band.
+
+    Reads the network envelope's ``temporary_flags.hide_5g`` first (fresh,
+    not cached - the cloud expires the flag on its own) and skips the write
+    when it already matches. Gated behind ``_HIDE_5G_GATE``.
+    """
+    raw_network = extract_data(await client.get_network(network_id, refresh_cache=True))
+    current = _hide_5g_enabled(raw_network)
+    if current is not None and current == body.enabled:
+        return Hide5gResponse(success=True, changed=False, enabled=current)
+
+    _LOGGER.warning(
+        "Applying hide-5 GHz change for network %s - disconnects 5 GHz clients",
+        network_id,
+    )
+    raw_result = await client.set_hide_5g(body.enabled, network_id=network_id)
+    success = check_success(raw_result)
+    return Hide5gResponse(success=success, changed=True, enabled=body.enabled)
+
+
 # --- Network Wi-Fi password ---------------------------------------------------
 
 _NETWORK_PASSWORD_RE = re.compile(r"[\x20-\x7e]{8,63}")
@@ -4231,6 +4387,10 @@ class AdvancedNetworkSettings(BaseModel):
     # documented in ``update_proxied_nodes``. Always None until the SDK
     # exposes a real source.
     proxied_nodes_enabled: bool | None = None
+    # ``temporary_flags.hide_5g`` (see ``_hide_5g_enabled``): None only when
+    # the envelope has no ``temporary_flags`` object at all.
+    hide_5g: bool | None = None
+    hide_5g_expiration: str | None = None
 
 
 @router.get("/{network_id}/advanced", response_model=AdvancedNetworkSettings)
@@ -4268,6 +4428,8 @@ async def get_network_advanced(
         nat_port_randomization=nat_port_randomization,
         mlo_mode=mlo_mode,
         proxied_nodes_enabled=None,
+        hide_5g=_hide_5g_enabled(raw_network),
+        hide_5g_expiration=_hide_5g_expiration(raw_network),
     )
 
 
