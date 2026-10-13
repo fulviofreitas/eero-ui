@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { NodeDetailLevel } from '#lib/stores/topology.js';
+	import { CLIENT_HEIGHT, type NodeDetailLevel } from '#lib/stores/topology.js';
 	import Icon from '$components/common/Icon.svelte';
 	import { inferDeviceIconFromLabel } from '#lib/deviceIcons.js';
 
@@ -36,15 +36,20 @@
 
 <div
 	class="device-node {statusClass}"
+	class:wired={data.connectionType === 'wired'}
+	style:height="{CLIENT_HEIGHT[detailLevel]}px"
 	class:selected
 	class:blocked={data.isBlocked}
 	class:paused={data.isPaused}
 	class:minimal={detailLevel === 'minimal'}
 >
-	<Handle type="target" position={Position.Top} class="handle" />
+	<Handle type="target" position={Position.Left} class="handle" />
 
 	<div class="device-content">
 		<span class="device-icon"><Icon name={deviceIcon} size={16} /></span>
+		<span class="connection-icon" title={data.connectionType === 'wired' ? 'Wired' : 'Wireless'}>
+			<Icon name={data.connectionType === 'wired' ? 'ethernet' : 'wifi'} size={12} />
+		</span>
 		<span class="device-label" title={data.label}>{data.label}</span>
 
 		{#if data.ip}
@@ -53,9 +58,6 @@
 
 		{#if detailLevel !== 'minimal'}
 			<div class="device-badges">
-				<span class="connection-type" title={data.connectionType}>
-					<Icon name={data.connectionType === 'wired' ? 'ethernet' : 'wifi'} size={10} />
-				</span>
 				{#if detailLevel === 'detailed' && data.signal !== undefined && data.signal !== null}
 					<span class="signal" title="Signal: {data.signal} dBm">
 						{data.signal} dBm
@@ -82,12 +84,15 @@
 
 <style>
 	.device-node {
-		background: var(--color-bg-secondary);
-		border: 1px solid var(--color-border);
+		--connection-color: var(--color-accent);
+		background: color-mix(in srgb, var(--connection-color) 12%, var(--color-bg-secondary));
+		border: 1px solid color-mix(in srgb, var(--connection-color) 50%, var(--color-border));
+		border-left: 3px solid var(--connection-color);
 		border-radius: var(--radius-lg);
 		padding: 8px 12px;
-		min-width: 90px;
-		max-width: 130px;
+		width: 160px;
+		box-sizing: border-box;
+		position: relative;
 		text-align: center;
 		font-family: inherit;
 		transition:
@@ -99,8 +104,17 @@
 
 	.device-node.minimal {
 		padding: 6px 10px;
-		min-width: 80px;
-		max-width: 110px;
+	}
+
+	.device-node.wired {
+		--connection-color: var(--color-success);
+	}
+
+	.connection-icon {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		color: var(--connection-color);
 	}
 
 	.device-node:hover {
@@ -112,13 +126,9 @@
 		box-shadow: var(--focus-ring);
 	}
 
-	.device-node.online {
-		border-color: var(--color-border);
-	}
-
 	.device-node.offline {
 		border-color: var(--color-border-muted);
-		opacity: 0.5;
+		opacity: 0.65;
 	}
 
 	.device-node.blocked {
@@ -146,7 +156,7 @@
 		font-size: var(--text-xs);
 		font-weight: 500;
 		color: var(--color-text-primary);
-		max-width: 100px;
+		max-width: 132px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -164,10 +174,6 @@
 		justify-content: center;
 		gap: 4px;
 		margin-top: 2px;
-	}
-
-	.connection-type {
-		font-size: var(--text-xs);
 	}
 
 	.signal {

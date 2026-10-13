@@ -6,9 +6,20 @@
  * i.e. on the leaf-eero row - so eeros disappeared behind devices.
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { api } from '$api/client';
 import type { DeviceSummary, EeroSummary } from '$api/types';
-import { transformToTopology } from './topology';
+import {
+	transformToTopology,
+	topologyStore,
+	layoutOptionsStore,
+	filteredTopology,
+	selectedNode,
+	CLIENT_HEIGHT,
+	type LayoutType,
+	type NodeDetailLevel
+} from './topology';
 
 const NODE_W = 130;
 const NODE_H = 60;
@@ -60,14 +71,16 @@ describe('transformToTopology - hierarchy layout', () => {
 
 		const { nodes } = transformToTopology(eeros, devices, 'hierarchy');
 		const byId = new Map(nodes.map((n) => [n.id, n]));
-		const absolute = nodes.map((n) => {
-			const parent = n.parentId ? byId.get(n.parentId) : undefined;
-			return {
-				id: n.id,
-				x: n.position.x + (parent?.position.x ?? 0),
-				y: n.position.y + (parent?.position.y ?? 0)
-			};
-		});
+		const absolute = nodes
+			.filter((n) => n.type !== 'clientGroup')
+			.map((n) => {
+				const parent = n.parentId ? byId.get(n.parentId) : undefined;
+				return {
+					id: n.id,
+					x: n.position.x + (parent?.position.x ?? 0),
+					y: n.position.y + (parent?.position.y ?? 0)
+				};
+			});
 
 		expect(nodes.filter((n) => n.type === 'device')).toHaveLength(devices.length);
 
@@ -82,7 +95,9 @@ describe('transformToTopology - hierarchy layout', () => {
 
 		const eeroRowY = byId.get('eero-2')!.position.y;
 		const gatewayNode = byId.get('eero-1')!;
-		const gatewayDevices = nodes.filter((n) => n.parentId === gatewayNode.id);
+		const gatewayDevices = nodes.filter(
+			(n) => n.parentId === gatewayNode.id && n.type === 'device'
+		);
 		expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length);
 		expect(gatewayDevices).toHaveLength(6);
 		for (const d of gatewayDevices) {
@@ -90,7 +105,7 @@ describe('transformToTopology - hierarchy layout', () => {
 		}
 	});
 
-	it('sizes and renders devices in the same column when a leaf shares the gateway model', () => {
+	it('keeps clients with an ambiguous eero model visible without guessing their parent', () => {
 		nextMac = 0;
 		// Leaf listed before the gateway, devices matched by the shared model name only.
 		const eeros = [
@@ -106,14 +121,18 @@ describe('transformToTopology - hierarchy layout', () => {
 
 		const { nodes } = transformToTopology(eeros, devices, 'hierarchy');
 		const byId = new Map(nodes.map((n) => [n.id, n]));
-		const absolute = nodes.map((n) => {
-			const parent = n.parentId ? byId.get(n.parentId) : undefined;
-			return {
-				id: n.id,
-				x: n.position.x + (parent?.position.x ?? 0),
-				y: n.position.y + (parent?.position.y ?? 0)
-			};
-		});
+		expect(nodes.filter((n) => n.type === 'device' && !n.parentId)).toHaveLength(3);
+		expect(nodes.filter((n) => n.type === 'device')).toHaveLength(devices.length);
+		const absolute = nodes
+			.filter((n) => n.type !== 'clientGroup')
+			.map((n) => {
+				const parent = n.parentId ? byId.get(n.parentId) : undefined;
+				return {
+					id: n.id,
+					x: n.position.x + (parent?.position.x ?? 0),
+					y: n.position.y + (parent?.position.y ?? 0)
+				};
+			});
 		for (let i = 0; i < absolute.length; i++) {
 			for (let j = i + 1; j < absolute.length; j++) {
 				const [a, b] = [absolute[i], absolute[j]];
@@ -121,5 +140,120 @@ describe('transformToTopology - hierarchy layout', () => {
 				expect(overlap, `${a.id} overlaps ${b.id}`).toBe(false);
 			}
 		}
+	});
+});
+
+describe('client groups', () => {
+	const layouts: LayoutType[] = ['hierarchy', 'horizontal', 'radial', 'force'];
+	const details: NodeDetailLevel[] = ['minimal', 'standard', 'detailed'];
+	for (const layout of layouts) {
+		for (const detail of details) {
+			it(`keeps mixed clients inside separate, non-overlapping groups in ${layout}/${detail}`, () => {
+				const eeros = [eero('1', 'Living Room', true), eero('2', 'Office'), eero('3', 'Hall')];
+				const devices = eeros.flatMap((e, eeroIndex) =>
+					Array.from({ length: eeroIndex * 4 + 7 }, (_, i) => ({
+						...device(i, e.location!),
+						wireless: i % 3 !== 0,
+						connected: i % 4 !== 0
+					}))
+				);
+				const graph = transformToTopology(eeros, devices, layout, detail);
+				const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+				const groups = graph.nodes.filter((n) => n.type === 'clientGroup');
+				expect(groups).toHaveLength(6);
+				const boxes = graph.nodes
+					.filter((n) => n.type !== 'device')
+					.map((n) => {
+						const parent = n.parentId ? byId.get(n.parentId) : undefined;
+						return {
+							id: n.id,
+							x: n.position.x + (parent?.position.x ?? 0),
+							y: n.position.y + (parent?.position.y ?? 0),
+							w: n.width ?? 180,
+							h: n.height ?? (detail === 'minimal' ? 80 : 150)
+						};
+					});
+				for (let i = 0; i < boxes.length; i++) {
+					for (const b of boxes.slice(i + 1)) {
+						const a = boxes[i];
+						expect(
+							a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y,
+							`${a.id} overlaps ${b.id}`
+						).toBe(false);
+					}
+				}
+				for (const group of groups) {
+					const clients = graph.nodes.filter(
+						(n) =>
+							n.type === 'device' &&
+							n.parentId === group.parentId &&
+							n.data.connectionType === group.data.connectionType
+					);
+					expect(group.data.deviceCount).toBe(clients.length);
+					for (const client of clients) {
+						expect(client.position.x).toBeGreaterThan(group.position.x);
+						expect(client.position.x + 160).toBeLessThanOrEqual(group.position.x + group.width!);
+						expect(client.position.y + CLIENT_HEIGHT[detail]).toBeLessThanOrEqual(
+							group.position.y + group.height!
+						);
+						const edge = graph.edges.find((edge) => edge.target === client.id)!;
+						expect(edge.source).toBe(client.parentId);
+					}
+					for (let i = 1; i < clients.length; i++) {
+						expect(clients[i].position.y - clients[i - 1].position.y).toBeGreaterThan(
+							CLIENT_HEIGHT[detail]
+						);
+					}
+				}
+				expect(
+					transformToTopology([...eeros].reverse(), [...devices].reverse(), layout, detail)
+				).toEqual(graph);
+			});
+		}
+	}
+
+	it('matches exact IDs and locations before a shared model, and keeps unknown clients visible', () => {
+		const eeros = [eero('1', 'Living Room', true), eero('2', 'Office')];
+		const clients = [device(0, '2'), device(1, ' OFFICE '), device(2, 'missing'), device(3, '')];
+		const { nodes, edges } = transformToTopology(eeros, clients);
+		const deviceNodes = nodes.filter((n) => n.type === 'device');
+		expect(deviceNodes).toHaveLength(4);
+		expect(deviceNodes.filter((n) => n.parentId === 'eero-2')).toHaveLength(2);
+		expect(deviceNodes.filter((n) => !n.parentId)).toHaveLength(2);
+		expect(edges.filter((e) => e.data?.type === 'client')).toHaveLength(2);
+	});
+
+	afterEach(() => {
+		topologyStore.clear();
+		layoutOptionsStore.set({
+			showDevices: true,
+			showOfflineDevices: false,
+			layoutType: 'hierarchy',
+			detailLevel: 'minimal'
+		});
+		vi.restoreAllMocks();
+	});
+
+	it('reflows and recounts after filtering without another API request, and hides filtered selection', async () => {
+		const eeros = [eero('1', 'Living Room', true)];
+		const clients = [
+			device(0, 'Living Room'),
+			{ ...device(1, 'Living Room'), connected: false, wireless: false }
+		];
+		const loadEeros = vi.spyOn(api.eeros, 'list').mockResolvedValue(eeros);
+		const loadDevices = vi.spyOn(api.devices, 'list').mockResolvedValue(clients);
+		await topologyStore.loadTopology();
+		expect(get(filteredTopology).nodes.filter((n) => n.type === 'clientGroup')).toHaveLength(1);
+		layoutOptionsStore.update((s) => ({ ...s, showOfflineDevices: true }));
+		expect(get(filteredTopology).nodes.filter((n) => n.type === 'clientGroup')).toHaveLength(2);
+		topologyStore.selectNode(`device-${clients[1].mac}`);
+		expect(get(selectedNode)?.data.eeroLabel).toBe('Living Room');
+		layoutOptionsStore.update((s) => ({ ...s, showOfflineDevices: false }));
+		expect(get(selectedNode)).toBeNull();
+		layoutOptionsStore.update((s) => ({ ...s, showDevices: false }));
+		expect(get(filteredTopology).nodes).toHaveLength(1);
+		expect(get(filteredTopology).edges).toHaveLength(0);
+		expect(loadEeros).toHaveBeenCalledTimes(1);
+		expect(loadDevices).toHaveBeenCalledTimes(1);
 	});
 });
