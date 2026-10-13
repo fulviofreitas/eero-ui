@@ -25,8 +25,9 @@
 
 	<div class="topology-tips">
 		<p>
-			<strong>Tip:</strong> Drag nodes to rearrange. Click a node to view details. Use scroll to zoom,
-			and drag the canvas to pan. Change layout and detail level using the controls above.
+			<strong>Tip:</strong> Each eero has green wired and blue wireless client groups. Drag an eero to
+			rearrange its whole group. Click a client to see its connected eero. Scroll to zoom, or drag the
+			canvas to pan.
 		</p>
 	</div>
 </div>

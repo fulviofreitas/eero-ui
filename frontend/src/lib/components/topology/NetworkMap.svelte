@@ -12,7 +12,8 @@
 		Background,
 		MiniMap,
 		BackgroundVariant,
-		type NodeTypes
+		type NodeTypes,
+		type EdgeTypes
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 
@@ -30,6 +31,8 @@
 	import EeroNode from './nodes/EeroNode.svelte';
 	import DeviceNode from './nodes/DeviceNode.svelte';
 	import GatewayNode from './nodes/GatewayNode.svelte';
+	import ClientGroupNode from './nodes/ClientGroupNode.svelte';
+	import ClientEdge from './ClientEdge.svelte';
 	import Icon from '$components/common/Icon.svelte';
 	import Button from '$components/common/Button.svelte';
 	import type { IconName } from '#lib/icons/paths.js';
@@ -41,6 +44,7 @@
 	}
 
 	let { readonly = false, onNodeClick = undefined }: Props = $props();
+	let showOverview = $state(false);
 
 	// Layout options for dropdown
 	const layoutOptions: { value: LayoutType; label: string; icon: IconName }[] = [
@@ -60,19 +64,13 @@
 	const nodeTypes: NodeTypes = {
 		gateway: GatewayNode,
 		eero: EeroNode,
-		device: DeviceNode
+		device: DeviceNode,
+		clientGroup: ClientGroupNode
 	};
+	const edgeTypes: EdgeTypes = { client: ClientEdge };
 
 	// Local reactive state bound to store
-	let nodes = $derived(
-		$filteredTopology.nodes.map((node) => ({
-			...node,
-			data: {
-				...node.data,
-				detailLevel: $layoutOptionsStore.detailLevel
-			}
-		}))
-	);
+	let nodes = $derived($filteredTopology.nodes);
 	let edges = $derived($filteredTopology.edges);
 
 	// Load topology on mount
@@ -86,7 +84,7 @@
 
 	// Handle node click - xyflow uses { node, event } directly
 	function handleNodeClick({ node }: { node: { id: string; data: TopologyNodeData } }) {
-		if (node) {
+		if (node && node.data.type !== 'clientGroup') {
 			topologyStore.selectNode(node.id);
 			onNodeClick?.(node.id);
 		}
@@ -116,8 +114,6 @@
 			...opts,
 			layoutType: target.value as LayoutType
 		}));
-		// Re-fetch to recalculate positions
-		topologyStore.loadTopology();
 	}
 
 	// Handle detail level change
@@ -174,6 +170,10 @@
 			<input type="checkbox" bind:checked={$layoutOptionsStore.showOfflineDevices} />
 			<span>Offline</span>
 		</label>
+		<label class="control-option">
+			<input type="checkbox" bind:checked={showOverview} />
+			<span>Overview</span>
+		</label>
 
 		<Button
 			size="sm"
@@ -185,79 +185,82 @@
 		/>
 	</div>
 
-	{#if $filteredTopology.loading && nodes.length === 0}
-		<div class="loading-overlay">
-			<span class="loading-spinner"></span>
-			<span>Loading network topology...</span>
-		</div>
-	{:else if $filteredTopology.error}
-		<div class="error-overlay">
-			<span class="error-icon"><Icon name="alert-triangle" size={36} /></span>
-			<span>{$filteredTopology.error}</span>
-			<Button variant="primary" onclick={refresh}>Retry</Button>
-		</div>
-	{:else if nodes.length === 0}
-		<div class="empty-overlay">
-			<span class="empty-icon"><Icon name="router" size={36} /></span>
-			<span>No topology data available</span>
-			<Button variant="primary" onclick={refresh}>Refresh</Button>
-		</div>
-	{:else}
-		<!-- fitViewOptions padding 0.3: `.map-controls` floats absolutely at top:12px over the
-		     canvas and the gateway node auto-layouts top-center, directly under it at the default
-		     0.1 padding. xyflow's fitView padding is uniform (no per-side option); a larger margin
-		     pulls every node away from all four edges, clearing the toolbar without touching the
-		     layout algorithm itself. edgesFocusable=false: edges carry no click/keyboard action, so
-		     they should not be reachable by Tab. -->
-		<SvelteFlow
-			{nodes}
-			{edges}
-			{nodeTypes}
-			fitView
-			fitViewOptions={{ padding: 0.3 }}
-			minZoom={0.2}
-			maxZoom={2}
-			nodesDraggable={!readonly}
-			nodesConnectable={false}
-			elementsSelectable={true}
-			edgesFocusable={false}
-			panOnScroll={true}
-			zoomOnScroll={true}
-			onnodeclick={handleNodeClick}
-			onpaneclick={handlePaneClick}
-		>
-			<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+	<div class="map-canvas">
+		{#if $filteredTopology.loading && nodes.length === 0}
+			<div class="loading-overlay">
+				<span class="loading-spinner"></span>
+				<span>Loading network topology...</span>
+			</div>
+		{:else if $filteredTopology.error}
+			<div class="error-overlay">
+				<span class="error-icon"><Icon name="alert-triangle" size={36} /></span>
+				<span>{$filteredTopology.error}</span>
+				<Button variant="primary" onclick={refresh}>Retry</Button>
+			</div>
+		{:else if nodes.length === 0}
+			<div class="empty-overlay">
+				<span class="empty-icon"><Icon name="router" size={36} /></span>
+				<span>No topology data available</span>
+				<Button variant="primary" onclick={refresh}>Refresh</Button>
+			</div>
+		{:else}
+			{#key `${$layoutOptionsStore.layoutType}-${$layoutOptionsStore.detailLevel}-${$layoutOptionsStore.showDevices}-${$layoutOptionsStore.showOfflineDevices}`}
+				<SvelteFlow
+					{nodes}
+					{edges}
+					{nodeTypes}
+					{edgeTypes}
+					fitView
+					fitViewOptions={{ padding: 0.12 }}
+					minZoom={0.05}
+					maxZoom={2}
+					nodesDraggable={!readonly}
+					nodesConnectable={false}
+					elementsSelectable={true}
+					edgesFocusable={false}
+					panOnScroll={true}
+					zoomOnScroll={true}
+					onnodeclick={handleNodeClick}
+					onpaneclick={handlePaneClick}
+				>
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} />
 
-			<Controls showZoom={true} showFitView={true} showLock={!readonly} />
+					<Controls showZoom={true} showFitView={true} showLock={!readonly} />
 
-			<MiniMap
-				nodeColor={(node) => {
-					if (node.type === 'gateway') return 'var(--color-accent)';
-					if (node.type === 'eero') {
-						return node.data.status === 'online' ? 'var(--color-success)' : 'var(--color-danger)';
-					}
-					return node.data.status === 'online'
-						? 'var(--color-text-secondary)'
-						: 'var(--color-border)';
-				}}
-				maskColor="var(--color-overlay)"
-			/>
-		</SvelteFlow>
-	{/if}
-
-	<!-- Legend for edge colors -->
+					{#if showOverview}
+						<MiniMap
+							nodeColor={(node) => {
+								if (node.type === 'clientGroup') return 'transparent';
+								if (node.type === 'gateway') return 'var(--color-accent)';
+								if (node.type === 'eero') {
+									return node.data.status === 'online'
+										? 'var(--color-success)'
+										: 'var(--color-danger)';
+								}
+								return node.data.connectionType === 'wired'
+									? 'var(--color-success)'
+									: 'var(--color-accent)';
+							}}
+							maskColor="var(--color-overlay)"
+						/>
+					{/if}
+				</SvelteFlow>
+			{/key}
+		{/if}
+	</div>
+	<!-- Legend for client groups and eero links -->
 	<div class="edge-legend">
 		<div class="legend-item">
-			<span class="legend-line wired"></span>
-			<span>Wired</span>
+			<span class="legend-swatch wired"></span>
+			<span>Wired clients</span>
 		</div>
 		<div class="legend-item">
-			<span class="legend-line wireless"></span>
-			<span>Wireless</span>
+			<span class="legend-swatch wireless"></span>
+			<span>Wireless clients</span>
 		</div>
 		<div class="legend-item">
 			<span class="legend-line mesh"></span>
-			<span>Mesh</span>
+			<span>Eero links</span>
 		</div>
 	</div>
 
@@ -305,6 +308,13 @@
 					{#if $selectedNode.data.connectionType}
 						<dt>Connection</dt>
 						<dd class="capitalize">{$selectedNode.data.connectionType}</dd>
+					{/if}
+
+					{#if $selectedNode.data.eeroLabel}
+						<dt>
+							{$selectedNode.data.status === 'offline' ? 'Last connected to' : 'Connected to'}
+						</dt>
+						<dd>{$selectedNode.data.eeroLabel}</dd>
 					{/if}
 
 					{#if $selectedNode.data.meshQuality !== undefined}
@@ -357,6 +367,8 @@
 
 <style>
 	.topology-container {
+		display: flex;
+		flex-direction: column;
 		width: 100%;
 		height: 100%;
 		min-height: 500px;
@@ -364,6 +376,16 @@
 		background: var(--color-bg-primary);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
+	}
+
+	.map-canvas {
+		position: relative;
+		flex: 1;
+		min-height: 350px;
+	}
+
+	:global(.svelte-flow__node-clientGroup) {
+		pointer-events: none;
 	}
 
 	/* Override Svelte Flow default styles to follow the active theme */
@@ -412,10 +434,7 @@
 
 	/* Map controls */
 	.map-controls {
-		position: absolute;
-		top: 12px;
-		left: 12px;
-		right: 12px;
+		margin: 12px;
 		z-index: var(--z-dropdown);
 		display: flex;
 		align-items: center;
@@ -501,17 +520,13 @@
 
 	/* Edge legend */
 	.edge-legend {
-		position: absolute;
-		bottom: 12px;
-		left: 60px; /* Offset to avoid overlapping with xyflow controls */
-		z-index: var(--z-dropdown);
+		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		gap: 16px;
+		gap: 12px;
 		background: var(--color-bg-secondary);
 		padding: 8px 14px;
-		border-radius: var(--radius-lg);
-		border: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-border);
 		font-size: var(--text-xs);
 		color: var(--color-text-secondary);
 	}
@@ -528,18 +543,17 @@
 		border-radius: 1px;
 	}
 
-	.legend-line.wired {
-		background: var(--color-success);
+	.legend-swatch {
+		width: 14px;
+		height: 14px;
+		border-radius: 3px;
+		border: 1px solid var(--color-accent);
+		background: var(--color-info-bg);
 	}
 
-	.legend-line.wireless {
-		background: repeating-linear-gradient(
-			90deg,
-			var(--color-accent) 0px,
-			var(--color-accent) 6px,
-			transparent 6px,
-			transparent 9px
-		);
+	.legend-swatch.wired {
+		border-color: var(--color-success);
+		background: var(--color-success-bg);
 	}
 
 	.legend-line.mesh {
@@ -694,5 +708,26 @@
 	/* Layout-only: the canonical Button fills the details panel's action row. */
 	:global(.details-actions-btn) {
 		width: 100%;
+	}
+
+	@media (max-width: 600px) {
+		.map-controls {
+			gap: 8px;
+			margin: 8px;
+		}
+		.control-select {
+			min-width: 0;
+			max-width: 180px;
+		}
+		.edge-legend {
+			gap: 8px;
+			padding: 8px;
+			font-size: 10px;
+		}
+		.details-panel {
+			top: 120px;
+			right: 8px;
+			max-width: calc(100% - 16px);
+		}
 	}
 </style>
