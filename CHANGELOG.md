@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.3.0](https://github.com/fulviofreitas/eero-ui/compare/v6.2.0...v6.3.0) (2026-10-13)
+
+### ✨ Features
+
+* **topology:** group clients into wired and wireless per eero ([#448](https://github.com/fulviofreitas/eero-ui/issues/448)) ([1e1eee2](https://github.com/fulviofreitas/eero-ui/commit/1e1eee2949a59895ce6aee8d088358e01c7d72e3))
+
+### 📚 Documentation
+
+* **wiki:** list block device as verified in Roadmap and Troubleshooting ([a9a7735](https://github.com/fulviofreitas/eero-ui/commit/a9a7735ce05655e0b764b13352d83785a293f3c0))
+
 ## [6.2.0](https://github.com/fulviofreitas/eero-ui/compare/v6.1.5...v6.2.0) (2026-10-12)
 
 ### ✨ Features
