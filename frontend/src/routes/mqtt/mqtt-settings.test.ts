@@ -15,6 +15,7 @@ const settings = {
 	message: null
 };
 
+/** Render the settings page with a saved broker and wait for the form to load. */
 async function renderSettings() {
 	server.use(http.get('/api/mqtt', () => HttpResponse.json(settings)));
 	render(MQTTPage);

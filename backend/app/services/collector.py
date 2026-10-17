@@ -347,7 +347,7 @@ class MetricsCollector:
         if self._publish_samples is not None:
             try:
                 self._publish_samples(samples)
-            except Exception:
+            except (OSError, RuntimeError, ValueError):
                 _LOGGER.warning("MQTT could not publish collected metrics")
 
     async def _collect_all_networks(

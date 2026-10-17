@@ -28,6 +28,7 @@
 		error: 'Connection error'
 	};
 
+	/** Load the saved form values and ignore responses after this page is unmounted. */
 	async function load() {
 		loading = true;
 		error = '';
@@ -47,6 +48,7 @@
 		}
 	}
 
+	/** Poll connection state without replacing edits or overwriting a newer save. */
 	async function refreshStatus() {
 		if (polling || saving || !status?.enabled) return;
 		polling = true;
@@ -61,6 +63,7 @@
 		}
 	}
 
+	/** Save broker edits, preserve or clear the password, and discard stale responses. */
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
 		revision += 1;

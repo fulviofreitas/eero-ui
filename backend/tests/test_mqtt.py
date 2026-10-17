@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
 from pydantic import SecretStr, ValidationError
 
 from app.main import app
@@ -22,12 +24,14 @@ from app.services.victoria import Sample
 
 @pytest.fixture
 def service(tmp_path):
+    """Create a disabled publisher whose settings stay inside the test directory."""
     service = MQTTService(tmp_path / "mqtt.json")
     return service
 
 
 @pytest.fixture
 def broker(service, monkeypatch):
+    """Connect a mocked broker and discard its initial connection announcements."""
     client = MagicMock()
     client.is_connected.return_value = True
     client.publish.return_value.rc = 0
@@ -35,13 +39,18 @@ def broker(service, monkeypatch):
     service.config.enabled = True
     service.config.broker_address = "mqtt://broker:1883"
     service.start()
-    service._on_connect(client, None, None, SimpleNamespace(is_failure=False), None)
+    service._on_connect(
+        client, None, None, ReasonCode(PacketTypes.CONNACK, identifier=0), None
+    )
     client.publish.reset_mock()
     return client
 
 
 def measurements(network_id="net-1", name="Home"):
+    """Build mixed client, speed-test and WAN samples for a named network."""
+
     def sample(metric, value, **labels):
+        """Create a current metric sample carrying the selected network and extra labels."""
         return Sample(
             metric, value, int(time.time() * 1000), {"network_id": network_id, **labels}
         )
@@ -60,6 +69,7 @@ def measurements(network_id="net-1", name="Home"):
 
 
 def published(client):
+    """Return the last published payload for each topic recorded by the mocked broker."""
     return {call.args[0]: call.args[1] for call in client.publish.call_args_list}
 
 
@@ -73,6 +83,7 @@ def published(client):
     ],
 )
 def test_broker_addresses(address, expected):
+    """Check supported addresses resolve to the expected host, port and TLS setting."""
     assert parse_broker_address(address) == expected
 
 
@@ -89,11 +100,13 @@ def test_broker_addresses(address, expected):
     ],
 )
 def test_invalid_addresses(address):
+    """Reject unsupported broker schemes, embedded credentials and invalid endpoints."""
     with pytest.raises(ValueError):
         parse_broker_address(address)
 
 
 def test_discovery_and_states_count_only_connected_known_clients(service, broker):
+    """Verify six retained sensors with correct counts, units, identities and expiry."""
     service.publish_samples(measurements())
     messages = published(broker)
     configs = [
@@ -133,6 +146,7 @@ def test_discovery_and_states_count_only_connected_known_clients(service, broker
 
 
 def test_empty_network_is_zero_but_missing_data_is_unknown(service, broker):
+    """Distinguish a confirmed empty network from unavailable measurements."""
     service.publish_samples(
         [
             Sample(
@@ -163,6 +177,7 @@ def test_empty_network_is_zero_but_missing_data_is_unknown(service, broker):
 
 
 def test_multiple_networks_do_not_collide_and_names_can_change(service, broker):
+    """Keep network discovery identities distinct while allowing display-name updates."""
     service.publish_samples(measurements() + measurements("net-2", "Office"))
     configs = [
         json.loads(value)
@@ -183,6 +198,7 @@ def test_multiple_networks_do_not_collide_and_names_can_change(service, broker):
 
 
 def test_home_assistant_birth_and_broker_reconnect_rediscover(service, broker):
+    """Reannounce stable discovery identities after Home Assistant or broker restarts."""
     service.publish_samples(measurements())
     unique_ids = {
         json.loads(value)["unique_id"]
@@ -196,7 +212,7 @@ def test_home_assistant_birth_and_broker_reconnect_rediscover(service, broker):
             SimpleNamespace(topic="homeassistant/status", payload=b"online"),
         ),
         lambda: service._on_connect(
-            broker, None, None, SimpleNamespace(is_failure=False), None
+            broker, None, None, ReasonCode(PacketTypes.CONNACK, identifier=0), None
         ),
     ):
         broker.publish.reset_mock()
@@ -211,10 +227,13 @@ def test_home_assistant_birth_and_broker_reconnect_rediscover(service, broker):
 
 
 def test_expired_cache_not_replayed_as_current_data(service, broker):
+    """Mark expired cached measurements unknown and the publisher unavailable on reconnect."""
     service.publish_samples(measurements())
     service._snapshot_at = time.monotonic() - 181
     broker.publish.reset_mock()
-    service._on_connect(broker, None, None, SimpleNamespace(is_failure=False), None)
+    service._on_connect(
+        broker, None, None, ReasonCode(PacketTypes.CONNACK, identifier=0), None
+    )
     assert published(broker)[f"{service.base_topic}/availability"] == "offline"
     assert all(
         value == "None"
@@ -224,6 +243,7 @@ def test_expired_cache_not_replayed_as_current_data(service, broker):
 
 
 async def test_credentials_persist_preserve_clear_and_never_appear_in_status(service):
+    """Verify password persistence, preservation, explicit removal and response redaction."""
     update = MQTTSettingsUpdate(
         broker_address="broker",
         username="mqtt-user",
@@ -246,6 +266,7 @@ async def test_credentials_persist_preserve_clear_and_never_appear_in_status(ser
 
 
 async def test_turning_discovery_off_removes_retained_configs(service, broker):
+    """Clear retained discovery and publish offline before disconnecting the old client."""
     service.publish_samples(measurements())
     broker.publish.reset_mock()
     await service.update(
@@ -261,6 +282,7 @@ async def test_turning_discovery_off_removes_retained_configs(service, broker):
 
 
 def test_wan_samples_expire_and_clear_on_failed_cycle(service, broker):
+    """Keep stale or missing WAN totals unknown even while other metrics remain available."""
     service.publish_samples(measurements())
     service._snapshots["net-1"]["wan_observed_at"] = time.time() - 91
     broker.publish.reset_mock()
@@ -280,6 +302,7 @@ def test_wan_samples_expire_and_clear_on_failed_cycle(service, broker):
 
 
 def test_start_sets_auth_tls_will_and_errors_are_safe(service, monkeypatch):
+    """Verify TLS, broker authentication, offline will and sanitized connection failures."""
     broker = MagicMock()
     monkeypatch.setattr("app.services.mqtt.mqtt.Client", lambda *a, **kw: broker)
     service.config.enabled = True
@@ -293,7 +316,9 @@ def test_start_sets_auth_tls_will_and_errors_are_safe(service, monkeypatch):
     broker.will_set.assert_called_with(
         f"{service.base_topic}/availability", "offline", qos=1, retain=True
     )
-    service._on_connect(broker, None, None, SimpleNamespace(is_failure=True), None)
+    service._on_connect(
+        broker, None, None, ReasonCode(PacketTypes.CONNACK, identifier=128), None
+    )
     assert service.status().connection_status == "error"
     assert "private-password" not in service.status().model_dump_json()
     service._on_connect_fail(broker, None)
@@ -301,23 +326,27 @@ def test_start_sets_auth_tls_will_and_errors_are_safe(service, monkeypatch):
 
 
 def test_discovery_prefix_rejects_wildcards():
+    """Reject discovery prefixes that would introduce MQTT wildcard subscriptions."""
     with pytest.raises(ValidationError):
         MQTTSettingsUpdate(discovery_prefix="homeassistant/#")
 
 
 @pytest.fixture
 def api_service(service):
+    """Override the app publisher dependency with the isolated test service."""
     app.dependency_overrides[get_mqtt_service] = lambda: service
     yield service
     app.dependency_overrides.pop(get_mqtt_service, None)
 
 
 async def test_mqtt_api_requires_auth(async_client, api_service):
+    """Require an authenticated dashboard session for both MQTT settings endpoints."""
     assert (await async_client.get("/api/mqtt")).status_code == 401
     assert (await async_client.put("/api/mqtt", json={})).status_code == 401
 
 
 async def test_mqtt_api_saves_secret_without_returning_it(auth_client, api_service):
+    """Persist a submitted password while excluding it from read and update responses."""
     response = await auth_client.put(
         "/api/mqtt", json={"broker_address": "broker", "password": "private-password"}
     )
@@ -331,6 +360,7 @@ async def test_mqtt_api_saves_secret_without_returning_it(auth_client, api_servi
 
 
 async def test_mqtt_api_rejects_empty_enabled_broker_and_csrf(auth_client, api_service):
+    """Reject enabling an empty broker and settings writes without the CSRF header."""
     response = await auth_client.put(
         "/api/mqtt", json={"enabled": True, "password": "private-password"}
     )
@@ -343,6 +373,7 @@ async def test_mqtt_api_rejects_empty_enabled_broker_and_csrf(auth_client, api_s
 
 
 async def test_validation_errors_do_not_echo_credentials(auth_client, api_service):
+    """Ensure invalid password values and credential-bearing URLs are never echoed."""
     for payload in (
         {"password": {"secret": "private-password"}},
         {"password": "private-password" * 400},
@@ -356,7 +387,10 @@ async def test_validation_errors_do_not_echo_credentials(auth_client, api_servic
 async def test_save_failure_keeps_previous_config(
     auth_client, api_service, monkeypatch
 ):
+    """Preserve the current settings and sanitize the response when persistence fails."""
+
     def fail_save(*args):
+        """Raise a secret-bearing disk error to exercise persistence-error redaction."""
         raise OSError("private-password")
 
     monkeypatch.setattr("app.services.mqtt.save_settings", fail_save)

@@ -10,10 +10,12 @@ from app.services.wan import aggregate_wan_usage, prepare_wan_sample
 
 
 def device(down=3.5, up=0.25, **extra):
+    """Build a connected client with configurable Internet usage and optional raw fields."""
     return {"connected": True, "usage": {"down_mbps": down, "up_mbps": up}, **extra}
 
 
 def test_sums_clients_once_ignoring_disconnected_usage_and_link_rates():
+    """Deduplicate clients and exclude disconnected usage and physical link rates."""
     first = device(mac="AA:BB")
     assert aggregate_wan_usage(
         [
@@ -29,12 +31,14 @@ def test_sums_clients_once_ignoring_disconnected_usage_and_link_rates():
     "devices", [[], [device(0, 0)], [device(20, 10, connected=False)]]
 )
 def test_true_idle_totals_are_zero(devices):
+    """Retain zero for valid idle clients and networks with no connected devices."""
     assert aggregate_wan_usage(devices) == (0, 0)
 
 
 @pytest.mark.parametrize("bad", [None, "2", True, -1, float("nan"), float("inf")])
 @pytest.mark.parametrize("direction", ["down_mbps", "up_mbps"])
 def test_partial_invalid_totals_are_unknown(bad, direction):
+    """Reject incomplete totals containing nonnumeric, negative or nonfinite rates."""
     second = device()
     second["usage"][direction] = bad
     assert aggregate_wan_usage([device(), second]) is None
@@ -42,10 +46,12 @@ def test_partial_invalid_totals_are_unknown(bad, direction):
 
 @pytest.mark.parametrize("usage", [None, {}, "unsupported"])
 def test_missing_usage_is_not_zero(usage):
+    """Treat missing or malformed client usage as unknown instead of zero traffic."""
     assert aggregate_wan_usage([device(usage=usage)]) is None
 
 
 async def test_requests_report_with_existing_sdk_auth_and_waits(monkeypatch):
+    """Reuse SDK authentication and allow the live-report counters time to settle."""
     auth = SimpleNamespace(get_auth_token=AsyncMock(return_value="existing-token"))
     networks = SimpleNamespace(
         post=AsyncMock(
@@ -65,6 +71,7 @@ async def test_requests_report_with_existing_sdk_auth_and_waits(monkeypatch):
 
 @pytest.mark.parametrize("authenticated", [True, False])
 async def test_no_ack_or_auth_does_not_claim_a_fresh_sample(monkeypatch, authenticated):
+    """Reject unacknowledged or unauthenticated reports before waiting for counters."""
     auth = SimpleNamespace(
         get_auth_token=AsyncMock(return_value="token" if authenticated else None)
     )

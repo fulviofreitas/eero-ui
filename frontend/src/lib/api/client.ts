@@ -266,7 +266,9 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 
 export const api = {
 	mqtt: {
+		/** Read public broker settings and connection status without automatic retries. */
 		get: () => fetchWithHandling<import('./types').MQTTStatus>('/mqtt', { retries: 0 }),
+		/** Save broker settings and reconnect; a null password preserves the saved secret. */
 		update: (settings: import('./types').MQTTSettingsUpdate) =>
 			fetchWithHandling<import('./types').MQTTStatus>('/mqtt', {
 				method: 'PUT',

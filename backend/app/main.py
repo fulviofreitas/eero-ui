@@ -120,6 +120,7 @@ async def lifespan(app: FastAPI):
             _LOGGER.warning("MQTT settings could not be loaded; MQTT is disabled")
 
         async def close_mqtt():
+            """Close the publisher after collection stops and clear its app-state reference."""
             if app.state.mqtt_service:
                 await app.state.mqtt_service.close()
                 app.state.mqtt_service = None
@@ -142,6 +143,7 @@ async def lifespan(app: FastAPI):
         collector_task = asyncio.create_task(collector.run_forever())
 
         async def close_collector():
+            """Cancel and await collection before closing MQTT or shared API clients."""
             collector_task.cancel()
             try:
                 await collector_task
@@ -217,6 +219,7 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=_csrf_guard_middleware)
 async def request_validation_error_handler(
     request: Request, exc: RequestValidationError
 ):
+    """Omit secret-bearing inputs from MQTT errors; preserve other API validation."""
     if request.url.path == "/api/mqtt":
         # FastAPI normally echoes invalid inputs, which can contain secrets.
         return JSONResponse(

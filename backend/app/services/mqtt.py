@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.reasoncodes import ReasonCode
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from .victoria import Sample
@@ -72,6 +73,7 @@ class MQTTSettingsUpdate(BaseModel):
     @field_validator("broker_address")
     @classmethod
     def valid_address(cls, value: str) -> str:
+        """Trim the broker address and validate its scheme, host and optional port."""
         value = value.strip()
         if value:
             parse_broker_address(value)
@@ -80,6 +82,7 @@ class MQTTSettingsUpdate(BaseModel):
     @field_validator("discovery_prefix")
     @classmethod
     def valid_prefix(cls, value: str) -> str:
+        """Normalize the discovery prefix and reject spaces or MQTT wildcards."""
         value = value.strip().strip("/")
         if (
             not value
@@ -92,14 +95,23 @@ class MQTTSettingsUpdate(BaseModel):
         return value
 
 
+def _new_instance_id() -> str:
+    """Create a stable-format identifier for a new MQTT installation."""
+    return uuid4().hex
+
+
 class MQTTSettings(MQTTSettingsUpdate):
+    """Persist broker settings, the saved secret and a stable installation identifier."""
+
     password: SecretStr = SecretStr("")
     instance_id: str = Field(
-        default_factory=lambda: uuid4().hex, pattern=r"^[a-f0-9]{32}$"
+        default_factory=_new_instance_id, pattern=r"^[a-f0-9]{32}$"
     )
 
 
 class MQTTStatus(BaseModel):
+    """Expose broker configuration and connection state with only a password-set flag."""
+
     enabled: bool
     broker_address: str
     username: str
@@ -111,6 +123,7 @@ class MQTTStatus(BaseModel):
 
 
 def load_settings(path: Path) -> MQTTSettings:
+    """Load persisted settings or disabled defaults; reject enabled MQTT with no broker."""
     if not path.exists():
         return MQTTSettings()
     config = MQTTSettings.model_validate_json(path.read_text(encoding="utf-8"))
@@ -143,6 +156,7 @@ class MQTTService:
     """
 
     def __init__(self, path: Path, interval_seconds: int = 60) -> None:
+        """Load settings and initialize thread-safe connection state and metric caches."""
         self.path = path
         self.config = load_settings(path)
         self._expiry = max(60, interval_seconds * 3)
@@ -157,9 +171,11 @@ class MQTTService:
 
     @property
     def base_topic(self) -> str:
+        """Return the installation-specific namespace shared by state and availability."""
         return f"eero_ui/{self.config.instance_id}"
 
     def status(self) -> MQTTStatus:
+        """Snapshot public settings and connection state while holding the shared lock."""
         with self._lock:
             return MQTTStatus(
                 **self.config.model_dump(exclude={"password", "instance_id"}),
@@ -169,6 +185,7 @@ class MQTTService:
             )
 
     def start(self) -> None:
+        """Start asynchronous broker connection and reconnection when MQTT is enabled."""
         with self._lock:
             if not self.config.enabled or self._client is not None:
                 return
@@ -198,6 +215,7 @@ class MQTTService:
             client.loop_start()
 
     async def update(self, update: MQTTSettingsUpdate) -> MQTTStatus:
+        """Persist settings, preserve an omitted password and reconnect with the new values."""
         async with self._update_lock:
             payload = update.model_dump(exclude={"password"})
             config = MQTTSettings(
@@ -224,10 +242,12 @@ class MQTTService:
             return self.status()
 
     async def close(self) -> None:
+        """Serialize shutdown with settings updates and stop the broker network thread."""
         async with self._update_lock:
             await asyncio.to_thread(self._stop)
 
     def _stop(self, remove_discovery: bool = False) -> None:
+        """Publish offline, optionally clear discovery and stop the client outside the lock."""
         with self._lock:
             client = self._client
             if client is None:
@@ -263,11 +283,14 @@ class MQTTService:
         client.disconnect()
         client.loop_stop()
 
-    def _on_connect(self, client, _userdata, _flags, reason_code, _properties) -> None:
+    def _on_connect(
+        self, client, _userdata, _flags, reason_code: ReasonCode, _properties
+    ) -> None:
+        """Handle the current client's CONNACK and republish discovery on success."""
         with self._lock:
             if client is not self._client:
                 return
-            if reason_code.is_failure:
+            if reason_code != 0:
                 self._status, self._message = (
                     "error",
                     "Broker rejected the connection. Check your credentials and broker permissions.",
@@ -280,6 +303,7 @@ class MQTTService:
             self._publish_snapshot()
 
     def _on_connect_fail(self, client, _userdata) -> None:
+        """Report a connection failure without exposing credentials or transport errors."""
         with self._lock:
             if client is self._client:
                 self._status, self._message = (
@@ -290,6 +314,7 @@ class MQTTService:
     def _on_disconnect(
         self, client, _userdata, _flags, _reason_code, _properties
     ) -> None:
+        """Mark the current connection as retrying while preserving rejection errors."""
         with self._lock:
             if client is self._client:
                 if self._status == "error":
@@ -300,6 +325,7 @@ class MQTTService:
                 )
 
     def _on_message(self, client, _userdata, message) -> None:
+        """Reannounce cached discovery and states when Home Assistant comes online."""
         with self._lock:
             if client is not self._client:
                 return
@@ -327,34 +353,7 @@ class MQTTService:
                     "values": {},
                 },
             )
-            values = snapshot["values"]
-            if sample.name == "eero_network_clients_count":
-                snapshot["name"] = sample.labels.get("name") or "Eero network"
-                # Count only connected devices with a known connection type.
-                for connection in ("wired", "wireless"):
-                    values[f"{connection}_clients"] = sum(
-                        1
-                        for device in samples
-                        if device.name == "eero_device_connected"
-                        and device.labels.get("network_id") == network_id
-                        and device.labels.get("connection_type") == connection
-                        and device.value == 1
-                    )
-            elif sample.name in (
-                "eero_network_wan_download_mbps",
-                "eero_network_wan_upload_mbps",
-            ):
-                if math.isfinite(sample.value) and sample.value >= 0:
-                    values[sample.name.removeprefix("eero_network_")] = sample.value
-                    snapshot["wan_observed_at"] = sample.timestamp_ms / 1000
-            elif sample.name in ("eero_speed_download_mbps", "eero_speed_upload_mbps"):
-                if math.isfinite(sample.value) and sample.value >= 0:
-                    key = (
-                        "download_mbps"
-                        if sample.name == "eero_speed_download_mbps"
-                        else "upload_mbps"
-                    )
-                    values[key] = sample.value
+            self._update_snapshot_values(snapshot, sample, samples)
         with self._lock:
             for network_id, previous in self._snapshots.items():
                 snapshots.setdefault(
@@ -365,13 +364,91 @@ class MQTTService:
             if self._client and self._client.is_connected():
                 self._publish_snapshot()
 
+    @staticmethod
+    def _update_snapshot_values(
+        snapshot: dict, sample: Sample, samples: list[Sample]
+    ) -> None:
+        """Merge a sample into network counts, valid rates and WAN observation time."""
+        values = snapshot["values"]
+        if sample.name == "eero_network_clients_count":
+            snapshot["name"] = sample.labels.get("name") or "Eero network"
+            for connection in ("wired", "wireless"):
+                values[f"{connection}_clients"] = sum(
+                    1
+                    for device in samples
+                    if device.name == "eero_device_connected"
+                    and device.labels.get("network_id") == sample.labels["network_id"]
+                    and device.labels.get("connection_type") == connection
+                    and device.value == 1
+                )
+        elif sample.name in (
+            "eero_network_wan_download_mbps",
+            "eero_network_wan_upload_mbps",
+        ):
+            if math.isfinite(sample.value) and sample.value >= 0:
+                values[sample.name.removeprefix("eero_network_")] = sample.value
+                snapshot["wan_observed_at"] = sample.timestamp_ms / 1000
+        elif sample.name in ("eero_speed_download_mbps", "eero_speed_upload_mbps"):
+            if math.isfinite(sample.value) and sample.value >= 0:
+                key = (
+                    "download_mbps"
+                    if sample.name == "eero_speed_download_mbps"
+                    else "upload_mbps"
+                )
+                values[key] = sample.value
+
     def _network_key(self, network_id: str) -> str:
+        """Hash a network identifier into a stable topic segment without exposing its ID."""
         return hashlib.sha256(network_id.encode()).hexdigest()[:16]
 
     def _discovery_topic(self, network_id: str, key: str) -> str:
+        """Return the retained discovery topic for one installation, network and sensor."""
         return f"{self.config.discovery_prefix}/sensor/eero_ui_{self.config.instance_id}_{self._network_key(network_id)}/{key}/config"
 
+    def _discovery_payload(self, network_id: str, key: str, snapshot: dict) -> dict:
+        """Describe a Home Assistant sensor with stable identity, units and expiry."""
+        network_key = self._network_key(network_id)
+        topic = f"{self.base_topic}/{network_key}"
+        name, icon, unit = _SENSORS[key]
+        payload = {
+            "name": name,
+            "unique_id": f"eero_ui_{self.config.instance_id}_{network_key}_{key}",
+            "state_topic": f"{topic}/{key}/state",
+            "availability_topic": f"{self.base_topic}/availability",
+            "expire_after": WAN_EXPIRY if key.startswith("wan_") else self._expiry,
+            "state_class": "measurement",
+            "icon": icon,
+            "device": {
+                "identifiers": [f"eero_ui_{self.config.instance_id}_{network_key}"],
+                "name": snapshot["name"],
+                "manufacturer": "eero",
+                "model": "Eero network",
+            },
+        }
+        if unit:
+            payload.update(
+                unit_of_measurement=unit,
+                device_class="data_rate",
+                suggested_display_precision=1,
+            )
+        if key.startswith("wan_"):
+            slug = re.sub(r"[^a-z0-9]+", "_", snapshot["name"].lower()).strip("_")
+            payload["default_entity_id"] = f"sensor.{slug}_{key.removesuffix('_mbps')}"
+        return payload
+
+    def _publish_discovery(
+        self, client: mqtt.Client, network_id: str, key: str, snapshot: dict
+    ) -> None:
+        """Retain discovery configuration when it changes or needs reannouncing."""
+        topic = self._discovery_topic(network_id, key)
+        encoded = json.dumps(self._discovery_payload(network_id, key, snapshot))
+        if self._announced.get(topic) != encoded:
+            info = client.publish(topic, encoded, qos=1, retain=True)
+            if info.rc == mqtt.MQTT_ERR_SUCCESS:
+                self._announced[topic] = encoded
+
     def _publish_snapshot(self) -> None:
+        """Publish discovery, fresh sensor states and overall availability for each network."""
         client = self._client
         if client is None:
             return
@@ -379,48 +456,9 @@ class MQTTService:
         for network_id, snapshot in self._snapshots.items():
             network_key = self._network_key(network_id)
             topic = f"{self.base_topic}/{network_key}"
-            for key, (name, icon, unit) in _SENSORS.items():
+            for key in _SENSORS:
                 if self.config.home_assistant_discovery:
-                    payload = {
-                        "name": name,
-                        "unique_id": f"eero_ui_{self.config.instance_id}_{network_key}_{key}",
-                        "state_topic": f"{topic}/{key}/state",
-                        "availability_topic": f"{self.base_topic}/availability",
-                        "expire_after": (
-                            WAN_EXPIRY if key.startswith("wan_") else self._expiry
-                        ),
-                        "state_class": "measurement",
-                        "icon": icon,
-                        "device": {
-                            "identifiers": [
-                                f"eero_ui_{self.config.instance_id}_{network_key}"
-                            ],
-                            "name": snapshot["name"],
-                            "manufacturer": "eero",
-                            "model": "Eero network",
-                        },
-                    }
-                    if unit:
-                        payload.update(
-                            unit_of_measurement=unit,
-                            device_class="data_rate",
-                            suggested_display_precision=1,
-                        )
-                    if key.startswith("wan_"):
-                        slug = re.sub(
-                            r"[^a-z0-9]+", "_", snapshot["name"].lower()
-                        ).strip("_")
-                        payload["default_entity_id"] = (
-                            f"sensor.{slug}_{key.removesuffix('_mbps')}"
-                        )
-                    discovery_topic = self._discovery_topic(network_id, key)
-                    encoded = json.dumps(payload)
-                    if self._announced.get(discovery_topic) != encoded:
-                        info = client.publish(
-                            discovery_topic, encoded, qos=1, retain=True
-                        )
-                        if info.rc == mqtt.MQTT_ERR_SUCCESS:
-                            self._announced[discovery_topic] = encoded
+                    self._publish_discovery(client, network_id, key, snapshot)
                 value = snapshot["values"].get(key) if fresh else None
                 if key.startswith("wan_") and not (
                     0 <= time.time() - snapshot.get("wan_observed_at", 0) < WAN_EXPIRY

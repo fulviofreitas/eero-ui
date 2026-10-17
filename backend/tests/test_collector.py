@@ -151,9 +151,12 @@ def samples_by_name(samples: list[Sample], name: str) -> list[Sample]:
 
 
 class TestMQTTPublishing:
+    """Verify MQTT forwarding and isolation from expected storage or broker failures."""
+
     async def test_publishes_normalized_samples_even_if_metrics_store_fails(
         self, autospec_client, fake_victoria
     ):
+        """Verify normalized samples reach MQTT even when the metrics store is unavailable."""
         autospec_client.get_devices.return_value = make_raw_response(
             [make_device(wireless=False)]
         )
@@ -164,6 +167,7 @@ class TestMQTTPublishing:
         publish = Mock()
 
         async def get_client():
+            """Yield the autospecced API client through the production dependency interface."""
             yield autospec_client
 
         collector = MetricsCollector(get_client, fake_victoria, publish_samples=publish)
@@ -180,23 +184,30 @@ class TestMQTTPublishing:
             network_id="net-1", limit=1
         )
 
+    @pytest.mark.parametrize("error", [OSError, RuntimeError, ValueError])
     async def test_mqtt_failure_does_not_stop_collection(
-        self, autospec_client, fake_victoria
+        self, autospec_client, fake_victoria, error
     ):
+        """Verify expected broker publishing errors leave the collected batch intact."""
+
         async def get_client():
+            """Supply the mocked API client for a cycle with a failing MQTT publisher."""
             yield autospec_client
 
         collector = MetricsCollector(
-            get_client, fake_victoria, publish_samples=Mock(side_effect=RuntimeError)
+            get_client, fake_victoria, publish_samples=Mock(side_effect=error)
         )
         await collector.run_cycle()
         assert len(fake_victoria.written_batches) == 1
 
 
 class TestWANCollection:
+    """Verify live-report throttling, cached totals and unknown-data handling."""
+
     async def test_reuses_one_device_read_throttles_reports_and_clears_failed_totals(
         self, autospec_client, fake_victoria, monkeypatch
     ):
+        """Check report throttling, timestamp reuse and removal of totals after a failure."""
         prepare = AsyncMock()
         monkeypatch.setattr("app.services.collector.prepare_wan_sample", prepare)
         clock = [100.0]
@@ -243,6 +254,7 @@ class TestWANCollection:
     async def test_bridge_mode_and_disabled_mqtt_do_not_request_reports(
         self, autospec_client, fake_victoria, monkeypatch, mode, enabled
     ):
+        """Verify bridge mode and disabled MQTT avoid live-report requests."""
         prepare = AsyncMock()
         monkeypatch.setattr("app.services.collector.prepare_wan_sample", prepare)
         network = make_network()
@@ -260,6 +272,7 @@ class TestWANCollection:
     async def test_missing_or_incomplete_device_usage_does_not_emit_zero(
         self, autospec_client, fake_victoria, monkeypatch, payload
     ):
+        """Keep absent or incomplete device usage unknown instead of inventing idle rates."""
         monkeypatch.setattr("app.services.collector.prepare_wan_sample", AsyncMock())
         autospec_client.get_devices.return_value = payload
         collector = make_collector(autospec_client, fake_victoria)
