@@ -1,0 +1,12 @@
+# Append to a Home Assistant view's cards list.
+# Replace sensor.home_* with your discovered network entity IDs.
+- type: glance
+  title: WAN throughput
+  columns: 2
+  entities:
+    - entity: sensor.home_wan_download
+      name: Download
+      icon: mdi:download-network
+    - entity: sensor.home_wan_upload
+      name: Upload
+      icon: mdi:upload-network

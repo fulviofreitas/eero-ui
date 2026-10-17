@@ -35,6 +35,9 @@ class Settings(BaseModel):
     # Metrics collector
     collection_interval: int = 60  # seconds
 
+    # Optional path for persisted MQTT broker settings.
+    mqtt_file: str | None = None
+
     # eero-api SDK tuning (phase-6.0-revamp.md § 3.1, decision 6)
     sdk_legacy_cookie: bool = False
     sdk_get_retries: int = 1
@@ -102,6 +105,7 @@ def get_settings() -> Settings:
         collection_interval=max(
             10, int(os.environ.get("EERO_DASHBOARD_COLLECTION_INTERVAL", "60"))
         ),
+        mqtt_file=os.environ.get("EERO_DASHBOARD_MQTT_FILE") or None,
         sdk_legacy_cookie=os.environ.get(
             "EERO_DASHBOARD_SDK_LEGACY_COOKIE", "false"
         ).lower()

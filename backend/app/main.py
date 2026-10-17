@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import math
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
@@ -22,6 +22,8 @@ from eero.exceptions import (
     EeroValidationException,
 )
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,8 +39,18 @@ from .deps import (
     get_eero_client,
     shutdown_client,
 )
-from .routes import account, auth, devices, eeros, metrics, networks, profiles
+from .routes import (
+    account,
+    auth,
+    devices,
+    eeros,
+    metrics,
+    mqtt,
+    networks,
+    profiles,
+)
 from .services.collector import MetricsCollector
+from .services.mqtt import MQTTService
 from .services.victoria import victoria_client
 
 
@@ -83,32 +95,63 @@ _DEFAULT_RETRY_AFTER_SECONDS = 60
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager.
-
-    Starts the metrics collector task (see ``services/collector.py``,
-    phase-6.0-revamp.md § 2.2) after the app is up, and tears it down
-    before the shared EeroClient and VictoriaMetrics client are closed.
-    """
+    """Start MQTT and metrics collection; unwind safely in reverse order."""
     _LOGGER.info("Starting Eero Dashboard Backend")
     _remove_legacy_exporter_session_file()
-    collector = MetricsCollector(
-        get_eero_client,
-        victoria_client,
-        interval_seconds=settings.collection_interval,
-    )
-    app.state.metrics_collector = collector
-    collector_task = asyncio.create_task(collector.run_forever())
+    async with AsyncExitStack() as stack:
+        stack.push_async_callback(victoria_client.aclose)
+        stack.push_async_callback(shutdown_client)
+        mqtt_path = (
+            Path(settings.mqtt_file)
+            if settings.mqtt_file
+            else Path(settings.cookie_file).parent / "mqtt.json"
+        )
+        app.state.mqtt_service = None
+        try:
+            mqtt_service = await asyncio.to_thread(
+                MQTTService, mqtt_path, settings.collection_interval
+            )
+            app.state.mqtt_service = mqtt_service
+            await asyncio.to_thread(mqtt_service.start)
+        except (OSError, ValueError):
+            if app.state.mqtt_service:
+                await app.state.mqtt_service.close()
+                app.state.mqtt_service = None
+            _LOGGER.warning("MQTT settings could not be loaded; MQTT is disabled")
 
-    yield
+        async def close_mqtt():
+            """Close the publisher after collection stops and clear its app-state reference."""
+            if app.state.mqtt_service:
+                await app.state.mqtt_service.close()
+                app.state.mqtt_service = None
 
-    _LOGGER.info("Shutting down Eero Dashboard Backend")
-    collector_task.cancel()
-    try:
-        await collector_task
-    except asyncio.CancelledError:
-        pass
-    await shutdown_client()
-    await victoria_client.aclose()
+        stack.push_async_callback(close_mqtt)
+        collector = MetricsCollector(
+            get_eero_client,
+            victoria_client,
+            interval_seconds=settings.collection_interval,
+            publish_samples=(
+                app.state.mqtt_service.publish_samples
+                if app.state.mqtt_service
+                else None
+            ),
+            wan_enabled=lambda: bool(
+                app.state.mqtt_service and app.state.mqtt_service.config.enabled
+            ),
+        )
+        app.state.metrics_collector = collector
+        collector_task = asyncio.create_task(collector.run_forever())
+
+        async def close_collector():
+            """Cancel and await collection before closing MQTT or shared API clients."""
+            collector_task.cancel()
+            try:
+                await collector_task
+            except asyncio.CancelledError:
+                pass
+
+        stack.push_async_callback(close_collector)
+        yield
 
 
 # Create FastAPI application
@@ -172,6 +215,25 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=_csrf_guard_middleware)
 
 
 # Global exception handler
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(
+    request: Request, exc: RequestValidationError
+):
+    """Omit secret-bearing inputs from MQTT errors; preserve other API validation."""
+    if request.url.path == "/api/mqtt":
+        # FastAPI normally echoes invalid inputs, which can contain secrets.
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": [
+                    {key: error[key] for key in ("loc", "msg", "type") if key in error}
+                    for error in exc.errors()
+                ]
+            },
+        )
+    return await request_validation_exception_handler(request, exc)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Handle uncaught exceptions."""
@@ -413,6 +475,7 @@ app.include_router(eeros.router, prefix="/api/eeros", tags=["Eeros"])
 app.include_router(profiles.router, prefix="/api/profiles", tags=["Profiles"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 app.include_router(account.router, prefix="/api/account", tags=["Account"])
+app.include_router(mqtt.router, prefix="/api/mqtt", tags=["MQTT"])
 
 
 # Health check

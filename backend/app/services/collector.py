@@ -59,6 +59,9 @@ from ..transformers import (
     normalize_speed_test,
 )
 from .victoria import Sample, VictoriaMetricsClient, VictoriaWriteError
+from .wan import EXPIRY_SECONDS as WAN_EXPIRY
+from .wan import MIN_INTERVAL_SECONDS as WAN_INTERVAL
+from .wan import aggregate_wan_usage, prepare_wan_sample
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,6 +150,8 @@ class MetricsCollector:
         get_eero_client: Callable[[], AsyncGenerator[EeroClient, None]],
         victoria_client: VictoriaMetricsClient,
         interval_seconds: int = 60,
+        publish_samples: Callable[[list[Sample]], None] | None = None,
+        wan_enabled: Callable[[], bool] | None = None,
     ) -> None:
         """Initialize the collector.
 
@@ -165,6 +170,10 @@ class MetricsCollector:
         self._rate_limit_backoff = 0.0
         # Set by the first rate-limited fetch; skips the rest of the cycle.
         self._rate_limited_this_cycle = False
+        self._publish_samples = publish_samples
+        self._wan_enabled = wan_enabled
+        self._wan_last_attempt: dict[str, float] = {}
+        self._wan_readings: dict[str, tuple[float, tuple[float, float], int]] = {}
 
     @property
     def error_counts(self) -> dict[str, int]:
@@ -335,6 +344,12 @@ class MetricsCollector:
             self._count_error("write")
             _LOGGER.warning("Metrics collector failed to write to VictoriaMetrics")
 
+        if self._publish_samples is not None:
+            try:
+                self._publish_samples(samples)
+            except (OSError, RuntimeError, ValueError):
+                _LOGGER.warning("MQTT could not publish collected metrics")
+
     async def _collect_all_networks(
         self, client: EeroClient, samples: list[Sample], now_ms: int
     ) -> bool:
@@ -393,7 +408,16 @@ class MetricsCollector:
         network_ok = True
 
         network_ok &= await self._collect_devices(
-            client, network_id, _label(network.get("name")), samples, now_ms
+            client,
+            network_id,
+            _label(network.get("name")),
+            samples,
+            now_ms,
+            collect_wan=bool(
+                self._wan_enabled
+                and self._wan_enabled()
+                and network.get("connection_mode") != "BRIDGE"
+            ),
         )
         network_ok &= await self._collect_eeros(client, network_id, samples, now_ms)
         network_ok &= await self._collect_speed_tests(
@@ -421,19 +445,61 @@ class MetricsCollector:
         network_name: str,
         samples: list[Sample],
         now_ms: int,
+        collect_wan: bool = False,
     ) -> bool:
         """Collect device-scoped metrics for one network, plus its client count.
 
         Returns:
             True on success, False if the underlying fetch failed.
         """
-        raw_devices, ok = await self._safe_fetch(
-            client.get_devices(network_id=network_id), "list devices"
+        wan_ready = False
+        if not collect_wan:
+            self._wan_readings.pop(network_id, None)
+        elif (
+            time.monotonic() - self._wan_last_attempt.get(network_id, float("-inf"))
+            >= WAN_INTERVAL
+        ):
+            self._wan_last_attempt[network_id] = time.monotonic()
+            self._wan_readings.pop(network_id, None)
+            _, wan_ready = await self._safe_fetch(
+                prepare_wan_sample(client, network_id), "request live WAN usage"
+            )
+
+        devices_call = (
+            client.get_devices(network_id=network_id, refresh_cache=True)
+            if wan_ready
+            else client.get_devices(network_id=network_id)
         )
+        raw_devices, ok = await self._safe_fetch(devices_call, "list devices")
         if not ok:
+            self._wan_readings.pop(network_id, None)
             return False
 
         raw_device_list = extract_list(raw_devices, "devices")
+        valid_list = isinstance(raw_devices, list) or (
+            isinstance(raw_devices, dict) and isinstance(raw_devices.get("data"), list)
+        )
+        if wan_ready and valid_list:
+            rates = aggregate_wan_usage(raw_device_list)
+            if rates is not None:
+                self._wan_readings[network_id] = (
+                    time.monotonic(),
+                    rates,
+                    int(time.time() * 1000),
+                )
+        reading = self._wan_readings.get(network_id)
+        if collect_wan and reading and time.monotonic() - reading[0] < WAN_EXPIRY:
+            for direction, value in zip(
+                ("download", "upload"), reading[1], strict=True
+            ):
+                samples.append(
+                    Sample(
+                        f"eero_network_wan_{direction}_mbps",
+                        value,
+                        reading[2],
+                        labels={"network_id": network_id, "name": network_name},
+                    )
+                )
         connected_count = 0
 
         for raw_device in raw_device_list:
