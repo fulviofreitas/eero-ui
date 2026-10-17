@@ -27,6 +27,15 @@ Conventions that apply to every route below:
 | `POST` | `/api/auth/verify` | no | 5/minute | `VerifyRequest {code}` | `VerifyResponse {success, message, preferred_network_id}` | `401` wrong code |
 | `POST` | `/api/auth/logout` | no | — | — | `{success, message}` | clears local state even if the cloud call fails |
 
+## MQTT (`/api/mqtt`)
+
+| Method | Endpoint | Request | Response | Notes |
+|---|---|---|---|---|
+| `GET` | `/api/mqtt` | — | `MQTTStatus` | Authenticated settings and connection status; never includes the password |
+| `PUT` | `/api/mqtt` | `{enabled, broker_address, username, password, home_assistant_discovery, discovery_prefix}` | `MQTTStatus` | Authenticated and CSRF protected; saves and reconnects without restarting the app |
+
+`MQTTStatus` includes all settings except `password`, plus `password_set`, `connection_status` (`disabled`, `connecting`, `connected`, `error`) and an optional `message`. In an update, `password: null` (or omitting it) preserves the saved secret; `password: ""` removes it. Enabled MQTT requires a valid broker address. Invalid settings return `422` without echoing inputs; unreadable or unwritable settings return a sanitized `503`. These local settings do not require the experimental eero write gate. See [[Configuration#mqtt-and-home-assistant]].
+
 ## 🌐 Networks (`/api/networks`)
 
 ### Reads

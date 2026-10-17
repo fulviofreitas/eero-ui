@@ -8,6 +8,22 @@
 // Authentication
 // ============================================
 
+export interface MQTTSettingsUpdate {
+	enabled: boolean;
+	broker_address: string;
+	username: string;
+	/** null preserves the saved password; an empty string removes it. */
+	password: string | null;
+	home_assistant_discovery: boolean;
+	discovery_prefix: string;
+}
+
+export interface MQTTStatus extends Omit<MQTTSettingsUpdate, 'password'> {
+	password_set: boolean;
+	connection_status: 'disabled' | 'connecting' | 'connected' | 'error';
+	message: string | null;
+}
+
 export interface AuthStatus {
 	authenticated: boolean;
 	/**

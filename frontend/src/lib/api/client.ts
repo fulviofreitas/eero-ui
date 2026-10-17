@@ -265,6 +265,15 @@ async function fetchWithHandling<T>(path: string, config: RequestConfig = {}): P
 // ============================================
 
 export const api = {
+	mqtt: {
+		get: () => fetchWithHandling<import('./types').MQTTStatus>('/mqtt', { retries: 0 }),
+		update: (settings: import('./types').MQTTSettingsUpdate) =>
+			fetchWithHandling<import('./types').MQTTStatus>('/mqtt', {
+				method: 'PUT',
+				body: settings,
+				retries: 0
+			})
+	},
 	// Health
 	health: () => fetchWithHandling<import('./types').HealthStatus>('/health'),
 

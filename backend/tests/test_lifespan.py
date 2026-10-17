@@ -16,6 +16,9 @@ real, live task to cancel) and patched ``shutdown_client`` /
 """
 
 import asyncio
+from types import SimpleNamespace
+
+import pytest
 
 from app import main as main_module
 
@@ -66,6 +69,88 @@ async def _noop_async(*args, **kwargs) -> None:
     """A do-nothing async replacement for shutdown_client/aclose in tests
     that don't care about call ordering."""
     return
+
+
+@pytest.mark.parametrize("body_fails", [False, True])
+async def test_mqtt_closes_after_collection_and_before_shared_clients(
+    monkeypatch, tmp_path, body_fails
+):
+    events = []
+    collector = FakeCollector()
+    collector.call_order = events
+    mqtt_path = tmp_path / "custom-mqtt.json"
+    monkeypatch.setattr(main_module.settings, "mqtt_file", str(mqtt_path))
+
+    async def close_mqtt():
+        events.append("mqtt_closed")
+
+    service = SimpleNamespace(
+        start=lambda: events.append("mqtt_started"),
+        publish_samples=lambda samples: None,
+        config=SimpleNamespace(enabled=True),
+        close=close_mqtt,
+    )
+
+    def make_mqtt(path, interval):
+        assert path == mqtt_path
+        assert interval == main_module.settings.collection_interval
+        return service
+
+    def make_collector(*args, **kwargs):
+        assert kwargs["publish_samples"] is service.publish_samples
+        assert kwargs["wan_enabled"]()
+        return collector
+
+    async def close_client():
+        events.append("client_closed")
+
+    monkeypatch.setattr(main_module, "MQTTService", make_mqtt)
+    monkeypatch.setattr(main_module, "MetricsCollector", make_collector)
+    monkeypatch.setattr(main_module, "shutdown_client", close_client)
+    monkeypatch.setattr(main_module.victoria_client, "aclose", _noop_async)
+
+    async def run_lifespan():
+        async with main_module.lifespan(main_module.app):
+            await asyncio.wait_for(collector.started.wait(), timeout=1)
+            assert main_module.app.state.mqtt_service is service
+            if body_fails:
+                raise RuntimeError("lifespan interrupted")
+
+    if body_fails:
+        with pytest.raises(RuntimeError, match="lifespan interrupted"):
+            await run_lifespan()
+    else:
+        await run_lifespan()
+    assert events == [
+        "mqtt_started",
+        "collector_task_cancelled",
+        "mqtt_closed",
+        "client_closed",
+    ]
+    assert main_module.app.state.mqtt_service is None
+
+
+async def test_invalid_mqtt_settings_allow_normal_collection(monkeypatch, caplog):
+    collector = FakeCollector()
+
+    def invalid_settings(*args):
+        raise ValueError("private-password")
+
+    def make_collector(*args, **kwargs):
+        assert kwargs["publish_samples"] is None
+        assert not kwargs["wan_enabled"]()
+        return collector
+
+    monkeypatch.setattr(main_module, "MQTTService", invalid_settings)
+    monkeypatch.setattr(main_module, "MetricsCollector", make_collector)
+    monkeypatch.setattr(main_module, "shutdown_client", _noop_async)
+    monkeypatch.setattr(main_module.victoria_client, "aclose", _noop_async)
+    async with main_module.lifespan(main_module.app):
+        await asyncio.wait_for(collector.started.wait(), timeout=1)
+        assert main_module.app.state.mqtt_service is None
+    assert collector.cancelled
+    assert "MQTT settings could not be loaded" in caplog.text
+    assert "private-password" not in caplog.text
 
 
 class TestLifespanShutdownOrdering:

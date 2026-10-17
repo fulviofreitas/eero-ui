@@ -52,6 +52,8 @@ Screenshots use **synthetic data only** — a small fictional mesh ("Maple Stree
 
 Writes that have not been verified end-to-end against a live eero network are hidden behind `EERO_DASHBOARD_EXPERIMENTAL_WRITES`; account e-mail and phone changes additionally need `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` — see the [Roadmap](../../wiki/Roadmap) for exactly which writes are gated and [Configuration → Write gates](../../wiki/Configuration#write-gates) for the flags.
 
+The **MQTT** section connects to your broker and supports Home Assistant auto discovery for wired/wireless client counts, the latest download/upload speed test, and live WAN download/upload throughput. See [MQTT setup](wiki/Configuration.md#mqtt-and-home-assistant).
+
 **Keyboard shortcuts** — `⌘K` / `Ctrl+K` opens the command palette, `?` shows the shortcuts help, `Esc` closes the open dialog or menu. Shortcuts never fire while you are typing in a field. Device filters (`q`, `status`, `conn`, `band`, `sort`, `dir`) are encoded in the URL, so a filtered view survives a refresh and can be shared.
 
 **Runtime dependencies added in 6.0** — exactly one: [`@tanstack/svelte-virtual`](https://github.com/TanStack/virtual) (MIT), which virtualizes the device table so a few hundred rows stay smooth. The UI fonts (Inter and JetBrains Mono, variable WOFF2) are self-hosted from `frontend/static/fonts/` under the SIL Open Font License; the licence text ships in `static/fonts/OFL.txt`. Nothing is fetched from a third party at runtime.

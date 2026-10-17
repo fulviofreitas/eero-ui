@@ -174,7 +174,8 @@
 		{ path: '/eeros', label: 'Eeros', icon: 'eeros' },
 		{ path: '/profiles', label: 'Profiles', icon: 'profiles' },
 		{ path: '/topology', label: 'Topology', icon: 'topology' },
-		{ path: '/account', label: 'Account', icon: 'person' }
+		{ path: '/account', label: 'Account', icon: 'person' },
+		{ path: '/mqtt', label: 'MQTT', icon: 'plug' }
 	];
 
 	// Dynamic nav items including network link
@@ -186,7 +187,8 @@
 				: null,
 			...baseNavItems.slice(1, 4), // Devices, Eeros, Profiles
 			{ path: '/topology', label: 'Topology', icon: 'topology' as IconName }, // Topology at the end
-			baseNavItems[5] // Account
+			baseNavItems[5], // Account
+			baseNavItems[6] // MQTT
 		].filter(Boolean) as { path: string; label: string; icon: IconName }[]
 	);
 
