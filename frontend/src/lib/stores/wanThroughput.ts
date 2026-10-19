@@ -2,7 +2,7 @@
  * WAN Throughput Store (eero-ui#458: `GET /metrics/network/wan`)
  *
  * Single per-network store for the Diagnostics card, modelled on `roaming.ts`.
- * A monotonically increasing request token makes only the most recently
+ * A monotonically increasing request sequence number makes only the most recently
  * issued request's response win, so a slow older range never overwrites a
  * newer one. A network change clears `data` immediately; a same-network
  * range change keeps the stale data in place while loading.
@@ -47,13 +47,13 @@ export const WAN_RANGE_OPTIONS: { value: WanThroughputRange; label: string }[] =
 
 function createWanThroughputStore() {
 	const { subscribe, set, update } = writable<WanThroughputState>(initialState);
-	let requestToken = 0;
+	let latestRequestSeq = 0;
 
 	const storeApi = {
 		subscribe,
 
 		async fetch(networkId: string, opts: WanThroughputFetchOptions = {}): Promise<void> {
-			const token = ++requestToken;
+			const requestSeq = ++latestRequestSeq;
 			const current = get({ subscribe });
 			const range = opts.range ?? current.range;
 			const isNetworkChange = networkId !== current.networkId;
@@ -69,7 +69,7 @@ function createWanThroughputStore() {
 
 			try {
 				const result = await api.metrics.wanThroughput(networkId, range);
-				if (token !== requestToken) return;
+				if (requestSeq !== latestRequestSeq) return;
 				update((s) => ({
 					...s,
 					enabled: result.enabled,
@@ -78,7 +78,7 @@ function createWanThroughputStore() {
 					lastUpdated: new Date()
 				}));
 			} catch (error) {
-				if (token !== requestToken) return;
+				if (requestSeq !== latestRequestSeq) return;
 				update((s) => ({ ...s, loading: false, error: messageFor(error) }));
 			}
 		},
@@ -94,7 +94,7 @@ function createWanThroughputStore() {
 		},
 
 		clear(): void {
-			requestToken += 1;
+			latestRequestSeq += 1;
 			set(initialState);
 		}
 	};
