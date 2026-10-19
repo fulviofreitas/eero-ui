@@ -7,6 +7,8 @@ relying on pydantic's own env-parsing (``Settings`` is a plain ``BaseModel``,
 not a ``BaseSettings``).
 """
 
+import pytest
+
 from app.config import get_settings
 
 
@@ -79,3 +81,37 @@ class TestSdkTuningEnvOverrides:
         settings = get_settings()
 
         assert settings.sdk_get_retries == 3
+
+
+class TestWanLiveUsageEnv:
+    """EERO_DASHBOARD_WAN_LIVE_USAGE: the second flag for live WAN bursts."""
+
+    def test_defaults_to_false(self, monkeypatch):
+        monkeypatch.setenv("EERO_DASHBOARD_SESSION_SECRET", "x" * 32)
+        monkeypatch.delenv("EERO_DASHBOARD_WAN_LIVE_USAGE", raising=False)
+
+        assert get_settings().wan_live_usage is False
+
+    @pytest.mark.parametrize("value", ["true", "TRUE", "True"])
+    def test_true_enables_it(self, monkeypatch, value):
+        monkeypatch.setenv("EERO_DASHBOARD_SESSION_SECRET", "x" * 32)
+        monkeypatch.setenv("EERO_DASHBOARD_WAN_LIVE_USAGE", value)
+
+        assert get_settings().wan_live_usage is True
+
+    @pytest.mark.parametrize("value", ["false", "1", "yes", ""])
+    def test_anything_else_stays_off(self, monkeypatch, value):
+        monkeypatch.setenv("EERO_DASHBOARD_SESSION_SECRET", "x" * 32)
+        monkeypatch.setenv("EERO_DASHBOARD_WAN_LIVE_USAGE", value)
+
+        assert get_settings().wan_live_usage is False
+
+    def test_experimental_writes_alone_does_not_enable_it(self, monkeypatch):
+        monkeypatch.setenv("EERO_DASHBOARD_SESSION_SECRET", "x" * 32)
+        monkeypatch.setenv("EERO_DASHBOARD_EXPERIMENTAL_WRITES", "true")
+        monkeypatch.delenv("EERO_DASHBOARD_WAN_LIVE_USAGE", raising=False)
+
+        settings = get_settings()
+
+        assert settings.experimental_writes is True
+        assert settings.wan_live_usage is False

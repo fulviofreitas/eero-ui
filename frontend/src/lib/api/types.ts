@@ -4,6 +4,8 @@
  * TypeScript interfaces matching the FastAPI backend models.
  */
 
+import type { MetricsResponse, TimeSeriesPoint } from './metrics';
+
 // ============================================
 // Authentication
 // ============================================
@@ -1682,4 +1684,27 @@ export interface RoamingResponse {
 	events: RoamingEvent[];
 	/** Up to 5, by move count. */
 	top_roamers: RoamingTopRoamer[];
+}
+
+// ============================================
+// WAN throughput (eero-ui#458): GET /metrics/network/wan
+// ============================================
+
+export type WanThroughputRange = '1h' | '6h' | '24h' | '7d';
+
+/** Raw backend response. Both series are `null` when the feature is disabled server-side. */
+export interface WanThroughputResponse {
+	enabled: boolean;
+	download: MetricsResponse | null;
+	upload: MetricsResponse | null;
+}
+
+/** Download/upload in Mbps; an absent series is `[]`, never zero-filled. */
+export interface WanThroughputSeries {
+	download: TimeSeriesPoint[];
+	upload: TimeSeriesPoint[];
+}
+
+export interface WanThroughputResult extends WanThroughputSeries {
+	enabled: boolean;
 }

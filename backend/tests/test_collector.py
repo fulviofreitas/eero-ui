@@ -7,6 +7,8 @@ failure, write failure, the tricky-label round trip, and the offline vs.
 absent device rules.
 """
 
+import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, create_autospec
 
 import pytest
@@ -18,8 +20,10 @@ from eero.exceptions import (
 )
 
 from app.routes import metrics as metrics_route
+from app.services import collector as collector_module
 from app.services.collector import MetricsCollector
 from app.services.victoria import Sample, VictoriaMetricsClient, VictoriaWriteError
+from app.services.wan import EXPIRY_SECONDS, SETTLE_SECONDS, WanTracker
 
 
 def make_raw_response(data, code: int = 200):
@@ -37,9 +41,11 @@ def _read_metrics_route_source() -> str:
         return f.read()
 
 
-def make_network(net_id="net-1", name="Home", last_reboot=None):
+def make_network(net_id="net-1", name="Home", last_reboot=None, mode=None):
     """Build a minimal raw network dict."""
     net: dict = {"url": f"/2.2/networks/{net_id}", "name": name}
+    if mode is not None:
+        net["connection"] = {"mode": mode}
     if last_reboot is not None:
         net["last_reboot"] = last_reboot
     return net
@@ -56,9 +62,10 @@ def make_device(
     signal=None,
     score_bars=None,
     source_location="Living Room",
+    usage=None,
 ):
     """Build a minimal raw device dict matching the eero API's shape."""
-    return {
+    device = {
         "url": f"/2.2/networks/net-1/devices/{dev_id}",
         "mac": mac,
         "nickname": name,
@@ -75,6 +82,9 @@ def make_device(
             "url": "/2.2/networks/net-1/eeros/eero-1",
         },
     }
+    if usage is not None:
+        device["usage"] = {"down_mbps": usage[0], "up_mbps": usage[1]}
+    return device
 
 
 def make_eero(
@@ -547,18 +557,21 @@ class TestPartialFailure:
     async def test_rate_limit_skips_the_rest_of_the_cycle(
         self, autospec_client, fake_victoria
     ):
-        autospec_client.get_devices = AsyncMock(
+        # Core reads (eeros, speed tests, DNS) run before the device read, so
+        # the first rate-limited fetch is get_eeros and the later ones skip.
+        autospec_client.get_eeros = AsyncMock(
             side_effect=EeroRateLimitException("slow down", retry_after=30.0)
         )
-        autospec_client.get_eeros = AsyncMock(
-            return_value=make_raw_response([make_eero()])
+        autospec_client.get_devices = AsyncMock(
+            return_value=make_raw_response([make_device()])
         )
         collector = make_collector(autospec_client, fake_victoria)
 
         await collector.run_cycle()
 
         # The coroutine is built but never awaited, so no request goes out.
-        autospec_client.get_eeros.assert_not_awaited()
+        autospec_client.get_devices.assert_not_awaited()
+        autospec_client.get_speed_tests.assert_not_awaited()
         written = fake_victoria.written_batches[0]
         errors = {
             s.labels["reason"]: s.value
@@ -568,9 +581,9 @@ class TestPartialFailure:
         assert sum(errors.values()) == 1.0
 
         # The next cycle starts clean and calls the cloud again.
-        autospec_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+        autospec_client.get_eeros = AsyncMock(return_value=make_raw_response([]))
         await collector.run_cycle()
-        autospec_client.get_eeros.assert_awaited()
+        autospec_client.get_devices.assert_awaited()
 
     async def test_rate_limit_backoff_is_capped(self, autospec_client, fake_victoria):
         autospec_client.get_devices = AsyncMock(
@@ -693,7 +706,12 @@ class TestMetricNamesAreSubsetOfPromQLLiterals:
 
         text = _read_metrics_route_source()
 
-        literals = set(re.findall(r"\beero_[a-z_]+\b", text))
+        # The flag-gated WAN gauges are not produced by a default cycle; their
+        # production is asserted in TestWanThroughput.
+        literals = set(re.findall(r"\beero_[a-z_]+\b", text)) - {
+            "eero_network_wan_download_mbps",
+            "eero_network_wan_upload_mbps",
+        }
 
         autospec_client.get_devices = AsyncMock(
             return_value=make_raw_response([make_device(signal=-50, score_bars=3)])
@@ -753,6 +771,12 @@ class TestMetricContractAllowlist:
 
     ALLOWLIST = CONTRACT_METRICS | ADDED_METRICS
 
+    # Live WAN throughput (issue #458): flag-gated, so absent from a default
+    # (flag-off) cycle and kept out of ALLOWLIST. Read back by metrics.py.
+    WAN_METRICS = frozenset(
+        {"eero_network_wan_download_mbps", "eero_network_wan_upload_mbps"}
+    )
+
     # Of the eight contract metrics, only these six are actually read back
     # by a surviving /api/metrics/* route today. The other two are written
     # for VictoriaMetrics history continuity (§ 2.3) but have no current
@@ -802,7 +826,8 @@ class TestMetricContractAllowlist:
         self, autospec_client, fake_victoria
     ):
         """The collector emits exactly the 14 allowlisted names -- no more,
-        no fewer -- on a fully successful cycle."""
+        no fewer -- on a fully successful flag-off cycle (the WAN gauges are
+        flag-gated and covered by TestWanThroughput)."""
         produced = await self._run_full_cycle(autospec_client, fake_victoria)
 
         assert produced == self.ALLOWLIST, (
@@ -826,9 +851,10 @@ class TestMetricContractAllowlist:
         text = _read_metrics_route_source()
         literals = set(re.findall(r"\beero_[a-z_]+\b", text))
 
-        assert literals == self.QUERIED_CONTRACT_METRICS, (
-            f"missing from metrics.py: {self.QUERIED_CONTRACT_METRICS - literals}; "
-            f"unexpected in metrics.py: {literals - self.QUERIED_CONTRACT_METRICS}"
+        expected = self.QUERIED_CONTRACT_METRICS | self.WAN_METRICS
+        assert literals == expected, (
+            f"missing from metrics.py: {expected - literals}; "
+            f"unexpected in metrics.py: {literals - expected}"
         )
 
     async def test_unqueried_contract_metrics_are_still_produced(
@@ -853,8 +879,423 @@ class TestMetricContractAllowlist:
         text = _read_metrics_route_source()
         literals = set(re.findall(r"\beero_[a-z_]+\b", text))
 
-        undocumented = literals - self.ALLOWLIST
+        undocumented = literals - self.ALLOWLIST - self.WAN_METRICS
         assert not undocumented, (
             "routes/metrics.py references metric names outside § 2.3's "
             f"contract/addition allowlist: {undocumented}"
         )
+
+
+WAN_NAMES = ("eero_network_wan_download_mbps", "eero_network_wan_upload_mbps")
+
+
+def make_wan_collector(client, victoria, enabled=True, clock=None) -> MetricsCollector:
+    """Build a collector with the WAN flag on (or off) and an optional fake clock."""
+
+    async def get_eero_client():
+        yield client
+
+    collector = MetricsCollector(
+        get_eero_client, victoria, interval_seconds=10, wan_enabled=lambda: enabled
+    )
+    if clock is not None:
+        collector._wan = WanTracker(clock=clock)
+    return collector
+
+
+class FakeClock:
+    """A settable monotonic clock for the WAN throttle and expiry."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def wan_client(autospec_client):
+    """An autospec client whose devices carry usage and whose burst succeeds."""
+    autospec_client.create_burst_reporter = AsyncMock(
+        return_value=make_raw_response({"next_burst": "later"})
+    )
+    autospec_client.get_devices = AsyncMock(
+        return_value=make_raw_response(
+            [
+                make_device("a", mac="aa:aa:aa:aa:aa:01", usage=(3.5, 0.5)),
+                make_device("b", mac="aa:aa:aa:aa:aa:02", usage=(6.5, 1.5)),
+                make_device("c", mac="aa:aa:aa:aa:aa:03", connected=False),
+            ]
+        )
+    )
+    return autospec_client
+
+
+@pytest.fixture
+def wan_sleep(monkeypatch):
+    """Replace the collector's asyncio.sleep so the settle wait is instant."""
+    sleep = AsyncMock()
+    monkeypatch.setattr("app.services.collector.asyncio.sleep", sleep)
+    return sleep
+
+
+def error_counts(batch) -> dict[str, float]:
+    """The eero_collector_errors_total samples of one batch, keyed by reason."""
+    return {
+        s.labels["reason"]: s.value
+        for s in samples_by_name(batch, "eero_collector_errors_total")
+    }
+
+
+class TestWanThroughput:
+    """Live WAN throughput: flag-gated, burst-then-sum, absent when unknown."""
+
+    @pytest.mark.parametrize("enabled", [None, False])
+    async def test_flag_off_never_bursts_and_reads_devices_plainly(
+        self, wan_client, fake_victoria, wan_sleep, enabled
+    ):
+        if enabled is None:
+            collector = make_collector(wan_client, fake_victoria)
+        else:
+            collector = make_wan_collector(wan_client, fake_victoria, enabled=enabled)
+
+        await collector.run_cycle()
+
+        wan_client.create_burst_reporter.assert_not_called()
+        wan_client.get_devices.assert_awaited_once_with(network_id="net-1")
+        wan_sleep.assert_not_awaited()
+        written = fake_victoria.written_batches[0]
+        for name in WAN_NAMES:
+            assert samples_by_name(written, name) == []
+
+    async def test_flag_on_bursts_each_network_once_and_settles_once(
+        self, wan_client, fake_victoria, wan_sleep, monkeypatch
+    ):
+        wan_client.get_networks = AsyncMock(
+            return_value=make_raw_response(
+                [make_network("net-1", "Home"), make_network("net-2", "Cabin")]
+            )
+        )
+        ticks = iter(range(1, 100))
+        monkeypatch.setattr(
+            collector_module,
+            "time",
+            SimpleNamespace(
+                monotonic=time.monotonic, time=lambda: 1000.0 * next(ticks)
+            ),
+        )
+        collector = make_wan_collector(wan_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        assert [c.args for c in wan_client.create_burst_reporter.await_args_list] == [
+            ("net-1",),
+            ("net-2",),
+        ]
+        assert sorted(
+            c.kwargs["network_id"] for c in wan_client.get_devices.await_args_list
+        ) == ["net-1", "net-2"]
+        for call in wan_client.get_devices.await_args_list:
+            assert call.kwargs["refresh_cache"] is True
+        wan_sleep.assert_awaited_once_with(SETTLE_SECONDS)
+
+        written = fake_victoria.written_batches[0]
+        cycle_ts = samples_by_name(written, "eero_up")[0].timestamp_ms
+        for name, expected in zip(WAN_NAMES, (10.0, 2.0), strict=True):
+            found = samples_by_name(written, name)
+            assert sorted(
+                (s.labels["network_id"], s.labels["name"]) for s in found
+            ) == [
+                ("net-1", "Home"),
+                ("net-2", "Cabin"),
+            ]
+            for sample in found:
+                assert set(sample.labels) == {"network_id", "name"}
+                assert sample.value == expected
+                # The device read's own timestamp, not the cycle's.
+                assert sample.timestamp_ms != cycle_ts
+
+    async def test_cycle_orders_core_reads_then_bursts_then_devices(
+        self, wan_client, fake_victoria, monkeypatch
+    ):
+        order: list[str] = []
+
+        def record(name, mock):
+            result = mock.return_value
+
+            async def _call(*args, **kwargs):
+                order.append(name)
+                return result
+
+            mock.side_effect = _call
+
+        record("eeros", wan_client.get_eeros)
+        record("speed", wan_client.get_speed_tests)
+        record("dns", wan_client.get_dns_settings)
+        record("burst", wan_client.create_burst_reporter)
+        record("devices", wan_client.get_devices)
+
+        async def fake_sleep(_seconds):
+            order.append("sleep")
+
+        monkeypatch.setattr("app.services.collector.asyncio.sleep", fake_sleep)
+        wan_client.get_devices.return_value = make_raw_response(
+            [make_device(usage=(1.0, 1.0))]
+        )
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        assert order == ["eeros", "speed", "dns", "burst", "sleep", "devices"]
+
+    async def test_bridge_mode_is_skipped_but_unknown_mode_is_eligible(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.get_networks = AsyncMock(
+            return_value=make_raw_response(
+                [
+                    make_network("net-1", "Bridged", mode="bridge"),
+                    make_network("net-2", "Unknown"),
+                    make_network("net-3", "Nat", mode="nat"),
+                ]
+            )
+        )
+        collector = make_wan_collector(wan_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        assert [c.args for c in wan_client.create_burst_reporter.await_args_list] == [
+            ("net-2",),
+            ("net-3",),
+        ]
+        written = fake_victoria.written_batches[0]
+        wan_networks = {
+            s.labels["network_id"]
+            for name in WAN_NAMES
+            for s in samples_by_name(written, name)
+        }
+        assert wan_networks == {"net-2", "net-3"}
+        bridged = [
+            c
+            for c in wan_client.get_devices.await_args_list
+            if c.kwargs["network_id"] == "net-1"
+        ]
+        assert [c.kwargs for c in bridged] == [{"network_id": "net-1"}]
+
+    async def test_one_burst_per_minute_per_network(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        clock = FakeClock()
+        collector = make_wan_collector(wan_client, fake_victoria, clock=clock)
+
+        await collector.run_cycle()
+        assert wan_client.create_burst_reporter.await_count == 1
+
+        # 10 s later: throttled. Devices are read plainly and the same point
+        # is re-emitted rather than a fake fresh one.
+        clock.now += 10
+        await collector.run_cycle()
+        assert wan_client.create_burst_reporter.await_count == 1
+        assert "refresh_cache" not in wan_client.get_devices.await_args.kwargs
+        first, second = (
+            samples_by_name(batch, WAN_NAMES[0])[0]
+            for batch in fake_victoria.written_batches
+        )
+        assert (second.value, second.timestamp_ms) == (first.value, first.timestamp_ms)
+
+        # 60 s after the first burst: due again.
+        clock.now += 50
+        await collector.run_cycle()
+        assert wan_client.create_burst_reporter.await_count == 2
+        assert wan_sleep.await_count == 2
+
+    async def test_unknown_total_emits_no_sample(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.get_devices = AsyncMock(
+            return_value=make_raw_response(
+                [
+                    make_device("a", usage=(1.0, 1.0)),
+                    make_device("b", mac="aa:aa:aa:aa:aa:02"),
+                ]  # b: no usage
+            )
+        )
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        for name in WAN_NAMES:
+            assert samples_by_name(written, name) == []
+        # Core device metrics are unaffected.
+        assert samples_by_name(written, "eero_network_clients_count")
+
+    async def test_no_connected_devices_is_a_known_zero(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.get_devices = AsyncMock(return_value=make_raw_response([]))
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        assert [
+            s.value for name in WAN_NAMES for s in samples_by_name(written, name)
+        ] == [
+            0.0,
+            0.0,
+        ]
+
+    async def test_malformed_device_payload_is_unknown_not_zero(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.get_devices = AsyncMock(return_value=make_raw_response("oops"))
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        for name in WAN_NAMES:
+            assert samples_by_name(written, name) == []
+
+    async def test_reading_older_than_expiry_is_not_emitted(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        clock = FakeClock()
+        collector = make_wan_collector(wan_client, fake_victoria, clock=clock)
+        await collector.run_cycle()
+        assert samples_by_name(fake_victoria.written_batches[0], WAN_NAMES[0])
+
+        # Past the expiry the next burst is due; it fails, so nothing fresh.
+        wan_client.create_burst_reporter = AsyncMock(
+            side_effect=EeroAPIException(500, "boom")
+        )
+        clock.now += EXPIRY_SECONDS + 1
+        await collector.run_cycle()
+
+        for name in WAN_NAMES:
+            assert samples_by_name(fake_victoria.written_batches[1], name) == []
+
+    async def test_burst_failure_is_counted_but_never_fails_the_cycle(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.create_burst_reporter = AsyncMock(
+            side_effect=EeroAPIException(500, "boom")
+        )
+        wan_client.get_eeros = AsyncMock(return_value=make_raw_response([make_eero()]))
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        assert error_counts(written)["api"] == 1.0
+        assert samples_by_name(written, "eero_up")[0].value == 1.0
+        for name in WAN_NAMES:
+            assert samples_by_name(written, name) == []
+        assert samples_by_name(written, "eero_network_clients_count")
+        assert samples_by_name(written, "eero_eero_client_count")
+        wan_sleep.assert_not_awaited()
+        wan_client.get_devices.assert_awaited_once_with(network_id="net-1")
+
+    async def test_failed_burst_is_throttled_like_a_successful_one(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.create_burst_reporter = AsyncMock(
+            side_effect=EeroAPIException(500, "boom")
+        )
+        clock = FakeClock()
+        collector = make_wan_collector(wan_client, fake_victoria, clock=clock)
+
+        await collector.run_cycle()
+        clock.now += 10
+        await collector.run_cycle()
+
+        assert wan_client.create_burst_reporter.await_count == 1
+
+    async def test_burst_rate_limit_is_counted_and_honours_retry_after(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.create_burst_reporter = AsyncMock(
+            side_effect=EeroRateLimitException("slow down", retry_after=45.0)
+        )
+        collector = make_wan_collector(wan_client, fake_victoria)
+
+        await collector.run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        assert error_counts(written)["rate_limit"] == 1.0
+        assert collector.next_delay() == 45.0
+        for name in WAN_NAMES:
+            assert samples_by_name(written, name) == []
+
+    async def test_a_failing_network_does_not_block_the_others_burst(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        wan_client.get_networks = AsyncMock(
+            return_value=make_raw_response(
+                [make_network("net-1", "Home"), make_network("net-2", "Cabin")]
+            )
+        )
+
+        async def burst(network_id):
+            if network_id == "net-1":
+                raise EeroAPIException(500, "boom")
+            return make_raw_response({})
+
+        wan_client.create_burst_reporter = AsyncMock(side_effect=burst)
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        written = fake_victoria.written_batches[0]
+        assert {
+            s.labels["network_id"] for s in samples_by_name(written, WAN_NAMES[0])
+        } == {"net-2"}
+        wan_sleep.assert_awaited_once_with(SETTLE_SECONDS)
+
+    async def test_device_fetch_failure_drops_the_stale_reading(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        clock = FakeClock()
+        collector = make_wan_collector(wan_client, fake_victoria, clock=clock)
+        await collector.run_cycle()
+        assert samples_by_name(fake_victoria.written_batches[0], WAN_NAMES[0])
+
+        wan_client.get_devices = AsyncMock(side_effect=EeroAPIException(500, "boom"))
+        clock.now += 10  # throttled, reading still within the expiry
+        await collector.run_cycle()
+
+        for name in WAN_NAMES:
+            assert samples_by_name(fake_victoria.written_batches[1], name) == []
+
+    async def test_turning_the_flag_off_forgets_the_reading(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        state = {"on": True}
+
+        async def get_eero_client():
+            yield wan_client
+
+        collector = MetricsCollector(
+            get_eero_client,
+            fake_victoria,
+            interval_seconds=10,
+            wan_enabled=lambda: state["on"],
+        )
+        await collector.run_cycle()
+        state["on"] = False
+        await collector.run_cycle()
+        state["on"] = True
+        await collector.run_cycle()  # throttled (real clock): no burst, no stale point
+
+        assert samples_by_name(fake_victoria.written_batches[0], WAN_NAMES[0])
+        assert samples_by_name(fake_victoria.written_batches[1], WAN_NAMES[0]) == []
+        assert samples_by_name(fake_victoria.written_batches[2], WAN_NAMES[0]) == []
+
+    async def test_every_wan_name_in_metrics_py_is_produced_when_enabled(
+        self, wan_client, fake_victoria, wan_sleep
+    ):
+        import re
+
+        literals = set(re.findall(r"\beero_[a-z_]+\b", _read_metrics_route_source()))
+        wan_literals = {name for name in literals if "wan" in name}
+        assert wan_literals == set(WAN_NAMES)
+
+        await make_wan_collector(wan_client, fake_victoria).run_cycle()
+
+        produced = {s.name for s in fake_victoria.written_batches[0]}
+        assert wan_literals <= produced

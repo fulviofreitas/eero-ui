@@ -220,6 +220,7 @@ All routes require a session (router-level `require_auth`) and validate every pa
 | `GET` | `/api/metrics/speedtest/history` | `start`, `end`, `step=5m`, `network_id?` | `{download, upload}` (VictoriaMetrics `query_range` results) |
 | `GET` | `/api/metrics/devices/{device_id}/signal` | `start`, `end`, `step=1m` | `{signal_strength, connection_score}`; `400` on a malformed id |
 | `GET` | `/api/metrics/network/client_count` | `start`, `end`, `step=5m` | `{total, wireless, wired, client_count}` |
+| `GET` | `/api/metrics/network/wan` | `start`, `end`, `step=1m`, `network_id?` | `{enabled, download, upload}`; the series are VictoriaMetrics `query_range` results of `last_over_time(eero_network_wan_*_mbps[90s])`, so a reading older than 90 s leaves a gap. `{enabled: false, download: null, upload: null}` (HTTP 200, no query) unless both `EERO_DASHBOARD_EXPERIMENTAL_WRITES` and `EERO_DASHBOARD_WAN_LIVE_USAGE` are `true`; `400` on a malformed `network_id` |
 | `GET` | `/api/metrics/roaming` | `network_id`, `range=24h` (`1h`/`6h`/`24h`/`7d`), `device_id?` | `RoamingResponse {network_id, range, start, end, resolution_seconds, total_events, truncated, events[], top_roamers[]}`; newest first, at most 500 events. `400` on a malformed id or unknown range, `404` when `network_id` is not on the session's account, `422` when the range holds more than 2,000 device series. Limit: `metrics_history` scope, 30/minute |
 
 ## Removed in 6.0

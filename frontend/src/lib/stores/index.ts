@@ -23,6 +23,7 @@ export * from './notifications';
 export * from './powerSavingSchedules';
 export * from './profileSchedules';
 export * from './roaming';
+export * from './wanThroughput';
 export * from './securityWan';
 export * from './speedtests';
 export * from './topology';

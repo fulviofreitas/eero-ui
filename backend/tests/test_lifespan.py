@@ -144,3 +144,39 @@ class TestLifespanCleanupRunsBeforeYield:
             # "inside" the running application, before any shutdown code
             # has had a chance to run.
             assert cleanup_calls == [1]
+
+
+class TestLifespanWanGate:
+    """Live WAN bursts need both ``experimental_writes`` and ``wan_live_usage``."""
+
+    async def test_wan_enabled_requires_both_flags(self, monkeypatch):
+        captured = {}
+
+        def make_collector(*args, **kwargs):
+            captured.update(kwargs)
+            return FakeCollector()
+
+        monkeypatch.setattr(main_module, "MetricsCollector", make_collector)
+        monkeypatch.setattr(
+            main_module, "_remove_legacy_exporter_session_file", lambda: None
+        )
+        monkeypatch.setattr(main_module, "shutdown_client", _noop_async)
+        monkeypatch.setattr(main_module.victoria_client, "aclose", _noop_async)
+
+        async with main_module.lifespan(main_module.app):
+            wan_enabled = captured["wan_enabled"]
+            observed = {}
+            for experimental in (False, True):
+                for live in (False, True):
+                    monkeypatch.setattr(
+                        main_module.settings, "experimental_writes", experimental
+                    )
+                    monkeypatch.setattr(main_module.settings, "wan_live_usage", live)
+                    observed[(experimental, live)] = wan_enabled()
+
+        assert observed == {
+            (False, False): False,
+            (False, True): False,
+            (True, False): False,
+            (True, True): True,
+        }

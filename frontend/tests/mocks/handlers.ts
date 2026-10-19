@@ -10,7 +10,48 @@
  */
 
 import { http, HttpResponse } from 'msw';
-import type { RoamingResponse } from '#lib/api/types.js';
+import type { RoamingResponse, WanThroughputResponse } from '#lib/api/types.js';
+import type { MetricsResponse } from '#lib/api/metrics.js';
+
+/**
+ * Build a VictoriaMetrics range result from `[secondsAgo, mbps]` pairs (oldest first), with
+ * timestamps relative to `Date.now()`. An empty list is the absent-series shape (`result: []`).
+ */
+export function wanVmResult(points: Array<[number, number]>): MetricsResponse {
+	const nowSeconds = Math.floor(Date.now() / 1000);
+	return {
+		status: 'success',
+		data: {
+			resultType: 'matrix',
+			result:
+				points.length === 0
+					? []
+					: [
+							{
+								metric: {},
+								values: points.map(([ago, v]): [number, string] => [nowSeconds - ago, String(v)])
+							}
+						]
+		}
+	};
+}
+
+/** Default fixture for `GET /api/metrics/network/wan`: enabled, non-empty, latest point 30 s old. */
+export function wanFixture(): WanThroughputResponse {
+	return {
+		enabled: true,
+		download: wanVmResult([
+			[900, 410.2],
+			[450, 120.5],
+			[30, 87.3]
+		]),
+		upload: wanVmResult([
+			[900, 22.1],
+			[450, 15.4],
+			[30, 9.8]
+		])
+	};
+}
 
 /**
  * Default fixture for `GET /api/metrics/roaming` (eero-ui#431). Covers all
@@ -1690,6 +1731,14 @@ export const handlers = [
 		}
 
 		return HttpResponse.json({ ...roamingFixture, range });
+	}),
+
+	http.get('/api/metrics/network/wan', ({ request }) => {
+		const url = new URL(request.url);
+		if (!url.searchParams.get('network_id')) {
+			return HttpResponse.json({ detail: 'network_id is required' }, { status: 422 });
+		}
+		return HttpResponse.json(wanFixture());
 	}),
 
 	// ============================================

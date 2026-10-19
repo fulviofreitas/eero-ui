@@ -40,6 +40,12 @@ router = APIRouter(
 )
 _LOGGER = logging.getLogger(__name__)
 
+# Lookback for the WAN throughput queries. Must equal ``wan.EXPIRY_SECONDS``
+# (pinned by a test): a reading older than that is "unknown", and a fixed
+# window makes VictoriaMetrics leave a gap there instead of carrying the last
+# sample forward for its automatic (up to 5 minute) lookback.
+_WAN_WINDOW = "90s"
+
 
 def _validate_identifier(value: str, field_name: str) -> str:
     """Validate an identifier before it reaches a PromQL label selector.
@@ -132,6 +138,63 @@ async def get_speedtest_history(
             f"eero_speed_upload_mbps{selector}", start, end, step
         )
         return {"download": download, "upload": upload}
+    except httpx.RequestError as e:
+        _LOGGER.error("VictoriaMetrics connection error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metrics service unavailable",
+        ) from e
+
+
+@router.get("/network/wan")
+async def get_network_wan_history(
+    start: str = Query(..., description="Start time (RFC3339 or Unix timestamp)"),
+    end: str = Query(..., description="End time (RFC3339 or Unix timestamp)"),
+    step: str = Query("1m", description="Query resolution step"),
+    network_id: str | None = Query(
+        None, description="Scope results to a single network"
+    ),
+) -> dict[str, Any]:
+    """Get live WAN throughput history for charts.
+
+    The series is written only when live WAN usage is enabled (both
+    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` and
+    ``EERO_DASHBOARD_WAN_LIVE_USAGE``). When it is not, this returns
+    ``enabled: false`` without querying VictoriaMetrics. Gaps in the series
+    mean "unknown", never zero.
+
+    Args:
+        start: Start time for the range.
+        end: End time for the range.
+        step: Query resolution step.
+        network_id: Optional network ID to filter by.
+
+    Returns:
+        ``{"enabled", "download", "upload"}``; the two series are
+        VictoriaMetrics ``query_range`` results, or None when disabled.
+    """
+    selector = _network_label_selector(network_id)
+    if not (settings.experimental_writes and settings.wan_live_usage):
+        return {"enabled": False, "download": None, "upload": None}
+    # nocache: with >= 50 points VictoriaMetrics aligns cached range queries
+    # to ``step``, so the last evaluation could sit a whole step before
+    # ``end`` and the newest reading would be missed (and shown as stale).
+    try:
+        download = await victoria_client.query_range(
+            f"last_over_time(eero_network_wan_download_mbps{selector}[{_WAN_WINDOW}])",
+            start,
+            end,
+            step,
+            nocache=True,
+        )
+        upload = await victoria_client.query_range(
+            f"last_over_time(eero_network_wan_upload_mbps{selector}[{_WAN_WINDOW}])",
+            start,
+            end,
+            step,
+            nocache=True,
+        )
+        return {"enabled": True, "download": download, "upload": upload}
     except httpx.RequestError as e:
         _LOGGER.error("VictoriaMetrics connection error: %s", e)
         raise HTTPException(

@@ -5,6 +5,8 @@
  */
 
 import type { ApiError, ApiErrorType } from './types';
+import { transformMetricsResponse } from './metrics';
+import { wanWindow } from '#lib/utils/wan-throughput.js';
 
 // Base URL for API requests (proxied in development)
 const API_BASE = '/api';
@@ -1707,7 +1709,28 @@ export const api = {
 					...(range && { range }),
 					...(deviceId && { device_id: deviceId })
 				}
-			})
+			}),
+
+		/**
+		 * Native WAN throughput (eero-ui#458), Mbps. Errors propagate as
+		 * `ApiClientError` (an error must never look like "unavailable");
+		 * `enabled: false` means the server has the feature switched off.
+		 */
+		wanThroughput: async (
+			networkId: string,
+			range: import('./types').WanThroughputRange = '24h'
+		): Promise<import('./types').WanThroughputResult> => {
+			const { start, end, step } = wanWindow(range);
+			const response = await fetchWithHandling<import('./types').WanThroughputResponse>(
+				'/metrics/network/wan',
+				{ params: { network_id: networkId, start, end, step } }
+			);
+			return {
+				enabled: response.enabled,
+				download: transformMetricsResponse(response.download ?? undefined),
+				upload: transformMetricsResponse(response.upload ?? undefined)
+			};
+		}
 	}
 };
 
