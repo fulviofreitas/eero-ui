@@ -298,7 +298,7 @@ def wan_enabled(monkeypatch):
 class TestNetworkWanRoute:
     """GET /api/metrics/network/wan: flag-gated live WAN throughput history."""
 
-    PARAMS = {"start": "0", "end": "100", "step": "1m"}
+    PARAMS: ClassVar[dict[str, str]] = {"start": "0", "end": "100", "step": "1m"}
 
     async def test_window_matches_the_reading_expiry(self):
         """A reading older than the expiry is unknown, so the query window
