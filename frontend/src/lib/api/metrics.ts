@@ -34,7 +34,7 @@ interface SignalHistoryResponse {
 /**
  * Transform Prometheus/VictoriaMetrics response to chart-friendly format
  */
-function transformMetricsResponse(data: MetricsResponse | undefined): TimeSeriesPoint[] {
+export function transformMetricsResponse(data: MetricsResponse | undefined): TimeSeriesPoint[] {
 	if (!data?.data?.result?.[0]?.values) {
 		return [];
 	}

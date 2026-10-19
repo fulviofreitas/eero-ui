@@ -52,6 +52,13 @@ class Settings(BaseModel):
     # independent flag; both must be on for those four routes.
     account_identity_writes: bool = False
 
+    # Live WAN throughput (issue #458): the collector requests a burst report
+    # (a POST that is not live-verified) once a minute per network. No user
+    # clicks it, so ``experimental_writes`` alone must not start it; like the
+    # account-identity gate this is a second, independent flag and both must
+    # be on (see ``main.lifespan``).
+    wan_live_usage: bool = False
+
     model_config = ConfigDict(env_prefix="EERO_DASHBOARD_")
 
 
@@ -119,6 +126,8 @@ def get_settings() -> Settings:
         account_identity_writes=os.environ.get(
             "EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES", "false"
         ).lower()
+        == "true",
+        wan_live_usage=os.environ.get("EERO_DASHBOARD_WAN_LIVE_USAGE", "false").lower()
         == "true",
     )
 

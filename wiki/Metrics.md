@@ -62,6 +62,17 @@ Six series the exporter did not provide, written on the same cycle:
 | `eero_collector_cycle_seconds` | — | how long the last cycle took |
 | `eero_collector_errors_total` | `reason` | cumulative failures since process start; one sample per reason every cycle, so a stalled collector shows as a gap in this series too |
 
+## Live WAN throughput (opt-in)
+
+Two further gauges exist only when live WAN usage is enabled (`EERO_DASHBOARD_EXPERIMENTAL_WRITES` **and** `EERO_DASHBOARD_WAN_LIVE_USAGE`, see [[Configuration#write-gates]]). They are not part of the stability contract above.
+
+| Metric | Type | Labels | Notes |
+|---|---|---|---|
+| `eero_network_wan_download_mbps` | Gauge | `network_id`, `name` | flag-gated; absent when unknown; bridge-mode networks excluded; one burst per minute per network; adds about 12 s to the cycle |
+| `eero_network_wan_upload_mbps` | Gauge | `network_id`, `name` | as above |
+
+The device list reports zero or stale per-client usage until the cloud is asked for a fresh report, so with the flags on the collector first reads the core metrics, then sends one `create_burst_reporter` request per network that is due (at most one a minute each, failed attempts included), waits 12 s once for all of them, and re-reads the devices bypassing the SDK cache. The gauge is the sum of connected clients' Internet usage (each client once, local LAN transfers excluded). It is **absent, not zero**, when any connected client's usage is missing or invalid, when the burst or device read failed, or when the last reading is more than 90 s old. A network with no connected clients is a real `0`. A throttled cycle re-emits the last reading with its original timestamp rather than a fresh one. A failed burst is counted in `eero_collector_errors_total` but never sets `eero_up` to `0`. The burst also invalidates the SDK's device cache, so other routes see a fresh device list.
+
 ## Reading metrics
 
 Every `/api/metrics/*` route requires an authenticated dashboard session; there is no unauthenticated way to read the store from outside the container.
@@ -72,6 +83,7 @@ Every `/api/metrics/*` route requires an authenticated dashboard session; there 
 | `GET /api/metrics/speedtest/history?start&end&step[&network_id]` | download/upload series |
 | `GET /api/metrics/devices/{device_id}/signal?start&end&step` | signal strength and connection score |
 | `GET /api/metrics/network/client_count?start&end&step` | total, wireless and wired counts |
+| `GET /api/metrics/network/wan?start&end[&step][&network_id]` | live WAN download/upload series, or `enabled: false` when the feature is off |
 | `GET /api/metrics/roaming?network_id&range[&device_id]` | device roaming events (see below) |
 
 ### Roaming events

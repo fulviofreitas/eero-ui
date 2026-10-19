@@ -38,6 +38,11 @@ class TestMetricsRequireAuth:
                 "/api/metrics/network/client_count",
                 {"start": "0", "end": "100", "step": "1m"},
             ),
+            (
+                "get",
+                "/api/metrics/network/wan",
+                {"start": "0", "end": "100", "step": "1m"},
+            ),
         ],
     )
     async def test_route_requires_auth(
@@ -279,3 +284,145 @@ class TestMetricsHealthReportsCollectorState:
         assert response.status_code == 200
         data = response.json()
         assert data["collector_errors_total"] == {}
+
+
+@pytest.fixture
+def wan_enabled(monkeypatch):
+    """Turn on both flags the WAN read route requires."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "experimental_writes", True)
+    monkeypatch.setattr(settings, "wan_live_usage", True)
+
+
+class TestNetworkWanRoute:
+    """GET /api/metrics/network/wan: flag-gated live WAN throughput history."""
+
+    PARAMS = {"start": "0", "end": "100", "step": "1m"}
+
+    async def test_window_matches_the_reading_expiry(self):
+        """A reading older than the expiry is unknown, so the query window
+        must be exactly that long or gaps would be painted over."""
+        from app.routes import metrics as metrics_route
+        from app.services import wan
+
+        assert metrics_route._WAN_WINDOW == f"{wan.EXPIRY_SECONDS}s"
+
+    @pytest.mark.parametrize(
+        "experimental,live", [(False, False), (True, False), (False, True)]
+    )
+    async def test_disabled_unless_both_flags_are_on(
+        self, auth_client, authenticated_client, monkeypatch, experimental, live
+    ):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "experimental_writes", experimental)
+        monkeypatch.setattr(settings, "wan_live_usage", live)
+        with patch(
+            "app.routes.metrics.victoria_client.query_range", new=AsyncMock()
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/network/wan", params=self.PARAMS
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "enabled": False,
+            "download": None,
+            "upload": None,
+        }
+        mocked_query_range.assert_not_called()
+
+    async def test_enabled_queries_both_series_with_a_network_selector(
+        self, auth_client, authenticated_client, wan_enabled
+    ):
+        vm_result = {"status": "success", "data": {"result": []}}
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value=vm_result),
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/network/wan",
+                params={**self.PARAMS, "network_id": "network-123"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "enabled": True,
+            "download": vm_result,
+            "upload": vm_result,
+        }
+        queries = [call.args[0] for call in mocked_query_range.call_args_list]
+        assert queries == [
+            'last_over_time(eero_network_wan_download_mbps{network_id="network-123"}[90s])',
+            'last_over_time(eero_network_wan_upload_mbps{network_id="network-123"}[90s])',
+        ]
+        for call in mocked_query_range.call_args_list:
+            assert call.args[1:] == ("0", "100", "1m")
+
+    async def test_step_defaults_to_one_minute(
+        self, auth_client, authenticated_client, wan_enabled
+    ):
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value={"status": "success", "data": {}}),
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/network/wan", params={"start": "0", "end": "100"}
+            )
+
+        assert response.status_code == 200
+        assert mocked_query_range.call_args.args[3] == "1m"
+
+    async def test_without_network_id_there_is_no_selector(
+        self, auth_client, authenticated_client, wan_enabled
+    ):
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(return_value={"status": "success", "data": {}}),
+        ) as mocked_query_range:
+            await auth_client.get("/api/metrics/network/wan", params=self.PARAMS)
+
+        queries = [call.args[0] for call in mocked_query_range.call_args_list]
+        assert queries == [
+            "last_over_time(eero_network_wan_download_mbps[90s])",
+            "last_over_time(eero_network_wan_upload_mbps[90s])",
+        ]
+
+    @pytest.mark.parametrize("bad_value", ['"', "}", "a b"])
+    async def test_malformed_network_id_is_rejected_before_any_query(
+        self, auth_client, authenticated_client, wan_enabled, bad_value
+    ):
+        with patch(
+            "app.routes.metrics.victoria_client.query_range", new=AsyncMock()
+        ) as mocked_query_range:
+            response = await auth_client.get(
+                "/api/metrics/network/wan",
+                params={**self.PARAMS, "network_id": bad_value},
+            )
+
+        assert response.status_code == 400
+        mocked_query_range.assert_not_called()
+
+    async def test_victoriametrics_down_is_503(
+        self, auth_client, authenticated_client, wan_enabled
+    ):
+        import httpx
+
+        with patch(
+            "app.routes.metrics.victoria_client.query_range",
+            new=AsyncMock(side_effect=httpx.ConnectError("down")),
+        ):
+            response = await auth_client.get(
+                "/api/metrics/network/wan", params=self.PARAMS
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Metrics service unavailable"
+
+    async def test_start_and_end_are_required(
+        self, auth_client, authenticated_client, wan_enabled
+    ):
+        response = await auth_client.get("/api/metrics/network/wan")
+
+        assert response.status_code == 422

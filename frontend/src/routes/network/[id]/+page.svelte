@@ -20,6 +20,8 @@
 	import AdvancedSettingsCard from '#lib/components/network/AdvancedSettingsCard.svelte';
 	import NetworkHealthCard from '#lib/components/network/NetworkHealthCard.svelte';
 	import NetworkSpeedTestCard from '#lib/components/network/NetworkSpeedTestCard.svelte';
+	import WanThroughputCard from '#lib/components/network/WanThroughputCard.svelte';
+	import { isBridgeMode } from '#lib/utils/wan-throughput.js';
 	import SpeedTestHistoryCard from '#lib/components/network/SpeedTestHistoryCard.svelte';
 	import NetworkScanCard from '#lib/components/network/NetworkScanCard.svelte';
 	import NetworkRenameModal from '#lib/components/network/NetworkRenameModal.svelte';
@@ -368,6 +370,17 @@
 				{#if networkId}
 					<!-- Speed Test History is full-width, not a grid cell (maintainer feedback):
 					     its table has enough columns that a half-width card clips the timestamp. -->
+					<!-- Live WAN throughput first, manual test history second. Bridge mode never has the
+					     series, so an "unavailable" chart would mislead; a null mode shows the card. -->
+					<div class="diagnostics-full">
+						{#if isBridgeMode(network?.connection_mode)}
+							<p class="text-muted text-sm wan-bridge-note">
+								WAN throughput is not collected in bridge mode.
+							</p>
+						{:else}
+							<WanThroughputCard {networkId} />
+						{/if}
+					</div>
 					<div class="diagnostics-full"><SpeedTestHistoryCard {networkId} /></div>
 
 					<div class="info-grid diagnostics-secondary">

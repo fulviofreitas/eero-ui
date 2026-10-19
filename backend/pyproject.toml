@@ -70,6 +70,9 @@ profile = "black"
 [tool.ruff]
 
 [tool.ruff.lint]
+# SLF001 (flake8-self) flags private-member access such as ``client._api``;
+# see tests/test_no_sdk_private_access.py for the complementary regex guard.
+extend-select = ["SLF001"]
 ignore = [
     # FastAPI dependency-injection idiom: Depends/Query/Body/etc. in argument
     # defaults is the framework's standard pattern; extend-immutable-calls
@@ -84,3 +87,5 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # strptime is followed by an explicit tz assignment; DTZ007 is a false positive.
 "app/routes/eeros.py" = ["DTZ007"]
+# Tests legitimately reach into private state.
+"tests/**" = ["SLF001"]

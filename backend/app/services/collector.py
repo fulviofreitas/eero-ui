@@ -28,6 +28,12 @@ implements):
   so the series never gaps just because a particular failure mode has not
   yet occurred -- consistent with the collector's own self-observability
   goal.
+- Live WAN throughput (``eero_network_wan_{download,upload}_mbps``) is
+  optional and flag-gated (``wan_enabled``). It needs a burst request (a
+  POST) before the device list carries fresh usage, so a cycle runs in three
+  phases: core reads, then concurrent bursts plus one shared settle wait,
+  then the device read. A burst failure is counted and logged but never
+  flips ``eero_up``; the series is absent, not zero, when unknown.
 """
 
 import asyncio
@@ -59,6 +65,7 @@ from ..transformers import (
     normalize_speed_test,
 )
 from .victoria import Sample, VictoriaMetricsClient, VictoriaWriteError
+from .wan import SETTLE_SECONDS, WanTracker, aggregate_wan_usage, request_burst
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,6 +154,7 @@ class MetricsCollector:
         get_eero_client: Callable[[], AsyncGenerator[EeroClient, None]],
         victoria_client: VictoriaMetricsClient,
         interval_seconds: int = 60,
+        wan_enabled: Callable[[], bool] | None = None,
     ) -> None:
         """Initialize the collector.
 
@@ -156,6 +164,9 @@ class MetricsCollector:
                 the collector always observes the current singleton.
             victoria_client: The shared VictoriaMetrics client to write to.
             interval_seconds: Seconds to sleep between collection cycles.
+            wan_enabled: Called each cycle; when it returns True, live WAN
+                throughput is collected (one burst request per minute per
+                network). None disables it.
         """
         self._get_eero_client = get_eero_client
         self._victoria = victoria_client
@@ -165,6 +176,8 @@ class MetricsCollector:
         self._rate_limit_backoff = 0.0
         # Set by the first rate-limited fetch; skips the rest of the cycle.
         self._rate_limited_this_cycle = False
+        self._wan_enabled = wan_enabled
+        self._wan = WanTracker()
 
     @property
     def error_counts(self) -> dict[str, int]:
@@ -354,20 +367,84 @@ class MetricsCollector:
         if not ok:
             return False
 
-        cycle_ok = True
         networks = [
             normalize_network(raw) for raw in extract_list(raw_networks, "networks")
         ]
+        wan_on = bool(self._wan_enabled and self._wan_enabled())
+
+        # Phase A: core reads, unchanged by the optional WAN feature.
+        ok_by_id: dict[str, bool] = {}
+        names: dict[str, str] = {}
+        eligible: list[str] = []
         for network in networks:
             network_id = network.get("id")
             if not network_id:
                 _LOGGER.debug("Skipping network with no resolvable id")
                 continue
-            network_ok = await self._collect_network(
+            names[network_id] = _label(network.get("name"))
+            ok_by_id[network_id] = await self._collect_network(
                 client, network_id, network, samples, now_ms
             )
-            cycle_ok = cycle_ok and network_ok
-        return cycle_ok
+            # A None connection_mode (neither known shape present) is
+            # eligible; only bridge mode has no WAN of its own to measure.
+            if wan_on and network.get("connection_mode") != "BRIDGE":
+                eligible.append(network_id)
+            else:
+                self._wan.forget(network_id)
+
+        # Phase B: optional burst writes, after every core read has landed.
+        refreshed = await self._request_wan_bursts(client, eligible)
+
+        # Phase C: device read (fresh usage when a burst just succeeded).
+        for network_id, name in names.items():
+            devices_ok = await self._collect_devices(
+                client,
+                network_id,
+                name,
+                samples,
+                now_ms,
+                refresh=network_id in refreshed,
+                wan=network_id in eligible,
+            )
+            ok_by_id[network_id] = ok_by_id[network_id] and devices_ok
+        return all(ok_by_id.values())
+
+    async def _request_wan_bursts(
+        self, client: EeroClient, eligible: list[str]
+    ) -> set[str]:
+        """Request live-usage bursts for every due network, then settle once.
+
+        Each attempt is stamped before the call so a failed burst is also
+        throttled to one per minute. Failures are counted and logged by
+        ``_safe_fetch`` but never fail the network: the feature is optional.
+
+        Args:
+            client: The shared EeroClient.
+            eligible: Networks that may be bursted this cycle.
+
+        Returns:
+            The network ids whose burst succeeded this cycle.
+        """
+        if self._rate_limited_this_cycle:
+            return set()
+        due = [nid for nid in eligible if self._wan.due(nid)]
+        if not due:
+            return set()
+        for network_id in due:
+            self._wan.mark_attempt(network_id)
+        results = await asyncio.gather(
+            *(
+                self._safe_fetch(
+                    request_burst(client, network_id), "request live WAN usage"
+                )
+                for network_id in due
+            )
+        )
+        succeeded = {nid for nid, (_, ok) in zip(due, results, strict=True) if ok}
+        if succeeded:
+            # One settle wait covers every network bursted this cycle.
+            await asyncio.sleep(SETTLE_SECONDS)
+        return succeeded
 
     async def _collect_network(
         self,
@@ -377,7 +454,7 @@ class MetricsCollector:
         samples: list[Sample],
         now_ms: int,
     ) -> bool:
-        """Collect and append every metric for one network.
+        """Collect and append the core (non-device) metrics for one network.
 
         Args:
             client: The shared EeroClient.
@@ -392,9 +469,6 @@ class MetricsCollector:
         """
         network_ok = True
 
-        network_ok &= await self._collect_devices(
-            client, network_id, _label(network.get("name")), samples, now_ms
-        )
         network_ok &= await self._collect_eeros(client, network_id, samples, now_ms)
         network_ok &= await self._collect_speed_tests(
             client, network_id, samples, now_ms
@@ -421,19 +495,49 @@ class MetricsCollector:
         network_name: str,
         samples: list[Sample],
         now_ms: int,
+        refresh: bool = False,
+        wan: bool = False,
     ) -> bool:
         """Collect device-scoped metrics for one network, plus its client count.
+
+        Args:
+            client: The shared EeroClient.
+            network_id: The network's resolved id.
+            network_name: The network's display name (a label value).
+            samples: The list to append samples to.
+            now_ms: The single timestamp (ms) shared by the whole cycle.
+            refresh: True right after a successful burst: bypass the SDK
+                device cache and derive a fresh WAN reading from the list.
+            wan: True when WAN throughput is collected for this network;
+                emits the stored reading if one is still valid.
 
         Returns:
             True on success, False if the underlying fetch failed.
         """
-        raw_devices, ok = await self._safe_fetch(
-            client.get_devices(network_id=network_id), "list devices"
-        )
+        if refresh:
+            devices_call = client.get_devices(network_id=network_id, refresh_cache=True)
+        else:
+            devices_call = client.get_devices(network_id=network_id)
+        raw_devices, ok = await self._safe_fetch(devices_call, "list devices")
         if not ok:
+            self._wan.forget(network_id)
             return False
 
         raw_device_list = extract_list(raw_devices, "devices")
+        if refresh and (
+            isinstance(raw_devices, list)
+            or (
+                isinstance(raw_devices, dict)
+                and isinstance(raw_devices.get("data"), list)
+            )
+        ):
+            # A malformed payload extracts to [], which would read as a false
+            # zero; only aggregate a list the API actually returned.
+            rates = aggregate_wan_usage(raw_device_list)
+            if rates is not None:
+                self._wan.store(network_id, rates, int(time.time() * 1000))
+        if wan:
+            self._append_wan_samples(network_id, network_name, samples)
         connected_count = 0
 
         for raw_device in raw_device_list:
@@ -457,6 +561,37 @@ class MetricsCollector:
             )
         )
         return True
+
+    def _append_wan_samples(
+        self, network_id: str, network_name: str, samples: list[Sample]
+    ) -> None:
+        """Append the WAN throughput gauges if a valid reading exists.
+
+        Absent, not zero: nothing is emitted when the reading is unknown or
+        expired. The reading's own timestamp is used rather than the
+        cycle's, so a throttled cycle re-emits the same point instead of a
+        fake fresh one.
+        """
+        reading = self._wan.current(network_id)
+        if reading is None:
+            return
+        labels = {"network_id": network_id, "name": network_name}
+        samples.append(
+            Sample(
+                "eero_network_wan_download_mbps",
+                reading.down_mbps,
+                reading.timestamp_ms,
+                labels=labels,
+            )
+        )
+        samples.append(
+            Sample(
+                "eero_network_wan_upload_mbps",
+                reading.up_mbps,
+                reading.timestamp_ms,
+                labels=dict(labels),
+            )
+        )
 
     def _collect_device_samples(
         self,
