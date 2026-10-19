@@ -359,6 +359,8 @@ class TestNetworkWanRoute:
         ]
         for call in mocked_query_range.call_args_list:
             assert call.args[1:] == ("0", "100", "1m")
+            # Fresh last point: never let the range cache align ``end`` back a step.
+            assert call.kwargs == {"nocache": True}
 
     async def test_step_defaults_to_one_minute(
         self, auth_client, authenticated_client, wan_enabled

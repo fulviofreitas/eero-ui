@@ -176,18 +176,23 @@ async def get_network_wan_history(
     selector = _network_label_selector(network_id)
     if not (settings.experimental_writes and settings.wan_live_usage):
         return {"enabled": False, "download": None, "upload": None}
+    # nocache: with >= 50 points VictoriaMetrics aligns cached range queries
+    # to ``step``, so the last evaluation could sit a whole step before
+    # ``end`` and the newest reading would be missed (and shown as stale).
     try:
         download = await victoria_client.query_range(
             f"last_over_time(eero_network_wan_download_mbps{selector}[{_WAN_WINDOW}])",
             start,
             end,
             step,
+            nocache=True,
         )
         upload = await victoria_client.query_range(
             f"last_over_time(eero_network_wan_upload_mbps{selector}[{_WAN_WINDOW}])",
             start,
             end,
             step,
+            nocache=True,
         )
         return {"enabled": True, "download": download, "upload": upload}
     except httpx.RequestError as e:

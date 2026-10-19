@@ -166,6 +166,8 @@ class VictoriaMetricsClient:
         start: str,
         end: str,
         step: str = "1m",
+        *,
+        nocache: bool = False,
     ) -> dict[str, Any]:
         """Execute a range PromQL query for historical data.
 
@@ -174,6 +176,10 @@ class VictoriaMetricsClient:
             start: Start time (RFC3339 or Unix timestamp).
             end: End time (RFC3339 or Unix timestamp).
             step: Query resolution step (e.g., "1m", "5m", "1h").
+            nocache: Bypass VictoriaMetrics' range-query cache. Cached
+                range queries with enough points are aligned to ``step``,
+                which can move the final evaluation up to one step before
+                ``end``; set this when the latest point's freshness matters.
 
         Returns:
             Query result from VictoriaMetrics API.
@@ -182,15 +188,15 @@ class VictoriaMetricsClient:
             httpx.HTTPError: If the request fails.
         """
         client = self._get_client()
-        response = await client.get(
-            "/api/v1/query_range",
-            params={
-                "query": promql,
-                "start": start,
-                "end": end,
-                "step": step,
-            },
-        )
+        params = {
+            "query": promql,
+            "start": start,
+            "end": end,
+            "step": step,
+        }
+        if nocache:
+            params["nocache"] = "1"
+        response = await client.get("/api/v1/query_range", params=params)
         response.raise_for_status()
         return response.json()
 

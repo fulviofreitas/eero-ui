@@ -36,10 +36,20 @@
 	let latestUpload = $derived(upload.at(-1) ?? null);
 	let latestTimestamp = $derived(Math.max(latestDownload?.x ?? 0, latestUpload?.x ?? 0));
 
-	// Wall-clock reference for staleness; refreshed whenever new data lands.
+	// Wall-clock reference for staleness: reset whenever new data lands and
+	// ticked while the card is mounted, so a reading left on screen does turn
+	// stale rather than looking current forever.
+	const CLOCK_TICK_MS = 30 * 1000;
+	let tick = $state(Date.now());
+	$effect(() => {
+		const timer = setInterval(() => {
+			tick = Date.now();
+		}, CLOCK_TICK_MS);
+		return () => clearInterval(timer);
+	});
 	let now = $derived.by(() => {
 		void wanState.lastUpdated;
-		return Date.now();
+		return Math.max(tick, Date.now());
 	});
 	let isStale = $derived(hasPoints && now - latestTimestamp > STALE_AFTER_MS);
 	let lastReported = $derived(

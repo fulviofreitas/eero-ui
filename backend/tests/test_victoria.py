@@ -189,6 +189,20 @@ class TestQueryAndQueryRange:
         client = _client_with_transport(handler)
         await client.query_range("eero_up", "0", "100", "1m")
 
+    async def test_query_range_nocache_is_opt_in(self):
+        """nocache=1 is sent only when asked for (WAN throughput freshness)."""
+        seen: list[dict[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(dict(request.url.params))
+            return httpx.Response(200, json={"status": "success", "data": {}})
+
+        client = _client_with_transport(handler)
+        await client.query_range("eero_up", "0", "100", "1m")
+        await client.query_range("eero_up", "0", "100", "1m", nocache=True)
+        assert "nocache" not in seen[0]
+        assert seen[1]["nocache"] == "1"
+
 
 class TestHealth:
     """Tests for VictoriaMetricsClient.health()."""
