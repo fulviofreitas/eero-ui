@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.5.0](https://github.com/fulviofreitas/eero-ui/compare/v6.4.0...v6.5.0) (2026-10-19)
+
+### ✨ Features
+
+* **metrics:** live WAN throughput gauges and network card, flag-gated ([#459](https://github.com/fulviofreitas/eero-ui/issues/459)) ([c368808](https://github.com/fulviofreitas/eero-ui/commit/c36880855ecdcdb296b2c8fa8f63a836611fa2fe)), closes [#456](https://github.com/fulviofreitas/eero-ui/issues/456) [#456](https://github.com/fulviofreitas/eero-ui/issues/456) [#458](https://github.com/fulviofreitas/eero-ui/issues/458)
+
 ## [6.4.0](https://github.com/fulviofreitas/eero-ui/compare/v6.3.0...v6.4.0) (2026-10-19)
 
 ### ✨ Features
