@@ -157,9 +157,8 @@ async def get_network_wan_history(
 ) -> dict[str, Any]:
     """Get live WAN throughput history for charts.
 
-    The series is written only when live WAN usage is enabled (both
-    ``EERO_DASHBOARD_EXPERIMENTAL_WRITES`` and
-    ``EERO_DASHBOARD_WAN_LIVE_USAGE``). When it is not, this returns
+    The series is written only when live WAN usage is enabled
+    (``EERO_DASHBOARD_WAN_LIVE_USAGE``). When it is not, this returns
     ``enabled: false`` without querying VictoriaMetrics. Gaps in the series
     mean "unknown", never zero.
 
@@ -174,7 +173,7 @@ async def get_network_wan_history(
         VictoriaMetrics ``query_range`` results, or None when disabled.
     """
     selector = _network_label_selector(network_id)
-    if not (settings.experimental_writes and settings.wan_live_usage):
+    if not settings.wan_live_usage:
         return {"enabled": False, "download": None, "upload": None}
     # nocache: with >= 50 points VictoriaMetrics aligns cached range queries
     # to ``step``, so the last evaluation could sit a whole step before

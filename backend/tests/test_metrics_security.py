@@ -288,10 +288,14 @@ class TestMetricsHealthReportsCollectorState:
 
 @pytest.fixture
 def wan_enabled(monkeypatch):
-    """Turn on both flags the WAN read route requires."""
+    """Turn on the one flag the WAN read route requires.
+
+    ``experimental_writes`` is left off on purpose: the burst is live-verified
+    (eero-api 8.4.1), so the route must not depend on it.
+    """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "experimental_writes", True)
+    monkeypatch.setattr(settings, "experimental_writes", False)
     monkeypatch.setattr(settings, "wan_live_usage", True)
 
 
@@ -308,16 +312,15 @@ class TestNetworkWanRoute:
 
         assert metrics_route._WAN_WINDOW == f"{wan.EXPIRY_SECONDS}s"
 
-    @pytest.mark.parametrize(
-        "experimental,live", [(False, False), (True, False), (False, True)]
-    )
-    async def test_disabled_unless_both_flags_are_on(
-        self, auth_client, authenticated_client, monkeypatch, experimental, live
+    @pytest.mark.parametrize("experimental", [False, True])
+    async def test_disabled_while_the_wan_flag_is_off(
+        self, auth_client, authenticated_client, monkeypatch, experimental
     ):
+        """The experimental flag neither enables nor is needed for WAN."""
         from app.config import settings
 
         monkeypatch.setattr(settings, "experimental_writes", experimental)
-        monkeypatch.setattr(settings, "wan_live_usage", live)
+        monkeypatch.setattr(settings, "wan_live_usage", False)
         with patch(
             "app.routes.metrics.victoria_client.query_range", new=AsyncMock()
         ) as mocked_query_range:

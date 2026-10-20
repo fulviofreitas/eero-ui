@@ -147,9 +147,9 @@ class TestLifespanCleanupRunsBeforeYield:
 
 
 class TestLifespanWanGate:
-    """Live WAN bursts need both ``experimental_writes`` and ``wan_live_usage``."""
+    """Live WAN bursts follow ``wan_live_usage`` alone (live-verified write)."""
 
-    async def test_wan_enabled_requires_both_flags(self, monkeypatch):
+    async def test_wan_enabled_follows_the_wan_flag_only(self, monkeypatch):
         captured = {}
 
         def make_collector(*args, **kwargs):
@@ -174,9 +174,10 @@ class TestLifespanWanGate:
                     monkeypatch.setattr(main_module.settings, "wan_live_usage", live)
                     observed[(experimental, live)] = wan_enabled()
 
+        # experimental_writes is irrelevant either way: the burst is verified.
         assert observed == {
             (False, False): False,
-            (False, True): False,
+            (False, True): True,
             (True, False): False,
             (True, True): True,
         }

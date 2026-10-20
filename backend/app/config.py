@@ -53,10 +53,11 @@ class Settings(BaseModel):
     account_identity_writes: bool = False
 
     # Live WAN throughput (issue #458): the collector requests a burst report
-    # (a POST that is not live-verified) once a minute per network. No user
-    # clicks it, so ``experimental_writes`` alone must not start it; like the
-    # account-identity gate this is a second, independent flag and both must
-    # be on (see ``main.lifespan``).
+    # once a minute per network. The write is live-verified (eero-api 8.4.1,
+    # maintainer's supervised check 2026-10-20: usage refreshed within 12 s,
+    # no node rebooted), so it no longer depends on ``experimental_writes``.
+    # It stays opt-in because it costs about 12 s per collector cycle and one
+    # extra cloud write per minute per network (see ``main.lifespan``).
     wan_live_usage: bool = False
 
     model_config = ConfigDict(env_prefix="EERO_DASHBOARD_")

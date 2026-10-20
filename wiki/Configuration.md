@@ -17,7 +17,7 @@ All settings are read once at startup from the environment (`backend/app/config.
 | `EERO_DASHBOARD_SDK_GET_RETRIES` | How many times the SDK retries a failed **GET** against the eero cloud. Clamped to `0`–`3`. Writes are never retried | `1` |
 | `EERO_DASHBOARD_SDK_LEGACY_COOKIE` | Also send the session as the legacy `s=` cookie alongside the `X-User-Token` header. Off by default since 6.0 | `false` |
 | `EERO_DASHBOARD_EXPERIMENTAL_WRITES` | Enable the write routes that are not verified end-to-end against a live eero network (see [[Roadmap]]). Off: those routes return `403` with `type: "experimental_disabled"` | `false` |
-| `EERO_DASHBOARD_WAN_LIVE_USAGE` | Live WAN throughput gauges. Both this **and** `EERO_DASHBOARD_EXPERIMENTAL_WRITES` must be `true`; see [Write gates](#write-gates) | `false` |
+| `EERO_DASHBOARD_WAN_LIVE_USAGE` | Live WAN throughput gauges (opt-in; independent of the experimental flag since 6.6). See [Write gates](#write-gates) | `false` |
 | `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES` | Second, independent gate for `PUT /api/account/email`, `PUT /api/account/phone` and their `/verify` routes. Both this **and** `EERO_DASHBOARD_EXPERIMENTAL_WRITES` must be `true` | `false` |
 
 Removed in 6.0 (setting either has no effect): `EERO_EXPORTER_SESSION_PATH`, `EERO_DASHBOARD_METRICS_ENDPOINT_ENABLED`.
@@ -57,7 +57,7 @@ Every write that eero-ui has **not** verified end-to-end against a live network 
 
 Account e-mail and phone changes additionally need `EERO_DASHBOARD_ACCOUNT_IDENTITY_WRITES=true`, because an eero-ui session is the whole eero account: whoever can reach the dashboard could otherwise re-home the account's recovery identity. See [[Security]].
 
-Live WAN throughput (`EERO_DASHBOARD_WAN_LIVE_USAGE=true`, on top of the experimental flag) is gated for a different reason: nobody clicks it. Once a minute per network the collector sends `create_burst_reporter`, a POST that eero-api marks as not confirmed against a live network, so turning the experimental flag on for another screen must not start it silently. It adds about 12 s to every collector cycle and one extra cloud write per minute per network, and it stays off by default until the maintainer has watched it for a reboot-free hour on a live mesh. See [[Metrics#live-wan-throughput-opt-in]].
+Live WAN throughput (`EERO_DASHBOARD_WAN_LIVE_USAGE=true`) is opt-in for cost, not safety. Once a minute per network the collector sends `create_burst_reporter`, a POST that is **live-verified** (eero-api 8.4.1, maintainer's supervised check 2026-10-20: per-device usage refreshed within 12 s, no node rebooted), so it no longer needs `EERO_DASHBOARD_EXPERIMENTAL_WRITES`. It adds about 12 s to every collector cycle and one extra cloud write per minute per network, which is why it stays off by default. See [[Metrics#live-wan-throughput-opt-in]].
 
 ## Upgrading to 6.0
 
