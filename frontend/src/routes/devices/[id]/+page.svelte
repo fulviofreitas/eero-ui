@@ -21,11 +21,13 @@
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import PremiumGate from '$components/common/PremiumGate.svelte';
 	import RoamingEventsCard from '#lib/components/network/RoamingEventsCard.svelte';
+	import RenameModal from '#lib/components/common/RenameModal.svelte';
 
 	let device = $state<DeviceDetail | null>(null);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let actionLoading = $state(false);
+	let showRenameModal = $state(false);
 
 	// Profile management
 	let profiles: ProfileSummary[] = $state([]);
@@ -158,18 +160,16 @@
 		}
 	}
 
-	function handleRename() {
+	function handleRename(name: string) {
+		showRenameModal = false;
 		if (!device?.id) return;
-		const newName = prompt('Enter new name:', device.nickname || device.hostname || '');
-		if (newName) {
-			devicesStore
-				.setNickname(device.id, newName)
-				.then(() => {
-					uiStore.success('Device renamed successfully.');
-					fetchDevice(true);
-				})
-				.catch((err) => uiStore.error(err.message));
-		}
+		devicesStore
+			.setNickname(device.id, name)
+			.then(() => {
+				uiStore.success('Device renamed successfully.');
+				fetchDevice(true);
+			})
+			.catch((err) => uiStore.error(err.message));
 	}
 </script>
 
@@ -217,7 +217,9 @@
 					Refresh
 				</Button>
 
-				<Button icon="edit" onclick={handleRename} disabled={actionLoading}>Rename</Button>
+				<Button icon="edit" onclick={() => (showRenameModal = true)} disabled={actionLoading}
+					>Rename</Button
+				>
 
 				{#if device!.blocked}
 					<Button variant="primary" icon="check" onclick={handleUnblock} loading={actionLoading}>
@@ -292,6 +294,14 @@
 				{ label: 'Network ID', value: device.network_id }
 			]}
 			apiUrl={device.url}
+		/>
+
+		<RenameModal
+			open={showRenameModal}
+			title="Rename Device"
+			initialValue={device.nickname || device.hostname || ''}
+			onClose={() => (showRenameModal = false)}
+			onSubmit={handleRename}
 		/>
 	{/if}
 </div>

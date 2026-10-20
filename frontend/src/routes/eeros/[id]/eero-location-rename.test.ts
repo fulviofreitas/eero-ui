@@ -4,6 +4,7 @@
  *
  * Coverage:
  * - gate-off hides the rename control
+ * - the Rename button opens the shared RenameModal; Save hands off to the confirm
  * - gate-on: renaming goes through ConfirmDialog naming "not verified
  *   end-to-end" before any PUT fires
  * - a successful confirmation updates the page's own `eero.location`
@@ -63,6 +64,12 @@ async function waitForEeroHeading() {
 	);
 }
 
+async function renameTo(location: string) {
+	await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+	await fireEvent.input(screen.getByLabelText('Location'), { target: { value: location } });
+	await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+}
+
 describe('eero detail page - location rename', () => {
 	beforeEach(() => {
 		entitlementsStore.clear();
@@ -77,7 +84,7 @@ describe('eero detail page - location rename', () => {
 		render(Page);
 		await waitForEeroHeading();
 
-		expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument();
 	}, 20000);
 
 	it('gate-on: renaming goes through ConfirmDialog naming "not verified end-to-end"', async () => {
@@ -95,10 +102,7 @@ describe('eero detail page - location rename', () => {
 			})
 		);
 
-		await fireEvent.input(screen.getByLabelText('Location'), {
-			target: { value: 'Kitchen' }
-		});
-		await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+		await renameTo('Kitchen');
 
 		const dialog = get(confirmDialog);
 		expect(dialog).not.toBeNull();
@@ -121,10 +125,7 @@ describe('eero detail page - location rename', () => {
 			)
 		);
 
-		await fireEvent.input(screen.getByLabelText('Location'), {
-			target: { value: 'Kitchen' }
-		});
-		await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+		await renameTo('Kitchen');
 		const dialog = get(confirmDialog);
 		await dialog!.onConfirm();
 
@@ -148,10 +149,7 @@ describe('eero detail page - location rename', () => {
 			)
 		);
 
-		await fireEvent.input(screen.getByLabelText('Location'), {
-			target: { value: 'Living Room' }
-		});
-		await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+		await renameTo('Living Room');
 		const dialog = get(confirmDialog);
 		await dialog!.onConfirm();
 
@@ -174,10 +172,7 @@ describe('eero detail page - location rename', () => {
 			)
 		);
 
-		await fireEvent.input(screen.getByLabelText('Location'), {
-			target: { value: 'Kitchen' }
-		});
-		await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+		await renameTo('Kitchen');
 		const dialog = get(confirmDialog);
 		await dialog!.onConfirm();
 

@@ -7,9 +7,10 @@
   route, which owns the `eero` state every other card on the page also reads.
 
   The location rename control (phase-6.0-revamp.md § 7 WP7 follow-up (c)) is an
-  unverified, non-settings write (plan § 5) - wrapped in `ExperimentalGate`, the
-  parent route owns the `ConfirmDialog` naming "not verified end-to-end" (same
-  split of responsibility as `onReboot`).
+  unverified, non-settings write (plan § 5) - a Rename button wrapped in
+  `ExperimentalGate` that opens the shared `RenameModal`; the parent route owns the
+  `ConfirmDialog` naming "not verified end-to-end" (same split of responsibility as
+  `onReboot`).
 
   The node action control (phase-6.0-revamp.md § 7 WP7, family 6) is a second
   unverified, non-settings write - self-contained here (like
@@ -24,6 +25,8 @@
 	import Icon from '$components/common/Icon.svelte';
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 	import Button from '$components/common/Button.svelte';
+	import RenameModal from '$components/common/RenameModal.svelte';
+	import { experimentalWrites } from '#lib/stores/entitlements.js';
 	import { NODE_ACTIONS, type NodeAction } from '$api/types';
 
 	interface Props {
@@ -41,7 +44,7 @@
 		 * rollback-on-error (phase-6.0-revamp.md § 7 WP6, deliverable 3).
 		 */
 		onSetLedBrightness?: (brightness: number) => void;
-		/** Fired with the trimmed input value when the Rename button is clicked. */
+		/** Fired with the trimmed location when the rename dialog is saved. */
 		onSetLocation?: (location: string) => void;
 	}
 
@@ -57,7 +60,13 @@
 		onSetLocation
 	}: Props = $props();
 
-	let locationInput = $derived(location ?? '');
+	let showRenameModal = $state(false);
+
+	// The modal lives inside ExperimentalGate so it unmounts with the button if the gate turns
+	// off mid-edit; clear the flag too, or it would pop back open when the gate turns on again.
+	$effect(() => {
+		if (!$experimentalWrites) showRenameModal = false;
+	});
 
 	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
 	const NODE_ACTION_LABELS: Record<NodeAction, string> = {
@@ -106,11 +115,9 @@
 		onSetLedBrightness?.(value);
 	}
 
-	function handleRenameSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		const trimmed = locationInput.trim();
-		if (!trimmed) return;
-		onSetLocation?.(trimmed);
+	function handleRenameSubmit(name: string) {
+		showRenameModal = false;
+		onSetLocation?.(name);
 	}
 </script>
 
@@ -162,18 +169,19 @@
 
 	{#if onSetLocation}
 		<ExperimentalGate>
-			<form class="location-row" onsubmit={handleRenameSubmit}>
-				<label for="eero-location-input" class="location-label">Location</label>
-				<div class="location-input-row">
-					<input
-						id="eero-location-input"
-						type="text"
-						bind:value={locationInput}
-						disabled={loading}
-					/>
-					<Button type="submit" disabled={loading || !locationInput.trim()}>Rename</Button>
-				</div>
-			</form>
+			<div class="location-row">
+				<Button icon="edit" onclick={() => (showRenameModal = true)} disabled={loading}>
+					Rename
+				</Button>
+			</div>
+			<RenameModal
+				open={showRenameModal}
+				title="Rename Eero"
+				label="Location"
+				initialValue={location ?? ''}
+				onClose={() => (showRenameModal = false)}
+				onSubmit={handleRenameSubmit}
+			/>
 		</ExperimentalGate>
 	{/if}
 
@@ -260,28 +268,6 @@
 
 	.location-row {
 		margin-bottom: var(--space-3);
-	}
-
-	.location-label {
-		display: block;
-		font-size: 0.875rem;
-		color: var(--color-text-secondary);
-		margin-bottom: var(--space-2);
-	}
-
-	.location-input-row {
-		display: flex;
-		gap: var(--space-2);
-	}
-
-	.location-input-row input {
-		flex: 1;
-		padding: var(--space-2) var(--space-3);
-		background-color: var(--color-bg-primary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		color: var(--color-text-primary);
-		font-size: 0.9375rem;
 	}
 
 	@media (max-width: 768px) {

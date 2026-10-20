@@ -143,7 +143,7 @@ describe('EeroActionsCard', () => {
 					onReboot: () => {}
 				}
 			});
-			expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+			expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument();
 		});
 
 		it('hides the rename control when the experimental-writes gate is off', async () => {
@@ -162,13 +162,13 @@ describe('EeroActionsCard', () => {
 				}
 			});
 
-			expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+			expect(screen.queryByRole('button', { name: 'Rename' })).not.toBeInTheDocument();
 			// Two gates are hidden behind ExperimentalGate on this card - the
 			// node action control and the location rename control.
 			expect(screen.getAllByRole('note').length).toBeGreaterThanOrEqual(2);
 		});
 
-		it('shows the rename control and calls onSetLocation with the trimmed value', async () => {
+		it('opens the rename dialog and calls onSetLocation with the trimmed value', async () => {
 			mockEntitlements(true);
 			await entitlementsStore.fetch('network-123');
 			const onSetLocation = vi.fn();
@@ -185,16 +185,53 @@ describe('EeroActionsCard', () => {
 				}
 			});
 
+			expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+			await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+
 			const input = screen.getByLabelText('Location') as HTMLInputElement;
+			expect(screen.getByRole('dialog', { name: 'Rename Eero' })).toBeInTheDocument();
 			expect(input.value).toBe('Living Room');
 
 			await fireEvent.input(input, { target: { value: '  Kitchen  ' } });
-			await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 			expect(onSetLocation).toHaveBeenCalledWith('Kitchen');
 		});
 
-		it('disables the Rename button when the input is empty', async () => {
+		it('closes the rename dialog when the gate turns off, and keeps it closed on re-enable', async () => {
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+			const onSetLocation = vi.fn();
+
+			render(EeroActionsCard, {
+				props: {
+					eeroId: 'eero-1',
+					ledOn: true,
+					loading: false,
+					location: 'Living Room',
+					onToggleLed: () => {},
+					onReboot: () => {},
+					onSetLocation
+				}
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+			expect(screen.getByRole('dialog', { name: 'Rename Eero' })).toBeInTheDocument();
+
+			mockEntitlements(false);
+			await entitlementsStore.fetch('network-123');
+			await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
+			);
+			expect(screen.queryByRole('dialog')).toBeNull();
+			expect(onSetLocation).not.toHaveBeenCalled();
+		});
+
+		it('disables Rename while the card is loading', async () => {
 			mockEntitlements(true);
 			await entitlementsStore.fetch('network-123');
 
@@ -202,8 +239,8 @@ describe('EeroActionsCard', () => {
 				props: {
 					eeroId: 'eero-1',
 					ledOn: true,
-					loading: false,
-					location: '',
+					loading: true,
+					location: 'Living Room',
 					onToggleLed: () => {},
 					onReboot: () => {},
 					onSetLocation: () => {}

@@ -24,7 +24,7 @@
 	import { isBridgeMode } from '#lib/utils/wan-throughput.js';
 	import SpeedTestHistoryCard from '#lib/components/network/SpeedTestHistoryCard.svelte';
 	import NetworkScanCard from '#lib/components/network/NetworkScanCard.svelte';
-	import NetworkRenameModal from '#lib/components/network/NetworkRenameModal.svelte';
+	import RenameModal from '#lib/components/common/RenameModal.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageCard from '#lib/components/network/DataUsageCard.svelte';
 	import EventsCard from '#lib/components/network/EventsCard.svelte';
@@ -52,7 +52,6 @@
 	let speedTestLoading = $state(false);
 	let guestToggleLoading = $state(false);
 	let showRenameModal = $state(false);
-	let renameValue = $state('');
 	let renaming = $state(false);
 	let activeTab = $state('overview');
 	/** Cancelled on unmount (REVIEWER finding, Medium) so an in-flight poll loop stops immediately rather than leaking past navigation. */
@@ -171,7 +170,6 @@
 	}
 
 	function openRenameNetworkModal() {
-		renameValue = network?.name ?? '';
 		showRenameModal = true;
 	}
 
@@ -409,13 +407,13 @@
 			<TechnicalCard ids={[{ label: 'Network ID', value: networkId }]} />
 		</section>
 
-		<NetworkRenameModal
+		<RenameModal
 			open={showRenameModal}
-			value={renameValue}
+			title="Rename Network"
+			initialValue={network?.name ?? ''}
 			submitting={renaming}
 			onClose={() => (showRenameModal = false)}
 			onSubmit={handleRenameNetwork}
-			onValueChange={(v) => (renameValue = v)}
 		/>
 	{/if}
 </div>

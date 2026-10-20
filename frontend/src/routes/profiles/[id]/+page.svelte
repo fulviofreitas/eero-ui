@@ -14,7 +14,7 @@
 	import ProfileSchedulesCard from '#lib/components/profile/ProfileSchedulesCard.svelte';
 	import ProfileContentFilterCard from '#lib/components/profile/ProfileContentFilterCard.svelte';
 	import ProfileBlockedApplicationsCard from '#lib/components/profile/ProfileBlockedApplicationsCard.svelte';
-	import ProfileRenameModal from '#lib/components/profile/ProfileRenameModal.svelte';
+	import RenameModal from '#lib/components/common/RenameModal.svelte';
 	import InsightsCard from '#lib/components/common/InsightsCard.svelte';
 	import DataUsageMiniCard from '#lib/components/common/DataUsageMiniCard.svelte';
 	import TechnicalCard from '$components/common/TechnicalCard.svelte';
@@ -25,7 +25,6 @@
 	let error: string | null = $state(null);
 	let actionLoading = $state(false);
 	let showRenameModal = $state(false);
-	let renameValue = $state('');
 	let renaming = $state(false);
 
 	function goToDevice(device: ProfileDevice) {
@@ -139,7 +138,6 @@
 	}
 
 	function openRenameModal() {
-		renameValue = profile?.name ?? '';
 		showRenameModal = true;
 	}
 
@@ -282,13 +280,13 @@
 			apiUrl={profile.url}
 		/>
 
-		<ProfileRenameModal
+		<RenameModal
 			open={showRenameModal}
-			value={renameValue}
+			title="Rename Profile"
+			initialValue={profile?.name ?? ''}
 			submitting={renaming}
 			onClose={() => (showRenameModal = false)}
 			onSubmit={handleRenameProfile}
-			onValueChange={(v) => (renameValue = v)}
 		/>
 	{/if}
 </div>

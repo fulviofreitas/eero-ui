@@ -5,15 +5,16 @@
  *   left assuming the write is as trustworthy as unblock/rename.
  * - Unblock and rename do NOT go through a confirm dialog at all (Verified,
  *   § 5 - safe for the existing optimistic pattern).
+ * - Rename opens the shared RenameModal (not a native `prompt()`).
  * - The menu is now the Dropdown primitive: aria-haspopup/expanded on the
  *   trigger, Escape closes and refocuses the trigger, no mouseleave-only close.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import DeviceRow from './DeviceRow.svelte';
-import { uiStore } from '$stores';
+import { devicesStore, uiStore } from '$stores';
 import type { DeviceSummary } from '$api/types';
 
 function makeDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
@@ -74,6 +75,29 @@ describe('DeviceRow action menu', () => {
 		// Give any (incorrect) confirm() call a tick to land before asserting its absence.
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(get(uiStore).confirmDialog).toBeNull();
+	});
+
+	it('rename (Verified, § 5) opens the rename dialog and saves without a confirm', async () => {
+		const promptSpy = vi.spyOn(window, 'prompt');
+		const setNickname = vi.spyOn(devicesStore, 'setNickname').mockResolvedValue(true);
+		render(DeviceRow, { props: { device: makeDevice() } });
+
+		await openActionMenu();
+		await fireEvent.click(screen.getByRole('menuitem', { name: /Rename/ }));
+
+		const input = (await screen.findByLabelText('New name')) as HTMLInputElement;
+		expect(screen.getByRole('dialog', { name: 'Rename Device' })).toBeInTheDocument();
+		expect(input.value).toBe('iPhone');
+
+		await fireEvent.input(input, { target: { value: ' Work Phone ' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		expect(setNickname).toHaveBeenCalledWith('dev-1', 'Work Phone');
+		expect(get(uiStore).confirmDialog).toBeNull();
+		expect(promptSpy).not.toHaveBeenCalled();
+
+		setNickname.mockRestore();
+		promptSpy.mockRestore();
 	});
 
 	it('exposes aria-haspopup/aria-expanded on the trigger and closes on Escape, refocusing it', async () => {
