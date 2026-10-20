@@ -5,7 +5,7 @@
   delegates row/cell rendering to DataTable (see phase-6.0-revamp.md § 6.2 Tier 2), which owns
   the `<tr>` and every visible column via `DataTableColumn.render` snippets defined in
   DeviceList.svelte. This component's only remaining job is the per-row action menu
-  (rename/block/unblock), rendered as the "actions" column's `render` snippet — the one piece of
+  (rename/block/unblock) plus its rename dialog, rendered as the "actions" column's `render` snippet — the one piece of
   row behaviour too stateful (loading, confirm dialogs) to inline as a snippet.
 
   A11Y (WP5 A6): the menu itself is the Dropdown primitive (aria-haspopup/expanded, focus-in on
@@ -17,6 +17,7 @@
 	import { devicesStore, uiStore } from '$stores';
 	import Icon from '$components/common/Icon.svelte';
 	import Dropdown, { type DropdownItem } from '$components/common/Dropdown.svelte';
+	import RenameModal from '$components/common/RenameModal.svelte';
 
 	interface Props {
 		device: DeviceSummary;
@@ -25,13 +26,14 @@
 	let { device }: Props = $props();
 
 	let loading = $state(false);
+	let showRenameModal = $state(false);
 
 	let displayName = $derived(
 		device.display_name || device.nickname || device.hostname || device.mac || 'Unknown Device'
 	);
 
 	let menuItems = $derived<DropdownItem[]>([
-		{ id: 'rename', label: 'Rename', icon: 'edit', onSelect: handleRename },
+		{ id: 'rename', label: 'Rename', icon: 'edit', onSelect: () => (showRenameModal = true) },
 		device.blocked
 			? { id: 'unblock', label: 'Unblock', icon: 'check', onSelect: handleUnblock }
 			: { id: 'block', label: 'Block', icon: 'x', danger: true, onSelect: handleBlock }
@@ -77,14 +79,13 @@
 		}
 	}
 
-	function handleRename() {
-		const newName = prompt('Enter new name:', device.nickname || device.hostname || '');
-		if (newName && device.id) {
-			devicesStore
-				.setNickname(device.id, newName)
-				.then(() => uiStore.success('Device renamed successfully.'))
-				.catch((error) => uiStore.error(error.message));
-		}
+	function handleRename(name: string) {
+		showRenameModal = false;
+		if (!device.id) return;
+		devicesStore
+			.setNickname(device.id, name)
+			.then(() => uiStore.success('Device renamed successfully.'))
+			.catch((error) => uiStore.error(error.message));
 	}
 </script>
 
@@ -102,6 +103,14 @@
 		{/if}
 	{/snippet}
 </Dropdown>
+
+<RenameModal
+	open={showRenameModal}
+	title="Rename Device"
+	initialValue={device.nickname || device.hostname || ''}
+	onClose={() => (showRenameModal = false)}
+	onSubmit={handleRename}
+/>
 
 <style>
 	:global(.action-btn) {
