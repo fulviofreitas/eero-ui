@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.7.0](https://github.com/fulviofreitas/eero-ui/compare/v6.6.0...v6.7.0) (2026-10-20)
+
+### ✨ Features
+
+* **metrics:** WAN throughput gauges no longer need the experimental-writes flag ([#463](https://github.com/fulviofreitas/eero-ui/issues/463)) ([015b7e8](https://github.com/fulviofreitas/eero-ui/commit/015b7e86f5908a321eb5821401fefc177da4f82a)), closes [#458](https://github.com/fulviofreitas/eero-ui/issues/458)
+
 ## [6.6.0](https://github.com/fulviofreitas/eero-ui/compare/v6.5.0...v6.6.0) (2026-10-20)
 
 ### ✨ Features
