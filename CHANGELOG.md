@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.8.0](https://github.com/fulviofreitas/eero-ui/compare/v6.7.0...v6.8.0) (2026-10-20)
+
+### ✨ Features
+
+* **ui:** rename everything through one shared modal form ([#464](https://github.com/fulviofreitas/eero-ui/issues/464)) ([75e7fb6](https://github.com/fulviofreitas/eero-ui/commit/75e7fb655eb42914940b1240c81190b901c61f55))
+
 ## [6.7.0](https://github.com/fulviofreitas/eero-ui/compare/v6.6.0...v6.7.0) (2026-10-20)
 
 ### ✨ Features
