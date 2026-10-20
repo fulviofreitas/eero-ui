@@ -26,6 +26,7 @@
 	import ExperimentalGate from '$components/common/ExperimentalGate.svelte';
 	import Button from '$components/common/Button.svelte';
 	import RenameModal from '$components/common/RenameModal.svelte';
+	import { experimentalWrites } from '#lib/stores/entitlements.js';
 	import { NODE_ACTIONS, type NodeAction } from '$api/types';
 
 	interface Props {
@@ -60,6 +61,12 @@
 	}: Props = $props();
 
 	let showRenameModal = $state(false);
+
+	// The modal lives inside ExperimentalGate so it unmounts with the button if the gate turns
+	// off mid-edit; clear the flag too, or it would pop back open when the gate turns on again.
+	$effect(() => {
+		if (!$experimentalWrites) showRenameModal = false;
+	});
 
 	const NOT_VERIFIED_DETAIL = 'This action is not verified end-to-end against the eero cloud.';
 	const NODE_ACTION_LABELS: Record<NodeAction, string> = {
@@ -167,15 +174,15 @@
 					Rename
 				</Button>
 			</div>
+			<RenameModal
+				open={showRenameModal}
+				title="Rename Eero"
+				label="Location"
+				initialValue={location ?? ''}
+				onClose={() => (showRenameModal = false)}
+				onSubmit={handleRenameSubmit}
+			/>
 		</ExperimentalGate>
-		<RenameModal
-			open={showRenameModal}
-			title="Rename Eero"
-			label="Location"
-			initialValue={location ?? ''}
-			onClose={() => (showRenameModal = false)}
-			onSubmit={handleRenameSubmit}
-		/>
 	{/if}
 
 	<p class="action-warning text-muted text-sm">

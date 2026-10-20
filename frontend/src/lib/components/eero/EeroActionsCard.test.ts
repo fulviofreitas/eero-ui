@@ -198,6 +198,39 @@ describe('EeroActionsCard', () => {
 			expect(onSetLocation).toHaveBeenCalledWith('Kitchen');
 		});
 
+		it('closes the rename dialog when the gate turns off, and keeps it closed on re-enable', async () => {
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+			const onSetLocation = vi.fn();
+
+			render(EeroActionsCard, {
+				props: {
+					eeroId: 'eero-1',
+					ledOn: true,
+					loading: false,
+					location: 'Living Room',
+					onToggleLed: () => {},
+					onReboot: () => {},
+					onSetLocation
+				}
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+			expect(screen.getByRole('dialog', { name: 'Rename Eero' })).toBeInTheDocument();
+
+			mockEntitlements(false);
+			await entitlementsStore.fetch('network-123');
+			await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+			mockEntitlements(true);
+			await entitlementsStore.fetch('network-123');
+			await waitFor(() =>
+				expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
+			);
+			expect(screen.queryByRole('dialog')).toBeNull();
+			expect(onSetLocation).not.toHaveBeenCalled();
+		});
+
 		it('disables Rename while the card is loading', async () => {
 			mockEntitlements(true);
 			await entitlementsStore.fetch('network-123');
