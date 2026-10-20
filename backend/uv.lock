@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -392,21 +392,21 @@ wheels = [
 
 [[package]]
 name = "eero-api"
-version = "8.4.0"
+version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "keyring" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/df/70/b1cf4b2ddb2b4af69b74b28bf1a6a263e264e73418c0503059672030083e/eero_api-8.4.0.tar.gz", hash = "sha256:02423a65cc30146eb23849eba3208c65196b80346424ae813041e812e61387c5", size = 155544, upload-time = "2026-10-17T18:55:46.925Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/71/a36514987bb3bba4741f48d90974233447636299e2947477c00b9e5d9d6d/eero_api-8.4.1.tar.gz", hash = "sha256:a462ccd4543ebfcf5c12eaa68ef75dcc8a2c10ec13a99c9511758b431724c215", size = 155918, upload-time = "2026-10-20T02:02:55.504Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/7e/86b822f7545b5b55600fd4cef062d53d8b4b3ee36861948c4b524b7976d6/eero_api-8.4.0-py3-none-any.whl", hash = "sha256:1c39d1b58aeebad2d452d817316cb786b98158fe9646c76ebe86f933f3e3e83d", size = 185697, upload-time = "2026-10-17T18:55:45.823Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/ef/fa3c6a4d3e170106f30b15150f1163ad39a8c90dd99ee30404b7be10a913/eero_api-8.4.1-py3-none-any.whl", hash = "sha256:71a49924397ab2b94743d5a90a28246c5f949939addd2aa26ed728af9e069f04", size = 186043, upload-time = "2026-10-20T02:02:54.014Z" },
 ]
 
 [[package]]
 name = "eero-ui-backend"
-version = "6.3.0"
+version = "6.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "eero-api" },
@@ -435,7 +435,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eero-api", specifier = ">=8.4.0,<9.0.0" },
+    { name = "eero-api", specifier = ">=8.4.1,<9.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
