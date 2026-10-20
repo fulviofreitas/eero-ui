@@ -8,10 +8,12 @@ throttle and expiry state. It uses only the public SDK surface -- no private
 SDK attributes, no manual token handling -- and is guarded by
 ``tests/test_no_sdk_private_access.py``.
 
-``create_burst_reporter`` is a POST whose side effects are not live-verified,
-so the collector only calls it behind two flags (see
-``Settings.wan_live_usage``). The total counts Internet traffic only; local
-LAN transfers are not included in the per-client usage the cloud reports.
+``create_burst_reporter`` is a POST, live-verified in eero-api 8.4.1 (usage
+refreshed within 12 s, no node rebooted). The collector still calls it only
+when ``Settings.wan_live_usage`` is on, because it costs a settle wait per
+cycle and one cloud write per minute per network. The total counts Internet
+traffic only; local LAN transfers are not included in the per-client usage
+the cloud reports.
 """
 
 import math

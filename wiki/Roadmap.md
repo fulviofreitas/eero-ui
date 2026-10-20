@@ -28,6 +28,7 @@ Shipped in 6.0: Svelte 5 runes migration, CSV/JSON/YAML device export, shared co
 | Guest network enable / disable | — | **verified**; disconnects guest clients |
 | Rename network | — | unverified; settings-class, assumed to reboot the mesh; gated (`_NETWORK_NAME_GATE`, security review 2026-09-24) |
 | DNS settings | — | **live-verified to reboot every eero**; settings-class; not gated (predates the flag) |
+| Live WAN throughput (burst reporter) | — | **verified** (eero-api 8.4.1, live-verified 2026-10-20, no reboot); opt-in `EERO_DASHBOARD_WAN_LIVE_USAGE` for its cycle-time cost |
 
 ### Verified writes (always available)
 

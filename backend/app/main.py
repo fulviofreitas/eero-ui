@@ -95,8 +95,8 @@ async def lifespan(app: FastAPI):
         get_eero_client,
         victoria_client,
         interval_seconds=settings.collection_interval,
-        # Both flags: the burst is an unverified write nobody clicks.
-        wan_enabled=lambda: settings.experimental_writes and settings.wan_live_usage,
+        # Live-verified write (eero-api 8.4.1); opt-in for its cost, not safety.
+        wan_enabled=lambda: settings.wan_live_usage,
     )
     app.state.metrics_collector = collector
     collector_task = asyncio.create_task(collector.run_forever())

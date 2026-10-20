@@ -64,7 +64,7 @@ Six series the exporter did not provide, written on the same cycle:
 
 ## Live WAN throughput (opt-in)
 
-Two further gauges exist only when live WAN usage is enabled (`EERO_DASHBOARD_EXPERIMENTAL_WRITES` **and** `EERO_DASHBOARD_WAN_LIVE_USAGE`, see [[Configuration#write-gates]]). They are not part of the stability contract above.
+Two further gauges exist only when live WAN usage is enabled (`EERO_DASHBOARD_WAN_LIVE_USAGE`, see [[Configuration#write-gates]]; the burst write behind them is live-verified as of eero-api 8.4.1, so the experimental flag is not involved). They are not part of the stability contract above.
 
 | Metric | Type | Labels | Notes |
 |---|---|---|---|
