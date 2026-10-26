@@ -25,7 +25,7 @@ RUN npm run build
 FROM alpine:latest AS vm-downloader
 
 ARG TARGETARCH
-ARG VM_VERSION=v1.154.1
+ARG VM_VERSION=v1.155.0
 
 RUN apk add --no-cache wget && \
     # Map Docker TARGETARCH to VictoriaMetrics arch naming
