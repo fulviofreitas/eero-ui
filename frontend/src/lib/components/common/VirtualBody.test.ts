@@ -3,7 +3,7 @@
  * `body` escape hatch does) since `<tr>`/`<td>` accessible roles need a table context, and the
  * `.table-wrapper` ancestor VirtualBody looks for via `closest()` as its scroll container.
  *
- * jsdom does no layout, so `offsetHeight` is 0 for every element by default - both what
+ * jsdom does no layout, so `offsetHeight`/`clientHeight` are 0 for every element by default - both what
  * @tanstack/virtual-core's `observeElementRect` reads for the scroll container's viewport size,
  * *and* what its `measureElement` fallback reads when `use:measureRow` fires for each mounted
  * `<tr>` (see VirtualBody.svelte's doc comment). `estimateSize` is passed explicitly as the
@@ -65,6 +65,14 @@ function stubMeasurements(viewportHeight: number, rowHeight: number) {
 			return this.classList.contains('table-wrapper') ? viewportHeight : rowHeight;
 		}
 	});
+	// virtual-core >= 3.19.8 sizes the scroll container from `clientHeight` (content-box) rather
+	// than `offsetHeight`; only the scroll container's viewport size goes through it.
+	Object.defineProperty(Element.prototype, 'clientHeight', {
+		configurable: true,
+		get(this: Element) {
+			return this.classList.contains('table-wrapper') ? viewportHeight : 0;
+		}
+	});
 }
 
 /**
@@ -104,6 +112,8 @@ describe('VirtualBody', () => {
 	afterEach(() => {
 		// @ts-expect-error - restore the real (jsdom default) descriptor between tests.
 		delete HTMLElement.prototype.offsetHeight;
+		// @ts-expect-error - same for the clientHeight stub on Element.prototype.
+		delete Element.prototype.clientHeight;
 	});
 
 	it('renders far fewer <tr>s than the full row count for a large list', async () => {
