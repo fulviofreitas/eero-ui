@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.8.3](https://github.com/fulviofreitas/eero-ui/compare/v6.8.2...v6.8.3) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* **deps:** bump certifi from 2026.1.4 to 2026.10.18 in /backend ([#467](https://github.com/fulviofreitas/eero-ui/issues/467)) ([b32e5da](https://github.com/fulviofreitas/eero-ui/commit/b32e5da0fd2fd766ef0a83868d1a13fca859f20a))
+
+## [6.8.2](https://github.com/fulviofreitas/eero-ui/compare/v6.8.1...v6.8.2) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* **deps-dev:** bump black from 26.3.1 to 26.10.1 in /backend ([#471](https://github.com/fulviofreitas/eero-ui/issues/471)) ([fc22491](https://github.com/fulviofreitas/eero-ui/commit/fc22491f00fdffe62a1d642ec52978f67f70edaa))
+
 ## [6.8.1](https://github.com/fulviofreitas/eero-ui/compare/v6.8.0...v6.8.1) (2026-10-20)
 
 ### 🐛 Bug Fixes
