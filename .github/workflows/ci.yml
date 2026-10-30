@@ -38,6 +38,40 @@ env:
 
 jobs:
   # ============================================================================
+  # 0️⃣ Detect Changes (docs-only changes skip lint, tests and builds)
+  # ============================================================================
+  changes:
+    name: 🔎 Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 🔎 Check for non-docs changes
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # Paths that cannot affect lint, tests or the build; any other path runs the full pipeline
+          DOCS_ONLY: '^[^/]+\.md$|^\.github/.+\.md$|^\.github/ISSUE_TEMPLATE/|^(docs|wiki)/|^LICENSE$'
+        run: |
+          # Fall back to the full pipeline on manual runs, new branches or an unreachable base
+          code=true
+          if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" && -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]] \
+            && changed=$(git diff --name-only "$BASE_SHA" HEAD) && [[ -n "$changed" ]] \
+            && ! grep -qvE "$DOCS_ONLY" <<< "$changed"; then
+            code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Code changes: $code"
+          printf '%s\n' "${changed:-}"
+
+  # ============================================================================
   # 1️⃣ Commit Lint (Gate 1)
   # ============================================================================
   commitlint:
@@ -64,7 +98,8 @@ jobs:
     name: 🐍 Backend Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: commitlint
+    needs: [commitlint, changes]
+    if: needs.changes.outputs.code == 'true'
 
     steps:
       - name: 📥 Checkout repository
@@ -92,7 +127,8 @@ jobs:
     name: ⚛️ Frontend Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: commitlint
+    needs: [commitlint, changes]
+    if: needs.changes.outputs.code == 'true'
 
     steps:
       - name: 📥 Checkout repository
@@ -196,7 +232,8 @@ jobs:
     name: 🔐 Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: commitlint
+    needs: [commitlint, changes]
+    if: needs.changes.outputs.code == 'true'
 
     steps:
       - name: 📥 Checkout repository
@@ -243,12 +280,19 @@ jobs:
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [commitlint, backend-lint, frontend-lint, backend-tests, frontend-tests, security-scan, docker-build]
+    needs: [changes, commitlint, backend-lint, frontend-lint, backend-tests, frontend-tests, security-scan, docker-build]
     if: always()
 
     steps:
       - name: 🔍 Check all jobs passed
         run: |
+          # Docs-only change: only Commit Lint ran, everything else was skipped on purpose
+          if [[ "${{ needs.changes.result }}" == "success" && "${{ needs.changes.outputs.code }}" == "false" ]]; then
+            echo "## 🧪 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+            echo "📄 Docs-only change: lint, test, security and build jobs skipped. Commit Lint: ${{ needs.commitlint.result }}" >> $GITHUB_STEP_SUMMARY
+            [[ "${{ needs.commitlint.result }}" == "success" ]] && exit 0 || exit 1
+          fi
+
           COMMITLINT="${{ needs.commitlint.result }}"
           BACKEND_LINT="${{ needs.backend-lint.result }}"
           FRONTEND_LINT="${{ needs.frontend-lint.result }}"
