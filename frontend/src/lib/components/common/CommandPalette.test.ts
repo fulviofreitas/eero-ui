@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { devicesStore, networksStore } from '$stores';
 import CommandPalette from './CommandPalette.svelte';
 
@@ -79,6 +80,15 @@ async function renderOpen() {
 	await waitFor(() => expect(screen.getByRole('combobox')).toBeInTheDocument());
 	// Wait for the "Loading…" placeholder to clear - devices/eeros/profiles/networks are loaded.
 	await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+	// The "Loading…" placeholder only covers the (mocked) eeros/profiles. The palette also kicks
+	// off devicesStore/networksStore fetches, and networksStore.fetch() chains a second request
+	// (setPreferred). If a test ends while that is in flight, it outlives MSW's afterAll
+	// server.close(), hits the real network, and its console.error lands during worker teardown
+	// (vitest "EnvironmentTeardownError: Closing rpc while onUserConsoleLog was pending").
+	await waitFor(() => {
+		expect(get(devicesStore).loading).toBe(false);
+		expect(get(networksStore).loading).toBe(false);
+	});
 }
 
 describe('CommandPalette', () => {
