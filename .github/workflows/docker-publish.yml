@@ -35,7 +35,7 @@ jobs:
       (github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
-    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
     permissions:
       contents: read
       packages: write
