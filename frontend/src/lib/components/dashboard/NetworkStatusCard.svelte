@@ -26,9 +26,9 @@
 		</div>
 		<div class="network-status-title">
 			<span class="network-name">{network.name}</span>
-			<span class="network-status-label"
-				>{network.status === 'online' ? 'Connected' : network.status}</span
-			>
+			<span class="network-status-label">
+				{network.status === 'online' ? 'Connected' : network.status}
+			</span>
 		</div>
 	</div>
 
