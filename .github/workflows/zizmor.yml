@@ -32,6 +32,6 @@ jobs:
       contents: read
       security-events: write
       actions: read
-    uses: fulviofreitas/workflow-arsenal/.github/workflows/zizmor.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master @ 2026-11-19
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/zizmor.yml@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
     with:
       advanced-security: true
