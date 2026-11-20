@@ -10,7 +10,11 @@
 name: 🐳 Docker Build & Publish
 
 on:
-  workflow_run:
+  # Safe here: the reusable workflow builds this repository at github.sha (master's head for a
+  # workflow_run event), never the triggering run's code, and uses none of its artifacts. The
+  # Release run that triggers it is itself gated to pushes to master of this repository; the
+  # job below also requires the Release run to belong to this repository.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["🚀 Release"]
     types: [completed]
     branches: [master]
@@ -20,13 +24,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   docker:
     name: 🐳 Docker
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     uses: fulviofreitas/workflow-arsenal/.github/workflows/docker-build.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
     permissions:
       contents: read

@@ -32,7 +32,8 @@
 name: 🤖 Auto-Merge
 
 on:
-  pull_request_target:
+  # Reviewed: base-branch workflow, read-only gate job, PR code never checked out.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types:
       - labeled
       - unlabeled
