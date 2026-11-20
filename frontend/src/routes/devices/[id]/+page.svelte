@@ -217,9 +217,9 @@
 					Refresh
 				</Button>
 
-				<Button icon="edit" onclick={() => (showRenameModal = true)} disabled={actionLoading}
-					>Rename</Button
-				>
+				<Button icon="edit" onclick={() => (showRenameModal = true)} disabled={actionLoading}>
+					Rename
+				</Button>
 
 				{#if device!.blocked}
 					<Button variant="primary" icon="check" onclick={handleUnblock} loading={actionLoading}>

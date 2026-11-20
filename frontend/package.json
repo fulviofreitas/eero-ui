@@ -1,6 +1,6 @@
 {
 	"name": "eero-ui",
-	"version": "6.8.5",
+	"version": "6.8.6",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -24,11 +24,11 @@
 		"@sveltejs/adapter-static": "^4.0.0",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"@testing-library/jest-dom": "^7.0.0",
+		"@testing-library/jest-dom": "^8.0.0",
 		"@testing-library/svelte": "^5.0.0",
 		"@types/node": "^26.0.0",
 		"@typescript-eslint/parser": "^8.53.0",
-		"@vitest/coverage-v8": "^5.0.0",
+		"@vitest/coverage-v8": "^5.1.1",
 		"eslint": "^10.0.0",
 		"eslint-plugin-svelte": "^3.0.0",
 		"globals": "^17.0.0",
@@ -42,11 +42,11 @@
 		"typescript": "^6.0.0",
 		"typescript-eslint": "^8.53.0",
 		"vite": "^8.0.12",
-		"vitest": "^5.0.0"
+		"vitest": "^5.1.1"
 	},
 	"dependencies": {
 		"@tanstack/svelte-virtual": "^3.13.39",
-		"@xyflow/svelte": "^1.5.0",
+		"@xyflow/svelte": "^2.0.0",
 		"chart.js": "^4.5.1",
 		"chartjs-adapter-date-fns": "^3.0.0",
 		"date-fns": "^4.1.0"

@@ -48,9 +48,9 @@
 
 {#snippet deviceNameCell(device: ProfileDevice)}
 	<div class="device-name-cell">
-		<span class="device-icon-sm"
-			><Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} /></span
-		>
+		<span class="device-icon-sm">
+			<Icon name={getDeviceTypeIcon(null, device.wireless)} size={14} />
+		</span>
 		<div>
 			<!--
 				R2 (WP5 reviewer fix): the row itself has no onRowClick/role="button" any more
@@ -155,9 +155,9 @@
 				>
 					<div class="device-header">
 						<div class="device-info">
-							<span class="device-icon"
-								><Icon name={getDeviceTypeIcon(null, device.wireless)} size={20} /></span
-							>
+							<span class="device-icon">
+								<Icon name={getDeviceTypeIcon(null, device.wireless)} size={20} />
+							</span>
 							<div>
 								<h3>
 									{device.display_name || device.nickname || device.hostname || 'Unknown Device'}
@@ -183,10 +183,10 @@
 						</div>
 						<div class="detail-row">
 							<span class="label">Connection</span>
-							<span class="value"
-								><Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
-								{device.wireless ? 'Wireless' : 'Wired'}</span
-							>
+							<span class="value">
+								<Icon name={device.wireless ? 'wifi' : 'ethernet'} size={14} />
+								{device.wireless ? 'Wireless' : 'Wired'}
+							</span>
 						</div>
 						{#if device.manufacturer}
 							<div class="detail-row">

@@ -113,8 +113,9 @@
 							<span>{displayName(connection)}</span>
 						{/if}
 						{#if connection.device_type}
-							<span class="connection-device-type text-muted text-sm">{connection.device_type}</span
-							>
+							<span class="connection-device-type text-muted text-sm">
+								{connection.device_type}
+							</span>
 						{/if}
 					</div>
 					<div class="connection-meta">
@@ -126,14 +127,14 @@
 								<span class="badge badge-warning">Upstream</span>
 							{/if}
 							{#if connection.negotiated_speed}
-								<span class="connection-speed text-muted text-sm"
-									>{connection.negotiated_speed}</span
-								>
+								<span class="connection-speed text-muted text-sm">
+									{connection.negotiated_speed}
+								</span>
 							{/if}
 						{:else if kindOf(connection) === 'wireless'}
-							<span class="badge badge-success"
-								>Wireless{connection.band ? ` · ${connection.band}` : ''}</span
-							>
+							<span class="badge badge-success">
+								Wireless{connection.band ? ` · ${connection.band}` : ''}
+							</span>
 						{/if}
 					</div>
 				</li>

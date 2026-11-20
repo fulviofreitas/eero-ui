@@ -42,9 +42,9 @@
 			<span class="badge-row-value">
 				{#if device.connected_to_eero}
 					{#if device.connected_to_eero_id}
-						<a href="/eeros/{device.connected_to_eero_id}" class="eero-link"
-							>{device.connected_to_eero}</a
-						>
+						<a href="/eeros/{device.connected_to_eero_id}" class="eero-link">
+							{device.connected_to_eero}
+						</a>
 					{:else}
 						{device.connected_to_eero}
 					{/if}

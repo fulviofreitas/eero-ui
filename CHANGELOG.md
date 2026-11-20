@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [6.8.6](https://github.com/fulviofreitas/eero-ui/compare/v6.8.5...v6.8.6) (2026-11-20)
+
+### 🐛 Bug Fixes
+
+* **deps:** bundle xyflow 2, jest-dom 8 and npm minor/patch updates ([#503](https://github.com/fulviofreitas/eero-ui/issues/503)) ([48591e9](https://github.com/fulviofreitas/eero-ui/commit/48591e9bdf5aeb6a5c70292fbd8149a6c21b66b1)), closes [#498](https://github.com/fulviofreitas/eero-ui/issues/498) [#499](https://github.com/fulviofreitas/eero-ui/issues/499) [#500](https://github.com/fulviofreitas/eero-ui/issues/500) [#499](https://github.com/fulviofreitas/eero-ui/issues/499) [#498](https://github.com/fulviofreitas/eero-ui/issues/498) [#499](https://github.com/fulviofreitas/eero-ui/issues/499) [#500](https://github.com/fulviofreitas/eero-ui/issues/500)
+
 ## [6.8.5](https://github.com/fulviofreitas/eero-ui/compare/v6.8.4...v6.8.5) (2026-11-20)
 
 ### 🐛 Bug Fixes

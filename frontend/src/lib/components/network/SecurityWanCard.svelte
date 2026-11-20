@@ -971,8 +971,9 @@
 
 			<SettingRow label="Passpoint">
 				{#snippet value()}
-					<span class="badge {boolBadgeClass(passpointEnabled)}">{boolLabel(passpointEnabled)}</span
-					>
+					<span class="badge {boolBadgeClass(passpointEnabled)}">
+						{boolLabel(passpointEnabled)}
+					</span>
 				{/snippet}
 				{#snippet control()}
 					{#if showControls}
@@ -1078,8 +1079,9 @@
 
 			<SettingRow label="IPv6 enabled">
 				{#snippet value()}
-					<span class="badge {boolBadgeClass(ipv6EnabledValue)}">{boolLabel(ipv6EnabledValue)}</span
-					>
+					<span class="badge {boolBadgeClass(ipv6EnabledValue)}">
+						{boolLabel(ipv6EnabledValue)}
+					</span>
 				{/snippet}
 				{#snippet control()}
 					{#if showControls}
