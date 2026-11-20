@@ -26,9 +26,6 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write
-  pull-requests: write
-  actions: read
 
 env:
   PYTHON_VERSION: "3.12"
@@ -49,7 +46,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -81,12 +78,12 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: 📝 Validate commits
-        uses: fulviofreitas/workflow-arsenal/.github/actions/commitlint@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/commitlint@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           from-sha: ${{ github.event.pull_request.base.sha }}
           to-sha: ${{ github.event.pull_request.head.sha }}
@@ -103,7 +100,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 📦 Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -115,7 +112,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🧹 Run Python lint
-        uses: fulviofreitas/workflow-arsenal/.github/actions/python-lint@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/python-lint@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           src-path: "backend/app/"
           tests-path: "backend/tests/"
@@ -132,11 +129,11 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 🔍 Run type check & lint
         id: frontend-check
-        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-check@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-check@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -182,7 +179,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 📦 Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -198,7 +195,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/workflow-arsenal/.github/actions/python-test@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/python-test@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           working-directory: backend
           test-path: "tests/"
@@ -217,10 +214,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-test@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-test@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -234,15 +231,19 @@ jobs:
     timeout-minutes: 20
     needs: [commitlint, changes]
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      security-events: write # upload the Semgrep SARIF to code scanning
+      actions: read # codeql-action/upload-sarif reads the run's workflow metadata
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: 🔐 Run Semgrep scan
-        uses: fulviofreitas/workflow-arsenal/.github/actions/security-semgrep@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/security-semgrep@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           config: "p/python p/javascript ${{ env.SEMGREP_RULES_PATH }}"
           target-path: "."
@@ -260,13 +261,13 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 🛠️ Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: 🐳 Build Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: false

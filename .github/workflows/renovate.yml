@@ -73,20 +73,31 @@ jobs:
     name: 🔄 Renovate
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read # the arsenal action restores Renovate's cache artifact from earlier runs
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # repository_dispatch payload values are untrusted; they reach the shell through the
+      # environment, never through template expansion.
       - name: 📋 Log trigger info
+        env:
+          SRC_REPO: ${{ github.event.client_payload.repository }}
+          SRC_PACKAGE: ${{ github.event.client_payload.package || 'unknown' }}
+          SRC_VERSION: ${{ github.event.client_payload.version }}
+          SRC_TAG: ${{ github.event.client_payload.tag }}
+          SRC_TRIGGERED_BY: ${{ github.event.client_payload.triggered_by || 'unknown' }}
         run: |
-          echo "🎯 Trigger: ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "🔗 Source: ${{ github.event.client_payload.repository }}"
-            echo "📦 Package: ${{ github.event.client_payload.package || 'unknown' }}"
-            echo "🏷️ Version: ${{ github.event.client_payload.version }}"
-            echo "🔖 Tag: ${{ github.event.client_payload.tag }}"
-            echo "👤 Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}"
+          echo "🎯 Trigger: ${GITHUB_EVENT_NAME}"
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            echo "🔗 Source: ${SRC_REPO}"
+            echo "📦 Package: ${SRC_PACKAGE}"
+            echo "🏷️ Version: ${SRC_VERSION}"
+            echo "🔖 Tag: ${SRC_TAG}"
+            echo "👤 Triggered by: ${SRC_TRIGGERED_BY}"
           fi
 
       # ========================================================================
@@ -96,7 +107,7 @@ jobs:
       # This step polls PyPI until the new version is available.
       - name: ⏳ Wait for PyPI indexing
         if: github.event_name == 'repository_dispatch'
-        uses: fulviofreitas/workflow-arsenal/.github/actions/wait-for-pypi@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/wait-for-pypi@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           package: ${{ github.event.client_payload.package }}
           version: ${{ github.event.client_payload.version }}
@@ -105,7 +116,7 @@ jobs:
       # 🔄 Run Renovate
       # ========================================================================
       - name: 🔄 Run Renovate
-        uses: fulviofreitas/workflow-arsenal/.github/actions/renovate@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/renovate@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           app-private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
@@ -119,30 +130,37 @@ jobs:
       # ========================================================================
       - name: 📝 Generate summary
         if: always()
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          SRC_REPO: ${{ github.event.client_payload.repository || 'unknown' }}
+          SRC_PACKAGE: ${{ github.event.client_payload.package || 'unknown' }}
+          SRC_VERSION: ${{ github.event.client_payload.version || 'unknown' }}
+          SRC_TAG: ${{ github.event.client_payload.tag || 'unknown' }}
+          SRC_TRIGGERED_BY: ${{ github.event.client_payload.triggered_by || 'unknown' }}
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << EOF
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
           ## 🔄 Renovate Summary
 
           | Property | Value |
           |:---------|:------|
-          | 📦 Repository | [\`${{ github.repository }}\`](https://github.com/${{ github.repository }}) |
-          | 🎯 Trigger | \`${{ github.event_name }}\` |
-          | 🧪 Dry Run | \`${{ github.event.inputs.dry_run || 'false' }}\` |
+          | 📦 Repository | [\`${GITHUB_REPOSITORY}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}) |
+          | 🎯 Trigger | \`${GITHUB_EVENT_NAME}\` |
+          | 🧪 Dry Run | \`${DRY_RUN}\` |
 
           EOF
 
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            cat >> $GITHUB_STEP_SUMMARY << EOF
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            cat >> "$GITHUB_STEP_SUMMARY" << EOF
 
           ### 📦 Triggered by Dependency Release
 
           | Property | Value |
           |:---------|:------|
-          | 🔗 Source | [\`${{ github.event.client_payload.repository || 'unknown' }}\`](https://github.com/${{ github.event.client_payload.repository }}) |
-          | 📦 Package | \`${{ github.event.client_payload.package || 'unknown' }}\` |
-          | 🏷️ Version | \`${{ github.event.client_payload.version || 'unknown' }}\` |
-          | 🔖 Tag | \`${{ github.event.client_payload.tag || 'unknown' }}\` |
-          | 👤 Triggered by | \`${{ github.event.client_payload.triggered_by || 'unknown' }}\` |
+          | 🔗 Source | [\`${SRC_REPO}\`](${GITHUB_SERVER_URL}/${SRC_REPO}) |
+          | 📦 Package | \`${SRC_PACKAGE}\` |
+          | 🏷️ Version | \`${SRC_VERSION}\` |
+          | 🔖 Tag | \`${SRC_TAG}\` |
+          | 👤 Triggered by | \`${SRC_TRIGGERED_BY}\` |
 
           EOF
           fi

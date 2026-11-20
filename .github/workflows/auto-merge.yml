@@ -32,7 +32,8 @@
 name: 🤖 Auto-Merge
 
 on:
-  pull_request_target:
+  # Reviewed: base-branch workflow, read-only gate job, PR code never checked out.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types:
       - labeled
       - unlabeled
@@ -239,7 +240,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Belt-and-suspenders: pull_request_target already defaults to the
           # base ref, but pinning explicitly prevents future edits from

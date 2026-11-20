@@ -11,7 +11,10 @@
 name: 🚀 Release
 
 on:
-  workflow_run:
+  # Safe here: the job checks out master, never the triggering run's code, and uses none of its
+  # artifacts; it also requires a push to master of this repository, because the branch filter
+  # alone matches a fork's pull request from a branch named master.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["🧪 CI Pipeline"]
     types: [completed]
     branches: [master]
@@ -30,10 +33,10 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# The release commit, tag, GitHub release and issue/PR comments are all made with the App
+# token, so GITHUB_TOKEN stays read-only.
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release:
@@ -43,27 +46,34 @@ jobs:
 
     if: |
       (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       !contains(github.event.workflow_run.head_commit.message, '[skip ci]') &&
       !contains(github.event.workflow_run.head_commit.message, 'chore(release)'))
 
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
         with:
           client-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          # Push the release commit and tag, create the release, comment on released issues/PRs.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
 
       - name: 📥 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token }}
 
       - name: 🚀 Run semantic-release
-        uses: fulviofreitas/workflow-arsenal/.github/actions/semantic-release@master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/semantic-release@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           dry-run: ${{ github.event.inputs.dry_run || 'false' }}
