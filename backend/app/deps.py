@@ -16,8 +16,8 @@ from fastapi import Depends, HTTPException, status
 from .config import settings
 from .transformers import (
     InvalidIdentifierError,
-    extract_id_from_url,
     extract_list,
+    resolve_resource_id,
     validate_path_id,
 )
 
@@ -325,7 +325,8 @@ async def get_network_id(
         raw_networks = await client.get_networks()
         networks = extract_list(raw_networks, "networks")
         if networks:
-            net_id = extract_id_from_url(networks[0].get("url"))
+            first = networks[0]
+            net_id = resolve_resource_id(first) if isinstance(first, dict) else None
             if net_id:
                 try:
                     return validate_identifier(net_id)

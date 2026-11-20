@@ -346,6 +346,39 @@ def extract_id_from_url(url: str | None) -> str | None:
     return parts[-1] if parts else None
 
 
+def resolve_resource_id(raw: dict[str, Any]) -> str | None:
+    """Resolve a resource's ID from its ``url``, falling back to its ``id``.
+
+    The ``url`` form (e.g. ``"/2.2/networks/123"``) is preferred so accounts
+    whose entries carry a ``url`` resolve exactly as before. Some accounts
+    return network entries with an ``id`` (a JSON integer) and no ``url``
+    (issue #501); eero-api itself resolves the id the same way (``id``, then
+    ``url``, coerced to ``str`` - eero-api #137). Booleans are rejected since
+    ``bool`` is an ``int`` subclass.
+
+    Like ``extract_id_from_url``, this does no identifier validation: callers
+    that put the result in a path or PromQL selector must still run it
+    through ``validate_identifier``.
+
+    Args:
+        raw: Raw resource data (the ``data`` envelope or a list entry).
+
+    Returns:
+        The resolved ID as a string, or ``None`` if neither field is usable.
+    """
+    url_id = extract_id_from_url(raw.get("url"))
+    if url_id:
+        return url_id
+    raw_id = raw.get("id")
+    if isinstance(raw_id, bool):
+        return None
+    if isinstance(raw_id, int):
+        return str(raw_id)
+    if isinstance(raw_id, str) and raw_id.strip():
+        return raw_id.strip()
+    return None
+
+
 def get_nested(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
     """Safely get a nested value from a dictionary.
 
@@ -527,8 +560,8 @@ def normalize_network(raw: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Normalized network dictionary
     """
-    # Extract ID from URL
-    net_id = extract_id_from_url(raw.get("url"))
+    # ID from the URL, or the raw ``id`` when the entry has no URL (#501)
+    net_id = resolve_resource_id(raw)
 
     # Normalize status
     status = normalize_status(raw.get("status"))

@@ -279,6 +279,30 @@ class TestPreferredNetworkIdStr:
         client.get_networks.assert_not_called()
 
 
+class TestGetNetworkIdFirstNetworkFallback:
+    """With no preference set, `get_network_id` resolves the first network's
+    id from its `url`, or from its raw `id` when there is no `url` (#501)."""
+
+    @staticmethod
+    def _client(networks):
+        client = MagicMock()
+        client.preferred_network_id = None
+        client.get_networks = AsyncMock(
+            return_value={"meta": {"code": 200}, "data": {"networks": networks}}
+        )
+        return client
+
+    async def test_uses_url_when_present(self):
+        client = self._client([{"url": "/2.2/networks/111", "id": 999}])
+
+        assert await deps.get_network_id(client=client, network_id=None) == "111"
+
+    async def test_falls_back_to_int_id_without_url(self):
+        client = self._client([{"id": 24930000, "name": "Home"}])
+
+        assert await deps.get_network_id(client=client, network_id=None) == "24930000"
+
+
 class TestRequireExperimentalWrites:
     """Tests for the decision-6a experimental-writes gate."""
 
