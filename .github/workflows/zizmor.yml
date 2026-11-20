@@ -1,0 +1,37 @@
+# ============================================================================
+# 🌈 zizmor — GitHub Actions security audit
+# ============================================================================
+# Audits this repo's workflows for template injection, dangerous triggers,
+# credential persistence and unpinned actions. Findings go to the Security
+# tab (code scanning); new alerts on changed lines fail the PR's "zizmor"
+# check. Reusable workflow: fulviofreitas/workflow-arsenal zizmor.yml.
+# ============================================================================
+
+name: 🌈 zizmor
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/**"
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/**"
+  schedule:
+    - cron: "17 5 * * 1" # weekly: new zizmor audits land between workflow edits
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: 🌈 zizmor
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/zizmor.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master @ 2026-11-19
+    with:
+      advanced-security: true
