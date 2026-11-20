@@ -471,9 +471,9 @@
 				<span>{$deviceCounts.total} total</span>
 				{#if $devicesStore.lastUpdated}
 					<span>•</span>
-					<span title="Click Refresh to update"
-						>Updated {new Date($devicesStore.lastUpdated).toLocaleTimeString()}</span
-					>
+					<span title="Click Refresh to update">
+						Updated {new Date($devicesStore.lastUpdated).toLocaleTimeString()}
+					</span>
 				{/if}
 			</div>
 		</div>

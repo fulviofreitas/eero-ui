@@ -167,8 +167,9 @@
 							bind:value={routerIp}
 							disabled={wanState.applying}
 						/>
-						{#if msipFieldErrors.routerIp}<span class="field-error">{msipFieldErrors.routerIp}</span
-							>{/if}
+						{#if msipFieldErrors.routerIp}<span class="field-error">
+								{msipFieldErrors.routerIp}
+							</span>{/if}
 					</div>
 					<div class="field-group">
 						<label class="field-label" for="msip-subnet-ip-{networkId}">Subnet IP</label>
@@ -180,8 +181,9 @@
 							bind:value={subnetIp}
 							disabled={wanState.applying}
 						/>
-						{#if msipFieldErrors.subnetIp}<span class="field-error">{msipFieldErrors.subnetIp}</span
-							>{/if}
+						{#if msipFieldErrors.subnetIp}<span class="field-error">
+								{msipFieldErrors.subnetIp}
+							</span>{/if}
 					</div>
 					<div class="field-group">
 						<label class="field-label" for="msip-subnet-mask-{networkId}">Subnet Mask</label>
@@ -193,9 +195,9 @@
 							bind:value={subnetMask}
 							disabled={wanState.applying}
 						/>
-						{#if msipFieldErrors.subnetMask}<span class="field-error"
-								>{msipFieldErrors.subnetMask}</span
-							>{/if}
+						{#if msipFieldErrors.subnetMask}<span class="field-error">
+								{msipFieldErrors.subnetMask}
+							</span>{/if}
 					</div>
 					<div class="field-group">
 						<label class="field-label" for="msip-nat-start-{networkId}">
@@ -209,8 +211,9 @@
 							bind:value={natStart}
 							disabled={wanState.applying}
 						/>
-						{#if msipFieldErrors.natStart}<span class="field-error">{msipFieldErrors.natStart}</span
-							>{/if}
+						{#if msipFieldErrors.natStart}<span class="field-error">
+								{msipFieldErrors.natStart}
+							</span>{/if}
 					</div>
 					<div class="field-group">
 						<label class="field-label" for="msip-nat-end-{networkId}">
@@ -224,8 +227,9 @@
 							bind:value={natEnd}
 							disabled={wanState.applying}
 						/>
-						{#if msipFieldErrors.natEnd}<span class="field-error">{msipFieldErrors.natEnd}</span
-							>{/if}
+						{#if msipFieldErrors.natEnd}<span class="field-error">
+								{msipFieldErrors.natEnd}
+							</span>{/if}
 					</div>
 				</div>
 			{/if}

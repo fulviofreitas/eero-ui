@@ -108,8 +108,10 @@
 					<span class="port-status">
 						{#if port.has_carrier}
 							<span class="text-success">●</span> Connected {#if port.speed}<span
-									class="port-speed-badge">{formatPortSpeed(port.speed)}</span
-								>{/if}
+									class="port-speed-badge"
+								>
+									{formatPortSpeed(port.speed)}
+								</span>{/if}
 						{:else}
 							<span class="text-muted">○ No link</span>
 						{/if}

@@ -102,8 +102,10 @@
 			<a
 				href="https://github.com/fulviofreitas/eero-ui/wiki/Configuration"
 				target="_blank"
-				rel="noopener noreferrer">Configuration</a
+				rel="noopener noreferrer"
 			>
+				Configuration
+			</a>
 		</p>
 	{:else if !hasPoints}
 		<p class="text-muted text-sm state-message" role="status">

@@ -286,9 +286,9 @@
 				</div>
 				{#if networkId}
 					<div class="info-grid premium-grid">
-						<PremiumGate feature="Network insights"
-							><InsightsCard scope="network" id={networkId} /></PremiumGate
-						>
+						<PremiumGate feature="Network insights">
+							<InsightsCard scope="network" id={networkId} />
+						</PremiumGate>
 						<PremiumGate feature="Data usage"><DataUsageCard {networkId} /></PremiumGate>
 					</div>
 				{/if}

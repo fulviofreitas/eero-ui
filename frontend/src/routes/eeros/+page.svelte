@@ -224,10 +224,10 @@
 						{/if}
 						<div class="detail-row">
 							<span class="label">Connection</span>
-							<span class="value"
-								><Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
-								{eero.wired ? 'Wired' : 'Wireless'}</span
-							>
+							<span class="value">
+								<Icon name={eero.wired ? 'ethernet' : 'wifi'} size={14} />
+								{eero.wired ? 'Wired' : 'Wireless'}
+							</span>
 						</div>
 					</div>
 				</a>

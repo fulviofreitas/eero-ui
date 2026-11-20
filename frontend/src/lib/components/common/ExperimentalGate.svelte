@@ -33,9 +33,9 @@
 {:else if !silent}
 	<div class="experimental-gate" role="note">
 		<span class="experimental-gate-icon"><Icon name="lock" size={16} /></span>
-		<span class="text-muted"
-			>Disabled by operator — set <code>EERO_DASHBOARD_EXPERIMENTAL_WRITES=true</code> to enable.</span
-		>
+		<span class="text-muted">
+			Disabled by operator — set <code>EERO_DASHBOARD_EXPERIMENTAL_WRITES=true</code> to enable.
+		</span>
 	</div>
 {/if}
 
