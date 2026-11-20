@@ -37,6 +37,25 @@ class TestListNetworks:
         assert len(data) == 1
         assert data[0]["name"] == "Home"
 
+    async def test_list_networks_id_without_url(
+        self, auth_client, authenticated_client
+    ):
+        """#501: an entry with an int ``id`` and no ``url`` keeps its id."""
+        raw_net = {
+            "id": 24930000,
+            "name": "Home",
+            "status": "green",
+            "connection": {"mode": "nat"},
+        }
+        authenticated_client.get_networks = AsyncMock(
+            return_value=make_raw_response({"networks": [raw_net]})
+        )
+
+        response = await auth_client.get("/api/networks")
+
+        assert response.status_code == 200
+        assert response.json()[0]["id"] == "24930000"
+
 
 class TestGetNetwork:
     """Tests for GET /api/networks/{network_id}."""

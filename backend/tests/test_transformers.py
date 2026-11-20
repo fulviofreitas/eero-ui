@@ -21,6 +21,7 @@ from app.transformers import (
     normalize_speed_test,
     normalize_status,
     read_connection_mode,
+    resolve_resource_id,
 )
 
 
@@ -347,6 +348,36 @@ class TestNormalizeNetwork:
         raw = {"url": "/networks/1"}
         result = normalize_network(raw)
         assert result["connection_mode"] is None
+
+    def test_falls_back_to_int_id_without_url(self):
+        """#501: some accounts list networks with an int ``id`` and no
+        ``url``; the id must not come out blank."""
+        raw = {"id": 24930000, "name": "Home", "status": "green"}
+        result = normalize_network(raw)
+        assert result["id"] == "24930000"
+
+
+class TestResolveResourceId:
+    """Tests for resolve_resource_id (#501)."""
+
+    def test_prefers_url(self):
+        assert resolve_resource_id({"url": "/2.2/networks/111", "id": 999}) == "111"
+
+    def test_int_id_without_url(self):
+        assert resolve_resource_id({"id": 24930000}) == "24930000"
+
+    def test_str_id_without_url(self):
+        assert resolve_resource_id({"id": "net-1", "url": None}) == "net-1"
+
+    def test_empty_url_falls_back_to_id(self):
+        assert resolve_resource_id({"url": "", "id": 5}) == "5"
+
+    @pytest.mark.parametrize("raw_id", [None, "", "   ", True, False, 1.5, {}])
+    def test_unusable_id_is_none(self, raw_id):
+        assert resolve_resource_id({"id": raw_id}) is None
+
+    def test_neither_field_is_none(self):
+        assert resolve_resource_id({"name": "Home"}) is None
 
 
 class TestReadConnectionMode:
