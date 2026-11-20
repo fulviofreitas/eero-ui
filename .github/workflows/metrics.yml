@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   metrics:
-    uses: fulviofreitas/workflow-arsenal/.github/workflows/reusable-metrics.yml@master
+    uses: fulviofreitas/workflow-arsenal/.github/workflows/reusable-metrics.yml@c62cf10d0a378d6308b62a40677b3dabfc83808b # master
     with:
       repo: eero-ui
       branch: master
