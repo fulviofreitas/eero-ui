@@ -83,7 +83,7 @@ jobs:
           fetch-depth: 0
 
       - name: 📝 Validate commits
-        uses: fulviofreitas/workflow-arsenal/.github/actions/commitlint@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/commitlint@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           from-sha: ${{ github.event.pull_request.base.sha }}
           to-sha: ${{ github.event.pull_request.head.sha }}
@@ -112,7 +112,7 @@ jobs:
         run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: 🧹 Run Python lint
-        uses: fulviofreitas/workflow-arsenal/.github/actions/python-lint@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/python-lint@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           src-path: "backend/app/"
           tests-path: "backend/tests/"
@@ -133,7 +133,7 @@ jobs:
 
       - name: 🔍 Run type check & lint
         id: frontend-check
-        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-check@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-check@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -195,7 +195,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/workflow-arsenal/.github/actions/python-test@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/python-test@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           working-directory: backend
           test-path: "tests/"
@@ -217,7 +217,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: 🧪 Run tests
-        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-test@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/frontend-test@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           working-directory: frontend
           node-version: ${{ env.NODE_VERSION }}
@@ -243,7 +243,7 @@ jobs:
           fetch-depth: 0
 
       - name: 🔐 Run Semgrep scan
-        uses: fulviofreitas/workflow-arsenal/.github/actions/security-semgrep@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/security-semgrep@7fcefdc57681a54229f0ae2c846f13d47e436e19 # master
         with:
           config: "p/python p/javascript ${{ env.SEMGREP_RULES_PATH }}"
           target-path: "."
