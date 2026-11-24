@@ -249,7 +249,7 @@ jobs:
           persist-credentials: false
 
       - name: 🤖 Run automerge
-        uses: fulviofreitas/workflow-arsenal/.github/actions/auto-merge@2087aa01c13f842fc566101ceeb9a4a49ec2a370 # master
+        uses: fulviofreitas/workflow-arsenal/.github/actions/auto-merge@7fcefdc57681a54229f0ae2c846f13d47e436e19 # v1.0.0
         with:
           # Use GitHub App for merging (required for PRs that modify workflow files)
           app-id: ${{ secrets.RENOVATE_APP_ID }}
